@@ -334,8 +334,8 @@
     root.querySelector('#copy-job-url')?.addEventListener('click', copyJobUrl);
     root.querySelector('#publish-btn').addEventListener('click', () => currentFlow()?.publicationStatus === 'published' ? unpublishFlow() : publishFlow());
     root.querySelector('#add-node').addEventListener('click', showNodePicker);
-    const workspace = document.getElementById('workspace');
-    bindCanvasPan(workspace);
+    const workspaceElement = document.getElementById('workspace');
+    bindCanvasPan(workspaceElement);
     drawCanvas(); drawInspector();
   }
 
