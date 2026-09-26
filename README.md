@@ -8,7 +8,7 @@ This repository is a static HTML/CSS/JavaScript app with no build step. Publish 
 
 For local development, serve the repository root with any static file server (for example `python3 -m http.server 8000`). Authentication and data access still use the configured Supabase project.
 
-Run the local flow-model checks with `node --test tests/pathway.test.js`.
+Run the local checks with `node --test tests/*.test.js`.
 
 ## What is implemented
 
@@ -16,11 +16,12 @@ Run the local flow-model checks with `node --test tests/pathway.test.js`.
 - Job-flow drafts are saved to Supabase under the authenticated owner’s workspace. Autosaves are debounced; the browser no longer acts as the primary data store.
 - Workspace-scoped Row Level Security protects reading, creating, updating, and deleting drafts. Owners cannot create a flow under another workspace.
 - Publish creates an immutable snapshot. The share link contains an unguessable snapshot ID; `apply.html` fetches the snapshot through a narrowly scoped public Postgres function, not from the private drafts table.
+- Flows have a persisted Draft/Published status. Unpublishing clears the active snapshot pointer, immediately invalidating its public link; republishing creates a new snapshot and link.
 - The visual builder still supports a fixed candidate-details step, optional fields, draggable questions, branching answers, preview, and distinct completion paths.
 
 ## Database migration
 
-The initial migration creates `workspaces`, `application_flows`, and `published_flows`; adds the first-account workspace trigger; and enables RLS. Public access is limited to the published snapshot lookup function. Keep applicant-submission tables private until a dedicated submission, anti-abuse, privacy, and retention design is implemented.
+The migrations create `workspaces`, `application_flows`, and `published_flows`; add the first-account workspace trigger; enable RLS; and add flow publication lifecycle fields. Public and authenticated clients can call the published-snapshot lookup function, but it returns data only for the flow's currently active token. Keep applicant-submission tables private until a dedicated submission, anti-abuse, privacy, and retention design is implemented.
 
 ## Important configuration
 

@@ -27,16 +27,16 @@
 
   async function listFlows(workspaceId) {
     await requireSession();
-    const { data, error } = await client.from('application_flows').select('id,workspace_id,created_by,company_name,job_title,flow_data,created_at,updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false });
+    const { data, error } = await client.from('application_flows').select('id,workspace_id,created_by,company_name,job_title,flow_data,publication_status,active_published_flow_id,created_at,updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false });
     if (error) throw error;
-    return (data || []).map(row => ({ ...row.flow_data, id: row.flow_data.id || row.id, cloudId: row.id, workspaceId: row.workspace_id, createdBy: row.created_by, companyName: row.company_name, jobTitle: row.job_title, updatedAt: row.updated_at }));
+    return (data || []).map(row => ({ ...row.flow_data, id: row.flow_data.id || row.id, cloudId: row.id, workspaceId: row.workspace_id, createdBy: row.created_by, companyName: row.company_name, jobTitle: row.job_title, publicationStatus: row.publication_status || 'draft', activePublishedFlowId: row.active_published_flow_id || null, updatedAt: row.updated_at }));
   }
 
   function saveFlow(flow, workspace) {
     const previous = saveQueues.get(flow.id) || Promise.resolve();
     const pending = previous.catch(() => {}).then(async () => {
       const session = await requireSession();
-      const { cloudId, workspaceId, createdBy, ...flowData } = flow;
+      const { cloudId, workspaceId, createdBy, publicationStatus, activePublishedFlowId, ...flowData } = flow;
       const row = { workspace_id: workspace.id, created_by: session.user.id, company_name: flow.companyName, job_title: flow.jobTitle, flow_data: flowData };
       let result;
       if (cloudId) result = await client.from('application_flows').update(row).eq('id', cloudId).eq('workspace_id', workspace.id).select('id').single();
@@ -64,8 +64,7 @@
     await saveQueues.get(flow.id)?.catch(() => {});
     await saveFlow(flow, workspace);
     const session = await requireSession();
-    const flowData = { ...flow };
-    delete flowData.cloudId; delete flowData.workspaceId; delete flowData.createdBy;
+    const { cloudId, workspaceId, createdBy, publicationStatus, activePublishedFlowId, ...flowData } = flow;
     const { data, error } = await client.from('published_flows').insert({
       workspace_id: workspace.id,
       flow_id: flow.cloudId,
@@ -73,7 +72,28 @@
       snapshot: flowData
     }).select('id').single();
     if (error) throw error;
+    const { error: stateError } = await client.from('application_flows')
+      .update({ publication_status: 'published', active_published_flow_id: data.id })
+      .eq('id', flow.cloudId).eq('workspace_id', workspace.id).select('id').single();
+    if (stateError) {
+      await client.from('published_flows').delete().eq('id', data.id).eq('workspace_id', workspace.id);
+      throw stateError;
+    }
+    flow.publicationStatus = 'published';
+    flow.activePublishedFlowId = data.id;
     return data.id;
+  }
+
+  async function unpublishFlow(flow, workspace) {
+    await saveQueues.get(flow.id)?.catch(() => {});
+    await requireSession();
+    if (!flow.cloudId) throw new Error('This flow has not been saved to your workspace yet.');
+    const { error } = await client.from('application_flows')
+      .update({ publication_status: 'draft', active_published_flow_id: null })
+      .eq('id', flow.cloudId).eq('workspace_id', workspace.id).select('id').single();
+    if (error) throw error;
+    flow.publicationStatus = 'draft';
+    flow.activePublishedFlowId = null;
   }
 
   async function getPublishedFlow(token) {
@@ -101,6 +121,7 @@
     saveFlow,
     deleteFlow,
     publishFlow,
+    unpublishFlow,
     getPublishedFlow,
     updateWorkspaceName,
     signOut,

@@ -27,6 +27,8 @@ const Core = context.PathwayCore;
 
 test('new flow always starts with a fixed candidate-details node and a connected ending', () => {
   const flow = Core.createFlow('Acme', 'Designer', 'Build accessible software.');
+  assert.equal(flow.publicationStatus, 'draft');
+  assert.equal(flow.activePublishedFlowId, null);
   assert.equal(flow.nodes.filter(node => node.type === 'candidateInfo').length, 1);
   assert.equal(flow.nodes[0].type, 'candidateInfo');
   assert.equal(flow.edges.length, 1);
