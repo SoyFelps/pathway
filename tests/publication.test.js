@@ -102,5 +102,6 @@ test('dashboard flow menu replaces Keep flow with status-aware lifecycle and lin
   assert.ok(!source.includes('Keep flow'));
   assert.ok(source.includes("const isPublished = flow.publicationStatus === 'published'"));
   assert.ok(source.includes("isPublished ? 'Unpublish' : 'Publish'"));
+  assert.ok(source.includes("isPublished ? '' : 'btn-primary'"));
   assert.ok(source.includes("id=\"copy-flow-url\">Copy job link"));
 });
