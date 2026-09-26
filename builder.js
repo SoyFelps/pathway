@@ -325,7 +325,7 @@
 
   function renderEditor() {
     const flow = currentFlow(); if (!flow) return renderDashboard();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name">${esc(workspace.name)}</span><span class="auth-user">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : 'Publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag to arrange, drag ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status">Drag a connection point to another step · Every route needs an ending</div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name">${esc(workspace.name)}</span><span class="auth-user">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : 'Publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status">Drag empty background to move around · Drag a connection point to another step</div></main></div></div>`;
     bindSidebar();
     root.querySelector('#brand-home').addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
     root.querySelector('#signout').addEventListener('click', doSignOut);
@@ -334,7 +334,38 @@
     root.querySelector('#copy-job-url')?.addEventListener('click', copyJobUrl);
     root.querySelector('#publish-btn').addEventListener('click', () => currentFlow()?.publicationStatus === 'published' ? unpublishFlow() : publishFlow());
     root.querySelector('#add-node').addEventListener('click', showNodePicker);
+    const workspace = document.getElementById('workspace');
+    bindCanvasPan(workspace);
     drawCanvas(); drawInspector();
+  }
+
+  function bindCanvasPan(workspace) {
+    if (!workspace) return;
+    let pan = null;
+    const beginPan = event => {
+      if (event.button !== 0 || event.target.closest('.node, .port, .target-port, .edge-path, .canvas-toolbar, button, input, textarea, select')) return;
+      event.preventDefault();
+      pan = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: workspace.scrollLeft, top: workspace.scrollTop };
+      workspace.classList.add('is-panning');
+      workspace.setPointerCapture(event.pointerId);
+    };
+    const movePan = event => {
+      if (!pan || event.pointerId !== pan.pointerId) return;
+      workspace.scrollLeft = pan.left - (event.clientX - pan.x);
+      workspace.scrollTop = pan.top - (event.clientY - pan.y);
+    };
+    const endPan = event => {
+      if (!pan || (event.pointerId != null && event.pointerId !== pan.pointerId)) return;
+      const pointerId = pan.pointerId;
+      pan = null;
+      workspace.classList.remove('is-panning');
+      if (workspace.hasPointerCapture(pointerId)) workspace.releasePointerCapture(pointerId);
+    };
+    workspace.addEventListener('pointerdown', beginPan);
+    workspace.addEventListener('pointermove', movePan);
+    workspace.addEventListener('pointerup', endPan);
+    workspace.addEventListener('pointercancel', endPan);
+    workspace.addEventListener('lostpointercapture', endPan);
   }
 
   function typeInfo(node) {

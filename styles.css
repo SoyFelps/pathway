@@ -71,3 +71,11 @@
   .applicant-review-right .applicant-resume-preview-head{min-height:50px;padding:7px 10px}
   .applicant-resume-preview-head strong{max-width:55vw}
 }
+
+/* Drag-to-pan flow canvas */
+.workspace{cursor:grab;touch-action:none;overscroll-behavior:contain}
+.workspace.is-panning{cursor:grabbing;user-select:none}
+.workspace.is-panning *{user-select:none}
+.workspace .node{cursor:default}
+.workspace .node-head{cursor:grab}
+.workspace .node-head:active{cursor:grabbing}
