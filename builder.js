@@ -201,12 +201,17 @@
     modalRoot.querySelector('#applicant-status-select').addEventListener('change', event => { void moveApplicant(applicant.id, event.target.value); });
     modalRoot.querySelector('#open-applicant-resume').addEventListener('click', async event => {
       const button = event.currentTarget;
+      const tab = window.open('about:blank', '_blank');
+      if (tab) tab.opener = null;
       button.disabled = true; button.textContent = 'Preparing secure link…';
       try {
         const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path);
-        window.open(url, '_blank', 'noopener,noreferrer');
-      } catch (error) { showToast(`Could not open resume: ${error.message || 'please retry'}`); }
-      finally { if (button.isConnected) { button.disabled = false; button.innerHTML = `↧ &nbsp;Open ${esc(applicant.resume_filename || 'resume')}`; } }
+        if (tab) tab.location.replace(url);
+        else { await navigator.clipboard.writeText(url); showToast('Secure resume link copied. It expires in two minutes.'); }
+      } catch (error) {
+        if (tab) tab.close();
+        showToast(`Could not open resume: ${error.message || 'please retry'}`);
+      } finally { if (button.isConnected) { button.disabled = false; button.innerHTML = `↧ &nbsp;Open ${esc(applicant.resume_filename || 'resume')}`; } }
     });
   }
 

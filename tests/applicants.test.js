@@ -89,3 +89,18 @@ test('Edge Function preflight uses a bodyless 204 response and allowlists the pu
   assert.match(edge, /if \(req\.method === "OPTIONS"\) return response\(req, 204, \{\}\)/);
   assert.match(edge, /"https:\/\/soyfelps\.github\.io"/);
 });
+
+test('resume opening reserves a browser tab during the click gesture and falls back to a short-lived secure link', () => {
+  const builder = read('builder.js');
+  const handlerStart = builder.indexOf("modalRoot.querySelector('#open-applicant-resume').addEventListener('click'");
+  const handler = builder.slice(handlerStart, handlerStart + 1600);
+  assert.ok(handler.indexOf("window.open('about:blank'") < handler.indexOf('await window.PathwayBackend.getApplicantResumeUrl'));
+  assert.match(handler, /tab\.location\.replace\(url\)/);
+  assert.match(handler, /navigator\.clipboard\.writeText\(url\)/);
+});
+
+test('resume Storage policies qualify the object-path column to avoid workspace.name shadowing', () => {
+  const migration = read('supabase/migrations/20260926191710_fix_applicant_resume_storage_policy_path.sql');
+  assert.equal((migration.match(/storage\.foldername\(storage\.objects\.name\)/g) || []).length, 2);
+  assert.doesNotMatch(migration, /storage\.foldername\(name\)/);
+});
