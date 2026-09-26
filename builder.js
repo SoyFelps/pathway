@@ -102,11 +102,28 @@
   }
   function showFlowMenu(id) {
     const flow = flows.find(item => item.id === id); if (!flow) return;
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Flow actions</div><h2>${esc(flow.jobTitle)}</h2><p>${esc(flow.companyName)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions" style="justify-content:space-between"><button class="btn btn-danger" id="delete-flow">Delete flow</button><button class="btn btn-primary" data-close>Keep flow</button></div>`);
+    const isPublished = flow.publicationStatus === 'published' && Boolean(flow.activePublishedFlowId);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${isPublished ? 'Published flow' : 'Draft flow'}</div><h2>${esc(flow.jobTitle)}</h2><p>${esc(flow.companyName)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">Delete flow</button><div style="display:flex;gap:8px;flex-wrap:wrap">${isPublished ? '<button class="btn" id="copy-flow-url">Copy job link</button>' : ''}<button class="btn btn-primary" id="toggle-flow-status">${isPublished ? 'Unpublish' : 'Publish'}</button></div></div>`);
+    modalRoot.querySelector('#copy-flow-url')?.addEventListener('click', () => copyFlowUrl(flow, true));
+    modalRoot.querySelector('#toggle-flow-status').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true; button.textContent = isPublished ? 'Unpublishing…' : 'Opening editor…';
+      if (!isPublished) {
+        closeModal(); openFlow(id); await publishFlow(); return;
+      }
+      try {
+        await window.PathwayBackend.unpublishFlow(flow, workspace);
+        flow.updatedAt = new Date().toISOString();
+        closeModal(); renderDashboard(); showToast('Flow returned to draft. Existing public links are now inactive.');
+      } catch (error) {
+        button.disabled = false; button.textContent = 'Unpublish';
+        showToast(error.message || 'This flow could not be unpublished.');
+      }
+    });
     modalRoot.querySelector('#delete-flow').addEventListener('click', async () => {
       const button = modalRoot.querySelector('#delete-flow'); button.disabled = true; button.textContent = 'Deleting…';
-      try { await window.PathwayBackend.deleteFlow(flow, workspace); flows = flows.filter(item => item.id !== id); closeModal(); renderDashboard(); showToast('Draft deleted.'); }
-      catch (error) { button.disabled = false; button.textContent = 'Delete flow'; showToast(`Could not delete this draft: ${error.message || 'try again'}`); }
+      try { await window.PathwayBackend.deleteFlow(flow, workspace); flows = flows.filter(item => item.id !== id); closeModal(); renderDashboard(); showToast('Flow deleted.'); }
+      catch (error) { button.disabled = false; button.textContent = 'Delete flow'; showToast(`Could not delete this flow: ${error.message || 'try again'}`); }
     });
   }
 
@@ -326,11 +343,15 @@
     previewController = window.PathwayCandidate.mountCandidate(modalRoot.querySelector('#candidate-preview'), flow, { preview: true, onFinish: finish });
   }
 
-  async function copyJobUrl() {
-    const link = window.PathwayBackend.getPublishedJobUrl(currentFlow());
+  async function copyJobUrl() { return copyFlowUrl(currentFlow()); }
+  async function copyFlowUrl(flow, closeOnSuccess = false) {
+    let link;
+    try { link = window.PathwayBackend.getPublishedJobUrl(flow); }
+    catch (error) { showToast(error.message || 'This flow has no active public link.'); return; }
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard access is unavailable.');
       await navigator.clipboard.writeText(link);
+      if (closeOnSuccess) closeModal();
       showToast('Public job link copied.');
     } catch (_) {
       setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Public job link</div><h2>Copy this link to share the role.</h2><p>This URL opens the published candidate experience.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><input class="text-input" id="job-link-fallback" aria-label="Public job link" readonly value="${esc(link)}"><div class="modal-actions"><button class="btn btn-primary" id="copy-job-link-fallback">Copy job link</button></div>`);

@@ -95,3 +95,12 @@ test('builder exposes the copy action only for published flows with an active to
   assert.ok(source.includes("flow.publicationStatus === 'published' && flow.activePublishedFlowId ?"));
   assert.ok(source.includes('copy-job-url'));
 });
+
+
+test('dashboard flow menu replaces Keep flow with status-aware lifecycle and link actions', () => {
+  const source = fs.readFileSync(require.resolve('../builder.js'), 'utf8');
+  assert.ok(!source.includes('Keep flow'));
+  assert.ok(source.includes("const isPublished = flow.publicationStatus === 'published'"));
+  assert.ok(source.includes("isPublished ? 'Unpublish' : 'Publish'"));
+  assert.ok(source.includes("id=\"copy-flow-url\">Copy job link"));
+});
