@@ -218,7 +218,7 @@
         </div>
       </section>
       <aside class="applicant-review-right" aria-label="Resume preview">
-        <div class="applicant-preview-empty" id="applicant-preview-empty"><span class="applicant-preview-icon">▧</span><h3>${isPdf ? 'Resume preview' : 'Preview unavailable'}</h3><p>${isPdf ? 'Select “Preview resume” to view this PDF securely beside the application details.' : 'This file type cannot be previewed in the browser. Download the resume to open it.'}</p></div>
+        <div class="applicant-preview-empty" id="applicant-preview-empty"><span class="applicant-preview-icon">▧</span><h3>${isPdf ? 'Resume preview' : 'Preview unavailable'}</h3><p>${isPdf ? 'Loading the private PDF preview beside the application details…' : 'This file type cannot be previewed in the browser. Download the resume to open it.'}</p></div>
         <section class="applicant-resume-preview is-hidden" id="applicant-resume-preview" aria-label="PDF resume preview">
           <div class="applicant-resume-preview-head"><div><span class="eyebrow">Private document</span><strong title="${esc(filename)}">${esc(filename)}</strong></div><button class="btn btn-sm" id="close-applicant-resume-preview">Close preview</button></div>
           <iframe id="applicant-resume-frame" title="PDF preview of ${esc(filename)}" loading="lazy" referrerpolicy="no-referrer"></iframe>
@@ -236,9 +236,10 @@
       previewPlaceholder.classList.remove('is-hidden');
       previewButton?.setAttribute('aria-expanded', 'false');
       previewFrame.removeAttribute('src');
+      if (previewButton) previewButton.innerHTML = '▧ &nbsp;Preview resume';
     };
-    previewButton?.addEventListener('click', async () => {
-      if (!previewPanel.classList.contains('is-hidden')) { closePreview(); return; }
+    const loadPreview = async () => {
+      if (!previewButton || !previewPanel.classList.contains('is-hidden')) return;
       previewButton.disabled = true; previewButton.textContent = 'Preparing preview…';
       try {
         const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path);
@@ -247,8 +248,13 @@
         previewPanel.classList.remove('is-hidden');
         previewButton.setAttribute('aria-expanded', 'true');
       } catch (error) { showToast(`Could not preview resume: ${error.message || 'please retry'}`); }
-      finally { if (previewButton.isConnected) { previewButton.disabled = false; previewButton.innerHTML = '▧ &nbsp;Preview resume'; } }
+      finally { if (previewButton.isConnected) { previewButton.disabled = false; previewButton.innerHTML = previewPanel.classList.contains('is-hidden') ? '▧ &nbsp;Preview resume' : '▧ &nbsp;Hide preview'; } }
+    };
+    previewButton?.addEventListener('click', () => {
+      if (!previewPanel.classList.contains('is-hidden')) closePreview();
+      else void loadPreview();
     });
+    if (previewButton) void loadPreview();
     modalRoot.querySelector('#close-applicant-resume-preview')?.addEventListener('click', closePreview);
     modalRoot.querySelector('#download-applicant-resume').addEventListener('click', async event => {
       const button = event.currentTarget;

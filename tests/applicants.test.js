@@ -111,6 +111,8 @@ test('PDF preview uses an inline signed URL while download remains a separate fo
   assert.match(builder, /previewFrame\.removeAttribute\('src'\)/);
   assert.match(builder, /getApplicantResumeUrl\(applicant\.resume_path, true, filename\)/);
   assert.match(builder, /Preview resume/);
+  assert.match(builder, /if \(previewButton\) void loadPreview\(\)/);
+  assert.match(builder, /'▧ &nbsp;Hide preview'/);
   assert.match(read('styles.css'), /\.applicant-review-layout\{display:grid;grid-template-columns:minmax\(390px/);
   assert.match(read('styles.css'), /\.applicant-review-right \.applicant-resume-preview iframe\{flex:1/);
   assert.match(read('styles.css'), /@media\(max-width:760px\)\{\s*\.applicant-review-layout\{grid-template-columns:minmax\(0,1fr\)/);
