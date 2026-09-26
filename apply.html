@@ -25,9 +25,10 @@
         return;
       }
       try {
-        const flow = await PathwayBackend.getPublishedFlow(decodeURIComponent(match[1]));
+        const publishedFlowId = decodeURIComponent(match[1]);
+        const flow = await PathwayBackend.getPublishedFlow(publishedFlowId);
         document.title = `${flow.jobTitle || 'Apply'} · ${flow.companyName || 'Pathway'}`;
-        PathwayCandidate.mountCandidate(root, flow);
+        PathwayCandidate.mountCandidate(root, flow, { publishedFlowId });
       } catch (error) {
         PathwayCandidate.renderInvalid(root, error.message || 'The application could not be loaded.');
       }

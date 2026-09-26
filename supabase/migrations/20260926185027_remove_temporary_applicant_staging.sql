@@ -1,0 +1,1 @@
+drop table public.pending_applicant_submissions;

@@ -18,10 +18,18 @@ Run the local checks with `node --test tests/*.test.js`.
 - Publish creates an immutable snapshot. The share link contains an unguessable snapshot ID; `apply.html` fetches the snapshot through a narrowly scoped public Postgres function, not from the private drafts table.
 - Flows have a persisted Draft/Published status. The editor provides a **Copy job link** action while published. Unpublishing clears the active snapshot pointer, immediately invalidating its public link; republishing creates a new snapshot and link.
 - The visual builder still supports a fixed candidate-details step, optional fields, draggable questions, branching answers, preview, and distinct completion paths.
+- Public job applications collect the configured contact details, a required PDF/DOC/DOCX resume (10 MB maximum), and the exact answers reached in the published journey. Candidate details are validated against the active snapshot server-side before any applicant row is inserted.
+- Candidate files live in a private `applicant-resumes` Storage bucket. Resume links are short-lived and generated only after the authenticated workspace owner requests a download.
+- The Applicants section has a job filter, search, four-stage Kanban (New, Failed, Promising, Approved), card drag-and-drop, and an application-review modal with candidate information, answers, and private resume access. Disqualified flow endings start in Failed; other completed applications start in New.
+- Applicants and resume reads are scoped to the authenticated workspace by RLS. Only the status column can be changed through the authenticated client. Public visitors cannot query the private applicant table or bucket.
+- Deleting a job pauses its public intake, removes its private resume files, and then cascades the flow, snapshots, and applicant records. The deletion flow explicitly warns that the operation is permanent.
+- A privacy notice and required acknowledgment appear before candidates proceed. Applications are used for role selection, visible only to the hiring workspace, retained while the job exists, and no email receipt/notification is sent in this first release.
 
 ## Database migration
 
-The migrations create `workspaces`, `application_flows`, and `published_flows`; add the first-account workspace trigger; enable RLS; and add flow publication lifecycle fields. Public and authenticated clients can call the published-snapshot lookup function, but it returns data only for the flow's currently active token. Keep applicant-submission tables private until a dedicated submission, anti-abuse, privacy, and retention design is implemented.
+The migrations are under `supabase/migrations/`. They create `workspaces`, `application_flows`, `published_flows`, and `applicants`; add owner RLS, private resume Storage policies, flow lifecycle fields, bounded intake rate limiting, and a database trigger that accepts applications only for the currently active published snapshot. Applicant data is inserted by the `applications` Supabase Edge Function; the client does not receive an insert grant.
+
+Deploy or update the public Edge Function using the Supabase dashboard or `supabase functions deploy applications --no-verify-jwt`. It is intentionally deployed with platform JWT verification disabled because applicants are not logged in; the function implements custom publishable-key/origin checks, server-side form and branch validation, and separately verifies the authenticated owner before flow deletion. It uses the Edge Function's server-only Supabase service key and must never be copied into `supabase-config.js`.
 
 ## Important configuration
 
@@ -31,4 +39,4 @@ The currently selected project is **PathwayAPP**. The publishable key committed 
 
 ## Deliberate limits in this first backend phase
 
-Each user owns one workspace; team invites and multiple-workspace membership are not implemented. Public candidate pages are demos: candidate details and answers are not stored or sent to employers, and resume files are not uploaded. There is no applicant database, email workflow, billing, audit/history UI, or account recovery interface yet. Use test data only until the candidate-submission phase and privacy notices are designed.
+Each user owns one workspace; team invites and multiple-workspace membership are not implemented. Applications do not send confirmation emails, notify recruiters by email, scan uploaded files for malware, or support bulk export/deletion. The intake endpoint limits resumes to PDF/DOC/DOCX under 10 MB and rate-limits public attempts. The privacy notice is product copy, not a substitute for your legal privacy policy; add a reviewed policy URL before broad production hiring use. Use test candidate data while the product is in early access.

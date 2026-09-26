@@ -6,6 +6,22 @@
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
   const saveQueues = new Map();
+  const APPLICATIONS_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/applications`;
+  const APPLICANT_STATUSES = new Set(['new', 'failed', 'promising', 'approved']);
+
+  async function callApplications(body, accessToken = '') {
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+    const headers = { apikey: config.publishableKey };
+    if (!isFormData) headers['Content-Type'] = 'application/json';
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    let result;
+    try { result = await fetch(APPLICATIONS_FUNCTION, { method: 'POST', headers, body: isFormData ? body : JSON.stringify(body) }); }
+    catch (_) { throw new Error('Could not reach the application service. Check your connection and try again.'); }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error || 'The application service could not complete this request.');
+    return payload;
+  }
 
   async function requireSession() {
     const { data, error } = await client.auth.getSession();
@@ -56,8 +72,10 @@
     await requireSession();
     await saveQueues.get(flow.id)?.catch(() => {});
     if (!flow.cloudId) return;
-    const { error } = await client.from('application_flows').delete().eq('id', flow.cloudId).eq('workspace_id', workspace.id);
-    if (error) throw error;
+    const session = await requireSession();
+    const cleanup = await callApplications({ action: 'deleteFlow', flowId: flow.cloudId }, session.access_token);
+    if (!cleanup.deleted) throw new Error('The flow could not be deleted.');
+    return cleanup;
   }
 
   async function publishFlow(flow, workspace) {
@@ -112,6 +130,53 @@
     return data;
   }
 
+  async function listApplicants(workspaceId, flowId = '') {
+    await requireSession();
+    let query = client.from('applicants')
+      .select('id,workspace_id,flow_id,published_flow_id,candidate_name,candidate_email,candidate_info,responses,resume_path,resume_filename,resume_content_type,status,submitted_at,updated_at,privacy_notice_version,privacy_acknowledged_at')
+      .eq('workspace_id', workspaceId)
+      .order('submitted_at', { ascending: false })
+      .limit(1000);
+    if (flowId) query = query.eq('flow_id', flowId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function updateApplicantStatus(applicantId, status) {
+    if (!APPLICANT_STATUSES.has(status)) throw new Error('Choose a valid applicant stage.');
+    await requireSession();
+    const { data, error } = await client.from('applicants').update({ status }).eq('id', applicantId).select('id,status,updated_at').single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function getApplicantResumeUrl(path) {
+    await requireSession();
+    if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('..')) throw new Error('This resume link is not valid.');
+    const { data, error } = await client.storage.from('applicant-resumes').createSignedUrl(path, 120, { download: true });
+    if (error) throw error;
+    return data.signedUrl;
+  }
+
+  async function submitApplication(application) {
+    const resume = application && application.resume;
+    if (!(resume instanceof File) || !resume.size) throw new Error('Select a PDF, DOC, or DOCX resume before continuing.');
+    if (resume.size > 10 * 1024 * 1024) throw new Error('Your resume must be 10 MB or smaller.');
+    const submissionKey = application.submissionKey || crypto.randomUUID();
+    const form = new FormData();
+    form.set('publishedFlowId', application.publishedFlowId);
+    form.set('submissionKey', submissionKey);
+    form.set('name', application.name);
+    form.set('email', application.email);
+    form.set('candidateInfo', JSON.stringify(application.candidateInfo || {}));
+    form.set('answers', JSON.stringify(application.answers || []));
+    form.set('privacyAcknowledged', String(Boolean(application.privacyAcknowledged)));
+    form.set('website', application.website || '');
+    form.set('resume', resume, resume.name);
+    return await callApplications(form);
+  }
+
   async function updateWorkspaceName(workspace, name) {
     const { data, error } = await client.from('workspaces').update({ name }).eq('id', workspace.id).select('id,name,created_at').single();
     if (error) throw error;
@@ -133,6 +198,10 @@
     unpublishFlow,
     getPublishedFlow,
     getPublishedJobUrl,
+    listApplicants,
+    updateApplicantStatus,
+    getApplicantResumeUrl,
+    submitApplication,
     updateWorkspaceName,
     signOut,
     signIn: (email, password) => client.auth.signInWithPassword({ email, password }),

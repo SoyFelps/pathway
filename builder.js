@@ -21,6 +21,15 @@
   let cloudSaveTimer;
   let previewController = null;
   let dragState = null;
+  let applicants = [];
+  let applicantFilter = '';
+  let applicantSearch = '';
+  const applicantStages = [
+    { key: 'new', label: 'New', color: 'stage-new' },
+    { key: 'failed', label: 'Failed', color: 'stage-failed' },
+    { key: 'promising', label: 'Promising', color: 'stage-promising' },
+    { key: 'approved', label: 'Approved', color: 'stage-approved' }
+  ];
 
   const currentFlow = () => flows.find(flow => flow.id === currentId);
   const esc = C.esc;
@@ -66,13 +75,23 @@
   }
   function closeModal() { modalRoot.innerHTML = ''; }
 
+  function renderSidebar(active) {
+    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">♧</span>Applicants</button><div class="sidebar-bottom">Private workspace<br>Applicant data stays within this account.</div></aside>`;
+  }
+
+  function bindSidebar() {
+    root.querySelector('[data-route="dashboard"]')?.addEventListener('click', () => renderDashboard());
+    root.querySelector('[data-route="applicants"]')?.addEventListener('click', () => { void renderApplicants(); });
+  }
+
   function renderDashboard() {
     currentId = null; selectedId = null;
     const count = flows.length;
     const drafts = flows.filter(flow => flow.publicationStatus !== 'published').length;
     const published = count - drafts;
     const nodes = flows.reduce((sum, flow) => sum + flow.nodes.length, 0);
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Make applying feel human.</h1><p>Design clear, considered journeys for the people behind every application.</p></div><div class="dash-action"><button class="btn" id="workspace-details">Workspace details</button><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.node}</span><div><strong>${nodes}</strong><span>Steps in your journeys</span></div></div><div class="stat"><span class="stat-icon">⌁</span><div><strong>Cloud</strong><span>Saved to Supabase</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${drafts} draft${drafts === 1 ? '' : 's'} · ${published} published</span></div>${flows.length ? `<section class="flow-grid">${flows.map(flow => `<article class="flow-card" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="Edit ${esc(flow.jobTitle)}"><div class="flow-card-preview"><span class="flow-preview-label">A glimpse of your flow</span><span class="mini-node" style="left:9%;top:56px;width:93px"><i></i><b></b></span><span class="mini-wire" style="left:28%;top:73px;width:17%;transform:rotate(0deg)"></span><span class="mini-node" style="left:45%;top:43px;width:102px"><i style="width:49px"></i><b></b></span><span class="mini-wire" style="left:67%;top:58px;width:12%;transform:rotate(-25deg)"></span><span class="mini-node" style="left:78%;top:27px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span><span class="mini-wire" style="left:67%;top:67px;width:12%;transform:rotate(25deg)"></span><span class="mini-node" style="left:78%;top:77px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span></div><div class="flow-card-body"><div class="flow-card-top"><span class="${flow.publicationStatus === 'published' ? 'published-tag' : 'draft-tag'}"><span class="status-dot"></span>${flow.publicationStatus === 'published' ? 'Published' : 'Draft'}</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><div class="flow-card-foot"><span class="flow-count">${ICONS.node}${nodeSummary(flow)}</span><span>${ago(flow.updatedAt)}</span></div></div></article>`).join('')}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Make applying feel human.</h1><p>Design clear, considered journeys for the people behind every application.</p></div><div class="dash-action"><button class="btn" id="workspace-details">Workspace details</button><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.node}</span><div><strong>${nodes}</strong><span>Steps in your journeys</span></div></div><div class="stat"><span class="stat-icon">⌁</span><div><strong>Cloud</strong><span>Saved to Supabase</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${drafts} draft${drafts === 1 ? '' : 's'} · ${published} published</span></div>${flows.length ? `<section class="flow-grid">${flows.map(flow => `<article class="flow-card" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="Edit ${esc(flow.jobTitle)}"><div class="flow-card-preview"><span class="flow-preview-label">A glimpse of your flow</span><span class="mini-node" style="left:9%;top:56px;width:93px"><i></i><b></b></span><span class="mini-wire" style="left:28%;top:73px;width:17%;transform:rotate(0deg)"></span><span class="mini-node" style="left:45%;top:43px;width:102px"><i style="width:49px"></i><b></b></span><span class="mini-wire" style="left:67%;top:58px;width:12%;transform:rotate(-25deg)"></span><span class="mini-node" style="left:78%;top:27px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span><span class="mini-wire" style="left:67%;top:67px;width:12%;transform:rotate(25deg)"></span><span class="mini-node" style="left:78%;top:77px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span></div><div class="flow-card-body"><div class="flow-card-top"><span class="${flow.publicationStatus === 'published' ? 'published-tag' : 'draft-tag'}"><span class="status-dot"></span>${flow.publicationStatus === 'published' ? 'Published' : 'Draft'}</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><div class="flow-card-foot"><span class="flow-count">${ICONS.node}${nodeSummary(flow)}</span><span>${ago(flow.updatedAt)}</span></div></div></article>`).join('')}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div></div>`;
+    bindSidebar();
     root.querySelector('#empty-new-flow')?.addEventListener('click', showNewFlow);
     root.querySelector('#new-flow').addEventListener('click', showNewFlow);
     root.querySelector('#workspace-details').addEventListener('click', showWorkspaceDetails);
@@ -84,11 +103,118 @@
     root.querySelectorAll('.flow-menu').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); showFlowMenu(button.dataset.menu); }));
   }
 
+  async function renderApplicants() {
+    currentId = null; selectedId = null;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><select id="applicant-flow-filter" class="applicants-filter" aria-label="Filter applicants by job"><option value="">All jobs</option>${flows.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join('')}</select><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button></div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
+    bindSidebar();
+    root.querySelector('#signout').addEventListener('click', doSignOut);
+    root.querySelector('#applicant-flow-filter').addEventListener('change', event => { applicantFilter = event.target.value; void renderApplicants(); });
+    root.querySelector('#applicant-search').addEventListener('input', event => {
+      applicantSearch = event.target.value;
+      renderApplicantBoard();
+    });
+    root.querySelector('#refresh-applicants').addEventListener('click', () => { void renderApplicants(); });
+    try {
+      applicants = await window.PathwayBackend.listApplicants(workspace.id, applicantFilter);
+      renderApplicantBoard();
+    } catch (error) {
+      const content = root.querySelector('#applicants-content');
+      if (content) content.innerHTML = `<div class="auth-error show" role="alert">${esc(`Could not load applicants: ${error.message || 'check your connection and try again'}`)}</div>`;
+    }
+  }
+
+  function renderApplicantBoard() {
+    const content = root.querySelector('#applicants-content');
+    if (!content) return;
+    const term = applicantSearch.trim().toLowerCase();
+    const visible = applicants.filter(applicant => {
+      const flow = flows.find(item => item.cloudId === applicant.flow_id);
+      return !term || `${applicant.candidate_name} ${applicant.candidate_email} ${flow?.jobTitle || ''} ${flow?.companyName || ''}`.toLowerCase().includes(term);
+    });
+    const filterName = applicantFilter ? flows.find(flow => flow.cloudId === applicantFilter)?.jobTitle : '';
+    if (!applicants.length && !applicantFilter && !term) {
+      const published = flows.filter(flow => flow.publicationStatus === 'published' && flow.activePublishedFlowId);
+      content.innerHTML = `<section class="applicants-empty"><span class="brand-mark">♧</span><h2>No applicants yet</h2><p>Applications for published jobs will appear here as candidates submit them. Review a test application before sharing your job links widely.</p>${published.length ? `<button class="btn btn-primary" id="open-published-flow">View published jobs</button>` : `<button class="btn btn-primary" id="open-flows">Go to dashboard</button>`}</section>`;
+      content.querySelector('#open-published-flow')?.addEventListener('click', renderDashboard);
+      content.querySelector('#open-flows')?.addEventListener('click', renderDashboard);
+      return;
+    }
+    content.innerHTML = `<div class="kanban-summary"><strong>${visible.length}</strong> ${visible.length === 1 ? 'applicant' : 'applicants'}${filterName ? ` for <strong>${esc(filterName)}</strong>` : ' across all jobs'}${applicants.length >= 1000 ? ' · Showing the latest 1,000; filter by job to narrow the list.' : ''}</div><section class="kanban-board" aria-label="Applicant pipeline">${applicantStages.map(stage => {
+      const cards = visible.filter(applicant => applicant.status === stage.key);
+      return `<section class="kanban-column" data-stage="${stage.key}" aria-label="${stage.label}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${stage.label}</div><span class="kanban-count">${cards.length}</span></div><div class="applicant-list">${cards.length ? cards.map(applicant => `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div></article>`).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
+    }).join('')}</section>`;
+    content.querySelectorAll('.applicant-card').forEach(card => {
+      card.addEventListener('click', () => showApplicantDetails(card.dataset.applicant));
+      card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showApplicantDetails(card.dataset.applicant); } });
+      card.addEventListener('dragstart', event => {
+        card.classList.add('dragging');
+        event.dataTransfer.setData('text/plain', card.dataset.applicant);
+        event.dataTransfer.effectAllowed = 'move';
+      });
+      card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    });
+    content.querySelectorAll('.kanban-column').forEach(column => {
+      column.addEventListener('dragover', event => { event.preventDefault(); column.classList.add('drag-over'); event.dataTransfer.dropEffect = 'move'; });
+      column.addEventListener('dragleave', event => { if (!column.contains(event.relatedTarget)) column.classList.remove('drag-over'); });
+      column.addEventListener('drop', event => {
+        event.preventDefault(); column.classList.remove('drag-over');
+        const applicantId = event.dataTransfer.getData('text/plain');
+        if (applicantId) void moveApplicant(applicantId, column.dataset.stage);
+      });
+    });
+  }
+
+  function formatApplicantDate(value) {
+    if (!value) return 'Just now';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Just now' : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+  }
+
+  async function moveApplicant(id, status) {
+    const applicant = applicants.find(item => item.id === id);
+    if (!applicant || applicant.status === status || !applicantStages.some(stage => stage.key === status)) return;
+    const oldStatus = applicant.status;
+    applicant.status = status;
+    renderApplicantBoard();
+    try {
+      const updated = await window.PathwayBackend.updateApplicantStatus(id, status);
+      applicant.status = updated.status;
+      applicant.updated_at = updated.updated_at;
+      renderApplicantBoard();
+      if (modalRoot.querySelector(`[data-detail-applicant="${id}"]`)) showApplicantDetails(id);
+      showToast(`Applicant moved to ${applicantStages.find(stage => stage.key === status).label}.`);
+    } catch (error) {
+      applicant.status = oldStatus;
+      renderApplicantBoard();
+      showToast(`Could not update applicant stage: ${error.message || 'please retry'}`);
+    }
+  }
+
+  function showApplicantDetails(id) {
+    const applicant = applicants.find(item => item.id === id);
+    if (!applicant) return;
+    const flow = flows.find(item => item.cloudId === applicant.flow_id);
+    const detailFields = Object.entries(applicant.candidate_info || {}).filter(([, value]) => value !== null && value !== '' && value !== undefined);
+    const answers = Array.isArray(applicant.responses) ? applicant.responses : [];
+    const statusOptions = applicantStages.map(stage => `<option value="${stage.key}" ${applicant.status === stage.key ? 'selected' : ''}>${stage.label}</option>`).join('');
+    setModal(`<section class="applicant-detail-modal" data-detail-applicant="${esc(applicant.id)}"><div class="modal-head applicant-detail-head"><div class="applicant-detail-title"><div class="applicant-avatar" aria-hidden="true">${esc(initials(applicant.candidate_name))}</div><div><div class="eyebrow" style="margin-bottom:5px">${esc(flow?.jobTitle || 'Application')}</div><h2>${esc(applicant.candidate_name)}</h2><div class="muted">${esc(applicant.candidate_email)}</div></div></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="applicant-detail-section"><div class="applicant-detail-actions"><label class="applicant-info-item"><span>Hiring stage</span><select class="applicant-status-select" id="applicant-status-select">${statusOptions}</select></label><button class="btn applicant-resume-button" id="open-applicant-resume">↧ &nbsp;Open ${esc(applicant.resume_filename || 'resume')}</button></div></div><div class="applicant-detail-section"><h3>Candidate details</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Full name</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>Email address</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(C.OPTIONAL_FIELDS.find(field => field.key === key)?.label || key)}</span><strong>${esc(value)}</strong></div>`).join('')}</div></div><div class="applicant-detail-section"><h3>Application answers · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || 'Application question')}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : '<div class="board-empty">No written answers were submitted for this flow.</div>'}</div><div class="applicant-detail-section"><h3>Application record</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Submitted</span><strong>${esc(new Date(applicant.submitted_at).toLocaleString())}</strong></div><div class="applicant-info-item"><span>Privacy notice</span><strong>${esc(applicant.privacy_notice_version || 'Recorded')}</strong></div></div><p class="applicant-privacy-note">This applicant record is visible only to this workspace. Resume access uses a short-lived, private download link.</p></div></section>`);
+    modalRoot.querySelector('#applicant-status-select').addEventListener('change', event => { void moveApplicant(applicant.id, event.target.value); });
+    modalRoot.querySelector('#open-applicant-resume').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true; button.textContent = 'Preparing secure link…';
+      try {
+        const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path);
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } catch (error) { showToast(`Could not open resume: ${error.message || 'please retry'}`); }
+      finally { if (button.isConnected) { button.disabled = false; button.innerHTML = `↧ &nbsp;Open ${esc(applicant.resume_filename || 'resume')}`; } }
+    });
+  }
+
   function showWorkspaceDetails() {
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Private workspace</div><h2>${esc(workspace.name)}</h2><p>Signed in as ${esc(user.email)}.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="prototype-note" style="margin:0">This first release gives each account one private workspace. Your job flows are saved in Supabase and isolated with row-level security. Inviting teammates is not available yet. Candidate submissions are not stored or delivered in this release.</div><div class="modal-actions"><button class="btn btn-primary" data-close>Got it</button></div>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Private workspace</div><h2>${esc(workspace.name)}</h2><p>Signed in as ${esc(user.email)}.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="prototype-note" style="margin:0">This first release gives each account one private workspace. Your job flows are saved in Supabase and isolated with row-level security. Inviting teammates is not available yet. Candidate applications are visible in the Applicants board and remain private to this workspace.</div><div class="modal-actions"><button class="btn btn-primary" data-close>Got it</button></div>`);
   }
   async function doSignOut() {
-    try { await window.PathwayBackend.signOut(); flows = []; workspace = null; user = null; window.PathwayAuth.renderAuth(); }
+    try { await window.PathwayBackend.signOut(); flows = []; applicants = []; workspace = null; user = null; window.PathwayAuth.renderAuth(); }
     catch (error) { showToast(`Could not sign out: ${error.message || 'please retry'}`); }
   }
 
@@ -103,7 +229,7 @@
   function showFlowMenu(id) {
     const flow = flows.find(item => item.id === id); if (!flow) return;
     const isPublished = flow.publicationStatus === 'published' && Boolean(flow.activePublishedFlowId);
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${isPublished ? 'Published flow' : 'Draft flow'}</div><h2>${esc(flow.jobTitle)}</h2><p>${esc(flow.companyName)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">Delete flow</button><div style="display:flex;gap:8px;flex-wrap:wrap">${isPublished ? '<button class="btn" id="copy-flow-url">Copy job link</button>' : ''}<button class="btn ${isPublished ? '' : 'btn-primary'}" id="toggle-flow-status">${isPublished ? 'Unpublish' : 'Publish'}</button></div></div>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${isPublished ? 'Published flow' : 'Draft flow'}</div><h2>${esc(flow.jobTitle)}</h2><p>${esc(flow.companyName)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="danger-confirm"><strong>Permanent deletion.</strong> Removing this job also deletes every application and private resume submitted to it. This cannot be undone.</div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">Delete flow</button><div style="display:flex;gap:8px;flex-wrap:wrap">${isPublished ? '<button class="btn" id="copy-flow-url">Copy job link</button>' : ''}<button class="btn ${isPublished ? '' : 'btn-primary'}" id="toggle-flow-status">${isPublished ? 'Unpublish' : 'Publish'}</button></div></div>`);
     modalRoot.querySelector('#copy-flow-url')?.addEventListener('click', () => copyFlowUrl(flow, true));
     modalRoot.querySelector('#toggle-flow-status').addEventListener('click', async event => {
       const button = event.currentTarget;
@@ -122,8 +248,13 @@
     });
     modalRoot.querySelector('#delete-flow').addEventListener('click', async () => {
       const button = modalRoot.querySelector('#delete-flow'); button.disabled = true; button.textContent = 'Deleting…';
-      try { await window.PathwayBackend.deleteFlow(flow, workspace); flows = flows.filter(item => item.id !== id); closeModal(); renderDashboard(); showToast('Flow deleted.'); }
-      catch (error) { button.disabled = false; button.textContent = 'Delete flow'; showToast(`Could not delete this flow: ${error.message || 'try again'}`); }
+      try {
+        const result = await window.PathwayBackend.deleteFlow(flow, workspace);
+        flows = flows.filter(item => item.id !== id);
+        applicants = applicants.filter(item => item.flow_id !== flow.cloudId);
+        closeModal(); renderDashboard();
+        showToast(result && result.resumesRemoved === false ? 'Flow and applications deleted. Some resume files may need cleanup.' : 'Flow, applications, and resumes deleted.');
+      } catch (error) { button.disabled = false; button.textContent = 'Delete flow'; showToast(`Could not delete this flow: ${error.message || 'try again'}`); }
     });
   }
 
@@ -133,7 +264,8 @@
 
   function renderEditor() {
     const flow = currentFlow(); if (!flow) return renderDashboard();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name">${esc(workspace.name)}</span><span class="auth-user">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : 'Publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag to arrange, drag ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status">Drag a connection point to another step · Every route needs an ending</div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name">${esc(workspace.name)}</span><span class="auth-user">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : 'Publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag to arrange, drag ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status">Drag a connection point to another step · Every route needs an ending</div></main></div></div>`;
+    bindSidebar();
     root.querySelector('#brand-home').addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
     root.querySelector('#signout').addEventListener('click', doSignOut);
     root.querySelector('#dashboard-back').addEventListener('click', renderDashboard);
@@ -402,6 +534,8 @@
     workspace = context.workspace;
     user = context.user;
     flows = context.flows;
-    renderDashboard();
+    applicants = []; applicantFilter = ''; applicantSearch = '';
+    const requestedPage = window.location.hash.replace(/^#/, '');
+    if (requestedPage === 'applicants') void renderApplicants(); else renderDashboard();
   });
 })();
