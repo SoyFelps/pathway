@@ -1,35 +1,33 @@
 # Pathway
 
-**A clearer way to hire.** Pathway is a static, interactive prototype for designing job application journeys. It is intended for portfolio demonstration—not as a live hiring product.
+**A calmer, clearer way to hire.** Pathway is an early-access web app for creating thoughtful job pages and application flows. The current foundation adds authenticated company workspaces and cloud-saved flows on Supabase.
 
-## Try it
+## Run the app
 
-Open `index.html` from a static web server or publish the repository with GitHub Pages. There is no build step, package installation, backend, or authentication.
+This repository is a static HTML/CSS/JavaScript app with no build step. Publish the root of `main` with GitHub Pages. `supabase-config.js` contains the project URL and browser-safe publishable key; the Supabase `service_role` key must never be placed in client code.
 
-The builder includes a seeded **Senior Product Designer** example so the branching canvas is immediately explorable. Use **New flow** to create another job. Drafts are saved in the current browser.
+For local development, serve the repository root with any static file server (for example `python3 -m http.server 8000`). Authentication and data access still use the configured Supabase project.
 
-## Files
+Run the local flow-model checks with `node --test tests/pathway.test.js`.
 
-- `index.html` — HR dashboard and visual flow builder.
-- `apply.html` — standalone public job page and candidate flow.
-- `pathway.js` — shared flow model, validation, branching traversal, local draft storage, and compressed URL encoding.
-- `candidate.js` — shared landing, candidate-details form, interstitial, question, and completion experience.
-- `builder.js` — dashboard, canvas interactions, step editing, preview, and publish action.
-- `styles.css` — responsive shared visual system.
+## What is implemented
 
-## Prototype behavior
+- Email/password sign-up and sign-in through Supabase Auth. A new account receives exactly one private workspace, created by a database trigger.
+- Job-flow drafts are saved to Supabase under the authenticated owner’s workspace. Autosaves are debounced; the browser no longer acts as the primary data store.
+- Workspace-scoped Row Level Security protects reading, creating, updating, and deleting drafts. Owners cannot create a flow under another workspace.
+- Publish creates an immutable snapshot. The share link contains an unguessable snapshot ID; `apply.html` fetches the snapshot through a narrowly scoped public Postgres function, not from the private drafts table.
+- The visual builder still supports a fixed candidate-details step, optional fields, draggable questions, branching answers, preview, and distinct completion paths.
 
-- Create multiple job flows and edit company name, title, and description.
-- The fixed Candidate Details step always collects name, email, and a resume file name. Optional fields can be selected per flow.
-- Add short-text, single-choice (answer-specific branches), multi-choice, and end steps. Drag canvas nodes and connection handles.
-- Preview the candidate experience before sharing.
-- Publish a snapshot as `apply.html#data=...`. The flow JSON is compressed with the browser's built-in deflate stream when available and encoded in the link; a plain encoded fallback is used in older browsers.
-- Candidate submissions are logged to the console and stored only in the current browser under `pathway:demo-submissions:v1`. The resume input is not uploaded; only its filename is collected.
+## Database migration
 
-## GitHub Pages
+The initial migration creates `workspaces`, `application_flows`, and `published_flows`; adds the first-account workspace trigger; and enables RLS. Public access is limited to the published snapshot lookup function. Keep applicant-submission tables private until a dedicated submission, anti-abuse, privacy, and retention design is implemented.
 
-In the repository settings, choose **Pages → Deploy from a branch**, select `main` and `/ (root)`, and save. GitHub Pages serves the static files directly. Since `apply.html` uses a relative path, published links also work when the repository is hosted under a project subpath.
+## Important configuration
 
-## Honest limitations
+Before using a deployed site, configure Supabase Auth’s **Site URL** and allowed **Redirect URLs** for the exact GitHub Pages origin and repository path. The app sends confirmation links to its current page. Configure email delivery and confirmation policies in Supabase Auth as appropriate for the launch.
 
-There is no candidate database, real resume upload/storage, email notification, user account, or cross-device synchronization. Drafts and demo submission records are local to one browser. Published links contain the full flow snapshot and can become long for unusually large flows. Do not enter real applicant information.
+The currently selected project is **PathwayAPP**. The publishable key committed in `supabase-config.js` is intentionally public. Security relies on Auth, RLS, and the restricted publish RPC—not secrecy of that key. Never use a service-role/secret key in the browser.
+
+## Deliberate limits in this first backend phase
+
+Each user owns one workspace; team invites and multiple-workspace membership are not implemented. Public candidate pages are demos: candidate details and answers are not stored or sent to employers, and resume files are not uploaded. There is no applicant database, email workflow, billing, audit/history UI, or account recovery interface yet. Use test data only until the candidate-submission phase and privacy notices are designed.

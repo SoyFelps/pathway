@@ -11,19 +11,25 @@
 </head>
 <body>
   <div id="candidate-app"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
   <script src="pathway.js"></script>
   <script src="candidate.js"></script>
+  <script src="backend.js"></script>
   <script>
     (async function () {
       const root = document.getElementById('candidate-app');
-      const match = window.location.hash.match(/(?:^|[&#])data=([^&]+)/);
-      if (!match) { PathwayCandidate.renderInvalid(root, 'This link is missing its flow data. Ask the hiring team for a complete application link.'); return; }
+      const match = window.location.hash.match(/(?:^|[&#])id=([^&]+)/);
+      if (!match) {
+        PathwayCandidate.renderInvalid(root, 'This link is missing its published application ID. Ask the hiring team for a new link.');
+        return;
+      }
       try {
-        const flow = await PathwayCore.decodeFlow(decodeURIComponent(match[1]));
+        const flow = await PathwayBackend.getPublishedFlow(decodeURIComponent(match[1]));
         document.title = `${flow.jobTitle || 'Apply'} · ${flow.companyName || 'Pathway'}`;
         PathwayCandidate.mountCandidate(root, flow);
       } catch (error) {
-        PathwayCandidate.renderInvalid(root, error.message || 'The application data could not be read.');
+        PathwayCandidate.renderInvalid(root, error.message || 'The application could not be loaded.');
       }
     })();
   </script>

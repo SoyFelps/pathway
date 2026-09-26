@@ -10,12 +10,15 @@
     arrow: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 5l7 7-7 7"/></svg>',
     copy: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>'
   };
-  let flows = C.loadFlows();
+  let flows = [];
+  let workspace = null;
+  let user = null;
   let currentId = null;
   let selectedId = null;
   let connectFrom = null;
   let toastTimer;
   let saveTimer;
+  let cloudSaveTimer;
   let previewController = null;
   let dragState = null;
 
@@ -23,16 +26,24 @@
   const esc = C.esc;
   const save = () => {
     const flow = currentFlow();
-    if (!flow) return;
+    if (!flow || !workspace) return;
     flow.updatedAt = new Date().toISOString();
-    C.saveFlows(flows);
     const indicator = document.querySelector('.save-indicator');
-    if (indicator) indicator.innerHTML = '<span class="status-dot"></span> Saved just now';
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      const item = document.querySelector('.save-indicator');
-      if (item) item.innerHTML = '<span class="status-dot"></span> Draft saved';
-    }, 1300);
+    if (indicator) indicator.innerHTML = '<span class="status-dot"></span> Saving…';
+    clearTimeout(cloudSaveTimer);
+    cloudSaveTimer = setTimeout(async () => {
+      try {
+        await window.PathwayBackend.saveFlow(flow, workspace);
+        const item = document.querySelector('.save-indicator');
+        if (item) item.innerHTML = '<span class="status-dot"></span> Saved securely';
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => { const current = document.querySelector('.save-indicator'); if (current) current.innerHTML = '<span class="status-dot"></span> Saved to workspace'; }, 1800);
+      } catch (error) {
+        const item = document.querySelector('.save-indicator');
+        if (item) item.innerHTML = '<span style="color:#b94841">Save failed</span>';
+        showToast(`Could not save this flow: ${error.message || 'check your connection'}`);
+      }
+    }, 350);
   };
   function showToast(message) {
     toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer);
@@ -59,11 +70,11 @@
     currentId = null; selectedId = null;
     const count = flows.length;
     const nodes = flows.reduce((sum, flow) => sum + flow.nodes.length, 0);
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="status-pill"><span class="status-dot"></span> Prototype workspace</span><button class="icon-btn" id="about-button" aria-label="About this prototype">i</button></div></header><main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Make applying feel human.</h1><p>Design clear, considered journeys for the people behind every application.</p></div><div class="dash-action"><button class="btn" id="view-limitations">About this prototype</button><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.node}</span><div><strong>${nodes}</strong><span>Steps in your journeys</span></div></div><div class="stat"><span class="stat-icon">⌁</span><div><strong>Local</strong><span>Saved in this browser</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${count} ${count === 1 ? 'draft' : 'drafts'}</span></div>${flows.length ? `<section class="flow-grid">${flows.map(flow => `<article class="flow-card" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="Edit ${esc(flow.jobTitle)}"><div class="flow-card-preview"><span class="flow-preview-label">A glimpse of your flow</span><span class="mini-node" style="left:9%;top:56px;width:93px"><i></i><b></b></span><span class="mini-wire" style="left:28%;top:73px;width:17%;transform:rotate(0deg)"></span><span class="mini-node" style="left:45%;top:43px;width:102px"><i style="width:49px"></i><b></b></span><span class="mini-wire" style="left:67%;top:58px;width:12%;transform:rotate(-25deg)"></span><span class="mini-node" style="left:78%;top:27px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span><span class="mini-wire" style="left:67%;top:67px;width:12%;transform:rotate(25deg)"></span><span class="mini-node" style="left:78%;top:77px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span></div><div class="flow-card-body"><div class="flow-card-top"><span class="draft-tag"><span class="status-dot"></span> Draft</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><div class="flow-card-foot"><span class="flow-count">${ICONS.node}${nodeSummary(flow)}</span><span>${ago(flow.updatedAt)}</span></div></div></article>`).join('')}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Make applying feel human.</h1><p>Design clear, considered journeys for the people behind every application.</p></div><div class="dash-action"><button class="btn" id="workspace-details">Workspace details</button><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.node}</span><div><strong>${nodes}</strong><span>Steps in your journeys</span></div></div><div class="stat"><span class="stat-icon">⌁</span><div><strong>Cloud</strong><span>Saved to Supabase</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${count} ${count === 1 ? 'draft' : 'drafts'}</span></div>${flows.length ? `<section class="flow-grid">${flows.map(flow => `<article class="flow-card" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="Edit ${esc(flow.jobTitle)}"><div class="flow-card-preview"><span class="flow-preview-label">A glimpse of your flow</span><span class="mini-node" style="left:9%;top:56px;width:93px"><i></i><b></b></span><span class="mini-wire" style="left:28%;top:73px;width:17%;transform:rotate(0deg)"></span><span class="mini-node" style="left:45%;top:43px;width:102px"><i style="width:49px"></i><b></b></span><span class="mini-wire" style="left:67%;top:58px;width:12%;transform:rotate(-25deg)"></span><span class="mini-node" style="left:78%;top:27px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span><span class="mini-wire" style="left:67%;top:67px;width:12%;transform:rotate(25deg)"></span><span class="mini-node" style="left:78%;top:77px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span></div><div class="flow-card-body"><div class="flow-card-top"><span class="draft-tag"><span class="status-dot"></span> Draft</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><div class="flow-card-foot"><span class="flow-count">${ICONS.node}${nodeSummary(flow)}</span><span>${ago(flow.updatedAt)}</span></div></div></article>`).join('')}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div>`;
     root.querySelector('#empty-new-flow')?.addEventListener('click', showNewFlow);
     root.querySelector('#new-flow').addEventListener('click', showNewFlow);
-    root.querySelector('#view-limitations').addEventListener('click', showAbout);
-    root.querySelector('#about-button').addEventListener('click', showAbout);
+    root.querySelector('#workspace-details').addEventListener('click', showWorkspaceDetails);
+    root.querySelector('#signout').addEventListener('click', doSignOut);
     root.querySelectorAll('.flow-card').forEach(card => {
       card.addEventListener('click', event => { if (!event.target.closest('.flow-menu')) openFlow(card.dataset.flow); });
       card.addEventListener('keydown', event => { if (event.key === 'Enter') openFlow(card.dataset.flow); });
@@ -71,8 +82,12 @@
     root.querySelectorAll('.flow-menu').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); showFlowMenu(button.dataset.menu); }));
   }
 
-  function showAbout() {
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">A portfolio prototype</div><h2>Thoughtful flows, no backend.</h2><p>Pathway is an interactive static demo of a visual hiring application builder.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="prototype-note" style="margin:0">Draft flows live in this browser’s local storage. Published links contain a compressed snapshot of the flow. Candidate responses are only saved in this browser as a demo. There are no accounts, uploads, emails, candidate database, or cross-device sync.</div><div class="modal-actions"><button class="btn btn-primary" data-close>Got it</button></div>`);
+  function showWorkspaceDetails() {
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Private workspace</div><h2>${esc(workspace.name)}</h2><p>Signed in as ${esc(user.email)}.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="prototype-note" style="margin:0">This first release gives each account one private workspace. Your job flows are saved in Supabase and isolated with row-level security. Inviting teammates is not available yet. Candidate submissions are not stored or delivered in this release.</div><div class="modal-actions"><button class="btn btn-primary" data-close>Got it</button></div>`);
+  }
+  async function doSignOut() {
+    try { await window.PathwayBackend.signOut(); flows = []; workspace = null; user = null; window.PathwayAuth.renderAuth(); }
+    catch (error) { showToast(`Could not sign out: ${error.message || 'please retry'}`); }
   }
 
   function showNewFlow() {
@@ -80,14 +95,16 @@
     modalRoot.querySelector('#new-flow-form').addEventListener('submit', event => {
       event.preventDefault(); const data = new FormData(event.currentTarget);
       const flow = C.createFlow(data.get('companyName').trim(), data.get('jobTitle').trim(), data.get('jobDescription').trim());
-      flows.unshift(flow); C.saveFlows(flows); closeModal(); openFlow(flow.id);
+      flows.unshift(flow); closeModal(); openFlow(flow.id); save();
     });
   }
   function showFlowMenu(id) {
     const flow = flows.find(item => item.id === id); if (!flow) return;
     setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Draft actions</div><h2>${esc(flow.jobTitle)}</h2><p>${esc(flow.companyName)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions" style="justify-content:space-between"><button class="btn btn-danger" id="delete-flow">Delete draft</button><button class="btn btn-primary" data-close>Keep flow</button></div>`);
-    modalRoot.querySelector('#delete-flow').addEventListener('click', () => {
-      flows = flows.filter(item => item.id !== id); C.saveFlows(flows); closeModal(); renderDashboard(); showToast('Draft deleted.');
+    modalRoot.querySelector('#delete-flow').addEventListener('click', async () => {
+      const button = modalRoot.querySelector('#delete-flow'); button.disabled = true; button.textContent = 'Deleting…';
+      try { await window.PathwayBackend.deleteFlow(flow, workspace); flows = flows.filter(item => item.id !== id); closeModal(); renderDashboard(); showToast('Draft deleted.'); }
+      catch (error) { button.disabled = false; button.textContent = 'Delete draft'; showToast(`Could not delete this draft: ${error.message || 'try again'}`); }
     });
   }
 
@@ -97,8 +114,9 @@
 
   function renderEditor() {
     const flow = currentFlow(); if (!flow) return renderDashboard();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="status-pill"><span class="status-dot"></span> Prototype workspace</span></div></header><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span> Draft saved</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button><button class="btn btn-primary" id="publish-btn">Publish &nbsp;↗</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag to arrange, drag ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status">Drag a connection point to another step · Every route needs an ending</div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name">${esc(workspace.name)}</span><span class="auth-user">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button><button class="btn btn-primary" id="publish-btn">Publish &nbsp;↗</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag to arrange, drag ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status">Drag a connection point to another step · Every route needs an ending</div></div>`;
     root.querySelector('#brand-home').addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
+    root.querySelector('#signout').addEventListener('click', doSignOut);
     root.querySelector('#dashboard-back').addEventListener('click', renderDashboard);
     root.querySelector('#preview-btn').addEventListener('click', openPreview);
     root.querySelector('#publish-btn').addEventListener('click', publishFlow);
@@ -312,9 +330,9 @@
       setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Before you publish</div><h2>Your journey needs one more pass.</h2><p>${esc(error.message)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn btn-primary" data-close>Back to the builder</button></div>`); return;
     }
     let link;
-    try { const payload = await C.encodeFlow(flow); const url = new URL('apply.html', window.location.href); url.hash = `data=${payload}`; link = url.href; }
-    catch (error) { showToast(error.message || 'This application link could not be created.'); return; }
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Snapshot ready</div><h2>Your job page is ready to share.</h2><p>This link contains a read-only snapshot of the flow. Your local draft can continue to change.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="publish-link" id="share-url">${esc(link)}</div><div class="prototype-note">The link opens the candidate experience. It can get long for very large flows. Nothing is published to a hiring system or candidate database.</div><div class="modal-actions"><button class="btn" id="open-link">Open candidate page</button><button class="btn btn-primary" id="copy-link">${ICONS.copy} &nbsp;Copy link</button></div>`);
+    try { const token = await window.PathwayBackend.publishFlow(flow, workspace); const url = new URL('apply.html', window.location.href); url.hash = `id=${encodeURIComponent(token)}`; link = url.href; }
+    catch (error) { showToast(error.message || 'This application could not be published.'); return; }
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Published snapshot</div><h2>Your job page is ready to share.</h2><p>This link opens a read-only version of the flow stored in your workspace. New edits won't change this published snapshot.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="publish-link" id="share-url">${esc(link)}</div><div class="prototype-note">The candidate form is public, but this early release does not yet save or deliver application responses. Avoid using real applicant data.</div><div class="modal-actions"><button class="btn" id="open-link">Open candidate page</button><button class="btn btn-primary" id="copy-link">${ICONS.copy} &nbsp;Copy link</button></div>`);
     modalRoot.querySelector('#copy-link').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(link); showToast('Application link copied.'); closeModal(); }
       catch (_) { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(modalRoot.querySelector('#share-url')); selection.removeAllRanges(); selection.addRange(range); showToast('Select and copy the highlighted link.'); }
@@ -323,5 +341,10 @@
   }
 
   window.addEventListener('pointerup', () => { if (connectFrom && window.pendingPointer) { connectFrom = null; window.pendingPointer = null; drawCanvas(); } });
-  renderDashboard();
+  window.PathwayAuth.start(context => {
+    workspace = context.workspace;
+    user = context.user;
+    flows = context.flows;
+    renderDashboard();
+  });
 })();

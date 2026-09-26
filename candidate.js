@@ -1,7 +1,7 @@
 /* Shared candidate journey renderer used by apply.html and the builder preview. */
 (function () {
   const C = window.PathwayCore;
-  const INFO_MESSAGE = 'The company wants to know a little bit more about you. Please answer the following questions to submit your application.';
+  const INFO_MESSAGE = 'The company wants to know a little bit more about you. Please answer the following questions to preview the application flow.';
 
   function candidateFieldHtml(key, optional = false) {
     const meta = C.FIELD_META[key] || C.OPTIONAL_FIELDS.find(field => field.key === key);
@@ -32,7 +32,7 @@
     function renderLanding() {
       const optional = C.OPTIONAL_FIELDS.filter(field => flow.candidateInfoFields && flow.candidateInfoFields[field.key]);
       const initials = (flow.companyName || 'P').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-      root.innerHTML = `<div class="candidate-app"><header class="candidate-header"><a class="brand" href="#" aria-label="Pathway"><span class="brand-mark">↗</span>pathway</a><span class="candidate-header-note">A thoughtful application starts here</span></header><main class="candidate-landing"><section class="job-copy"><div class="company-lockup"><span class="company-avatar">${C.esc(initials || 'P')}</span><div><div class="company-label">${C.esc(flow.companyName || 'Hiring team')}</div><div class="muted" style="font-size:11px;margin-top:3px">Careers</div></div></div><div class="job-kicker">Open position</div><h1 class="job-title">${C.esc(flow.jobTitle || 'Open position')}</h1><div class="job-description">${C.esc(flow.jobDescription || 'We’re excited to meet you. Tell us a little about yourself to get started.')}</div><div class="job-meta"><span class="meta-chip">Application · 3 min</span><span class="meta-chip">Direct application</span></div><div class="job-about"><h2>How to apply</h2><p>Start with a few details about yourself. We’ll then ask a small number of questions tailored to this role. Your progress stays in this browser while you complete the application.</p></div></section><section class="candidate-form-card"><h2>Start your application</h2><p class="form-intro">A few details to introduce yourself to ${C.esc(flow.companyName || 'the hiring team')}.</p><form id="candidate-info-form" novalidate>${candidateFieldHtml('name')}${candidateFieldHtml('email')}${candidateFieldHtml('resume')}${optional.map(field => candidateFieldHtml(field.key, true)).join('')}<button class="btn btn-primary candidate-apply" type="submit">Apply for this role <span aria-hidden="true">→</span></button><p class="privacy-note">Your information is only used for this prototype and stays in this browser.</p></form></section></main><footer class="candidate-footer">Powered by Pathway · A clearer way to hire</footer></div>`;
+      root.innerHTML = `<div class="candidate-app"><header class="candidate-header"><a class="brand" href="#" aria-label="Pathway"><span class="brand-mark">↗</span>pathway</a><span class="candidate-header-note">A thoughtful application starts here</span></header><main class="candidate-landing"><section class="job-copy"><div class="company-lockup"><span class="company-avatar">${C.esc(initials || 'P')}</span><div><div class="company-label">${C.esc(flow.companyName || 'Hiring team')}</div><div class="muted" style="font-size:11px;margin-top:3px">Careers</div></div></div><div class="job-kicker">Open position</div><h1 class="job-title">${C.esc(flow.jobTitle || 'Open position')}</h1><div class="job-description">${C.esc(flow.jobDescription || 'We’re excited to meet you. Tell us a little about yourself to get started.')}</div><div class="job-meta"><span class="meta-chip">Early access</span><span class="meta-chip">Demo flow · not accepting submissions yet</span></div><div class="job-about"><h2>How to apply</h2><p>Start with a few details about yourself. We’ll then ask a small number of questions tailored to this role. Your progress stays in this browser while you complete the application.</p></div></section><section class="candidate-form-card"><h2>Start your application</h2><p class="form-intro">A few details to introduce yourself to ${C.esc(flow.companyName || 'the hiring team')}.</p><form id="candidate-info-form" novalidate>${candidateFieldHtml('name')}${candidateFieldHtml('email')}${candidateFieldHtml('resume')}${optional.map(field => candidateFieldHtml(field.key, true)).join('')}<button class="btn btn-primary candidate-apply" type="submit">Explore application flow <span aria-hidden="true">→</span></button><p class="privacy-note">This early-access preview does not save or send your information to the company. Resume files are not uploaded.</p></form></section></main><footer class="candidate-footer">Powered by Pathway · A clearer way to hire</footer></div>`;
       const form = root.querySelector('#candidate-info-form');
       Object.entries(state.info).forEach(([key, value]) => { const input = form.elements[key]; if (input && input.type !== 'file') input.value = value; });
       form.addEventListener('submit', event => {
@@ -50,7 +50,7 @@
     }
 
     function renderInterstitial() {
-      root.innerHTML = `<main class="interstitial-screen"><section class="interstitial-content"><div class="interstitial-mark" aria-hidden="true">✳</div><div class="eyebrow" style="margin-bottom:13px">One more thing</div><h1>A little more about you.</h1><p>${C.esc(INFO_MESSAGE)}</p><button id="continue-questions" class="btn btn-primary">Continue to questions <span aria-hidden="true">→</span></button><div class="question-footnote">${C.esc(flow.companyName || 'The hiring team')} · ${C.esc(flow.jobTitle || 'Application')}</div></section></main>`;
+      root.innerHTML = `<main class="interstitial-screen"><section class="interstitial-content"><div class="interstitial-mark" aria-hidden="true">✳</div><div class="eyebrow" style="margin-bottom:13px">One more thing</div><h1>A little more about you.</h1><p>${C.esc(INFO_MESSAGE)}</p><div class="prototype-note">Preview only · Nothing you enter is sent or stored.</div><button id="continue-questions" class="btn btn-primary">Continue to questions <span aria-hidden="true">→</span></button><div class="question-footnote">${C.esc(flow.companyName || 'The hiring team')} · ${C.esc(flow.jobTitle || 'Application')}</div></section></main>`;
       root.querySelector('#continue-questions').addEventListener('click', () => {
         if (!state.current) { complete('submitted'); return; }
         if (state.current.type === 'end') { complete(state.current.subtype || 'submitted', state.current.label); return; }
@@ -109,17 +109,8 @@
     function complete(subtype, endingLabel) {
       state.screen = 'complete';
       const isDisqualified = subtype === 'disqualified';
-      const collected = { companyName: flow.companyName, jobTitle: flow.jobTitle, candidateInfo: state.info, answers: state.answers, completedAt: new Date().toISOString() };
-      if (!options.preview && !state.logged) {
-        state.logged = true;
-        console.info('[Pathway prototype] Application received (local demo only):', collected);
-        try {
-          const existing = JSON.parse(localStorage.getItem(C.ANSWERS_KEY) || '[]');
-          existing.push(collected);
-          localStorage.setItem(C.ANSWERS_KEY, JSON.stringify(existing));
-        } catch (error) { console.warn('Pathway could not save this local demo submission.', error); }
-      }
-      root.innerHTML = `<main class="completion-screen ${isDisqualified ? 'disqualified' : ''}"><section class="completion-content"><div class="completion-mark" aria-hidden="true">${isDisqualified ? '↗' : '✓'}</div><div class="eyebrow" style="margin-bottom:13px">${isDisqualified ? 'Thank you for your interest' : 'Application complete'}</div><h1>${isDisqualified ? 'Thanks for sharing.' : C.esc(endingLabel || 'Application received.')}</h1><p>${isDisqualified ? 'Based on the information shared, this role may not be the right fit right now. We appreciate your time and interest in ' + C.esc(flow.companyName || 'our team') + '.' : C.esc(flow.companyName || 'The hiring team') + ' has received your application. Thanks for taking the time to share a little about yourself.'}</p><a class="btn btn-primary" href="${options.preview ? '#' : 'index.html'}" id="finish-link">${options.preview ? 'Return to preview' : 'Done'}</a><div class="prototype-note">${options.preview ? 'Preview mode · Answers are not stored.' : 'Prototype note: answers are stored only in this browser as a demonstration. No hiring system or company receives them.'}</div></section></main>`;
+      // Candidate submissions are deliberately not sent or persisted in this foundation release.
+      root.innerHTML = `<main class="completion-screen ${isDisqualified ? 'disqualified' : ''}"><section class="completion-content"><div class="completion-mark" aria-hidden="true">${isDisqualified ? '↗' : '✓'}</div><div class="eyebrow" style="margin-bottom:13px">${isDisqualified ? 'Thank you for exploring' : 'Preview complete'}</div><h1>${isDisqualified ? 'Thanks for exploring.' : 'No application was sent.'}</h1><p>${isDisqualified ? 'This route ends here in the demo flow. We appreciate your time and interest in ' + C.esc(flow.companyName || 'the team') + '.' : 'You have reached the end of this application preview for ' + C.esc(flow.companyName || 'the hiring team') + '.'}</p><a class="btn btn-primary" href="${options.preview ? '#' : 'index.html'}" id="finish-link">${options.preview ? 'Return to preview' : 'Done'}</a><div class="prototype-note">Preview only · Your details and answers were not stored or sent to the company.</div></section></main>`;
       root.querySelector('#finish-link').addEventListener('click', event => { if (options.preview) { event.preventDefault(); options.onFinish && options.onFinish(); } });
     }
 
@@ -128,7 +119,7 @@
   }
 
   function renderInvalid(root, reason) {
-    root.innerHTML = `<main class="invalid-screen"><section class="invalid-content"><div class="invalid-mark" aria-hidden="true">!</div><div class="eyebrow" style="margin-bottom:13px">Link unavailable</div><h1>This link is invalid or incomplete.</h1><p>${C.esc(reason || 'Ask the hiring team for a fresh application link.')}</p><a class="btn btn-primary" href="index.html">Back to Pathway</a><div class="prototype-note">This is a static prototype. Published links contain the application flow in the URL; no account or server is needed.</div></section></main>`;
+    root.innerHTML = `<main class="invalid-screen"><section class="invalid-content"><div class="invalid-mark" aria-hidden="true">!</div><div class="eyebrow" style="margin-bottom:13px">Link unavailable</div><h1>This link is invalid or incomplete.</h1><p>${C.esc(reason || 'Ask the hiring team for a fresh application link.')}</p><a class="btn btn-primary" href="index.html">Back to Pathway</a><div class="prototype-note">Published job pages load a read-only snapshot by its unique link. The private draft and workspace remain inaccessible to public visitors.</div></section></main>`;
   }
 
   window.PathwayCandidate = { mountCandidate, renderInvalid, INFO_MESSAGE };

@@ -149,6 +149,7 @@
   async function decodeFlow(encoded) {
     if (!encoded) throw new Error('This link is missing its flow data.');
     const kind = encoded.slice(0, 2);
+    if (kind !== 'z.' && kind !== 'j.') throw new Error('This link format is not recognized.');
     const bytes = fromBase64Url(encoded.slice(2));
     let decodedBytes = bytes;
     if (kind === 'z.') {
