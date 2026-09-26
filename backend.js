@@ -151,12 +151,15 @@
     return data;
   }
 
-  async function getApplicantResumeUrl(path) {
+  async function getApplicantResumeUrl(path, download = false, filename = '') {
     await requireSession();
     if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('..')) throw new Error('This resume link is not valid.');
-    const { data, error } = await client.storage.from('applicant-resumes').createSignedUrl(path, 120, { download: true });
-    if (error) throw error;
-    return data.signedUrl;
+    const bucket = client.storage.from('applicant-resumes');
+    const result = download
+      ? await bucket.createSignedUrl(path, 120, { download: filename || true })
+      : await bucket.createSignedUrl(path, 120);
+    if (result.error) throw result.error;
+    return result.data.signedUrl;
   }
 
   async function submitApplication(application) {

@@ -37,7 +37,7 @@ test('applicant board filters by workspace and optional flow and validates stage
 
 test('workspace UI includes search, flow filter, four Kanban stages, card drag/drop, and detail review', () => {
   const builder = read('builder.js');
-  for (const text of ['Dashboard', 'Applicants', 'applicant-flow-filter', 'applicant-search', 'new', 'failed', 'promising', 'approved', 'dragstart', "dataTransfer.getData('text/plain')", 'showApplicantDetails', 'applicant-status-select', 'Open ${esc(applicant.resume_filename']) {
+  for (const text of ['Dashboard', 'Applicants', 'applicant-flow-filter', 'applicant-search', 'new', 'failed', 'promising', 'approved', 'dragstart', "dataTransfer.getData('text/plain')", 'showApplicantDetails', 'applicant-status-select', 'Preview PDF', 'Download resume', 'applicant-resume-preview', 'applicant-resume-frame']) {
     assert.ok(builder.includes(text), `missing expected applicants UI fragment: ${text}`);
   }
 });
@@ -90,13 +90,27 @@ test('Edge Function preflight uses a bodyless 204 response and allowlists the pu
   assert.match(edge, /"https:\/\/soyfelps\.github\.io"/);
 });
 
-test('resume opening reserves a browser tab during the click gesture and falls back to a short-lived secure link', () => {
+test('resume download reserves a browser tab during the click gesture and falls back to a short-lived secure link', () => {
   const builder = read('builder.js');
-  const handlerStart = builder.indexOf("modalRoot.querySelector('#open-applicant-resume').addEventListener('click'");
-  const handler = builder.slice(handlerStart, handlerStart + 1600);
+  const handlerStart = builder.indexOf("modalRoot.querySelector('#download-applicant-resume').addEventListener('click'");
+  const handler = builder.slice(handlerStart, handlerStart + 1200);
   assert.ok(handler.indexOf("window.open('about:blank'") < handler.indexOf('await window.PathwayBackend.getApplicantResumeUrl'));
   assert.match(handler, /tab\.location\.replace\(url\)/);
   assert.match(handler, /navigator\.clipboard\.writeText\(url\)/);
+});
+
+test('PDF preview uses an inline signed URL while download remains a separate forced-download link', () => {
+  const backend = read('backend.js');
+  const helperStart = backend.indexOf('async function getApplicantResumeUrl');
+  const helper = backend.slice(helperStart, helperStart + 700);
+  assert.match(helper, /download\s*\?\s*await bucket\.createSignedUrl\(path, 120, \{ download: filename \|\| true \}\)/);
+  assert.match(helper, /:\s*await bucket\.createSignedUrl\(path, 120\)/);
+  const builder = read('builder.js');
+  assert.match(builder, /applicant\.resume_content_type === 'application\/pdf'/);
+  assert.match(builder, /previewFrame\.src = url/);
+  assert.match(builder, /previewFrame\.removeAttribute\('src'\)/);
+  assert.match(builder, /getApplicantResumeUrl\(applicant\.resume_path, true, applicant\.resume_filename/);
+  assert.match(read('styles.css'), /\.applicant-resume-preview iframe\{[^}]*height:min\(70vh,760px\)/);
 });
 
 test('resume Storage policies qualify the object-path column to avoid workspace.name shadowing', () => {

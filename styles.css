@@ -29,3 +29,6 @@
 /* Keep editor actions centered over the canvas after adding the workspace rail. */
 @media(min-width:761px){.canvas-add,.canvas-status{left:calc((100vw - 120px)/2)}}
 @media(max-width:760px){.editor-main .editor-layout{grid-template-columns:minmax(0,1fr);height:calc(100vh - 220px);min-height:520px}.canvas-add,.canvas-status{left:50%;max-width:calc(100vw - 28px)}.inspector{border-left:0;border-top:1px solid var(--line)}}
+
+/* Private PDF resume preview */
+.applicant-resume-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.applicant-resume-preview{margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#f3f6f3}.applicant-resume-preview.is-hidden{display:none}.applicant-resume-preview-head{min-height:42px;padding:7px 10px 7px 13px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f8faf8;border-bottom:1px solid var(--line);color:#536258;font-size:11px;font-weight:650}.applicant-resume-preview iframe{display:block;width:100%;height:min(70vh,760px);min-height:360px;border:0;background:#e9eeea}@media(max-width:760px){.applicant-resume-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.applicant-resume-preview iframe{height:65vh;min-height:320px}}
