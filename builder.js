@@ -69,7 +69,8 @@
     return `Edited ${Math.floor(hours / 24)}d ago`;
   }
   function setModal(html) {
-    modalRoot.innerHTML = `<div class="modal-backdrop" role="presentation"><section class="modal" role="dialog" aria-modal="true">${html}</section></div>`;
+    const applicantReview = html.includes('applicant-review-layout');
+    modalRoot.innerHTML = `<div class="modal-backdrop${applicantReview ? ' applicant-review-backdrop' : ''}" role="presentation"><section class="modal${applicantReview ? ' applicant-review-shell' : ''}" role="dialog" aria-modal="true">${html}</section></div>`;
     modalRoot.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) closeModal(); });
     modalRoot.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', closeModal));
   }
@@ -196,14 +197,43 @@
     const flow = flows.find(item => item.cloudId === applicant.flow_id);
     const detailFields = Object.entries(applicant.candidate_info || {}).filter(([, value]) => value !== null && value !== '' && value !== undefined);
     const answers = Array.isArray(applicant.responses) ? applicant.responses : [];
+    const isPdf = applicant.resume_content_type === 'application/pdf';
+    const filename = applicant.resume_filename || 'resume';
     const statusOptions = applicantStages.map(stage => `<option value="${stage.key}" ${applicant.status === stage.key ? 'selected' : ''}>${stage.label}</option>`).join('');
-    setModal(`<section class="applicant-detail-modal" data-detail-applicant="${esc(applicant.id)}"><div class="modal-head applicant-detail-head"><div class="applicant-detail-title"><div class="applicant-avatar" aria-hidden="true">${esc(initials(applicant.candidate_name))}</div><div><div class="eyebrow" style="margin-bottom:5px">${esc(flow?.jobTitle || 'Application')}</div><h2>${esc(applicant.candidate_name)}</h2><div class="muted">${esc(applicant.candidate_email)}</div></div></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="applicant-detail-section"><div class="applicant-detail-actions"><label class="applicant-info-item"><span>Hiring stage</span><select class="applicant-status-select" id="applicant-status-select">${statusOptions}</select></label><div class="applicant-resume-actions">${applicant.resume_content_type === 'application/pdf' ? '<button class="btn applicant-resume-button" id="preview-applicant-resume" aria-expanded="false">▧ &nbsp;Preview PDF</button>' : ''}<button class="btn applicant-resume-button" id="download-applicant-resume">↓ &nbsp;Download resume</button></div></div><div class="applicant-resume-preview is-hidden" id="applicant-resume-preview"><div class="applicant-resume-preview-head"><span>Private PDF preview</span><button class="btn btn-sm" id="close-applicant-resume-preview">Close</button></div><iframe id="applicant-resume-frame" title="PDF preview of ${esc(applicant.resume_filename || 'applicant resume')}" loading="lazy" referrerpolicy="no-referrer"></iframe></div><div class="applicant-detail-section"><h3>Candidate details</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Full name</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>Email address</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(C.OPTIONAL_FIELDS.find(field => field.key === key)?.label || key)}</span><strong>${esc(value)}</strong></div>`).join('')}</div></div><div class="applicant-detail-section"><h3>Application answers · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || 'Application question')}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : '<div class="board-empty">No written answers were submitted for this flow.</div>'}</div><div class="applicant-detail-section"><h3>Application record</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Submitted</span><strong>${esc(new Date(applicant.submitted_at).toLocaleString())}</strong></div><div class="applicant-info-item"><span>Privacy notice</span><strong>${esc(applicant.privacy_notice_version || 'Recorded')}</strong></div></div><p class="applicant-privacy-note">This applicant record is visible only to this workspace. Resume access uses a short-lived, private download link.</p></div></section>`);
+
+    setModal(`<div class="applicant-review-layout" data-detail-applicant="${esc(applicant.id)}">
+      <section class="applicant-review-left" aria-label="Applicant details">
+        <header class="modal-head applicant-detail-head">
+          <div class="applicant-detail-title"><div class="applicant-avatar" aria-hidden="true">${esc(initials(applicant.candidate_name))}</div><div><div class="eyebrow" style="margin-bottom:5px">${esc(flow?.jobTitle || 'Application')}</div><h2>${esc(applicant.candidate_name)}</h2><div class="muted">${esc(applicant.candidate_email)}</div></div></div>
+          <button class="modal-x" data-close aria-label="Close applicant details">×</button>
+        </header>
+        <div class="applicant-review-content">
+          <section class="applicant-detail-section applicant-detail-actions-section"><div class="applicant-detail-actions">
+            <label class="applicant-info-item"><span>Hiring stage</span><select class="applicant-status-select" id="applicant-status-select">${statusOptions}</select></label>
+            <div class="applicant-resume-actions">${isPdf ? '<button class="btn applicant-resume-button" id="preview-applicant-resume" aria-expanded="false">▧ &nbsp;Preview resume</button>' : ''}<button class="btn applicant-resume-button" id="download-applicant-resume">↓ &nbsp;Download resume</button></div>
+          </div></section>
+          <section class="applicant-detail-section"><h3>Candidate details</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Full name</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>Email address</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(C.OPTIONAL_FIELDS.find(field => field.key === key)?.label || key)}</span><strong>${esc(value)}</strong></div>`).join('')}</div></section>
+          <section class="applicant-detail-section"><h3>Application answers · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || 'Application question')}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : '<div class="board-empty">No written answers were submitted for this flow.</div>'}</section>
+          <section class="applicant-detail-section"><h3>Application record</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Submitted</span><strong>${esc(new Date(applicant.submitted_at).toLocaleString())}</strong></div><div class="applicant-info-item"><span>Privacy notice</span><strong>${esc(applicant.privacy_notice_version || 'Recorded')}</strong></div></div><p class="applicant-privacy-note">This applicant record is visible only to this workspace. Resume links are private and expire after two minutes.</p></section>
+        </div>
+      </section>
+      <aside class="applicant-review-right" aria-label="Resume preview">
+        <div class="applicant-preview-empty" id="applicant-preview-empty"><span class="applicant-preview-icon">▧</span><h3>${isPdf ? 'Resume preview' : 'Preview unavailable'}</h3><p>${isPdf ? 'Select “Preview resume” to view this PDF securely beside the application details.' : 'This file type cannot be previewed in the browser. Download the resume to open it.'}</p></div>
+        <section class="applicant-resume-preview is-hidden" id="applicant-resume-preview" aria-label="PDF resume preview">
+          <div class="applicant-resume-preview-head"><div><span class="eyebrow">Private document</span><strong title="${esc(filename)}">${esc(filename)}</strong></div><button class="btn btn-sm" id="close-applicant-resume-preview">Close preview</button></div>
+          <iframe id="applicant-resume-frame" title="PDF preview of ${esc(filename)}" loading="lazy" referrerpolicy="no-referrer"></iframe>
+        </section>
+      </aside>
+    </div>`);
+
     modalRoot.querySelector('#applicant-status-select').addEventListener('change', event => { void moveApplicant(applicant.id, event.target.value); });
     const previewButton = modalRoot.querySelector('#preview-applicant-resume');
     const previewPanel = modalRoot.querySelector('#applicant-resume-preview');
     const previewFrame = modalRoot.querySelector('#applicant-resume-frame');
+    const previewPlaceholder = modalRoot.querySelector('#applicant-preview-empty');
     const closePreview = () => {
       previewPanel.classList.add('is-hidden');
+      previewPlaceholder.classList.remove('is-hidden');
       previewButton?.setAttribute('aria-expanded', 'false');
       previewFrame.removeAttribute('src');
     };
@@ -213,10 +243,11 @@
       try {
         const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path);
         previewFrame.src = url;
+        previewPlaceholder.classList.add('is-hidden');
         previewPanel.classList.remove('is-hidden');
         previewButton.setAttribute('aria-expanded', 'true');
       } catch (error) { showToast(`Could not preview resume: ${error.message || 'please retry'}`); }
-      finally { if (previewButton.isConnected) { previewButton.disabled = false; previewButton.innerHTML = '▧ &nbsp;Preview PDF'; } }
+      finally { if (previewButton.isConnected) { previewButton.disabled = false; previewButton.innerHTML = '▧ &nbsp;Preview resume'; } }
     });
     modalRoot.querySelector('#close-applicant-resume-preview')?.addEventListener('click', closePreview);
     modalRoot.querySelector('#download-applicant-resume').addEventListener('click', async event => {
@@ -225,7 +256,7 @@
       if (tab) tab.opener = null;
       button.disabled = true; button.textContent = 'Preparing download…';
       try {
-        const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path, true, applicant.resume_filename || 'resume');
+        const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path, true, filename);
         if (tab) tab.location.replace(url);
         else { await navigator.clipboard.writeText(url); showToast('Secure download link copied. It expires in two minutes.'); }
       } catch (error) {
@@ -234,7 +265,6 @@
       } finally { if (button.isConnected) { button.disabled = false; button.innerHTML = '↓ &nbsp;Download resume'; } }
     });
   }
-
   function showWorkspaceDetails() {
     setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Private workspace</div><h2>${esc(workspace.name)}</h2><p>Signed in as ${esc(user.email)}.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="prototype-note" style="margin:0">This first release gives each account one private workspace. Your job flows are saved in Supabase and isolated with row-level security. Inviting teammates is not available yet. Candidate applications are visible in the Applicants board and remain private to this workspace.</div><div class="modal-actions"><button class="btn btn-primary" data-close>Got it</button></div>`);
   }

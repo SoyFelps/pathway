@@ -32,3 +32,42 @@
 
 /* Private PDF resume preview */
 .applicant-resume-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.applicant-resume-preview{margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#f3f6f3}.applicant-resume-preview.is-hidden{display:none}.applicant-resume-preview-head{min-height:42px;padding:7px 10px 7px 13px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f8faf8;border-bottom:1px solid var(--line);color:#536258;font-size:11px;font-weight:650}.applicant-resume-preview iframe{display:block;width:100%;height:min(70vh,760px);min-height:360px;border:0;background:#e9eeea}@media(max-width:760px){.applicant-resume-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.applicant-resume-preview iframe{height:65vh;min-height:320px}}
+
+/* Full-screen applicant review with a dedicated resume pane */
+.applicant-review-backdrop{padding:0;align-items:stretch;justify-content:stretch;background:rgba(16,29,21,.42);backdrop-filter:blur(3px)}
+.applicant-review-shell{width:100%;max-width:none;height:100vh;height:100dvh;max-height:none;padding:0;border:0;border-radius:0;overflow:hidden;box-shadow:none}
+.applicant-review-layout{display:grid;grid-template-columns:minmax(390px,.9fr) minmax(0,1.1fr);width:100%;height:100%;background:#fff}
+.applicant-review-left{display:flex;flex-direction:column;min-width:0;min-height:0;background:#fff;border-right:1px solid var(--line)}
+.applicant-review-left .applicant-detail-head{flex:0 0 auto;margin:0;padding:24px clamp(20px,3vw,38px) 17px;border-bottom:1px solid #edf1ed}
+.applicant-review-left .applicant-detail-title h2{font-size:21px}
+.applicant-review-content{flex:1;min-height:0;overflow-y:auto;padding:0 clamp(20px,3vw,38px) 32px}
+.applicant-review-content .applicant-detail-section:first-child{padding-top:18px}
+.applicant-review-content .applicant-detail-actions{justify-content:space-between;align-items:flex-end}
+.applicant-review-content .applicant-info-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.applicant-resume-actions{display:flex;gap:8px;flex-wrap:wrap}
+.applicant-review-right{position:relative;display:flex;align-items:stretch;justify-content:stretch;min-width:0;min-height:0;overflow:hidden;background:#eef2ef}
+.applicant-preview-empty{width:min(100%,420px);margin:auto;padding:34px;text-align:center}
+.applicant-preview-icon{width:48px;height:48px;margin:0 auto 16px;border-radius:14px;display:grid;place-items:center;background:#e0ebe2;color:var(--green);font-size:22px}
+.applicant-preview-empty h3{margin:0 0 8px;font:700 17px var(--display);color:#2f4336}
+.applicant-preview-empty p{margin:0;color:#728076;font-size:12px;line-height:1.65}
+.applicant-preview-empty.is-hidden{display:none}
+.applicant-review-right .applicant-resume-preview{position:absolute;inset:0;display:flex;flex-direction:column;min-width:0;min-height:0;margin:0;border:0;border-radius:0;background:#e9eeea}
+.applicant-review-right .applicant-resume-preview.is-hidden{display:none}
+.applicant-review-right .applicant-resume-preview-head{flex:0 0 auto;min-height:62px;padding:10px 18px 10px 22px;background:#fff}
+.applicant-resume-preview-head>div{display:flex;flex-direction:column;min-width:0;gap:3px}
+.applicant-resume-preview-head strong{max-width:min(55vw,620px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#34463a;font-size:12px}
+.applicant-review-right .applicant-resume-preview iframe{flex:1;min-height:0;width:100%;height:auto;border:0;background:#e9eeea}
+@media(max-width:760px){
+  .applicant-review-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,46dvh) minmax(0,54dvh)}
+  .applicant-review-left{border-right:0;border-bottom:1px solid var(--line)}
+  .applicant-review-left .applicant-detail-head{padding:14px 16px 12px}
+  .applicant-review-left .applicant-detail-title h2{font-size:17px}
+  .applicant-review-content{padding:0 16px 20px}
+  .applicant-review-content .applicant-info-grid{grid-template-columns:1fr 1fr}
+  .applicant-review-content .applicant-detail-actions{align-items:flex-start;flex-direction:column}
+  .applicant-resume-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .applicant-resume-actions .btn,.applicant-status-select{width:100%}
+  .applicant-preview-empty{padding:18px}
+  .applicant-review-right .applicant-resume-preview-head{min-height:50px;padding:7px 10px}
+  .applicant-resume-preview-head strong{max-width:55vw}
+}

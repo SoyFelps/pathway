@@ -37,7 +37,7 @@ test('applicant board filters by workspace and optional flow and validates stage
 
 test('workspace UI includes search, flow filter, four Kanban stages, card drag/drop, and detail review', () => {
   const builder = read('builder.js');
-  for (const text of ['Dashboard', 'Applicants', 'applicant-flow-filter', 'applicant-search', 'new', 'failed', 'promising', 'approved', 'dragstart', "dataTransfer.getData('text/plain')", 'showApplicantDetails', 'applicant-status-select', 'Preview PDF', 'Download resume', 'applicant-resume-preview', 'applicant-resume-frame']) {
+  for (const text of ['Dashboard', 'Applicants', 'applicant-flow-filter', 'applicant-search', 'new', 'failed', 'promising', 'approved', 'dragstart', "dataTransfer.getData('text/plain')", 'showApplicantDetails', 'applicant-status-select', 'Preview resume', 'Download resume', 'applicant-review-layout', 'applicant-review-left', 'applicant-review-right', 'applicant-resume-preview', 'applicant-resume-frame']) {
     assert.ok(builder.includes(text), `missing expected applicants UI fragment: ${text}`);
   }
 });
@@ -106,11 +106,14 @@ test('PDF preview uses an inline signed URL while download remains a separate fo
   assert.match(helper, /download\s*\?\s*await bucket\.createSignedUrl\(path, 120, \{ download: filename \|\| true \}\)/);
   assert.match(helper, /:\s*await bucket\.createSignedUrl\(path, 120\)/);
   const builder = read('builder.js');
-  assert.match(builder, /applicant\.resume_content_type === 'application\/pdf'/);
+  assert.match(builder, /const isPdf = applicant\.resume_content_type === 'application\/pdf'/);
   assert.match(builder, /previewFrame\.src = url/);
   assert.match(builder, /previewFrame\.removeAttribute\('src'\)/);
-  assert.match(builder, /getApplicantResumeUrl\(applicant\.resume_path, true, applicant\.resume_filename/);
-  assert.match(read('styles.css'), /\.applicant-resume-preview iframe\{[^}]*height:min\(70vh,760px\)/);
+  assert.match(builder, /getApplicantResumeUrl\(applicant\.resume_path, true, filename\)/);
+  assert.match(builder, /Preview resume/);
+  assert.match(read('styles.css'), /\.applicant-review-layout\{display:grid;grid-template-columns:minmax\(390px/);
+  assert.match(read('styles.css'), /\.applicant-review-right \.applicant-resume-preview iframe\{flex:1/);
+  assert.match(read('styles.css'), /@media\(max-width:760px\)\{\s*\.applicant-review-layout\{grid-template-columns:minmax\(0,1fr\)/);
 });
 
 test('resume Storage policies qualify the object-path column to avoid workspace.name shadowing', () => {
