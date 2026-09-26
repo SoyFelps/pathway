@@ -116,11 +116,12 @@
 
   function renderEditor() {
     const flow = currentFlow(); if (!flow) return renderDashboard();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name">${esc(workspace.name)}</span><span class="auth-user">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button><button class="btn ${flow.publicationStatus === 'published' ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : 'Publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag to arrange, drag ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status">Drag a connection point to another step · Every route needs an ending</div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name">${esc(workspace.name)}</span><span class="auth-user">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : 'Publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag to arrange, drag ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status">Drag a connection point to another step · Every route needs an ending</div></div>`;
     root.querySelector('#brand-home').addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
     root.querySelector('#signout').addEventListener('click', doSignOut);
     root.querySelector('#dashboard-back').addEventListener('click', renderDashboard);
     root.querySelector('#preview-btn').addEventListener('click', openPreview);
+    root.querySelector('#copy-job-url')?.addEventListener('click', copyJobUrl);
     root.querySelector('#publish-btn').addEventListener('click', () => currentFlow()?.publicationStatus === 'published' ? unpublishFlow() : publishFlow());
     root.querySelector('#add-node').addEventListener('click', showNodePicker);
     drawCanvas(); drawInspector();
@@ -323,6 +324,22 @@
     const finish = () => { if (previewController) previewController.destroy(); modalRoot.innerHTML = ''; previewController = null; };
     modalRoot.querySelector('#close-preview').addEventListener('click', finish);
     previewController = window.PathwayCandidate.mountCandidate(modalRoot.querySelector('#candidate-preview'), flow, { preview: true, onFinish: finish });
+  }
+
+  async function copyJobUrl() {
+    const link = window.PathwayBackend.getPublishedJobUrl(currentFlow());
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard access is unavailable.');
+      await navigator.clipboard.writeText(link);
+      showToast('Public job link copied.');
+    } catch (_) {
+      setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Public job link</div><h2>Copy this link to share the role.</h2><p>This URL opens the published candidate experience.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><input class="text-input" id="job-link-fallback" aria-label="Public job link" readonly value="${esc(link)}"><div class="modal-actions"><button class="btn btn-primary" id="copy-job-link-fallback">Copy job link</button></div>`);
+      const input = modalRoot.querySelector('#job-link-fallback'); input.focus(); input.select();
+      modalRoot.querySelector('#copy-job-link-fallback').addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(link); closeModal(); showToast('Public job link copied.'); }
+        catch (_) { input.focus(); input.select(); showToast('Link selected. Copy it to your clipboard.'); }
+      });
+    }
   }
 
   async function unpublishFlow() {

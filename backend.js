@@ -96,6 +96,15 @@
     flow.activePublishedFlowId = null;
   }
 
+  function getPublishedJobUrl(flow) {
+    if (!flow || flow.publicationStatus !== 'published' || !flow.activePublishedFlowId) {
+      throw new Error('Publish this flow to create a public job link.');
+    }
+    const url = new URL('apply.html', window.location.href);
+    url.hash = `id=${encodeURIComponent(flow.activePublishedFlowId)}`;
+    return url.href;
+  }
+
   async function getPublishedFlow(token) {
     const { data, error } = await client.rpc('get_published_flow', { p_token: token });
     if (error) throw error;
@@ -123,6 +132,7 @@
     publishFlow,
     unpublishFlow,
     getPublishedFlow,
+    getPublishedJobUrl,
     updateWorkspaceName,
     signOut,
     signIn: (email, password) => client.auth.signInWithPassword({ email, password }),

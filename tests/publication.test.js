@@ -32,7 +32,9 @@ function createBackendHarness() {
   const context = {
     console,
     PATHWAY_SUPABASE_CONFIG: { url: 'https://example.supabase.co', publishableKey: 'public-test-key' },
-    supabase: { createClient: () => client }
+    supabase: { createClient: () => client },
+    URL,
+    location: { href: 'https://soyfelps.github.io/pathway/' }
   };
   context.window = context;
   vm.createContext(context);
@@ -72,4 +74,24 @@ test('published snapshot RPC only serves the currently active published snapshot
   const sql = fs.readFileSync(require.resolve('../supabase/migrations/20260926125422_add_flow_publication_lifecycle.sql'), 'utf8');
   assert.match(sql, /f\.publication_status\s*=\s*'published'/i);
   assert.match(sql, /f\.active_published_flow_id\s*=\s*pf\.id/i);
+});
+
+
+test('published flow produces a public apply URL using the active snapshot token', () => {
+  const { backend } = createBackendHarness();
+  const link = backend.getPublishedJobUrl({
+    publicationStatus: 'published', activePublishedFlowId: '11111111-1111-4111-8111-111111111111'
+  });
+  assert.equal(link, 'https://soyfelps.github.io/pathway/apply.html#id=11111111-1111-4111-8111-111111111111');
+});
+
+test('draft flows cannot produce a public job URL', () => {
+  const { backend } = createBackendHarness();
+  assert.throws(() => backend.getPublishedJobUrl({ publicationStatus: 'draft', activePublishedFlowId: null }), /publish this flow/i);
+});
+
+test('builder exposes the copy action only for published flows with an active token', () => {
+  const source = fs.readFileSync(require.resolve('../builder.js'), 'utf8');
+  assert.ok(source.includes("flow.publicationStatus === 'published' && flow.activePublishedFlowId ?"));
+  assert.ok(source.includes('copy-job-url'));
 });

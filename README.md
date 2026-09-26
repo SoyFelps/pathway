@@ -16,7 +16,7 @@ Run the local checks with `node --test tests/*.test.js`.
 - Job-flow drafts are saved to Supabase under the authenticated owner’s workspace. Autosaves are debounced; the browser no longer acts as the primary data store.
 - Workspace-scoped Row Level Security protects reading, creating, updating, and deleting drafts. Owners cannot create a flow under another workspace.
 - Publish creates an immutable snapshot. The share link contains an unguessable snapshot ID; `apply.html` fetches the snapshot through a narrowly scoped public Postgres function, not from the private drafts table.
-- Flows have a persisted Draft/Published status. Unpublishing clears the active snapshot pointer, immediately invalidating its public link; republishing creates a new snapshot and link.
+- Flows have a persisted Draft/Published status. The editor provides a **Copy job link** action while published. Unpublishing clears the active snapshot pointer, immediately invalidating its public link; republishing creates a new snapshot and link.
 - The visual builder still supports a fixed candidate-details step, optional fields, draggable questions, branching answers, preview, and distinct completion paths.
 
 ## Database migration
