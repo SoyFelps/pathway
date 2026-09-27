@@ -1,6 +1,6 @@
 # Stripe integration setup
 
-The code is configured for Pathway's **test-mode monthly subscription** and an embedded Checkout Form. Checkout becomes usable after the updated database migration and Edge Functions are deployed and the required server-side secrets are available in Supabase.
+Pathway's **test-mode monthly subscription** and embedded Checkout Form are implemented and deployed. Checkout will be ready for end-to-end testing after the Stripe webhook signing secret is added to Supabase and the existing API secret is verified to be the matching test key.
 
 ## Stripe test product and price
 
@@ -46,21 +46,16 @@ Stripe.js is loaded directly from `https://js.stripe.com/dahlia/stripe.js`, init
 
 Target Supabase project: **PathwayAPP** (`gftnghlkuiuhuwyaajdn`).
 
-1. Verify that the Supabase Edge Function secret `STRIPE_SECRET_KEY` is present and contains the matching `sk_test_…` key. Do not disclose it in chat. Supabase's built-in `SUPABASE_URL` and service-role secret are used by the functions at runtime.
-2. **Approved cutover:** applying `20260926195500_stripe_subscription_publication_gates.sql` will change every currently published flow to Draft and clear its active public URL. Existing applicants and resumes remain. After subscribing, owners can republish, which creates fresh links.
-3. Deploy `billing` with JWT verification enabled. Deploy `billing-webhook` with JWT verification disabled; the function validates the Stripe signature itself. Deploy the updated `applications` function.
-4. In Stripe test mode → Developers/Workbench → Webhooks, add:
-   `https://gftnghlkuiuhuwyaajdn.supabase.co/functions/v1/billing-webhook`
-   Subscribe it to:
-   - `checkout.session.completed`
-   - `customer.subscription.created`
-   - `customer.subscription.updated`
-   - `customer.subscription.deleted`
-   - `invoice.paid`
-   - `invoice.payment_failed`
-5. Copy the endpoint's `whsec_…` signing secret into Supabase Edge Function secrets under `STRIPE_WEBHOOK_SECRET`. Do not put it in the frontend or Git repository.
-6. Test checkout in Stripe test mode before switching to live mode. Use Stripe's test card `4242 4242 4242 4242`, any future expiry date, and any CVC.
-7. Push the updated static site to the GitHub Pages branch. Before accepting real payment, replace the test key/Price with live-mode ones and confirm the live webhook endpoint.
+1. **Completed:** applied migration `20260926195500_stripe_subscription_publication_gates.sql`. This approved cutover changed every then-published flow to Draft and cleared active public URLs. Existing applicant and resume records were preserved. After subscribing, owners can republish with fresh links.
+2. **Completed:** deployed `billing` (JWT verification on), `billing-webhook` (platform JWT off; Stripe signature verification inside the function), and updated `applications` (public candidate intake still requires the public API key, plus active paid entitlement).
+3. **Completed:** created this active **test-mode** webhook endpoint in the confirmed Stripe test account:
+   - Endpoint ID: `we_1UKG77LxHJwAlJp9MUj1C1Lh`
+   - URL: `https://gftnghlkuiuhuwyaajdn.supabase.co/functions/v1/billing-webhook`
+   - Events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
+4. **Still required:** in Stripe's endpoint details, reveal and copy this endpoint's `whsec_…` signing secret. In Supabase → **Edge Function Secrets**, add/update `STRIPE_WEBHOOK_SECRET` with that value. Keep it out of this repository and chat.
+5. The user said the Stripe API secret is already stored in Supabase, but its name and test/live mode were not verified. In Supabase → Edge Function Secrets, confirm `STRIPE_SECRET_KEY` contains the matching test-mode `sk_test_…` key. Never disclose that key. Supabase's built-in URL and service-role secret are used at runtime.
+6. The static site is pushed to `main`; GitHub Pages returned HTTP 200 and serves `stripe-config.js` with the supplied test publishable key. After setting the webhook secret, complete an end-to-end test. Use Stripe's test card `4242 4242 4242 4242`, any future expiry date, and any CVC.
+7. Before accepting real payments, replace the test publishable key and Price with matching live-mode values, configure the live secret key only in Supabase, and create a separate live webhook endpoint with a live `whsec_…` secret.
 
 Subscription status is synchronized from signed webhook events. A subscription grants publication access only while Stripe reports `active` and its paid period has not ended. When access ends, published flows are returned to Draft; public lookup, database triggers, and applicant intake all deny expired/unpaid publications. Draft creation, editing, and preview remain free.
 
