@@ -40,7 +40,7 @@ The user says the Stripe secret key is already stored in Supabase. I have not vi
 | Stripe API version | `2026-03-25.dahlia; custom_checkout_payment_form_preview=v1` |
 | line item | `price_1UKFrzLxHJwAlJp9n6W70f8k`, quantity `1` |
 
-Stripe.js is loaded directly from `https://js.stripe.com/dahlia/stripe.js`, initialized with beta `custom_checkout_payment_form_1`, and rendered in the Pathway subscription dialog.
+Stripe.js is loaded directly from `https://js.stripe.com/dahlia/stripe.js`, initialized with beta `custom_checkout_payment_form_1`, and rendered in the dedicated Pathway subscription page.
 
 ## Supabase deployment and Stripe webhook
 
@@ -52,9 +52,10 @@ Target Supabase project: **PathwayAPP** (`gftnghlkuiuhuwyaajdn`).
    - Endpoint ID: `we_1UKG77LxHJwAlJp9MUj1C1Lh`
    - URL: `https://gftnghlkuiuhuwyaajdn.supabase.co/functions/v1/billing-webhook`
    - Events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
-4. **Still required:** in Stripe's endpoint details, reveal and copy this endpoint's `whsec_…` signing secret. In Supabase → **Edge Function Secrets**, add/update `STRIPE_WEBHOOK_SECRET` with that value. Keep it out of this repository and chat.
-5. The user said the Stripe API secret is already stored in Supabase, but its name and test/live mode were not verified. In Supabase → Edge Function Secrets, confirm `STRIPE_SECRET_KEY` contains the matching test-mode `sk_test_…` key. Never disclose that key. Supabase's built-in URL and service-role secret are used at runtime.
-6. The static site is pushed to `main`; GitHub Pages returned HTTP 200 and serves `stripe-config.js` with the supplied test publishable key. After setting the webhook secret, complete an end-to-end test. Use Stripe's test card `4242 4242 4242 4242`, any future expiry date, and any CVC.
+4. **Completed and verified:** Stripe sent signed subscription events to the test endpoint; Supabase accepted the signature and processed them. `STRIPE_WEBHOOK_SECRET` and the matching test-mode `STRIPE_SECRET_KEY` are therefore configured for `billing-webhook`.
+5. **Completed:** the active test subscription writes its period end to the workspace. Stripe API `2026-03-25.dahlia` moved period dates to `items.data[].current_period_end`; the webhook now reads that field (and remains compatible with the older top-level field).
+6. **Completed:** the test-mode subscription is active through **October 27, 2026**. The app displays Premium and enables the Publish action. The checkout used Stripe test mode; it did not charge real money.
+7. **Completed:** the static site is pushed to `main`; GitHub Pages serves the subscription page and the cache-busted Premium activation refresh. Before accepting real payments, replace the test publishable key and Price with matching live-mode values, configure the live secret key only in Supabase, and create a separate live webhook endpoint with a live `whsec_…` secret.
 7. Before accepting real payments, replace the test publishable key and Price with matching live-mode values, configure the live secret key only in Supabase, and create a separate live webhook endpoint with a live `whsec_…` secret.
 
 Subscription status is synchronized from signed webhook events. A subscription grants publication access only while Stripe reports `active` and its paid period has not ended. When access ends, published flows are returned to Draft; public lookup, database triggers, and applicant intake all deny expired/unpaid publications. Draft creation, editing, and preview remain free.
@@ -63,7 +64,7 @@ Subscription status is synchronized from signed webhook events. A subscription g
 
 - `node --test tests/*.test.js` — automated tests for publication gates, billing UI, Checkout config, webhooks, and applicant handling.
 - Confirm checkout displays **US$ 24.90 monthly** before the user confirms payment.
-- Verify successful test checkout writes an active `workspace_subscriptions` row and allows publishing.
+- Verified: successful test checkout writes an active `workspace_subscriptions` entitlement and unlocks the Publish control.
 - Verify subscription expiration/cancellation returns flows to Draft and disables public links, while preserving existing application and resume records.
 - Verify invalid webhook signatures are rejected.
 
