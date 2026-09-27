@@ -6,6 +6,7 @@
   const toast = document.getElementById('toast');
   const ICONS = {
     flows: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
+    applicants: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.1"/><path d="M3.4 20c.2-3.3 2.1-5.3 5.6-5.3s5.4 2 5.6 5.3M16 5.4a3 3 0 0 1 0 5.8M17 14.8c2.1.6 3.3 2.2 3.5 4.7"/></svg>',
     node: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="8" height="6" rx="1.5"/><rect x="13" y="14" width="8" height="6" rx="1.5"/><path d="M11 7h3a2 2 0 0 1 2 2v5"/></svg>',
     arrow: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 5l7 7-7 7"/></svg>',
     copy: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>'
@@ -80,7 +81,7 @@
   function closeModal() { modalRoot.innerHTML = ''; }
 
   function renderSidebar(active) {
-    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">♧</span>Applicants</button><button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">◈</span>My Plan</button><div class="sidebar-bottom">Private workspace<br>Applicant data stays within this account.</div></aside>`;
+    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>Applicants</button><button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">◈</span>My Plan</button><div class="sidebar-bottom">Private workspace<br>Applicant data stays within this account.</div></aside>`;
   }
 
   function bindSidebar() {
@@ -285,7 +286,7 @@
     const filterName = applicantFilter ? flows.find(flow => flow.cloudId === applicantFilter)?.jobTitle : '';
     if (!applicants.length && !applicantFilter && !term) {
       const published = flows.filter(flow => flow.publicationStatus === 'published' && flow.activePublishedFlowId);
-      content.innerHTML = `<section class="applicants-empty"><span class="brand-mark">♧</span><h2>No applicants yet</h2><p>Applications for published jobs will appear here as candidates submit them. Review a test application before sharing your job links widely.</p>${published.length ? `<button class="btn btn-primary" id="open-published-flow">View published jobs</button>` : `<button class="btn btn-primary" id="open-flows">Go to dashboard</button>`}</section>`;
+      content.innerHTML = `<section class="applicants-empty"><span class="applicant-empty-icon" aria-hidden="true">${ICONS.applicants}</span><h2>No applicants yet</h2><p>Applications for published jobs will appear here as candidates submit them. Review a test application before sharing your job links widely.</p>${published.length ? `<button class="btn btn-primary" id="open-published-flow">View published jobs</button>` : `<button class="btn btn-primary" id="open-flows">Go to dashboard</button>`}</section>`;
       content.querySelector('#open-published-flow')?.addEventListener('click', renderDashboard);
       content.querySelector('#open-flows')?.addEventListener('click', renderDashboard);
       return;

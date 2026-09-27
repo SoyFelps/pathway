@@ -54,8 +54,8 @@ test('My Plan shows account status and keeps future Premium billing actions disa
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /builder\.js\?v=my-plan-benefits-20260927/);
-  assert.match(html, /styles\.css\?v=my-plan-benefits-20260927/);
+  assert.match(html, /builder\.js\?v=applicants-icon-20260927/);
+  assert.match(html, /styles\.css\?v=applicants-icon-20260927/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);

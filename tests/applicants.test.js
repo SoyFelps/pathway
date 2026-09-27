@@ -42,6 +42,14 @@ test('workspace UI includes search, flow filter, four Kanban stages, card drag/d
   }
 });
 
+test('Applicants uses a people icon in navigation and its empty state', () => {
+  const builder = read('builder.js');
+  assert.match(builder, /applicants: '<svg[\s\S]*?<circle cx="9" cy="8"/);
+  assert.match(builder, /data-route="applicants"[\s\S]*?\$\{ICONS\.applicants\}/);
+  assert.match(builder, /class="applicant-empty-icon"[\s\S]*?\$\{ICONS\.applicants\}/);
+  assert.doesNotMatch(builder, /♧/);
+});
+
 test('public application endpoint validates the active snapshot, branch answers, privacy notice, file type, size, and rate limit', () => {
   const edge = read('supabase/functions/applications/index.ts');
   for (const text of ['loadActiveFlow', 'active_published_flow_id', 'validateApplicantSubmission', 'privacyAcknowledged', 'MAX_RESUME_BYTES', 'consume_applicant_submission_limit', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']) {
