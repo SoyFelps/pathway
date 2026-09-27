@@ -30,7 +30,7 @@ test('free accounts see upgrade controls instead of publish actions across edito
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /builder\.js\?v=79b7cbe/);
+  assert.match(html, /builder\.js\?v=inspector-20260927/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);

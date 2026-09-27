@@ -28,3 +28,14 @@ test('editor canvas element does not shadow workspace data used by its header', 
   assert.match(editor, /bindCanvasPan\(workspaceElement\)/);
   assert.doesNotMatch(editor, /const workspace\s*=/);
 });
+
+test('job details are shown only when the fixed candidate-details node is selected', () => {
+  const start = builder.indexOf('function drawInspector()');
+  const end = builder.indexOf('function updateNodeLabel(', start);
+  const inspector = builder.slice(start, end);
+  assert.match(inspector, /const roleSettings = selected\.type === 'candidateInfo'/);
+  assert.match(inspector, /<h2>Job details<\/h2>/);
+  assert.match(inspector, /panel\.innerHTML = `\$\{roleSettings\}/);
+  assert.match(inspector, /<div class="inspector-kicker">Selected step<\/div>/);
+  assert.match(inspector, /querySelector\('#role-company'\)\?\./);
+});
