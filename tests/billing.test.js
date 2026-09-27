@@ -27,10 +27,25 @@ test('free accounts see upgrade controls instead of publish actions across edito
   assert.match(builder, /<span class="status-dot"><\/span>Premium/);
 });
 
+test('My Plan shows account status and keeps future Premium billing actions disabled', () => {
+  const builder = read('builder.js');
+  assert.match(builder, /data-route="my-plan"/);
+  assert.match(builder, /function renderMyPlan\(\)/);
+  assert.match(builder, /requestedPage === 'my-plan'/);
+  assert.match(builder, /subscription\?\.active/);
+  assert.match(builder, /id="my-plan-upgrade"/);
+  assert.match(builder, /Payment history/);
+  assert.match(builder, /Change the card used for your subscription/);
+  assert.match(builder, /Cancel subscription/);
+  assert.match(builder, /class="btn plan-placeholder" disabled/);
+  assert.match(builder, /These billing actions are placeholders for now/);
+  assert.match(builder, /subscriptionReturnPage === 'my-plan'/);
+});
+
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /builder\.js\?v=inspector-20260927/);
+  assert.match(html, /builder\.js\?v=my-plan-20260927/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);

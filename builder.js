@@ -80,12 +80,13 @@
   function closeModal() { modalRoot.innerHTML = ''; }
 
   function renderSidebar(active) {
-    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">♧</span>Applicants</button><div class="sidebar-bottom">Private workspace<br>Applicant data stays within this account.</div></aside>`;
+    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">♧</span>Applicants</button><button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">◈</span>My Plan</button><div class="sidebar-bottom">Private workspace<br>Applicant data stays within this account.</div></aside>`;
   }
 
   function bindSidebar() {
     root.querySelector('[data-route="dashboard"]')?.addEventListener('click', () => renderDashboard());
     root.querySelector('[data-route="applicants"]')?.addEventListener('click', () => { void renderApplicants(); });
+    root.querySelector('[data-route="my-plan"]')?.addEventListener('click', renderMyPlan);
   }
 
   function renderPlanControl() {
@@ -105,6 +106,9 @@
     } else if (root.querySelector('.applicants-page')) {
       subscriptionReturnPage = 'applicants';
       subscriptionReturnFlowId = null;
+    } else if (root.querySelector('.my-plan-page')) {
+      subscriptionReturnPage = 'my-plan';
+      subscriptionReturnFlowId = null;
     } else {
       subscriptionReturnPage = 'dashboard';
       subscriptionReturnFlowId = null;
@@ -117,6 +121,8 @@
       openFlow(subscriptionReturnFlowId);
     } else if (subscriptionReturnPage === 'applicants') {
       void renderApplicants();
+    } else if (subscriptionReturnPage === 'my-plan') {
+      renderMyPlan();
     } else {
       renderDashboard();
     }
@@ -128,7 +134,8 @@
       try {
         subscription = await window.PathwayBackend.getSubscriptionState(workspace.id);
         if (subscription.active) {
-          renderDashboard();
+          if (subscriptionReturnPage === 'my-plan') renderMyPlan();
+          else renderDashboard();
           showToast('Premium is active. You can now publish job flows.');
           return;
         }
@@ -237,6 +244,30 @@
       const content = root.querySelector('#applicants-content');
       if (content) content.innerHTML = `<div class="auth-error show" role="alert">${esc(`Could not load applicants: ${error.message || 'check your connection and try again'}`)}</div>`;
     }
+  }
+
+  function formatPlanDate(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  function renderMyPlan() {
+    currentId = null; selectedId = null;
+    const premium = Boolean(subscription?.active);
+    const periodEnd = formatPlanDate(subscription?.currentPeriodEnd);
+    const statusText = premium
+      ? subscription.cancelAtPeriodEnd && periodEnd ? `Scheduled to end on ${periodEnd}` : periodEnd ? `Renews on ${periodEnd}` : 'Your Premium subscription is active.'
+      : 'You are currently on the Free plan.';
+    const management = premium
+      ? `<section class="plan-management-card"><div class="plan-section-heading"><div><div class="eyebrow">Subscription management</div><h2>Billing details</h2><p>Manage the payment method and history for this workspace.</p></div></div><div class="plan-action-list"><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment history</strong><span>View invoices and previous payments.</span></div><button class="btn plan-placeholder" disabled>Coming soon</button></div><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment method</strong><span>Change the card used for your subscription.</span></div><button class="btn plan-placeholder" disabled>Coming soon</button></div><div class="plan-action-row plan-cancel-row"><div class="plan-action-copy"><strong>Cancel subscription</strong><span>${subscription.cancelAtPeriodEnd && periodEnd ? `Your subscription is set to end on ${esc(periodEnd)}.` : 'Cancellation controls will be available here.'}</span></div><button class="btn btn-danger plan-placeholder" disabled>${subscription.cancelAtPeriodEnd ? 'Cancellation scheduled' : 'Coming soon'}</button></div></div><p class="plan-placeholder-note">These billing actions are placeholders for now. Stripe billing management will be connected in a later update.</p></section>`
+      : `<section class="plan-free-note"><div class="plan-free-mark" aria-hidden="true">↗</div><div><strong>Build and preview for free</strong><p>Create and refine application flows at no cost. Upgrade when you are ready to publish a job.</p></div></section>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-plan')}<main class="my-plan-page"><div class="my-plan-heading"><div class="eyebrow">Workspace billing</div><h1>My Plan</h1><p>View your plan and manage billing for ${esc(workspace.name)}.</p></div><section class="plan-overview-card ${premium ? 'is-premium' : 'is-free'}"><div class="plan-overview-copy"><span class="plan-state-chip ${premium ? 'is-premium' : 'is-free'}"><span class="status-dot"></span>${premium ? 'Premium active' : 'Free plan'}</span><h2>${premium ? 'Premium' : 'Free'}</h2><p>${statusText}</p></div>${premium ? `<div class="plan-overview-price"><strong>US$ 24.90</strong><span>per month</span></div>` : '<button class="btn btn-primary" id="my-plan-upgrade">Upgrade to Premium</button>'}</section>${premium ? '<section class="plan-benefit-strip"><span class="plan-benefit-icon">✓</span><div><strong>Job publishing is enabled</strong><p>You can publish and manage job application links while your subscription is active.</p></div></section>' : ''}${management}</main></div></div>`;
+    bindSidebar();
+    bindPlanControl();
+    root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
+    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+    root.querySelector('#my-plan-upgrade')?.addEventListener('click', openSubscriptionPage);
   }
 
   function renderApplicantBoard() {
@@ -754,7 +785,9 @@
     if (checkoutComplete) {
       window.history.replaceState({}, '', window.location.pathname + window.location.hash);
     }
-    if (requestedPage === 'applicants') void renderApplicants(); else renderDashboard();
+    if (requestedPage === 'applicants') void renderApplicants();
+    else if (requestedPage === 'my-plan') renderMyPlan();
+    else renderDashboard();
     if (checkoutComplete) void refreshSubscriptionAfterCheckout();
   });
 })();
