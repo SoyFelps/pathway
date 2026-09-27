@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-function createBackendHarness() {
+function createBackendHarness({ paid = true } = {}) {
   const calls = [];
   let snapshotSequence = 0;
   const client = {
@@ -17,6 +17,10 @@ function createBackendHarness() {
         delete() { calls.push({ table, method: 'delete' }); return this; },
         eq(field, value) { this.filters.push([field, value]); return this; },
         select() { return this; },
+        maybeSingle: async function () {
+          if (table === 'workspace_subscriptions') return { data: paid ? { status: 'active', current_period_end: '2099-01-01T00:00:00.000Z', cancel_at_period_end: false } : null, error: null };
+          return { data: null, error: null };
+        },
         single: async function () {
           if (table === 'published_flows' && this.payload) {
             snapshotSequence += 1;
@@ -60,6 +64,14 @@ test('publishing saves the flow, inserts a snapshot, and activates its public to
   assert.equal(snapshot.payload.snapshot.publicationStatus, undefined);
 });
 
+test('free workspaces cannot publish through the authenticated backend adapter', async () => {
+  const { backend, calls } = createBackendHarness({ paid: false });
+  const flow = { id: 'flow-1', companyName: 'Acme', jobTitle: 'Designer', nodes: [], edges: [], publicationStatus: 'draft' };
+  await assert.rejects(backend.publishFlow(flow, { id: 'workspace-1' }), /active subscription is required/i);
+  assert.equal(calls.length, 0);
+  assert.equal(flow.publicationStatus, 'draft');
+});
+
 test('unpublishing clears the active token and returns the flow to draft', async () => {
   const { backend, calls } = createBackendHarness();
   const flow = { id: 'flow-1', cloudId: 'flow-db-1', publicationStatus: 'published', activePublishedFlowId: 'snapshot-1' };
@@ -101,7 +113,7 @@ test('dashboard flow menu replaces Keep flow with status-aware lifecycle and lin
   const source = fs.readFileSync(require.resolve('../builder.js'), 'utf8');
   assert.ok(!source.includes('Keep flow'));
   assert.ok(source.includes("const isPublished = flow.publicationStatus === 'published'"));
-  assert.ok(source.includes("isPublished ? 'Unpublish' : 'Publish'"));
-  assert.ok(source.includes("isPublished ? '' : 'btn-primary'"));
+  assert.ok(source.includes("isPublished ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'"));
+  assert.ok(source.includes("isPublished || !subscription?.active ? '' : 'btn-primary'"));
   assert.ok(source.includes("id=\"copy-flow-url\">Copy job link"));
 });

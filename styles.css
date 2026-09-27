@@ -79,3 +79,7 @@
 .workspace .node{cursor:default}
 .workspace .node-head{cursor:grab}
 .workspace .node-head:active{cursor:grabbing}
+
+/* Paid-plan checkout */
+.modal:has(.checkout-form),.modal:has(.subscription-plan){width:min(100%,560px)}.subscription-plan{display:flex;align-items:center;justify-content:space-between;border:1px solid #dfe8df;background:#f8fbf8;border-radius:10px;padding:15px 16px;margin:0 0 13px}.subscription-plan strong,.subscription-plan span{display:block}.subscription-plan strong{font:700 14px var(--display);margin-bottom:4px}.subscription-plan div span{font-size:11px;color:#758178}.plan-check{width:27px;height:27px;display:grid!important;place-items:center;border-radius:50%;background:#e4f0e4;color:#407650;font-weight:700}.subscription-note{font-size:11px!important;line-height:1.55!important;margin:0 0 16px!important}.checkout-form{border:1px solid #e5ebe5;border-radius:9px;padding:14px;min-height:90px;background:#fff}.subscription-setup-note,.subscription-error{font-size:12px;line-height:1.55;border-radius:8px;padding:12px 13px;margin-top:15px}.subscription-setup-note{background:#f3f7f3;border:1px solid #e4ebe4;color:#637168}.subscription-error{background:#fff0ed;border:1px solid #f1d7d1;color:#a14c41}.subscription-error[hidden]{display:none}
+@media(max-width:760px){.top-actions{gap:6px}.top-actions .btn-lime{padding:7px 8px;font-size:10px}.top-actions .status-pill{display:none}.modal:has(.checkout-form),.modal:has(.subscription-plan){width:100%}.checkout-form{padding:8px}}

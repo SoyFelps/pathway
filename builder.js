@@ -13,6 +13,7 @@
   let flows = [];
   let workspace = null;
   let user = null;
+  let subscription = { status: 'free', active: false, currentPeriodEnd: null, cancelAtPeriodEnd: false };
   let currentId = null;
   let selectedId = null;
   let connectFrom = null;
@@ -85,14 +86,72 @@
     root.querySelector('[data-route="applicants"]')?.addEventListener('click', () => { void renderApplicants(); });
   }
 
+  function renderPlanControl() {
+    return subscription?.active
+      ? '<span class="status-pill" title="Your workspace can publish job flows"><span class="status-dot"></span>Active subscription</span>'
+      : '<button class="btn btn-sm btn-lime" id="upgrade-to-publish">Upgrade to publish</button>';
+  }
+
+  function bindPlanControl() {
+    root.querySelector('#upgrade-to-publish')?.addEventListener('click', showSubscriptionModal);
+  }
+
+  function showSubscriptionModal() {
+    const stripeConfig = window.PATHWAY_STRIPE_CONFIG || {};
+    const configuredKey = typeof stripeConfig.publishableKey === 'string' && /^pk_(test|live)_/.test(stripeConfig.publishableKey) && !stripeConfig.publishableKey.includes('REPLACE_');
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Pathway subscription</div><h2>Publish your job flows.</h2><p>Unlock live job links and accept applications from candidates. Your subscription is managed securely by Stripe.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="subscription-plan"><div><strong>Pathway</strong><span>Paid plan · Recurring subscription</span></div><span class="plan-check">✓</span></div><p class="subscription-note">The exact price and billing interval will be shown in Stripe Checkout before you confirm. Payment management will be added to Pathway later.</p><div class="subscription-error" id="checkout-error" role="alert" hidden></div>${configuredKey ? '<div class="checkout-form" id="checkout-form"></div><div class="modal-actions"><button class="btn btn-primary" id="start-checkout">Continue to secure checkout</button></div>' : '<div class="subscription-setup-note">Checkout is not configured yet. Add the Stripe publishable key and server-side Stripe secrets listed in <strong>STRIPE_INTEGRATION_TODO.md</strong> before using this button.</div><div class="modal-actions"><button class="btn" data-close>Close</button></div>'}`);
+    const startButton = modalRoot.querySelector('#start-checkout');
+    if (!startButton) return;
+    startButton.addEventListener('click', async () => {
+      const errorBox = modalRoot.querySelector('#checkout-error');
+      const showError = message => { errorBox.textContent = message; errorBox.hidden = false; };
+      startButton.disabled = true;
+      startButton.textContent = 'Preparing secure checkout…';
+      try {
+        if (!window.Stripe) throw new Error('Stripe.js did not load. Refresh the page and try again.');
+        const clientSecret = await window.PathwayBackend.createCheckoutSession();
+        const stripe = window.Stripe(stripeConfig.publishableKey, { betas: ['custom_checkout_payment_form_1'] });
+        const checkout = stripe.initCheckoutFormSdk({
+          clientSecret,
+          appearance: {
+            theme: 'stripe', labels: 'auto', inputs: 'spaced',
+            variables: {
+              borderRadius: '4px', colorBackground: '#ffffff', colorDanger: '#df1b41', colorPrimary: '#315f4a',
+              colorSuccess: '#00c853', colorText: '#30313d', fontFamily: 'default', fontSizeBase: '16px', spacingUnit: '4px'
+            }
+          }
+        });
+        const form = checkout.createForm({ layout: 'expanded' });
+        form.mount('#checkout-form');
+        startButton.hidden = true;
+        const loadActionsResult = await checkout.loadActions();
+        if (loadActionsResult.type === 'success') {
+          form.on('confirm', async event => {
+            errorBox.hidden = true;
+            try { await loadActionsResult.actions.confirm({ formConfirmEvent: event }); }
+            catch (error) { showError(error.message || 'Payment could not be confirmed. Please try again.'); }
+          });
+        } else {
+          showError(loadActionsResult.error?.message || 'The secure checkout form could not be loaded.');
+          startButton.hidden = false;
+        }
+      } catch (error) {
+        showError(error.message || 'The subscription checkout could not be started.');
+        startButton.disabled = false;
+        startButton.textContent = 'Try again';
+      }
+    });
+  }
+
   function renderDashboard() {
     currentId = null; selectedId = null;
     const count = flows.length;
     const drafts = flows.filter(flow => flow.publicationStatus !== 'published').length;
     const published = count - drafts;
     const nodes = flows.reduce((sum, flow) => sum + flow.nodes.length, 0);
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Make applying feel human.</h1><p>Design clear, considered journeys for the people behind every application.</p></div><div class="dash-action"><button class="btn" id="workspace-details">Workspace details</button><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.node}</span><div><strong>${nodes}</strong><span>Steps in your journeys</span></div></div><div class="stat"><span class="stat-icon">⌁</span><div><strong>Cloud</strong><span>Saved to Supabase</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${drafts} draft${drafts === 1 ? '' : 's'} · ${published} published</span></div>${flows.length ? `<section class="flow-grid">${flows.map(flow => `<article class="flow-card" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="Edit ${esc(flow.jobTitle)}"><div class="flow-card-preview"><span class="flow-preview-label">A glimpse of your flow</span><span class="mini-node" style="left:9%;top:56px;width:93px"><i></i><b></b></span><span class="mini-wire" style="left:28%;top:73px;width:17%;transform:rotate(0deg)"></span><span class="mini-node" style="left:45%;top:43px;width:102px"><i style="width:49px"></i><b></b></span><span class="mini-wire" style="left:67%;top:58px;width:12%;transform:rotate(-25deg)"></span><span class="mini-node" style="left:78%;top:27px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span><span class="mini-wire" style="left:67%;top:67px;width:12%;transform:rotate(25deg)"></span><span class="mini-node" style="left:78%;top:77px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span></div><div class="flow-card-body"><div class="flow-card-top"><span class="${flow.publicationStatus === 'published' ? 'published-tag' : 'draft-tag'}"><span class="status-dot"></span>${flow.publicationStatus === 'published' ? 'Published' : 'Draft'}</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><div class="flow-card-foot"><span class="flow-count">${ICONS.node}${nodeSummary(flow)}</span><span>${ago(flow.updatedAt)}</span></div></div></article>`).join('')}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Make applying feel human.</h1><p>Design clear, considered journeys for the people behind every application.</p></div><div class="dash-action"><button class="btn" id="workspace-details">Workspace details</button><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.node}</span><div><strong>${nodes}</strong><span>Steps in your journeys</span></div></div><div class="stat"><span class="stat-icon">⌁</span><div><strong>Cloud</strong><span>Saved to Supabase</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${drafts} draft${drafts === 1 ? '' : 's'} · ${published} published</span></div>${flows.length ? `<section class="flow-grid">${flows.map(flow => `<article class="flow-card" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="Edit ${esc(flow.jobTitle)}"><div class="flow-card-preview"><span class="flow-preview-label">A glimpse of your flow</span><span class="mini-node" style="left:9%;top:56px;width:93px"><i></i><b></b></span><span class="mini-wire" style="left:28%;top:73px;width:17%;transform:rotate(0deg)"></span><span class="mini-node" style="left:45%;top:43px;width:102px"><i style="width:49px"></i><b></b></span><span class="mini-wire" style="left:67%;top:58px;width:12%;transform:rotate(-25deg)"></span><span class="mini-node" style="left:78%;top:27px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span><span class="mini-wire" style="left:67%;top:67px;width:12%;transform:rotate(25deg)"></span><span class="mini-node" style="left:78%;top:77px;width:77px"><i style="width:35px"></i><b style="width:49px"></b></span></div><div class="flow-card-body"><div class="flow-card-top"><span class="${flow.publicationStatus === 'published' ? 'published-tag' : 'draft-tag'}"><span class="status-dot"></span>${flow.publicationStatus === 'published' ? 'Published' : 'Draft'}</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><div class="flow-card-foot"><span class="flow-count">${ICONS.node}${nodeSummary(flow)}</span><span>${ago(flow.updatedAt)}</span></div></div></article>`).join('')}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div></div>`;
     bindSidebar();
+    bindPlanControl();
     root.querySelector('#empty-new-flow')?.addEventListener('click', showNewFlow);
     root.querySelector('#new-flow').addEventListener('click', showNewFlow);
     root.querySelector('#workspace-details').addEventListener('click', showWorkspaceDetails);
@@ -106,8 +165,9 @@
 
   async function renderApplicants() {
     currentId = null; selectedId = null;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><select id="applicant-flow-filter" class="applicants-filter" aria-label="Filter applicants by job"><option value="">All jobs</option>${flows.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join('')}</select><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button></div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><select id="applicant-flow-filter" class="applicants-filter" aria-label="Filter applicants by job"><option value="">All jobs</option>${flows.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join('')}</select><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button></div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
     bindSidebar();
+    bindPlanControl();
     root.querySelector('#signout').addEventListener('click', doSignOut);
     root.querySelector('#applicant-flow-filter').addEventListener('change', event => { applicantFilter = event.target.value; void renderApplicants(); });
     root.querySelector('#applicant-search').addEventListener('input', event => {
@@ -290,7 +350,7 @@
   function showFlowMenu(id) {
     const flow = flows.find(item => item.id === id); if (!flow) return;
     const isPublished = flow.publicationStatus === 'published' && Boolean(flow.activePublishedFlowId);
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${isPublished ? 'Published flow' : 'Draft flow'}</div><h2>${esc(flow.jobTitle)}</h2><p>${esc(flow.companyName)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="danger-confirm"><strong>Permanent deletion.</strong> Removing this job also deletes every application and private resume submitted to it. This cannot be undone.</div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">Delete flow</button><div style="display:flex;gap:8px;flex-wrap:wrap">${isPublished ? '<button class="btn" id="copy-flow-url">Copy job link</button>' : ''}<button class="btn ${isPublished ? '' : 'btn-primary'}" id="toggle-flow-status">${isPublished ? 'Unpublish' : 'Publish'}</button></div></div>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${isPublished ? 'Published flow' : 'Draft flow'}</div><h2>${esc(flow.jobTitle)}</h2><p>${esc(flow.companyName)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="danger-confirm"><strong>Permanent deletion.</strong> Removing this job also deletes every application and private resume submitted to it. This cannot be undone.</div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">Delete flow</button><div style="display:flex;gap:8px;flex-wrap:wrap">${isPublished ? '<button class="btn" id="copy-flow-url">Copy job link</button>' : ''}<button class="btn ${isPublished || !subscription?.active ? '' : 'btn-primary'}" id="toggle-flow-status">${isPublished ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'}</button></div></div>`);
     modalRoot.querySelector('#copy-flow-url')?.addEventListener('click', () => copyFlowUrl(flow, true));
     modalRoot.querySelector('#toggle-flow-status').addEventListener('click', async event => {
       const button = event.currentTarget;
@@ -325,14 +385,15 @@
 
   function renderEditor() {
     const flow = currentFlow(); if (!flow) return renderDashboard();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name">${esc(workspace.name)}</span><span class="auth-user">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : 'Publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status">Drag empty background to move around · Drag a connection point to another step</div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name">${esc(workspace.name)}</span><span class="auth-user">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' || !subscription?.active ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status">Drag empty background to move around · Drag a connection point to another step</div></main></div></div>`;
     bindSidebar();
+    bindPlanControl();
     root.querySelector('#brand-home').addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
     root.querySelector('#signout').addEventListener('click', doSignOut);
     root.querySelector('#dashboard-back').addEventListener('click', renderDashboard);
     root.querySelector('#preview-btn').addEventListener('click', openPreview);
     root.querySelector('#copy-job-url')?.addEventListener('click', copyJobUrl);
-    root.querySelector('#publish-btn').addEventListener('click', () => currentFlow()?.publicationStatus === 'published' ? unpublishFlow() : publishFlow());
+    root.querySelector('#publish-btn').addEventListener('click', () => currentFlow()?.publicationStatus === 'published' ? unpublishFlow() : subscription?.active ? publishFlow() : showSubscriptionModal());
     root.querySelector('#add-node').addEventListener('click', showNodePicker);
     const workspaceElement = document.getElementById('workspace');
     bindCanvasPan(workspaceElement);
@@ -603,6 +664,7 @@
   }
 
   async function publishFlow() {
+    if (!subscription?.active) { showSubscriptionModal(); return; }
     const flow = currentFlow();
     try { C.normalizeFlow(flow); }
     catch (error) {
@@ -625,9 +687,14 @@
   window.PathwayAuth.start(context => {
     workspace = context.workspace;
     user = context.user;
+    subscription = context.subscription || { status: 'free', active: false, currentPeriodEnd: null, cancelAtPeriodEnd: false };
     flows = context.flows;
     applicants = []; applicantFilter = ''; applicantSearch = '';
     const requestedPage = window.location.hash.replace(/^#/, '');
+    if (new URLSearchParams(window.location.search).get('checkout') === 'complete') {
+      window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+      setTimeout(() => showToast(subscription.active ? 'Subscription active. You can now publish job flows.' : 'Checkout received. Subscription access is syncing; refresh in a moment.'), 0);
+    }
     if (requestedPage === 'applicants') void renderApplicants(); else renderDashboard();
   });
 })();

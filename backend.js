@@ -7,6 +7,7 @@
   });
   const saveQueues = new Map();
   const APPLICATIONS_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/applications`;
+  const BILLING_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/billing`;
   const APPLICANT_STATUSES = new Set(['new', 'failed', 'promising', 'approved']);
 
   async function callApplications(body, accessToken = '') {
@@ -30,6 +31,40 @@
     return data.session;
   }
 
+  async function getSubscriptionState(workspaceId) {
+    await requireSession();
+    const { data, error } = await client.from('workspace_subscriptions')
+      .select('status,current_period_end,cancel_at_period_end')
+      .eq('workspace_id', workspaceId).maybeSingle();
+    if (error) throw error;
+    const currentPeriodEnd = data?.current_period_end ? Date.parse(data.current_period_end) : 0;
+    return {
+      status: data?.status || 'free',
+      currentPeriodEnd: data?.current_period_end || null,
+      cancelAtPeriodEnd: Boolean(data?.cancel_at_period_end),
+      active: data?.status === 'active' && currentPeriodEnd > Date.now()
+    };
+  }
+
+  async function createCheckoutSession() {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(BILLING_FUNCTION, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+    } catch (_) {
+      throw new Error('Could not reach the billing service. Check your connection and try again.');
+    }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error || 'The subscription checkout could not be started.');
+    if (!payload.client_secret) throw new Error('Stripe did not return a checkout form.');
+    return payload.client_secret;
+  }
+
   async function bootstrap() {
     const { data: authData, error: authError } = await client.auth.getSession();
     if (authError) throw authError;
@@ -37,8 +72,9 @@
     const user = authData.session.user;
     const { data: workspace, error: workspaceError } = await client.from('workspaces').select('id,name,created_at').eq('owner_id', user.id).single();
     if (workspaceError) throw new Error(`Could not load your workspace: ${workspaceError.message}`);
+    const subscription = await getSubscriptionState(workspace.id);
     const flows = await listFlows(workspace.id);
-    return { session: authData.session, user, workspace, flows };
+    return { session: authData.session, user, workspace, subscription, flows };
   }
 
   async function listFlows(workspaceId) {
@@ -80,6 +116,8 @@
 
   async function publishFlow(flow, workspace) {
     await saveQueues.get(flow.id)?.catch(() => {});
+    const subscription = await getSubscriptionState(workspace.id);
+    if (!subscription.active) throw new Error('An active subscription is required to publish job flows.');
     await saveFlow(flow, workspace);
     const session = await requireSession();
     const { cloudId, workspaceId, createdBy, publicationStatus, activePublishedFlowId, ...flowData } = flow;
@@ -194,6 +232,8 @@
   window.PathwayBackend = {
     client,
     bootstrap,
+    getSubscriptionState,
+    createCheckoutSession,
     listFlows,
     saveFlow,
     deleteFlow,

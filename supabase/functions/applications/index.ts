@@ -5,6 +5,8 @@ const APP_ORIGINS = new Set([
   "https://soyfelps.github.io",
   "http://localhost:8765",
   "http://127.0.0.1:8765",
+  "http://localhost:8000",
+  "http://127.0.0.1:8000",
   "http://localhost:5500",
   "http://127.0.0.1:5500",
 ]);
@@ -95,6 +97,12 @@ async function loadActiveFlow(publishedId: string) {
     .eq("id", publication.flow_id).eq("workspace_id", publication.workspace_id).maybeSingle();
   if (flowError) throw flowError;
   if (!flow || flow.publication_status !== "published" || flow.active_published_flow_id !== publication.id) {
+    throw new Error("This job is no longer accepting applications.");
+  }
+  const { data: subscription, error: subscriptionError } = await admin.from("workspace_subscriptions")
+    .select("status,current_period_end").eq("workspace_id", flow.workspace_id).maybeSingle();
+  if (subscriptionError) throw subscriptionError;
+  if (subscription?.status !== "active" || !subscription.current_period_end || Date.parse(subscription.current_period_end) <= Date.now()) {
     throw new Error("This job is no longer accepting applications.");
   }
   return { publication, flow, snapshot: publication.snapshot as Record<string, unknown> };

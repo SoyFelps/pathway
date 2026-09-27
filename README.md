@@ -40,3 +40,9 @@ The currently selected project is **PathwayAPP**. The publishable key committed 
 ## Deliberate limits in this first backend phase
 
 Each user owns one workspace; team invites and multiple-workspace membership are not implemented. Applications do not send confirmation emails, notify recruiters by email, scan uploaded files for malware, or support bulk export/deletion. The intake endpoint limits resumes to PDF/DOC/DOCX under 10 MB and rate-limits public attempts. The privacy notice is product copy, not a substitute for your legal privacy policy; add a reviewed policy URL before broad production hiring use. Use test candidate data while the product is in early access.
+
+## Subscription-based publishing
+
+Draft creation, editing, and candidate preview remain free. Publishing requires an active recurring Stripe subscription. The builder reads the workspace subscription status for its header and replaces free-plan Publish actions with **Upgrade to publish** and an embedded Stripe Checkout Form. The browser receives only a publishable key; Checkout Sessions are created server-side by `supabase/functions/billing` for the authenticated workspace.
+
+`supabase/functions/billing-webhook` verifies Stripe signatures and syncs subscription lifecycle events into `workspace_subscriptions`. When access ends, published flows are returned to Draft and their active links are invalidated. Database triggers, the public flow lookup, and candidate intake independently verify the active paid entitlement so client-side UI changes cannot bypass the gate. Deployment values and exact Stripe Dashboard/webhook setup are in [STRIPE_INTEGRATION_TODO.md](STRIPE_INTEGRATION_TODO.md). The separate Payment management page remains deferred.
