@@ -99,17 +99,26 @@
   function showSubscriptionModal() {
     const stripeConfig = window.PATHWAY_STRIPE_CONFIG || {};
     const configuredKey = typeof stripeConfig.publishableKey === 'string' && /^pk_(test|live)_/.test(stripeConfig.publishableKey) && !stripeConfig.publishableKey.includes('REPLACE_');
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Pathway subscription</div><h2>Publish your job flows.</h2><p>Unlock live job links and accept applications from candidates. Your subscription is managed securely by Stripe.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="subscription-plan"><div><strong>Pathway</strong><span>Paid plan · Recurring subscription</span></div><span class="plan-check">✓</span></div><p class="subscription-note">The exact price and billing interval will be shown in Stripe Checkout before you confirm. Payment management will be added to Pathway later.</p><div class="subscription-error" id="checkout-error" role="alert" hidden></div>${configuredKey ? '<div class="checkout-form" id="checkout-form"></div><div class="modal-actions"><button class="btn btn-primary" id="start-checkout">Continue to secure checkout</button></div>' : '<div class="subscription-setup-note">Checkout is not configured yet. Add the Stripe publishable key and server-side Stripe secrets listed in <strong>STRIPE_INTEGRATION_TODO.md</strong> before using this button.</div><div class="modal-actions"><button class="btn" data-close>Close</button></div>'}`);
-    const startButton = modalRoot.querySelector('#start-checkout');
-    if (!startButton) return;
-    startButton.addEventListener('click', async () => {
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Secure Stripe checkout</div><h2>Start your subscription.</h2><p>Review the recurring price and complete payment securely with Stripe.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div>${configuredKey ? '<p class="checkout-status" id="checkout-status" aria-live="polite">Loading secure checkout…</p><div class="checkout-form" id="checkout-form"></div>' : '<div class="subscription-setup-note">Checkout is not configured yet. Add the Stripe publishable key and server-side Stripe secrets listed in <strong>STRIPE_INTEGRATION_TODO.md</strong> before using this button.</div>'}<div class="subscription-error" id="checkout-error" role="alert" hidden></div><div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn btn-primary" id="retry-checkout" hidden>Try again</button></div>`);
+    if (!configuredKey) return;
+
+    const showError = message => {
       const errorBox = modalRoot.querySelector('#checkout-error');
-      const showError = message => { errorBox.textContent = message; errorBox.hidden = false; };
-      startButton.disabled = true;
-      startButton.textContent = 'Preparing secure checkout…';
+      if (!errorBox) return;
+      errorBox.textContent = message;
+      errorBox.hidden = false;
+      const status = modalRoot.querySelector('#checkout-status');
+      if (status) status.hidden = true;
+      const retryButton = modalRoot.querySelector('#retry-checkout');
+      if (retryButton) retryButton.hidden = false;
+    };
+    modalRoot.querySelector('#retry-checkout')?.addEventListener('click', showSubscriptionModal);
+
+    void (async () => {
       try {
         if (!window.Stripe) throw new Error('Stripe.js did not load. Refresh the page and try again.');
         const clientSecret = await window.PathwayBackend.createCheckoutSession();
+        if (!modalRoot.querySelector('#checkout-form')) return;
         const stripe = window.Stripe(stripeConfig.publishableKey, { betas: ['custom_checkout_payment_form_1'] });
         const checkout = stripe.initCheckoutFormSdk({
           clientSecret,
@@ -123,24 +132,22 @@
         });
         const form = checkout.createForm({ layout: 'expanded' });
         form.mount('#checkout-form');
-        startButton.hidden = true;
         const loadActionsResult = await checkout.loadActions();
-        if (loadActionsResult.type === 'success') {
-          form.on('confirm', async event => {
-            errorBox.hidden = true;
-            try { await loadActionsResult.actions.confirm({ formConfirmEvent: event }); }
-            catch (error) { showError(error.message || 'Payment could not be confirmed. Please try again.'); }
-          });
-        } else {
-          showError(loadActionsResult.error?.message || 'The secure checkout form could not be loaded.');
-          startButton.hidden = false;
+        if (loadActionsResult.type !== 'success') {
+          throw new Error(loadActionsResult.error?.message || 'The secure checkout form could not be loaded.');
         }
+        const status = modalRoot.querySelector('#checkout-status');
+        if (status) status.hidden = true;
+        form.on('confirm', async event => {
+          const errorBox = modalRoot.querySelector('#checkout-error');
+          if (errorBox) errorBox.hidden = true;
+          try { await loadActionsResult.actions.confirm({ formConfirmEvent: event }); }
+          catch (error) { showError(error.message || 'Payment could not be confirmed. Please try again.'); }
+        });
       } catch (error) {
         showError(error.message || 'The subscription checkout could not be started.');
-        startButton.disabled = false;
-        startButton.textContent = 'Try again';
       }
-    });
+    })();
   }
 
   function renderDashboard() {

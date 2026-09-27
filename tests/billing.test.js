@@ -26,6 +26,15 @@ test('header loads Stripe.js directly and checkout form uses the configured beta
   assert.match(builder, /actions\.confirm\(\{ formConfirmEvent: event \}\)/);
 });
 
+test('upgrade opens Stripe Checkout directly and sends the active Supabase access token', () => {
+  const builder = read('builder.js');
+  const backend = read('backend.js');
+  assert.match(builder, /addEventListener\('click', showSubscriptionModal\)/);
+  assert.match(builder, /const clientSecret = await window\.PathwayBackend\.createCheckoutSession\(\)/);
+  assert.doesNotMatch(builder, /Continue to secure checkout|id="start-checkout"/);
+  assert.match(backend, /Authorization: `Bearer \$\{session\.access_token\}`/);
+});
+
 test('Checkout Session is server-created as a recurring embedded form using the Checkout Studio parameters', () => {
   const edge = read('supabase/functions/billing/index.ts');
   for (const value of [
@@ -36,6 +45,8 @@ test('Checkout Session is server-created as a recurring embedded form using the 
     'client_secret: session.client_secret', 'custom_checkout_payment_form_preview=v1'
   ]) assert.ok(edge.includes(value), `missing configured Stripe value: ${value}`);
   assert.match(edge, /auth\.getUser\(bearer\)/);
+  assert.ok(edge.includes('match(/^Bearer\\s+(.+)$/i)'), 'billing must parse a normal Bearer authorization header');
+  assert.ok(!edge.includes('match(/^Bearer\\\\s+(.+)$/i)'), 'billing must not match a literal backslash-s sequence');
   assert.match(edge, /subscription_data: \{ metadata: \{ workspace_id: workspace\.id \} \}/);
   assert.doesNotMatch(edge, /sk_(?:test|live)_[A-Za-z0-9]+/);
 });
