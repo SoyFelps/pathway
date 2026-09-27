@@ -21,6 +21,10 @@ test('free accounts see upgrade controls instead of publish actions across edito
   assert.match(builder, /US\$ 24\.90/);
   assert.match(builder, /Payments are simulated; no real charge will be made/);
   assert.doesNotMatch(builder, /showSubscriptionModal/);
+  assert.match(builder, /function refreshSubscriptionAfterCheckout\(\)/);
+  assert.match(builder, /getSubscriptionState\(workspace\.id\)/);
+  assert.match(builder, /Premium is active\. You can now publish job flows\./);
+  assert.match(builder, /<span class="status-dot"><\/span>Premium/);
 });
 
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
@@ -66,6 +70,9 @@ test('signed Stripe subscription webhooks update entitlements and automatically 
     assert.ok(edge.includes(type), `missing handled billing event: ${type}`);
   }
   assert.match(edge, /from\("workspace_subscriptions"\)\.upsert/);
+  assert.match(edge, /subscription\.items\?\.data/);
+  assert.match(edge, /function subscriptionPeriodEnd\(/);
+  assert.match(edge, /current_period_end/);
   assert.match(edge, /if \(!hasAccess\)[\s\S]*publication_status: "draft", active_published_flow_id: null/);
 });
 

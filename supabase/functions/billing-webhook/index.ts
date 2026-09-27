@@ -24,6 +24,7 @@ type SubscriptionSnapshot = {
   customer: string | { id: string } | null;
   status: string;
   current_period_end?: number;
+  items?: { data?: Array<{ current_period_end?: number }> };
   cancel_at_period_end?: boolean;
   metadata?: Record<string, string>;
 };
@@ -34,11 +35,22 @@ function objectId(value: unknown): string | null {
   return null;
 }
 
+function subscriptionPeriodEnd(subscription: SubscriptionSnapshot): number | null {
+  // Stripe API version 2025-03-31.basil removed subscription-level period fields.
+  // For subscriptions with multiple items, use the earliest valid item boundary.
+  const itemEnds = (subscription.items?.data || [])
+    .map(item => item.current_period_end)
+    .filter((value): value is number => Number.isFinite(value));
+  if (itemEnds.length) return Math.min(...itemEnds);
+  return Number.isFinite(subscription.current_period_end) ? subscription.current_period_end! : null;
+}
+
 async function syncSubscription(subscription: SubscriptionSnapshot, workspaceId: string, customerId?: string | null) {
   if (!admin) throw new Error("Subscription database is not configured.");
   const validStatuses = new Set(["active", "trialing", "past_due", "canceled", "unpaid", "incomplete", "incomplete_expired", "paused"]);
   const status = validStatuses.has(subscription.status) ? subscription.status : "incomplete";
-  const periodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+  const periodEndTimestamp = subscriptionPeriodEnd(subscription);
+  const periodEnd = periodEndTimestamp ? new Date(periodEndTimestamp * 1000).toISOString() : null;
   const normalizedCustomerId = customerId || objectId(subscription.customer);
   const { data: current, error: currentError } = await admin.from("workspace_subscriptions")
     .select("stripe_subscription_id,status,current_period_end").eq("workspace_id", workspaceId).maybeSingle();

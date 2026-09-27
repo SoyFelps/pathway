@@ -90,7 +90,7 @@
 
   function renderPlanControl() {
     return subscription?.active
-      ? '<span class="status-pill" title="Your workspace can publish job flows"><span class="status-dot"></span>Active subscription</span>'
+      ? '<span class="status-pill" title="Your workspace can publish job flows"><span class="status-dot"></span>Premium</span>'
       : '<button class="btn btn-sm btn-lime" id="upgrade-to-publish">Upgrade to publish</button>';
   }
 
@@ -120,6 +120,24 @@
     } else {
       renderDashboard();
     }
+  }
+
+  async function refreshSubscriptionAfterCheckout() {
+    showToast('Checkout received. Activating your Premium plan…');
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        subscription = await window.PathwayBackend.getSubscriptionState(workspace.id);
+        if (subscription.active) {
+          renderDashboard();
+          showToast('Premium is active. You can now publish job flows.');
+          return;
+        }
+      } catch (_) {
+        // A transient network or webhook delay is handled by the next bounded refresh.
+      }
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+    showToast('Payment received, but plan activation is still syncing. Refresh this page in a moment.');
   }
 
   function renderSubscriptionPage() {
@@ -729,10 +747,11 @@
     flows = context.flows;
     applicants = []; applicantFilter = ''; applicantSearch = '';
     const requestedPage = window.location.hash.replace(/^#/, '');
-    if (new URLSearchParams(window.location.search).get('checkout') === 'complete') {
+    const checkoutComplete = new URLSearchParams(window.location.search).get('checkout') === 'complete';
+    if (checkoutComplete) {
       window.history.replaceState({}, '', window.location.pathname + window.location.hash);
-      setTimeout(() => showToast(subscription.active ? 'Subscription active. You can now publish job flows.' : 'Checkout received. Subscription access is syncing; refresh in a moment.'), 0);
     }
     if (requestedPage === 'applicants') void renderApplicants(); else renderDashboard();
+    if (checkoutComplete) void refreshSubscriptionAfterCheckout();
   });
 })();
