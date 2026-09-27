@@ -14,6 +14,8 @@
   let workspace = null;
   let user = null;
   let subscription = { status: 'free', active: false, currentPeriodEnd: null, cancelAtPeriodEnd: false };
+  let subscriptionReturnPage = 'dashboard';
+  let subscriptionReturnFlowId = null;
   let currentId = null;
   let selectedId = null;
   let connectFrom = null;
@@ -93,32 +95,60 @@
   }
 
   function bindPlanControl() {
-    root.querySelector('#upgrade-to-publish')?.addEventListener('click', showSubscriptionModal);
+    root.querySelector('#upgrade-to-publish')?.addEventListener('click', openSubscriptionPage);
   }
 
-  function showSubscriptionModal() {
+  function openSubscriptionPage() {
+    if (root.querySelector('.editor-main')) {
+      subscriptionReturnPage = 'editor';
+      subscriptionReturnFlowId = currentId;
+    } else if (root.querySelector('.applicants-page')) {
+      subscriptionReturnPage = 'applicants';
+      subscriptionReturnFlowId = null;
+    } else {
+      subscriptionReturnPage = 'dashboard';
+      subscriptionReturnFlowId = null;
+    }
+    renderSubscriptionPage();
+  }
+
+  function returnFromSubscriptionPage() {
+    if (subscriptionReturnPage === 'editor' && flows.some(flow => flow.id === subscriptionReturnFlowId)) {
+      openFlow(subscriptionReturnFlowId);
+    } else if (subscriptionReturnPage === 'applicants') {
+      void renderApplicants();
+    } else {
+      renderDashboard();
+    }
+  }
+
+  function renderSubscriptionPage() {
     const stripeConfig = window.PATHWAY_STRIPE_CONFIG || {};
     const configuredKey = typeof stripeConfig.publishableKey === 'string' && /^pk_(test|live)_/.test(stripeConfig.publishableKey) && !stripeConfig.publishableKey.includes('REPLACE_');
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Secure Stripe checkout</div><h2>Start your subscription.</h2><p>Review the recurring price and complete payment securely with Stripe.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div>${configuredKey ? '<p class="checkout-status" id="checkout-status" aria-live="polite">Loading secure checkout…</p><div class="checkout-form" id="checkout-form"></div>' : '<div class="subscription-setup-note">Checkout is not configured yet. Add the Stripe publishable key and server-side Stripe secrets listed in <strong>STRIPE_INTEGRATION_TODO.md</strong> before using this button.</div>'}<div class="subscription-error" id="checkout-error" role="alert" hidden></div><div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn btn-primary" id="retry-checkout" hidden>Try again</button></div>`);
+    const isTestMode = stripeConfig.publishableKey?.startsWith('pk_test_');
+    root.innerHTML = `<main class="subscription-page"><header class="subscription-topbar"><div class="subscription-topbar-left"><button class="subscription-back" id="subscription-back">← <span>Back to workspace</span></button><a class="brand" href="#" id="subscription-brand"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a></div><div class="subscription-identity"><span>${esc(user.email)}</span><button class="btn btn-sm" id="subscription-signout">Sign out</button></div></header><div class="subscription-layout"><section class="subscription-story"><div class="subscription-eyebrow"><span class="subscription-eyebrow-dot"></span>Pathway for hiring teams</div><h1>Make every application feel like the start of a good conversation.</h1><p class="subscription-lead">Create thoughtful job journeys, collect complete applications, and keep every candidate moving through one clear hiring workspace.</p><div class="subscription-benefits"><div class="subscription-benefit"><span>01</span><div><strong>Build better application journeys</strong><p>Use clear, branching flows that fit each role and respect candidates' time.</p></div></div><div class="subscription-benefit"><span>02</span><div><strong>Keep applicants organized</strong><p>Review answers and resumes together, then move candidates through your pipeline.</p></div></div><div class="subscription-benefit"><span>03</span><div><strong>Publish when you're ready</strong><p>Share a dedicated job link and receive applications directly in Pathway.</p></div></div></div><div class="subscription-price-card"><div><span class="subscription-price-label">Pathway subscription</span><div class="subscription-price"><strong>${esc(stripeConfig.priceLabel || 'US$ 24.90')}</strong><span>/ month</span></div></div><span class="subscription-recurring">Recurring billing</span><p>The final amount and billing details are shown by Stripe before you confirm.</p></div>${isTestMode ? '<div class="subscription-test-note"><span>TEST MODE</span> Payments are simulated; no real charge will be made.</div>' : ''}<p class="subscription-trust">Secure payment processing by Stripe. Your card details are handled by Stripe and are not stored by Pathway.</p></section><section class="subscription-checkout-panel" aria-label="Stripe subscription checkout"><div class="checkout-panel-heading"><span class="checkout-panel-kicker">Secure checkout</span><h2>Subscribe to Pathway</h2><p>Enter your payment details below to unlock job publishing.</p></div>${configuredKey ? '<div class="checkout-status" id="checkout-status" aria-live="polite">Connecting securely to Stripe…</div><div class="subscription-checkout-form" id="subscription-checkout-form"></div>' : '<div class="subscription-setup-note">Checkout is not configured yet. Add the Stripe publishable key and server-side Stripe secrets listed in <strong>STRIPE_INTEGRATION_TODO.md</strong> before using this page.</div>'}<div class="subscription-error" id="checkout-error" role="alert" hidden></div><div class="checkout-panel-footer"><span>Encrypted, secure checkout</span><button class="btn btn-primary" id="retry-checkout" hidden>Try again</button></div></section></div></main>`;
+    root.querySelector('#subscription-back')?.addEventListener('click', returnFromSubscriptionPage);
+    root.querySelector('#subscription-brand')?.addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
+    root.querySelector('#subscription-signout')?.addEventListener('click', doSignOut);
+    root.querySelector('#retry-checkout')?.addEventListener('click', renderSubscriptionPage);
     if (!configuredKey) return;
 
     const showError = message => {
-      const errorBox = modalRoot.querySelector('#checkout-error');
+      const errorBox = root.querySelector('#checkout-error');
       if (!errorBox) return;
       errorBox.textContent = message;
       errorBox.hidden = false;
-      const status = modalRoot.querySelector('#checkout-status');
+      const status = root.querySelector('#checkout-status');
       if (status) status.hidden = true;
-      const retryButton = modalRoot.querySelector('#retry-checkout');
+      const retryButton = root.querySelector('#retry-checkout');
       if (retryButton) retryButton.hidden = false;
     };
-    modalRoot.querySelector('#retry-checkout')?.addEventListener('click', showSubscriptionModal);
 
     void (async () => {
       try {
         if (!window.Stripe) throw new Error('Stripe.js did not load. Refresh the page and try again.');
         const clientSecret = await window.PathwayBackend.createCheckoutSession();
-        if (!modalRoot.querySelector('#checkout-form')) return;
+        if (!root.querySelector('#subscription-checkout-form')) return;
         const stripe = window.Stripe(stripeConfig.publishableKey, { betas: ['custom_checkout_payment_form_1'] });
         const checkout = stripe.initCheckoutFormSdk({
           clientSecret,
@@ -131,15 +161,15 @@
           }
         });
         const form = checkout.createForm({ layout: 'expanded' });
-        form.mount('#checkout-form');
+        form.mount('#subscription-checkout-form');
         const loadActionsResult = await checkout.loadActions();
         if (loadActionsResult.type !== 'success') {
           throw new Error(loadActionsResult.error?.message || 'The secure checkout form could not be loaded.');
         }
-        const status = modalRoot.querySelector('#checkout-status');
+        const status = root.querySelector('#checkout-status');
         if (status) status.hidden = true;
         form.on('confirm', async event => {
-          const errorBox = modalRoot.querySelector('#checkout-error');
+          const errorBox = root.querySelector('#checkout-error');
           if (errorBox) errorBox.hidden = true;
           try { await loadActionsResult.actions.confirm({ formConfirmEvent: event }); }
           catch (error) { showError(error.message || 'Payment could not be confirmed. Please try again.'); }
@@ -363,6 +393,7 @@
       const button = event.currentTarget;
       button.disabled = true; button.textContent = isPublished ? 'Unpublishing…' : 'Opening editor…';
       if (!isPublished) {
+        if (!subscription?.active) { closeModal(); openSubscriptionPage(); return; }
         closeModal(); openFlow(id); await publishFlow(); return;
       }
       try {
@@ -400,7 +431,7 @@
     root.querySelector('#dashboard-back').addEventListener('click', renderDashboard);
     root.querySelector('#preview-btn').addEventListener('click', openPreview);
     root.querySelector('#copy-job-url')?.addEventListener('click', copyJobUrl);
-    root.querySelector('#publish-btn').addEventListener('click', () => currentFlow()?.publicationStatus === 'published' ? unpublishFlow() : subscription?.active ? publishFlow() : showSubscriptionModal());
+    root.querySelector('#publish-btn').addEventListener('click', () => currentFlow()?.publicationStatus === 'published' ? unpublishFlow() : subscription?.active ? publishFlow() : openSubscriptionPage());
     root.querySelector('#add-node').addEventListener('click', showNodePicker);
     const workspaceElement = document.getElementById('workspace');
     bindCanvasPan(workspaceElement);
@@ -671,7 +702,7 @@
   }
 
   async function publishFlow() {
-    if (!subscription?.active) { showSubscriptionModal(); return; }
+    if (!subscription?.active) { openSubscriptionPage(); return; }
     const flow = currentFlow();
     try { C.normalizeFlow(flow); }
     catch (error) {

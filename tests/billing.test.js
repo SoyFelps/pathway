@@ -10,9 +10,17 @@ test('free accounts see upgrade controls instead of publish actions across edito
   const builder = read('builder.js');
   assert.match(builder, /Upgrade to publish/);
   assert.match(builder, /subscription\?\.active \? 'Publish' : 'Upgrade to publish'/);
-  assert.match(builder, /if \(!subscription\?\.active\) \{ showSubscriptionModal\(\); return; \}/);
+  assert.match(builder, /if \(!subscription\?\.active\) \{ openSubscriptionPage\(\); return; \}/);
   assert.match(builder, /renderPlanControl\(\)/);
   assert.match(builder, /id="upgrade-to-publish"/);
+  assert.match(builder, /function renderSubscriptionPage\(\)/);
+  assert.match(builder, /subscription-layout/);
+  assert.match(builder, /subscription-benefit/);
+  assert.match(builder, /subscription-checkout-form/);
+  assert.match(builder, /Back to workspace/);
+  assert.match(builder, /US\$ 24\.90/);
+  assert.match(builder, /Payments are simulated; no real charge will be made/);
+  assert.doesNotMatch(builder, /showSubscriptionModal/);
 });
 
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
@@ -29,7 +37,7 @@ test('header loads Stripe.js directly and checkout form uses the configured beta
 test('upgrade opens Stripe Checkout directly and sends the active Supabase access token', () => {
   const builder = read('builder.js');
   const backend = read('backend.js');
-  assert.match(builder, /addEventListener\('click', showSubscriptionModal\)/);
+  assert.match(builder, /addEventListener\('click', openSubscriptionPage\)/);
   assert.match(builder, /const clientSecret = await window\.PathwayBackend\.createCheckoutSession\(\)/);
   assert.doesNotMatch(builder, /Continue to secure checkout|id="start-checkout"/);
   assert.match(backend, /Authorization: `Bearer \$\{session\.access_token\}`/);
