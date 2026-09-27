@@ -88,6 +88,13 @@ test('published snapshot RPC only serves the currently active published snapshot
   assert.match(sql, /f\.active_published_flow_id\s*=\s*pf\.id/i);
 });
 
+test('published-flow RPC remains executable by candidates and signed-in workspace users', () => {
+  const gateMigration = fs.readFileSync(require.resolve('../supabase/migrations/20260926195500_stripe_subscription_publication_gates.sql'), 'utf8');
+  const permissionFix = fs.readFileSync(require.resolve('../supabase/migrations/20260927115500_restore_authenticated_published_flow_lookup.sql'), 'utf8');
+  assert.match(gateMigration, /grant execute on function public\.get_published_flow\(uuid\) to anon/);
+  assert.match(permissionFix, /grant execute on function public\.get_published_flow\(uuid\) to authenticated/);
+});
+
 
 test('published flow produces a public apply URL using the active snapshot token', () => {
   const { backend } = createBackendHarness();
