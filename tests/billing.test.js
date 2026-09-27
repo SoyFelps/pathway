@@ -40,12 +40,21 @@ test('My Plan shows account status and keeps future Premium billing actions disa
   assert.match(builder, /class="btn plan-placeholder" disabled/);
   assert.match(builder, /These billing actions are placeholders for now/);
   assert.match(builder, /subscriptionReturnPage === 'my-plan'/);
+  const start = builder.indexOf('function renderMyPlan()');
+  const end = builder.indexOf('function renderApplicantBoard(', start);
+  const planScreen = builder.slice(start, end);
+  assert.doesNotMatch(planScreen, /plan-state-chip/);
+  for (const benefit of ['Publish your job flow', 'Share a public job link', 'Receive applications in Pathway', 'Review candidates and resumes', 'Approve or reject candidates']) {
+    assert.ok(planScreen.includes(benefit), `missing Free-plan Premium benefit: ${benefit}`);
+  }
+  assert.match(planScreen, /id="my-plan-benefits-upgrade"/);
+  assert.match(planScreen, /my-plan-benefits-upgrade.*openSubscriptionPage/s);
 });
 
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /builder\.js\?v=my-plan-20260927/);
+  assert.match(html, /builder\.js\?v=my-plan-benefits-20260927/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);
