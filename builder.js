@@ -28,6 +28,7 @@
   let applicants = [];
   let applicantFilter = '';
   let applicantSearch = '';
+  let currentCardSummaryRequest = 0;
   const applicantStages = [
     { key: 'new', label: 'New', color: 'stage-new' },
     { key: 'failed', label: 'Failed', color: 'stage-failed' },
@@ -282,11 +283,32 @@
       paymentMethodButton.id = 'update-payment-method';
       paymentMethodButton.textContent = 'Update payment method';
       paymentMethodRow.querySelector('.plan-action-copy span').textContent = 'Update your card securely through Stripe. Pathway never stores your card details.';
+      paymentMethodRow.querySelector('.plan-action-copy').insertAdjacentHTML('beforeend', '<small class="plan-card-summary" id="current-payment-method" aria-live="polite">Loading current card…</small>');
       paymentMethodButton.addEventListener('click', openPaymentMethodPortal);
+      void loadCurrentCardSummary();
     }
     if (premium && subscription.cancelAtPeriodEnd) {
       root.querySelector('.plan-action-list')?.insertAdjacentHTML('beforeend', '<div class="plan-action-row plan-keep-row"><div class="plan-action-copy"><strong>Keep Premium</strong><span>Remove the scheduled cancellation and restore automatic renewal at US$ 24.90 per month.</span></div><button class="btn" id="keep-premium">Keep Premium</button></div>');
       root.querySelector('#keep-premium')?.addEventListener('click', showKeepPremiumConfirmation);
+    }
+  }
+
+  async function loadCurrentCardSummary() {
+    const summary = root.querySelector('#current-payment-method');
+    if (!summary) return;
+    const requestId = ++currentCardSummaryRequest;
+    try {
+      const card = await window.PathwayBackend.getCurrentPaymentMethodSummary();
+      if (!summary.isConnected || requestId !== currentCardSummaryRequest) return;
+      summary.textContent = card
+        ? `${card.brand} ending in ${card.last4} · Expires ${String(card.expMonth).padStart(2, '0')}/${card.expYear}`
+        : 'Stripe does not report a default card for this subscription.';
+      summary.classList.toggle('is-unavailable', !card);
+    } catch (_) {
+      if (summary.isConnected && requestId === currentCardSummaryRequest) {
+        summary.textContent = 'Card details could not be loaded. You can still update your payment method.';
+        summary.classList.add('is-unavailable');
+      }
     }
   }
 
@@ -885,6 +907,16 @@
     else if (requestedPage === 'my-plan') renderMyPlan();
     else renderDashboard();
     if (checkoutComplete) void refreshSubscriptionAfterCheckout();
-    if (paymentMethodUpdated) showToast('Payment method updated in Stripe.');
+    if (paymentMethodUpdated) void syncPaymentMethodAfterPortal();
   });
+
+  async function syncPaymentMethodAfterPortal() {
+    try {
+      await window.PathwayBackend.syncPaymentMethodFromCustomer();
+      await loadCurrentCardSummary();
+      showToast('Payment method updated for this subscription.');
+    } catch (error) {
+      showToast(error.message || 'The updated card could not be applied. Please try again.');
+    }
+  }
 })();

@@ -100,3 +100,5 @@
 .applicant-empty-icon{width:42px;height:42px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#e7f0e8;color:var(--green)}.applicant-empty-icon svg{width:20px;height:20px}
 
 .danger-confirm{margin-top:16px;padding:15px 16px;border:1px solid #f0dfdc;border-radius:10px;background:#fff8f7;color:#735650;font-size:12px;line-height:1.65}.danger-confirm strong{display:block;margin-bottom:4px;color:#7d453f}.btn-danger:disabled{cursor:not-allowed;opacity:.7;background:#f8f4f3;border-color:#eadfdd}.cancellation-error{margin-top:14px}.plan-keep-row .plan-action-copy strong{color:var(--green)}.renewal-confirm{margin-top:16px;padding:15px 16px;border:1px solid #dfebdf;border-radius:10px;background:#f5faf5;color:#526458;font-size:12px;line-height:1.65}.renewal-confirm strong{display:block;margin-bottom:4px;color:#315f4a}
+
+.plan-card-summary{display:block;margin-top:6px;color:#496650;font-size:11px;font-weight:650;line-height:1.45}.plan-card-summary.is-unavailable{color:#89938c;font-weight:500}

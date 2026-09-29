@@ -94,12 +94,38 @@ test('payment-method adapter accepts only HTTPS Stripe Billing Portal session UR
   assert.match(backend, /createPaymentMethodUpdateSession,/);
 });
 
+test('payment-method summary is authenticated, uses Stripe default-method precedence, and exposes only masked card fields', () => {
+  const edge = read('supabase/functions/billing/index.ts');
+  const backend = read('backend.js');
+  const builder = read('builder.js');
+  assert.match(edge, /action === "getPaymentMethodSummary"/);
+  assert.match(edge, /action === "syncPaymentMethodFromCustomer"/);
+  assert.match(edge, /stripe\.subscriptions\.update\(existing\.stripe_subscription_id, \{ default_payment_method: customerMethodId \}\)/);
+  assert.match(edge, /stripe\.subscriptions\.update\(existing\.stripe_subscription_id, \{ default_source: customerSourceId \}\)/);
+  assert.match(edge, /stripe\.subscriptions\.retrieve\(existing\.stripe_subscription_id, \{ expand: \["default_payment_method"\] \}\)/);
+  assert.match(edge, /customer\.invoice_settings\?\.default_payment_method/);
+  assert.match(edge, /stripe\.customers\.retrieveSource\(existing\.stripe_customer_id, sourceId\)/);
+  assert.match(edge, /stripeObjectId\(method\.customer\) !== customerId/);
+  assert.match(edge, /return \{ brand, last4, exp_month: month, exp_year: year \}/);
+  assert.match(edge, /payment_method: summary/);
+  assert.match(backend, /async function getCurrentPaymentMethodSummary\(\)/);
+  assert.match(backend, /JSON\.stringify\(\{ action: 'getPaymentMethodSummary' \}\)/);
+  assert.match(backend, /!\/\^\\d\{4\}\$\/\.test\(card\.last4\)/);
+  assert.match(backend, /getCurrentPaymentMethodSummary,/);
+  assert.match(builder, /id="current-payment-method"/);
+  assert.match(builder, /getCurrentPaymentMethodSummary\(\)/);
+  assert.match(builder, /ending in \$\{card\.last4\}/);
+  assert.match(builder, /requestId !== currentCardSummaryRequest/);
+  assert.match(builder, /syncPaymentMethodFromCustomer\(\)/);
+  assert.doesNotMatch(builder, /card\.number|card\.cvc/);
+});
+
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=payment-method-20260929/);
-  assert.match(html, /builder\.js\?v=payment-method-20260929b/);
-  assert.match(html, /styles\.css\?v=keep-premium-20260929/);
+  assert.match(html, /backend\.js\?v=current-card-20260929/);
+  assert.match(html, /builder\.js\?v=current-card-20260929/);
+  assert.match(html, /styles\.css\?v=current-card-20260929/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);
@@ -135,7 +161,7 @@ test('Checkout Session is server-created as a recurring embedded form using the 
 
 test('billing endpoint schedules cancellation only at period end after verifying the owner and Stripe subscription', () => {
   const edge = read('supabase/functions/billing/index.ts');
-  assert.match(edge, /action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession"/);
+  assert.match(edge, /action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer"/);
   assert.match(edge, /auth\.getUser\(bearer\)/);
   assert.match(edge, /owner_id", auth\.user\.id/);
   assert.match(edge, /stripe_subscription_id/);

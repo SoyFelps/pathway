@@ -53,6 +53,22 @@ function stripeObjectId(value: unknown): string | null {
   return null;
 }
 
+function safeCardSummary(value: unknown, customerId: string) {
+  if (!value || typeof value !== "object") return null;
+  const method = value as Record<string, unknown>;
+  if (stripeObjectId(method.customer) !== customerId) return null;
+  if (method.type !== "card" && method.object !== "card") return null;
+  const card = (method.object === "card" ? method : method.card) as Record<string, unknown> | null;
+  if (!card) return null;
+  const last4 = typeof card.last4 === "string" ? card.last4 : "";
+  const month = Number(card.exp_month);
+  const year = Number(card.exp_year);
+  if (!/^\d{4}$/.test(last4) || !Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 2000) return null;
+  const rawBrand = card.display_brand || card.brand;
+  const brand = typeof rawBrand === "string" && /^[a-z0-9 _-]{1,24}$/i.test(rawBrand) ? rawBrand : "Card";
+  return { brand, last4, exp_month: month, exp_year: year };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return response(req, 204, {});
   if (req.method !== "POST") return fail(req, 405, "Use POST for this endpoint.");
@@ -67,7 +83,7 @@ Deno.serve(async (req: Request) => {
   } catch {
     return fail(req, 400, "The request body must be valid JSON.");
   }
-  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession") return fail(req, 400, "This billing action is not supported.");
+  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer") return fail(req, 400, "This billing action is not supported.");
 
   const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
   if (!bearer) return fail(req, 401, "Sign in to manage your subscription.");
@@ -151,6 +167,92 @@ Deno.serve(async (req: Request) => {
     } catch (error) {
       console.error("Stripe renewal restoration request failed", error);
       return fail(req, 502, "Stripe could not remove the scheduled cancellation. Please try again.");
+    }
+  }
+
+  if (action === "syncPaymentMethodFromCustomer") {
+    if (!existing?.stripe_customer_id || !existing.stripe_subscription_id) return fail(req, 409, "An active Stripe subscription was not found for this workspace.");
+    if (existing.status !== "active" || periodEnd <= Date.now()) return fail(req, 409, "An active subscription is required to update its payment method.");
+    try {
+      const current = await stripe.subscriptions.retrieve(existing.stripe_subscription_id, { expand: ["default_payment_method"] });
+      if (current.status !== "active" || stripeObjectId(current.customer) !== existing.stripe_customer_id) return fail(req, 409, "The Stripe subscription no longer matches this workspace's active plan.");
+      if (current.metadata?.workspace_id !== workspace.id) return fail(req, 403, "The Stripe subscription could not be verified for this workspace.");
+      const customer = await stripe.customers.retrieve(existing.stripe_customer_id, { expand: ["invoice_settings.default_payment_method"] });
+      if ("deleted" in customer && customer.deleted) return fail(req, 409, "The Stripe customer for this workspace is no longer available.");
+      const customerMethod = customer.invoice_settings?.default_payment_method;
+      const customerMethodId = stripeObjectId(customerMethod);
+      const customerSourceId = stripeObjectId(customer.default_source);
+      if (customerMethodId) {
+        const method = typeof customerMethod === "string" ? await stripe.paymentMethods.retrieve(customerMethodId) : customerMethod;
+        if (stripeObjectId(method.customer) !== existing.stripe_customer_id) return fail(req, 403, "The selected payment method could not be verified for this workspace.");
+        if (method.type !== "card") return fail(req, 409, "The selected payment method is not a card and cannot be shown in My Plan.");
+        if (stripeObjectId(current.default_payment_method) !== customerMethodId) {
+          await stripe.subscriptions.update(existing.stripe_subscription_id, { default_payment_method: customerMethodId });
+        }
+      } else if (customerSourceId && stripeObjectId(current.default_source) !== customerSourceId) {
+        const source = await stripe.customers.retrieveSource(existing.stripe_customer_id, customerSourceId);
+        if (stripeObjectId(source.customer) !== existing.stripe_customer_id || source.object !== "card") return fail(req, 409, "Stripe did not return a supported default card for this workspace.");
+        await stripe.subscriptions.update(existing.stripe_subscription_id, { default_source: customerSourceId });
+      } else if (!customerMethodId) {
+        return fail(req, 409, "Stripe did not return a new default card to apply to this subscription.");
+      }
+      return response(req, 200, { payment_method: await (async () => {
+        const updated = await stripe.subscriptions.retrieve(existing.stripe_subscription_id, { expand: ["default_payment_method"] });
+        let summary = safeCardSummary(updated.default_payment_method, existing.stripe_customer_id);
+        if (!summary && updated.default_payment_method) {
+          const methodId = stripeObjectId(updated.default_payment_method);
+          if (methodId) summary = safeCardSummary(await stripe.paymentMethods.retrieve(methodId), existing.stripe_customer_id);
+        }
+        if (!summary && updated.default_source) {
+          const sourceId = stripeObjectId(updated.default_source);
+          if (sourceId) summary = safeCardSummary(await stripe.customers.retrieveSource(existing.stripe_customer_id, sourceId), existing.stripe_customer_id);
+        }
+        return summary;
+      })() });
+    } catch (error) {
+      console.error("Stripe customer-to-subscription payment method sync failed", error);
+      return fail(req, 502, "Stripe could not sync the updated card to this subscription. Please try again.");
+    }
+  }
+
+  if (action === "getPaymentMethodSummary") {
+    if (!existing?.stripe_customer_id || !existing.stripe_subscription_id) return fail(req, 409, "An active Stripe subscription was not found for this workspace.");
+    if (existing.status !== "active" || periodEnd <= Date.now()) return fail(req, 409, "An active subscription is required to view its payment method.");
+    try {
+      const current = await stripe.subscriptions.retrieve(existing.stripe_subscription_id, { expand: ["default_payment_method"] });
+      if (current.status !== "active" || stripeObjectId(current.customer) !== existing.stripe_customer_id) {
+        return fail(req, 409, "The Stripe subscription no longer matches this workspace's active plan.");
+      }
+      if (current.metadata?.workspace_id !== workspace.id) return fail(req, 403, "The Stripe subscription could not be verified for this workspace.");
+
+      let summary = safeCardSummary(current.default_payment_method, existing.stripe_customer_id);
+      if (!summary && current.default_payment_method) {
+        const methodId = stripeObjectId(current.default_payment_method);
+        if (methodId) summary = safeCardSummary(await stripe.paymentMethods.retrieve(methodId), existing.stripe_customer_id);
+      }
+      if (!summary && current.default_source) {
+        const sourceId = stripeObjectId(current.default_source);
+        if (sourceId) summary = safeCardSummary(await stripe.customers.retrieveSource(existing.stripe_customer_id, sourceId), existing.stripe_customer_id);
+      }
+      if (!summary && !current.default_payment_method && !current.default_source) {
+        const customer = await stripe.customers.retrieve(existing.stripe_customer_id, { expand: ["invoice_settings.default_payment_method"] });
+        if (!("deleted" in customer && customer.deleted)) {
+          const customerDefault = customer.invoice_settings?.default_payment_method;
+          summary = safeCardSummary(customerDefault, existing.stripe_customer_id);
+          if (!summary && customerDefault) {
+            const methodId = stripeObjectId(customerDefault);
+            if (methodId) summary = safeCardSummary(await stripe.paymentMethods.retrieve(methodId), existing.stripe_customer_id);
+          }
+          if (!summary && customer.default_source) {
+            const sourceId = stripeObjectId(customer.default_source);
+            if (sourceId) summary = safeCardSummary(await stripe.customers.retrieveSource(existing.stripe_customer_id, sourceId), existing.stripe_customer_id);
+          }
+        }
+      }
+      return response(req, 200, { payment_method: summary });
+    } catch (error) {
+      console.error("Stripe default payment method summary retrieval failed", error);
+      return fail(req, 502, "The current payment method could not be loaded. Please try again.");
     }
   }
 

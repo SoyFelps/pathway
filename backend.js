@@ -89,6 +89,48 @@
     return portalUrl.href;
   }
 
+  async function getCurrentPaymentMethodSummary() {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(BILLING_FUNCTION, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getPaymentMethodSummary' })
+      });
+    } catch (_) {
+      throw new Error('Could not reach the billing service. Check your connection and try again.');
+    }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error || 'The current payment method could not be loaded.');
+    if (payload.payment_method == null) return null;
+    const card = payload.payment_method;
+    if (typeof card.brand !== 'string' || !/^\d{4}$/.test(card.last4) || !Number.isInteger(card.exp_month) || card.exp_month < 1 || card.exp_month > 12 || !Number.isInteger(card.exp_year) || card.exp_year < 2000) {
+      throw new Error('Stripe returned incomplete payment method details.');
+    }
+    return { brand: card.brand, last4: card.last4, expMonth: card.exp_month, expYear: card.exp_year };
+  }
+
+  async function syncPaymentMethodFromCustomer() {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(BILLING_FUNCTION, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'syncPaymentMethodFromCustomer' })
+      });
+    } catch (_) {
+      throw new Error('Could not reach the billing service. Check your connection and try again.');
+    }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error || 'The updated payment method could not be applied to this subscription.');
+    if (payload.payment_method == null) throw new Error('Stripe did not confirm a card for this subscription.');
+    return payload.payment_method;
+  }
+
   async function cancelSubscriptionAtPeriodEnd() {
     const session = await requireSession();
     let result;
@@ -297,6 +339,8 @@
     getSubscriptionState,
     createCheckoutSession,
     createPaymentMethodUpdateSession,
+    getCurrentPaymentMethodSummary,
+    syncPaymentMethodFromCustomer,
     cancelSubscriptionAtPeriodEnd,
     keepPremiumSubscription,
     listFlows,
