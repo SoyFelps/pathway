@@ -112,11 +112,11 @@ async function getWorkspaceContext(userId: string) {
     .eq("user_id", userId).maybeSingle();
   if (memberError) throw memberError;
   if (!member) return { workspace: null, isOwner: false, member: null, premiumActive: false };
-  const { data: workspace, error: workspaceError } = await admin.from("workspaces")
-    .select("id,name,created_at,owner_id").eq("id", member.workspace_id).maybeSingle();
+  const [{ data: workspace, error: workspaceError }, { data: subscription, error: subscriptionError }] = await Promise.all([
+    admin.from("workspaces").select("id,name,created_at,owner_id").eq("id", member.workspace_id).maybeSingle(),
+    admin.from("workspace_subscriptions").select("status,current_period_end").eq("workspace_id", member.workspace_id).maybeSingle(),
+  ]);
   if (workspaceError) throw workspaceError;
-  const { data: subscription, error: subscriptionError } = await admin.from("workspace_subscriptions")
-    .select("status,current_period_end").eq("workspace_id", member.workspace_id).maybeSingle();
   if (subscriptionError) throw subscriptionError;
   const premiumActive = subscription?.status === "active" && Date.parse(subscription.current_period_end || "") > Date.now();
   const safeMember = {
@@ -295,26 +295,20 @@ async function handle(req: Request): Promise<Response> {
         });
       }
       if (!canManage) {
-        const { data: ownMembership, error: ownError } = await admin.from("workspace_members")
-          .select("id,user_id,member_email,can_flows,can_applicants,can_manage_team,created_at")
-          .eq("workspace_id", workspaceId).eq("user_id", user.id).maybeSingle();
-        if (ownError) return fail(req, 503, "Your team membership could not be loaded.");
         return response(req, 200, {
           workspace: { id: context.workspace.id, name: context.workspace.name }, isOwner: false,
-          premiumActive: true, canManage: false, members: ownMembership ? [ownMembership] : [],
+          premiumActive: true, canManage: false, members: [],
           invitations: [], seatsUsed: 0, seatLimit: 3,
         });
       }
-      await admin.from("workspace_invitations").update({ status: "expired" })
-        .eq("workspace_id", workspaceId).eq("status", "pending").lte("expires_at", new Date().toISOString());
-      const [membersResult, invitesResult] = await Promise.all([
+      const [membersResult, invitesResult, ownerResult] = await Promise.all([
         admin.from("workspace_members").select("id,user_id,member_email,can_flows,can_applicants,can_manage_team,created_at").eq("workspace_id", workspaceId).order("created_at"),
-        admin.from("workspace_invitations").select("id,invited_email,can_flows,can_applicants,can_manage_team,status,expires_at,created_at").eq("workspace_id", workspaceId).eq("status", "pending").order("created_at", { ascending: false }),
+        admin.from("workspace_invitations").select("id,invited_email,can_flows,can_applicants,can_manage_team,status,expires_at,created_at").eq("workspace_id", workspaceId).eq("status", "pending").gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }),
+        isOwner ? Promise.resolve({ data: { user: { email: user.email || null } }, error: null }) : admin.auth.admin.getUserById(context.workspace.owner_id),
       ]);
       if (membersResult.error || invitesResult.error) return fail(req, 503, "Team members could not be loaded.");
-      const ownerResult = await admin.auth.admin.getUserById(context.workspace.owner_id);
       if (ownerResult.error) return fail(req, 503, "The workspace owner could not be loaded.");
-      const pendingCount = invitesResult.data?.filter((invite) => Date.parse(invite.expires_at) > Date.now()).length || 0;
+      const pendingCount = invitesResult.data?.length || 0;
       return response(req, 200, {
         workspace: { id: context.workspace.id, name: context.workspace.name },
         owner: { userId: context.workspace.owner_id, email: ownerResult.data.user?.email || null },

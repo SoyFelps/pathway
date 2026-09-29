@@ -155,7 +155,22 @@ test('My Team stylesheet and static page load are versioned for immediate deploy
   const css = read('styles.css');
   assert.match(html, /auth\.js\?v=team-auto-accept-20260929/);
   assert.match(html, /backend\.js\?v=team-invite-recovery-20260929/);
-  assert.match(html, /builder\.js\?v=team-invite-recovery-20260929/);
+  assert.match(html, /builder\.js\?v=team-loading-20260929/);
+  assert.match(html, /styles\.css\?v=team-loading-20260929/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
+});
+
+test('My Team renders loading cards before its list request resolves and ignores stale route responses', () => {
+  const builder = read('builder.js');
+  const edge = read('supabase/functions/team/index.ts');
+  assert.match(builder, /function renderMyTeamLoadingMarkup\(\)/);
+  assert.match(builder, /role="status">Loading your team/);
+  assert.match(builder, /team-skeleton-seat/);
+  assert.match(builder, /team-skeleton-field/);
+  assert.match(builder, /const requestId = \+\+teamRenderRequestId;\s*renderMyTeamLoading\(\);\s*try \{\s*const data = await window\.PathwayBackend\.listTeam\(\)/);
+  assert.match(builder, /requestId !== teamRenderRequestId/);
+  assert.match(edge, /Promise\.all\(\[\s*admin\.from\("workspace_members"\)[\s\S]*admin\.from\("workspace_invitations"\)[\s\S]*admin\.auth\.admin\.getUserById/);
+  assert.doesNotMatch(edge, /await admin\.from\("workspace_invitations"\)\.update\(\{ status: "expired" \}\)/);
+  assert.doesNotMatch(edge, /const \{ data: ownMembership, error: ownError \} = await admin\.from\("workspace_members"\)/);
 });

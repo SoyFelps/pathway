@@ -40,6 +40,7 @@
   let paymentHistoryInvoices = [];
   let paymentHistoryNextAfter = null;
   let paymentHistoryHasMore = false;
+  let teamRenderRequestId = 0;
   const applicantStages = [
     { key: 'new', label: 'New', color: 'stage-new' },
     { key: 'failed', label: 'Failed', color: 'stage-failed' },
@@ -310,11 +311,25 @@
     return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>Manage access to ${esc(workspace.name)}. Premium includes up to 3 additional members at no extra seat charge.</p></div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>Team access is paused</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>Team management permission is off</strong><p>You can see your own membership and leave this workspace. Ask a team manager to enable Team access if you need to invite or manage others.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All three are enabled by default.</small></div><div class="team-permission-grid"><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label></div><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${data.isOwner ? `<article class="team-person team-owner"><div class="team-person-heading"><div><strong>${esc(data.owner?.email || user.email)}</strong><span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
   }
 
+  function renderMyTeamLoadingMarkup() {
+    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page" aria-busy="true"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>Loading team members and invitations…</p></div><div class="team-skeleton team-skeleton-seat" aria-hidden="true"></div></div><section class="team-card team-loading-card" aria-hidden="true"><div class="team-skeleton team-skeleton-title"></div><div class="team-skeleton team-skeleton-copy"></div><div class="team-skeleton team-skeleton-field"></div><div class="team-skeleton team-skeleton-button"></div></section><section class="team-card team-loading-card" aria-hidden="true"><div class="team-skeleton team-skeleton-title"></div><div class="team-skeleton team-skeleton-person"></div><div class="team-skeleton team-skeleton-person short"></div></section><p class="team-loading-status" role="status">Loading your team…</p></main></div></div>`;
+  }
+
+  function renderMyTeamLoading() {
+    root.innerHTML = renderMyTeamLoadingMarkup();
+    bindSidebar(); bindPlanControl();
+    root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
+    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+  }
+
   async function renderMyTeam() {
     currentId = null; selectedId = null;
     if (!isOwner && !teamMember) return renderDashboard();
+    const requestId = ++teamRenderRequestId;
+    renderMyTeamLoading();
     try {
       const data = await window.PathwayBackend.listTeam();
+      if (requestId !== teamRenderRequestId || !root.querySelector('[data-route="my-team"].active')) return;
       root.innerHTML = renderMyTeamMarkup(data);
       bindSidebar(); bindPlanControl();
       root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
@@ -328,6 +343,7 @@
       root.querySelectorAll('[data-invitation-id] [data-permission]').forEach(input => input.addEventListener('change', () => { void saveInvitationPermissions(input.closest('[data-invitation-id]')); }));
       root.querySelector('#leave-team')?.addEventListener('click', showLeaveTeamConfirmation);
     } catch (error) {
+      if (requestId !== teamRenderRequestId || !root.querySelector('[data-route="my-team"].active')) return;
       root.innerHTML = `<div class="app-shell"><header class="topbar"><span class="brand">pathway</span><div class="top-actions"><span class="workspace-name">${esc(workspace.name)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><section class="team-notice is-paused"><h1>Team data unavailable</h1><p>${esc(error.message || 'Please try again.')}</p><button class="btn" id="retry-team">Retry</button></section></main></div></div>`;
       bindSidebar(); root.querySelector('#retry-team')?.addEventListener('click', () => { void renderMyTeam(); }); root.querySelector('#signout')?.addEventListener('click', doSignOut);
     }
