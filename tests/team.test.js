@@ -5,7 +5,7 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
-test('team schema reserves at most three Premium member seats and stores only invitation-token hashes', () => {
+test('team schema reserves three Premium seats and supports hashed acceptance with encrypted link recovery', () => {
   const sql = read('supabase/migrations/20260929150000_my_team.sql');
   const invitationFix = read('supabase/migrations/20260929185600_fix_team_invitation_expiry_column.sql');
   assert.match(sql, /create table public\.workspace_members/);
@@ -18,6 +18,9 @@ test('team schema reserves at most three Premium member seats and stores only in
   assert.match(sql, /public\.workspace_has_active_subscription\(p_workspace_id\)/);
   assert.match(sql, /pathway_team_invite_pending/);
   assert.match(invitationFix, /wi\.expires_at <= now\(\)/);
+  const recoverableLinks = read('supabase/migrations/20260929194000_recoverable_team_invite_links.sql');
+  assert.match(recoverableLinks, /encrypted_token text/);
+  assert.match(recoverableLinks, /Acceptance still uses only token_hash/);
 });
 
 test('team permissions independently gate flows, candidates, team administration, and resume access', () => {
@@ -80,6 +83,29 @@ test('confirmed invite signups are joined automatically from the standard app UR
   assert.match(edge, /pathway_team_invite_pending: false/);
 });
 
+test('pending invitations can copy their active link from encrypted token storage', () => {
+  const backend = read('backend.js');
+  const builder = read('builder.js');
+  const edge = read('supabase/functions/team/index.ts');
+  const migration = read('supabase/migrations/20260929194000_recoverable_team_invite_links.sql');
+  assert.match(builder, /data-copy-invitation-link="\$\{esc\(invite\.id\)\}"/);
+  assert.match(builder, /copyTeamInviteLink\(button\)/);
+  assert.match(builder, /previous link no longer works/);
+  assert.match(backend, /getTeamInvitationLink\(invitationId\) \{ return callTeam\(\{ action: 'getInvitationLink', invitationId, appUrl: window\.location\.origin \+ window\.location\.pathname \}\); \}/);
+  assert.match(edge, /body\.action === "getInvitationLink"/);
+  assert.match(edge, /const permissionDenied = requireManager\(\);[\s\S]{0,120}if \(!context\.premiumActive\)/);
+  assert.match(edge, /\.eq\("id", invitationId\)\.eq\("workspace_id", workspaceId\)\.eq\("status", "pending"\)/);
+  assert.match(edge, /async function encryptInviteToken\(token: string\)/);
+  assert.match(edge, /async function decryptInviteToken\(encrypted: string\)/);
+  assert.match(edge, /\[A-Za-z0-9_-\]\{107\}/);
+  assert.match(edge, /p_encrypted_token: await encryptInviteToken\(token\)/);
+  assert.match(edge, /let token = "";[\s\S]*if \(existing\.encrypted_token\)[\s\S]*await decryptInviteToken\(existing\.encrypted_token\)/);
+  assert.match(migration, /add column if not exists encrypted_token text/);
+  assert.match(migration, /encrypted_token ~ '\^v1\[\.\]\[A-Za-z0-9_-\]\{16\}\[\.\]\[A-Za-z0-9_-\]\{107\}\$'/);
+  assert.match(migration, /insert into public\.workspace_invitations as i \([\s\S]*token_hash, encrypted_token, can_flows/);
+  assert.match(migration, /grant execute on function public\.create_team_invitation\(uuid, text, text, text, boolean, boolean, boolean\) to authenticated/);
+});
+
 test('team Edge Function separates public invite preview from authenticated membership changes', () => {
   const edge = read('supabase/functions/team/index.ts');
   assert.match(edge, /action === "previewInvitation"/);
@@ -122,8 +148,8 @@ test('My Team stylesheet and static page load are versioned for immediate deploy
   const html = read('index.html');
   const css = read('styles.css');
   assert.match(html, /auth\.js\?v=team-auto-accept-20260929/);
-  assert.match(html, /backend\.js\?v=team-auto-accept-20260929/);
-  assert.match(html, /builder\.js\?v=my-team-20260929/);
+  assert.match(html, /backend\.js\?v=team-invite-recovery-20260929/);
+  assert.match(html, /builder\.js\?v=team-invite-recovery-20260929/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });

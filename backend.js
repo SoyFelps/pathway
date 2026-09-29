@@ -60,6 +60,7 @@
   async function acceptPendingTeamInvitation() { return callTeam({ action: 'acceptPendingInvitation' }); }
   async function updateTeamMemberPermissions(memberId, permissions) { return callTeam({ action: 'updateMemberPermissions', memberId, permissions }); }
   async function updateTeamInvitationPermissions(invitationId, permissions) { return callTeam({ action: 'updateInvitationPermissions', invitationId, permissions }); }
+  async function getTeamInvitationLink(invitationId) { return callTeam({ action: 'getInvitationLink', invitationId, appUrl: window.location.origin + window.location.pathname }); }
   async function revokeTeamInvitation(invitationId) { return callTeam({ action: 'revokeInvitation', invitationId }); }
   async function removeTeamMember(memberId) { return callTeam({ action: 'removeMember', memberId }); }
   async function leaveTeam() { return callTeam({ action: 'leaveTeam' }); }
@@ -476,6 +477,7 @@
     acceptPendingTeamInvitation,
     updateTeamMemberPermissions,
     updateTeamInvitationPermissions,
+    getTeamInvitationLink,
     revokeTeamInvitation,
     removeTeamMember,
     leaveTeam,

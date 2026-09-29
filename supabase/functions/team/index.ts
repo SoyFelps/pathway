@@ -49,6 +49,33 @@ async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+function base64UrlDecode(value: string): Uint8Array {
+  const binary = atob(value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+async function invitationEncryptionKey(): Promise<CryptoKey> {
+  if (!serviceKey) throw new Error("Team service encryption is not configured.");
+  const keyBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(serviceKey));
+  return crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+async function encryptInviteToken(token: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await invitationEncryptionKey(), new TextEncoder().encode(token));
+  return `v1.${base64UrlEncode(iv)}.${base64UrlEncode(new Uint8Array(ciphertext))}`;
+}
+async function decryptInviteToken(encrypted: string): Promise<string> {
+  const match = /^v1\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]{107})$/.exec(encrypted);
+  if (!match) throw new Error("This invitation link cannot be recovered.");
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: base64UrlDecode(match[1]) }, await invitationEncryptionKey(), base64UrlDecode(match[2]));
+  const token = new TextDecoder().decode(plaintext);
+  if (!TOKEN_RE.test(token)) throw new Error("This invitation link cannot be recovered.");
+  return token;
+}
 function createInviteToken(): string {
   const random = crypto.getRandomValues(new Uint8Array(32));
   return [...random].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -212,6 +239,7 @@ async function handle(req: Request): Promise<Response> {
         p_workspace_id: workspaceId,
         p_email: email,
         p_token_hash: await sha256Hex(token),
+        p_encrypted_token: await encryptInviteToken(token),
         p_can_flows: permissions.can_flows,
         p_can_applicants: permissions.can_applicants,
         p_can_manage_team: permissions.can_manage_team,
@@ -220,6 +248,43 @@ async function handle(req: Request): Promise<Response> {
       const inviteUrl = new URL(appUrl.href);
       inviteUrl.hash = `team-invite=${token}`;
       return response(req, 200, { invitation: Array.isArray(data) ? data[0] : data, url: inviteUrl.href });
+    }
+
+    if (body.action === "getInvitationLink") {
+      const permissionDenied = requireManager();
+      if (permissionDenied instanceof Response) return permissionDenied;
+      if (!context.premiumActive) return fail(req, 403, "An active Premium plan is required to access invitation links.");
+      const invitationId = cleanText(body.invitationId, 64);
+      if (!UUID_RE.test(invitationId)) return fail(req, 400, "Choose a valid invitation.");
+      let appUrl: URL;
+      try { appUrl = new URL(cleanText(body.appUrl, 500)); }
+      catch { return fail(req, 400, "The Pathway return address is invalid."); }
+      if (!APP_ORIGINS.has(appUrl.origin) || appUrl.username || appUrl.password || appUrl.search || appUrl.hash || !/(?:^|\/)(?:index\.html|pathway\/)?$/.test(appUrl.pathname)) {
+        return fail(req, 400, "The Pathway return address is not allowed.");
+      }
+      const { data: existing, error: lookupError } = await admin.from("workspace_invitations")
+        .select("id,token_hash,encrypted_token").eq("id", invitationId).eq("workspace_id", workspaceId).eq("status", "pending")
+        .gt("expires_at", new Date().toISOString()).maybeSingle();
+      if (lookupError) return fail(req, 503, "The pending invitation could not be checked.");
+      if (!existing) return fail(req, 404, "This invitation is no longer pending. Refresh the page and try again.");
+      let token = "";
+      let refreshed = false;
+      if (existing.encrypted_token) {
+        try { token = await decryptInviteToken(existing.encrypted_token); } catch { /* upgrade unverifiable legacy/corrupt rows with a fresh secret */ }
+      }
+      if (!token) {
+        token = createInviteToken();
+        const { data, error } = await admin.from("workspace_invitations").update({
+          token_hash: await sha256Hex(token), encrypted_token: await encryptInviteToken(token),
+        }).eq("id", invitationId).eq("workspace_id", workspaceId).eq("status", "pending")
+          .eq("token_hash", existing.token_hash).gt("expires_at", new Date().toISOString()).select("id").maybeSingle();
+        if (error) return fail(req, 503, "A copyable invitation link could not be prepared.");
+        if (!data) return fail(req, 409, "This invitation changed before its link could be prepared. Refresh and try again.");
+        refreshed = true;
+      }
+      const inviteUrl = new URL(appUrl.href);
+      inviteUrl.hash = `team-invite=${token}`;
+      return response(req, 200, { url: inviteUrl.href, refreshed });
     }
 
     if (body.action === "listTeam") {
