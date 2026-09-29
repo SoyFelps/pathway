@@ -261,7 +261,7 @@
       ? subscription.cancelAtPeriodEnd && periodEnd ? `Scheduled to end on ${periodEnd}` : periodEnd ? `Renews on ${periodEnd}` : 'Your Premium subscription is active.'
       : 'You are currently on the Free plan.';
     const management = premium
-      ? `<section class="plan-management-card"><div class="plan-section-heading"><div><div class="eyebrow">Subscription management</div><h2>Billing details</h2><p>Manage the payment method and history for this workspace.</p></div></div><div class="plan-action-list"><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment history</strong><span>View invoices and previous payments.</span></div><button class="btn plan-placeholder" disabled>Coming soon</button></div><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment method</strong><span>Change the card used for your subscription.</span></div><button class="btn plan-placeholder" disabled>Coming soon</button></div><div class="plan-action-row plan-cancel-row"><div class="plan-action-copy"><strong>Cancel subscription</strong><span>${subscription.cancelAtPeriodEnd && periodEnd ? `Your subscription is set to end on ${esc(periodEnd)}.` : 'Cancellation controls will be available here.'}</span></div><button class="btn btn-danger plan-placeholder" disabled>${subscription.cancelAtPeriodEnd ? 'Cancellation scheduled' : 'Coming soon'}</button></div></div><p class="plan-placeholder-note">These billing actions are placeholders for now. Stripe billing management will be connected in a later update.</p></section>`
+      ? `<section class="plan-management-card"><div class="plan-section-heading"><div><div class="eyebrow">Subscription management</div><h2>Billing details</h2><p>Manage the payment method and history for this workspace.</p></div></div><div class="plan-action-list"><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment history</strong><span>View invoices and previous payments.</span></div><button class="btn plan-placeholder" disabled>Coming soon</button></div><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment method</strong><span>Change the card used for your subscription.</span></div><button class="btn plan-placeholder" disabled>Coming soon</button></div><div class="plan-action-row plan-cancel-row"><div class="plan-action-copy"><strong>Cancel subscription</strong><span>${subscription.cancelAtPeriodEnd && periodEnd ? `Premium will remain active until ${esc(periodEnd)}.` : `Schedule cancellation for the end of your paid period${periodEnd ? ` (${esc(periodEnd)})` : ''}.`}</span></div><button class="btn btn-danger" id="cancel-subscription" ${subscription.cancelAtPeriodEnd ? 'disabled' : ''}>${subscription.cancelAtPeriodEnd ? 'Cancellation scheduled' : 'Cancel subscription'}</button></div></div><p class="plan-placeholder-note">Payment history and card changes will be added later. If you cancel, Premium and published jobs remain active through the date shown above.</p></section>`
       : `<section class="plan-free-note"><div class="plan-free-mark" aria-hidden="true">↗</div><div><strong>Build and preview for free</strong><p>Create and refine application flows at no cost. Upgrade when you are ready to publish a job.</p></div></section>`;
     const freeBenefits = !premium
       ? `<section class="premium-benefits-card"><div class="premium-benefits-heading"><span class="premium-benefits-mark" aria-hidden="true">✦</span><div><div class="eyebrow">Premium plan</div><h2>Everything you need to move from job post to decision</h2><p>Publish a role and manage the full applicant journey in Pathway.</p></div></div><ul class="premium-benefits-list"><li><span aria-hidden="true">↗</span><div><strong>Publish your job flow</strong><p>Turn your application journey into a live job posting.</p></div></li><li><span aria-hidden="true">⤴</span><div><strong>Share a public job link</strong><p>Send one simple link to candidates wherever you recruit.</p></div></li><li><span aria-hidden="true">＋</span><div><strong>Receive applications in Pathway</strong><p>Collect candidate details and answers in your workspace.</p></div></li><li><span aria-hidden="true">▤</span><div><strong>Review candidates and resumes</strong><p>See application responses and preview or download resumes.</p></div></li><li><span aria-hidden="true">✓</span><div><strong>Approve or reject candidates</strong><p>Organize your pipeline and make hiring decisions as applications come in.</p></div></li></ul><button class="btn btn-primary" id="my-plan-benefits-upgrade">Upgrade to Premium</button></section>`
@@ -273,6 +273,37 @@
     root.querySelector('#signout')?.addEventListener('click', doSignOut);
     root.querySelector('#my-plan-upgrade')?.addEventListener('click', openSubscriptionPage);
     root.querySelector('#my-plan-benefits-upgrade')?.addEventListener('click', openSubscriptionPage);
+    root.querySelector('#cancel-subscription')?.addEventListener('click', showCancelSubscriptionConfirmation);
+  }
+
+  function showCancelSubscriptionConfirmation() {
+    if (!subscription?.active || subscription.cancelAtPeriodEnd) return;
+    const periodEnd = formatPlanDate(subscription.currentPeriodEnd);
+    setModal(`<div class="modal-head"><div><h2>Schedule subscription cancellation?</h2><p>Your Premium plan will remain active through the end of the paid period.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="danger-confirm"><strong>What happens next:</strong> Pathway will turn off renewal with Stripe. You will keep Premium access and published job links until ${esc(periodEnd || 'the end of your current billing period')}. After that date, the subscription ends and published jobs are automatically unpublished.</div><div class="modal-actions"><button class="btn" data-close>Keep Premium</button><button class="btn btn-danger" id="confirm-subscription-cancel">Schedule cancellation</button></div>`);
+    const confirmButton = modalRoot.querySelector('#confirm-subscription-cancel');
+    confirmButton.addEventListener('click', async () => {
+      confirmButton.disabled = true;
+      confirmButton.textContent = 'Scheduling…';
+      try {
+        const result = await window.PathwayBackend.cancelSubscriptionAtPeriodEnd();
+        subscription = {
+          ...subscription,
+          status: result.status || 'active',
+          currentPeriodEnd: result.current_period_end || subscription.currentPeriodEnd,
+          cancelAtPeriodEnd: true,
+          active: true
+        };
+        closeModal();
+        renderMyPlan();
+        showToast(`Cancellation scheduled. Premium remains active until ${formatPlanDate(subscription.currentPeriodEnd)}.`);
+      } catch (error) {
+        confirmButton.disabled = false;
+        confirmButton.textContent = 'Schedule cancellation';
+        const message = modalRoot.querySelector('.cancellation-error');
+        if (message) message.textContent = error.message || 'Could not schedule cancellation. Try again.';
+        else confirmButton.closest('.modal').insertAdjacentHTML('beforeend', `<div class="auth-error show cancellation-error" role="alert">${esc(error.message || 'Could not schedule cancellation. Try again.')}</div>`);
+      }
+    });
   }
 
   function renderApplicantBoard() {

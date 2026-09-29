@@ -45,15 +45,32 @@ function fail(req: Request, status: number, message: string) {
   return response(req, status, { error: message });
 }
 
+function stripeObjectId(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "id" in value && typeof (value as { id: unknown }).id === "string") {
+    return (value as { id: string }).id;
+  }
+  return null;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return response(req, 204, {});
   if (req.method !== "POST") return fail(req, 405, "Use POST for this endpoint.");
   const origin = req.headers.get("origin") || "";
   if (origin && !APP_ORIGINS.has(origin)) return fail(req, 403, "This application origin is not allowed.");
-  if (!admin || !stripe || !stripePriceId) return fail(req, 503, "Checkout is not configured yet.");
+  if (!admin || !stripe) return fail(req, 503, "Billing is not configured yet.");
+
+  let action = "checkout";
+  try {
+    const body = await req.json();
+    if (body && typeof body.action === "string") action = body.action;
+  } catch {
+    return fail(req, 400, "The request body must be valid JSON.");
+  }
+  if (action !== "checkout" && action !== "cancelSubscription") return fail(req, 400, "This billing action is not supported.");
 
   const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
-  if (!bearer) return fail(req, 401, "Sign in to start a subscription.");
+  if (!bearer) return fail(req, 401, "Sign in to manage your subscription.");
   const { data: auth, error: authError } = await admin.auth.getUser(bearer);
   if (authError || !auth.user) return fail(req, 401, "Your session expired. Sign in again.");
 
@@ -62,13 +79,48 @@ Deno.serve(async (req: Request) => {
   if (workspaceError || !workspace) return fail(req, 403, "Your workspace could not be verified.");
 
   const { data: existing, error: subscriptionError } = await admin
-    .from("workspace_subscriptions").select("status,current_period_end,stripe_customer_id")
+    .from("workspace_subscriptions").select("status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id")
     .eq("workspace_id", workspace.id).maybeSingle();
   if (subscriptionError) return fail(req, 503, "Your subscription status could not be checked.");
   const periodEnd = existing?.current_period_end ? Date.parse(existing.current_period_end) : 0;
+
+  if (action === "cancelSubscription") {
+    if (!existing?.stripe_subscription_id) return fail(req, 409, "No active subscription was found for this workspace.");
+    if (existing.cancel_at_period_end) {
+      return response(req, 200, {
+        status: existing.status,
+        current_period_end: existing.current_period_end,
+        cancel_at_period_end: true,
+      });
+    }
+    if (existing.status !== "active" || periodEnd <= Date.now()) {
+      return fail(req, 409, "Only an active subscription can be scheduled for cancellation.");
+    }
+
+    try {
+      const current = await stripe.subscriptions.retrieve(existing.stripe_subscription_id);
+      if (current.status !== "active" || stripeObjectId(current.customer) !== existing.stripe_customer_id) {
+        return fail(req, 409, "The Stripe subscription no longer matches this workspace's active plan.");
+      }
+      if (current.metadata?.workspace_id !== workspace.id) {
+        return fail(req, 403, "The Stripe subscription could not be verified for this workspace.");
+      }
+      const updated = await stripe.subscriptions.update(existing.stripe_subscription_id, { cancel_at_period_end: true });
+      return response(req, 200, {
+        status: updated.status,
+        current_period_end: existing.current_period_end,
+        cancel_at_period_end: Boolean(updated.cancel_at_period_end),
+      });
+    } catch (error) {
+      console.error("Stripe period-end cancellation request failed", error);
+      return fail(req, 502, "Stripe could not schedule the subscription cancellation. Please try again.");
+    }
+  }
+
   if (existing?.status === "active" && periodEnd > Date.now()) {
     return fail(req, 409, "Your workspace already has an active subscription.");
   }
+  if (!stripePriceId) return fail(req, 503, "Checkout is not configured yet.");
 
   try {
     const returnUrl = new URL("index.html", appUrl);

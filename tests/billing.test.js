@@ -27,7 +27,7 @@ test('free accounts see upgrade controls instead of publish actions across edito
   assert.match(builder, /<span class="status-dot"><\/span>Premium/);
 });
 
-test('My Plan shows account status and keeps future Premium billing actions disabled', () => {
+test('My Plan shows account status and requires confirmation before scheduling cancellation', () => {
   const builder = read('builder.js');
   assert.match(builder, /data-route="my-plan"/);
   assert.match(builder, /function renderMyPlan\(\)/);
@@ -38,8 +38,14 @@ test('My Plan shows account status and keeps future Premium billing actions disa
   assert.match(builder, /Change the card used for your subscription/);
   assert.match(builder, /Cancel subscription/);
   assert.match(builder, /class="btn plan-placeholder" disabled/);
-  assert.match(builder, /These billing actions are placeholders for now/);
+  assert.match(builder, /Payment history and card changes will be added later/);
   assert.match(builder, /subscriptionReturnPage === 'my-plan'/);
+  assert.match(builder, /function showCancelSubscriptionConfirmation\(\)/);
+  assert.match(builder, /Schedule cancellation/);
+  assert.match(builder, /keep Premium access and published job links until/);
+  assert.match(builder, /Pathway will turn off renewal with Stripe/);
+  assert.match(builder, /cancelSubscriptionAtPeriodEnd\(\)/);
+  assert.match(builder, /Cancellation scheduled/);
   const start = builder.indexOf('function renderMyPlan()');
   const end = builder.indexOf('function renderApplicantBoard(', start);
   const planScreen = builder.slice(start, end);
@@ -51,11 +57,21 @@ test('My Plan shows account status and keeps future Premium billing actions disa
   assert.match(planScreen, /my-plan-benefits-upgrade.*openSubscriptionPage/s);
 });
 
+test('cancellation adapter sends the authenticated period-end cancellation action', () => {
+  const backend = read('backend.js');
+  assert.match(backend, /async function cancelSubscriptionAtPeriodEnd\(\)/);
+  assert.match(backend, /JSON\.stringify\(\{ action: 'cancelSubscription' \}\)/);
+  assert.match(backend, /Authorization: `Bearer \$\{session\.access_token\}`/);
+  assert.match(backend, /if \(!payload\.cancel_at_period_end\)/);
+  assert.match(backend, /cancelSubscriptionAtPeriodEnd,/);
+});
+
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /builder\.js\?v=applicants-icon-20260927/);
-  assert.match(html, /styles\.css\?v=applicants-icon-20260927/);
+  assert.match(html, /backend\.js\?v=cancel-subscription-20260929/);
+  assert.match(html, /builder\.js\?v=cancel-subscription-20260929/);
+  assert.match(html, /styles\.css\?v=cancel-subscription-20260929/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);
@@ -87,6 +103,19 @@ test('Checkout Session is server-created as a recurring embedded form using the 
   assert.ok(!edge.includes('match(/^Bearer\\\\s+(.+)$/i)'), 'billing must not match a literal backslash-s sequence');
   assert.match(edge, /subscription_data: \{ metadata: \{ workspace_id: workspace\.id \} \}/);
   assert.doesNotMatch(edge, /sk_(?:test|live)_[A-Za-z0-9]+/);
+});
+
+test('billing endpoint schedules cancellation only at period end after verifying the owner and Stripe subscription', () => {
+  const edge = read('supabase/functions/billing/index.ts');
+  assert.match(edge, /action !== "checkout" && action !== "cancelSubscription"/);
+  assert.match(edge, /auth\.getUser\(bearer\)/);
+  assert.match(edge, /owner_id", auth\.user\.id/);
+  assert.match(edge, /stripe_subscription_id/);
+  assert.match(edge, /current\.metadata\?\.workspace_id !== workspace\.id/);
+  assert.match(edge, /stripe\.subscriptions\.update\(existing\.stripe_subscription_id, \{ cancel_at_period_end: true \}\)/);
+  assert.match(edge, /cancel_at_period_end: Boolean\(updated\.cancel_at_period_end\)/);
+  assert.doesNotMatch(edge, /subscriptions\.cancel\(/);
+  assert.doesNotMatch(edge, /refunds\.create\(/);
 });
 
 test('signed Stripe subscription webhooks update entitlements and automatically unpublish when access ends', () => {

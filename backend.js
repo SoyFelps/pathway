@@ -65,6 +65,25 @@
     return payload.client_secret;
   }
 
+  async function cancelSubscriptionAtPeriodEnd() {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(BILLING_FUNCTION, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancelSubscription' })
+      });
+    } catch (_) {
+      throw new Error('Could not reach the billing service. Check your connection and try again.');
+    }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error || 'The cancellation request could not be completed.');
+    if (!payload.cancel_at_period_end) throw new Error('Stripe did not confirm the scheduled cancellation.');
+    return payload;
+  }
+
   async function bootstrap() {
     const { data: authData, error: authError } = await client.auth.getSession();
     if (authError) throw authError;
@@ -234,6 +253,7 @@
     bootstrap,
     getSubscriptionState,
     createCheckoutSession,
+    cancelSubscriptionAtPeriodEnd,
     listFlows,
     saveFlow,
     deleteFlow,
