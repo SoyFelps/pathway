@@ -42,7 +42,7 @@ test('My Plan shows account status and requires confirmation before scheduling c
   assert.ok(builder.includes("query.get('billing') === 'payment-method-updated'"));
   assert.match(builder, /Cancel subscription/);
   assert.match(builder, /class="btn plan-placeholder" disabled/);
-  assert.match(builder, /Payment history and card changes will be added later/);
+  assert.match(builder, /Payment history will be available here soon/);
   assert.match(builder, /subscriptionReturnPage === 'my-plan'/);
   assert.match(builder, /function showCancelSubscriptionConfirmation\(\)/);
   assert.match(builder, /if \(premium && subscription\.cancelAtPeriodEnd\)/);
@@ -98,7 +98,7 @@ test('header loads Stripe.js directly and checkout form uses the configured beta
   const html = read('index.html');
   const builder = read('builder.js');
   assert.match(html, /backend\.js\?v=payment-method-20260929/);
-  assert.match(html, /builder\.js\?v=payment-method-20260929/);
+  assert.match(html, /builder\.js\?v=payment-method-20260929b/);
   assert.match(html, /styles\.css\?v=keep-premium-20260929/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
