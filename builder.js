@@ -274,9 +274,33 @@
     root.querySelector('#my-plan-upgrade')?.addEventListener('click', openSubscriptionPage);
     root.querySelector('#my-plan-benefits-upgrade')?.addEventListener('click', openSubscriptionPage);
     root.querySelector('#cancel-subscription')?.addEventListener('click', showCancelSubscriptionConfirmation);
+    const paymentMethodRow = [...root.querySelectorAll('.plan-action-row')].find(row => row.querySelector('strong')?.textContent === 'Payment method');
+    const paymentMethodButton = paymentMethodRow?.querySelector('button');
+    if (premium && paymentMethodButton) {
+      paymentMethodButton.disabled = false;
+      paymentMethodButton.className = 'btn';
+      paymentMethodButton.id = 'update-payment-method';
+      paymentMethodButton.textContent = 'Update payment method';
+      paymentMethodRow.querySelector('.plan-action-copy span').textContent = 'Update your card securely through Stripe. Pathway never stores your card details.';
+      paymentMethodButton.addEventListener('click', openPaymentMethodPortal);
+    }
     if (premium && subscription.cancelAtPeriodEnd) {
       root.querySelector('.plan-action-list')?.insertAdjacentHTML('beforeend', '<div class="plan-action-row plan-keep-row"><div class="plan-action-copy"><strong>Keep Premium</strong><span>Remove the scheduled cancellation and restore automatic renewal at US$ 24.90 per month.</span></div><button class="btn" id="keep-premium">Keep Premium</button></div>');
       root.querySelector('#keep-premium')?.addEventListener('click', showKeepPremiumConfirmation);
+    }
+  }
+
+  async function openPaymentMethodPortal(event) {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = 'Opening Stripe…';
+    try {
+      const portalUrl = await window.PathwayBackend.createPaymentMethodUpdateSession();
+      window.location.assign(portalUrl);
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = 'Update payment method';
+      showToast(error.message || 'Could not open Stripe. Please try again.');
     }
   }
 
@@ -851,13 +875,16 @@
     flows = context.flows;
     applicants = []; applicantFilter = ''; applicantSearch = '';
     const requestedPage = window.location.hash.replace(/^#/, '');
-    const checkoutComplete = new URLSearchParams(window.location.search).get('checkout') === 'complete';
-    if (checkoutComplete) {
+    const query = new URLSearchParams(window.location.search);
+    const checkoutComplete = query.get('checkout') === 'complete';
+    const paymentMethodUpdated = query.get('billing') === 'payment-method-updated';
+    if (checkoutComplete || paymentMethodUpdated) {
       window.history.replaceState({}, '', window.location.pathname + window.location.hash);
     }
     if (requestedPage === 'applicants') void renderApplicants();
     else if (requestedPage === 'my-plan') renderMyPlan();
     else renderDashboard();
     if (checkoutComplete) void refreshSubscriptionAfterCheckout();
+    if (paymentMethodUpdated) showToast('Payment method updated in Stripe.');
   });
 })();

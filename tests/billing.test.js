@@ -35,7 +35,11 @@ test('My Plan shows account status and requires confirmation before scheduling c
   assert.match(builder, /subscription\?\.active/);
   assert.match(builder, /id="my-plan-upgrade"/);
   assert.match(builder, /Payment history/);
-  assert.match(builder, /Change the card used for your subscription/);
+  assert.match(builder, /Update your card securely through Stripe/);
+  assert.match(builder, /id = 'update-payment-method'/);
+  assert.match(builder, /createPaymentMethodUpdateSession\(\)/);
+  assert.match(builder, /window\.location\.assign\(portalUrl\)/);
+  assert.ok(builder.includes("query.get('billing') === 'payment-method-updated'"));
   assert.match(builder, /Cancel subscription/);
   assert.match(builder, /class="btn plan-placeholder" disabled/);
   assert.match(builder, /Payment history and card changes will be added later/);
@@ -80,11 +84,21 @@ test('Keep Premium adapter sends an authenticated request to remove scheduled ca
   assert.match(backend, /keepPremiumSubscription,/);
 });
 
+test('payment-method adapter accepts only HTTPS Stripe Billing Portal session URLs', () => {
+  const backend = read('backend.js');
+  assert.match(backend, /async function createPaymentMethodUpdateSession\(\)/);
+  assert.match(backend, /JSON\.stringify\(\{ action: 'createPaymentMethodUpdateSession' \}\)/);
+  assert.match(backend, /Authorization: `Bearer \$\{session\.access_token\}`/);
+  assert.match(backend, /portalUrl\.protocol !== 'https:'/);
+  assert.match(backend, /portalUrl\.hostname !== 'billing\.stripe\.com'/);
+  assert.match(backend, /createPaymentMethodUpdateSession,/);
+});
+
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=keep-premium-20260929/);
-  assert.match(html, /builder\.js\?v=keep-premium-20260929/);
+  assert.match(html, /backend\.js\?v=payment-method-20260929/);
+  assert.match(html, /builder\.js\?v=payment-method-20260929/);
   assert.match(html, /styles\.css\?v=keep-premium-20260929/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
@@ -121,7 +135,7 @@ test('Checkout Session is server-created as a recurring embedded form using the 
 
 test('billing endpoint schedules cancellation only at period end after verifying the owner and Stripe subscription', () => {
   const edge = read('supabase/functions/billing/index.ts');
-  assert.match(edge, /action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription"/);
+  assert.match(edge, /action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession"/);
   assert.match(edge, /auth\.getUser\(bearer\)/);
   assert.match(edge, /owner_id", auth\.user\.id/);
   assert.match(edge, /stripe_subscription_id/);
@@ -130,6 +144,16 @@ test('billing endpoint schedules cancellation only at period end after verifying
   assert.match(edge, /if \(action === "resumeSubscription"\)/);
   assert.match(edge, /current\.cancel_at_period_end/);
   assert.match(edge, /stripe\.subscriptions\.update\(existing\.stripe_subscription_id, \{ cancel_at_period_end: false \}\)/);
+  assert.match(edge, /if \(action === "createPaymentMethodUpdateSession"\)/);
+  assert.match(edge, /stripe\.billingPortal\.sessions\.create\(/);
+  assert.match(edge, /customer: existing\.stripe_customer_id/);
+  assert.match(edge, /type: "payment_method_update"/);
+  assert.match(edge, /redirect: \{ return_url: completedReturnUrl\.href \}/);
+  assert.match(edge, /if \(action === "createPaymentMethodUpdateSession"\)/);
+  assert.match(edge, /stripe\.billingPortal\.sessions\.create\(/);
+  assert.match(edge, /customer: existing\.stripe_customer_id/);
+  assert.match(edge, /type: "payment_method_update"/);
+  assert.match(edge, /billing", "payment-method-updated"/);
   assert.match(edge, /cancel_at_period_end: Boolean\(updated\.cancel_at_period_end\)/);
   assert.doesNotMatch(edge, /subscriptions\.cancel\(/);
   assert.doesNotMatch(edge, /refunds\.create\(/);

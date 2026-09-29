@@ -55,21 +55,24 @@ Target Supabase project: **PathwayAPP** (`gftnghlkuiuhuwyaajdn`).
 4. **Completed and verified:** Stripe sent signed subscription events to the test endpoint; Supabase accepted the signature and processed them. `STRIPE_WEBHOOK_SECRET` and the matching test-mode `STRIPE_SECRET_KEY` are therefore configured for `billing-webhook`.
 5. **Completed:** the active test subscription writes its period end to the workspace. Stripe API `2026-03-25.dahlia` moved period dates to `items.data[].current_period_end`; the webhook now reads that field (and remains compatible with the older top-level field).
 6. **Completed:** the test-mode subscription is active through **October 27, 2026**. The app displays Premium and enables the Publish action. The checkout used Stripe test mode; it did not charge real money.
-7. **Completed:** the static site is pushed to `main`; GitHub Pages serves the subscription page and the cache-busted Premium activation refresh. Before accepting real payments, replace the test publishable key and Price with matching live-mode values, configure the live secret key only in Supabase, and create a separate live webhook endpoint with a live `whsec_…` secret.
-7. Before accepting real payments, replace the test publishable key and Price with matching live-mode values, configure the live secret key only in Supabase, and create a separate live webhook endpoint with a live `whsec_…` secret.
-
+7. **Completed:** the static site is pushed to `main`; GitHub Pages serves the subscription page and cache-busted billing controls. Before accepting real payments, replace the test publishable key and Price with matching live-mode values, configure the live secret key only in Supabase, create a separate live webhook endpoint with a live `whsec_…` secret, and enable Payment method updates in the live Stripe Customer Portal configuration.
 Subscription status is synchronized from signed webhook events. A subscription grants publication access only while Stripe reports `active` and its paid period has not ended. When access ends, published flows are returned to Draft; public lookup, database triggers, and applicant intake all deny expired/unpaid publications. Draft creation, editing, and preview remain free.
 
 ## Validation
 
 - `node --test tests/*.test.js` — automated tests for publication gates, billing UI, Checkout config, webhooks, and applicant handling.
+- Confirm the Payment method action opens Stripe's hosted update flow and returns the signed-in user to My Plan.
 - Confirm checkout displays **US$ 24.90 monthly** before the user confirms payment.
 - Verified: successful test checkout writes an active `workspace_subscriptions` entitlement and unlocks the Publish control.
 - Verify subscription expiration/cancellation returns flows to Draft and disables public links, while preserving existing application and resume records.
 - Verify invalid webhook signatures are rejected.
 
-## Later phase
+## Customer Portal — Payment method updates
 
-The separate **Payment** page for billing history, invoices, payment method updates, and cancellation controls remains intentionally deferred. Stripe's customer portal can be integrated in that phase.
+- **Test mode is configured:** My Plan requests a short-lived Stripe Customer Portal session dedicated to `payment_method_update`. Stripe hosts the card form; Pathway never receives or stores card numbers. A successful update redirects the customer to My Plan.
+- The active default test configuration is `bpc_1UKzHRLxHJwAlJp9pHXQfvJE` in the configured Stripe test account. It enables payment-method updates only; subscription cancellation/changes, billing-information updates, and invoice history are disabled there.
+- The billing Edge Function verifies the signed-in workspace owner, active Stripe subscription, Stripe customer ID, and subscription `workspace_id` metadata before creating a portal session.
+- **Before live payments:** create/enable a live Customer Portal configuration with **Payment methods → Let your customer update their payment method information**. Portal configurations are mode-specific; do not reuse the test configuration in live mode.
+- Payment history/invoice viewing remains a later My Plan feature; this integration is deliberately limited to changing the payment method.
 
 Resources: [Stripe API keys](https://docs.stripe.com/keys), [Stripe products and prices](https://docs.stripe.com/products-prices/manage-prices), [embedded form quickstart](https://docs.stripe.com/checkout/form/quickstart), [Stripe webhook docs](https://docs.stripe.com/webhooks), [Supabase Stripe webhook example](https://supabase.com/docs/guides/functions/examples/stripe-webhooks).

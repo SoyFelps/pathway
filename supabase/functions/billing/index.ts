@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
   } catch {
     return fail(req, 400, "The request body must be valid JSON.");
   }
-  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription") return fail(req, 400, "This billing action is not supported.");
+  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession") return fail(req, 400, "This billing action is not supported.");
 
   const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
   if (!bearer) return fail(req, 401, "Sign in to manage your subscription.");
@@ -151,6 +151,44 @@ Deno.serve(async (req: Request) => {
     } catch (error) {
       console.error("Stripe renewal restoration request failed", error);
       return fail(req, 502, "Stripe could not remove the scheduled cancellation. Please try again.");
+    }
+  }
+
+  if (action === "createPaymentMethodUpdateSession") {
+    if (!existing?.stripe_customer_id || !existing.stripe_subscription_id) {
+      return fail(req, 409, "An active Stripe subscription was not found for this workspace.");
+    }
+    if (existing.status !== "active" || periodEnd <= Date.now()) {
+      return fail(req, 409, "An active subscription is required to update its payment method.");
+    }
+
+    try {
+      const current = await stripe.subscriptions.retrieve(existing.stripe_subscription_id);
+      if (current.status !== "active" || stripeObjectId(current.customer) !== existing.stripe_customer_id) {
+        return fail(req, 409, "The Stripe subscription no longer matches this workspace's active plan.");
+      }
+      if (current.metadata?.workspace_id !== workspace.id) {
+        return fail(req, 403, "The Stripe subscription could not be verified for this workspace.");
+      }
+      const returnUrl = new URL("index.html", appUrl);
+      returnUrl.hash = "my-plan";
+      const completedReturnUrl = new URL(returnUrl.href);
+      completedReturnUrl.searchParams.set("billing", "payment-method-updated");
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: existing.stripe_customer_id,
+        return_url: returnUrl.href,
+        flow_data: {
+          type: "payment_method_update",
+          after_completion: {
+            type: "redirect",
+            redirect: { return_url: completedReturnUrl.href },
+          },
+        },
+      });
+      return response(req, 200, { url: portalSession.url });
+    } catch (error) {
+      console.error("Stripe payment method portal session creation failed", error);
+      return fail(req, 502, "Stripe could not open the secure payment method page. Please try again.");
     }
   }
 

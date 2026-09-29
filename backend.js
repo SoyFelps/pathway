@@ -65,6 +65,30 @@
     return payload.client_secret;
   }
 
+  async function createPaymentMethodUpdateSession() {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(BILLING_FUNCTION, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'createPaymentMethodUpdateSession' })
+      });
+    } catch (_) {
+      throw new Error('Could not reach the billing service. Check your connection and try again.');
+    }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error || 'The secure payment method update could not be opened.');
+    if (typeof payload.url !== 'string') throw new Error('Stripe did not return a secure payment method update link.');
+    let portalUrl;
+    try { portalUrl = new URL(payload.url); } catch (_) { throw new Error('Stripe returned an invalid billing portal link.'); }
+    if (portalUrl.protocol !== 'https:' || portalUrl.hostname !== 'billing.stripe.com') {
+      throw new Error('Stripe returned an unexpected billing portal domain.');
+    }
+    return portalUrl.href;
+  }
+
   async function cancelSubscriptionAtPeriodEnd() {
     const session = await requireSession();
     let result;
@@ -272,6 +296,7 @@
     bootstrap,
     getSubscriptionState,
     createCheckoutSession,
+    createPaymentMethodUpdateSession,
     cancelSubscriptionAtPeriodEnd,
     keepPremiumSubscription,
     listFlows,
