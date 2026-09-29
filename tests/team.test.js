@@ -7,6 +7,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
 test('team schema reserves at most three Premium member seats and stores only invitation-token hashes', () => {
   const sql = read('supabase/migrations/20260929150000_my_team.sql');
+  const invitationFix = read('supabase/migrations/20260929185600_fix_team_invitation_expiry_column.sql');
   assert.match(sql, /create table public\.workspace_members/);
   assert.match(sql, /user_id uuid not null unique references auth\.users/);
   assert.match(sql, /index workspace_invitations_pending_email_idx/);
@@ -16,6 +17,7 @@ test('team schema reserves at most three Premium member seats and stores only in
   assert.match(sql, /if seat_count >= 3 then raise exception 'This workspace no longer has an available member seat\.'/);
   assert.match(sql, /public\.workspace_has_active_subscription\(p_workspace_id\)/);
   assert.match(sql, /pathway_team_invite_pending/);
+  assert.match(invitationFix, /wi\.expires_at <= now\(\)/);
 });
 
 test('team permissions independently gate flows, candidates, team administration, and resume access', () => {
