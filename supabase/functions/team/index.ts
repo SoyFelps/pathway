@@ -163,6 +163,31 @@ async function handle(req: Request): Promise<Response> {
       return response(req, 200, { accepted: true, workspaceId: result.workspace_id, workspaceName: result.workspace_name });
     }
 
+    if (body.action === "acceptPendingInvitation") {
+      if (!user.email_confirmed_at) return fail(req, 403, "Confirm your email address before joining a workspace.");
+      if (user.user_metadata?.pathway_team_invite_pending !== true) {
+        return response(req, 200, { accepted: false, reason: "no_pending_invitation" });
+      }
+      const email = cleanText(user.email).toLowerCase();
+      if (!email) return fail(req, 403, "The confirmed account email could not be verified.");
+      const { data: invitation, error: invitationError } = await admin.from("workspace_invitations")
+        .select("token_hash").eq("invited_email", email).eq("status", "pending")
+        .gt("expires_at", new Date().toISOString()).maybeSingle();
+      if (invitationError) return fail(req, 503, "The pending workspace invitation could not be checked.");
+      if (!invitation) {
+        const userMetadata = { ...(user.user_metadata || {}), pathway_team_invite_pending: false };
+        try { await admin.auth.admin.updateUserById(user.id, { user_metadata: userMetadata }); } catch { /* marker is advisory; no invitation remains */ }
+        return response(req, 200, { accepted: false, reason: "no_pending_invitation" });
+      }
+      const { data, error } = await userClient.rpc("accept_team_invitation", { p_token_hash: invitation.token_hash });
+      if (error) return fail(req, 403, error.message || "The invitation could not be accepted.");
+      const result = Array.isArray(data) ? data[0] : data;
+      if (!result?.workspace_id) return fail(req, 503, "The team invitation could not be confirmed.");
+      const userMetadata = { ...(user.user_metadata || {}), pathway_team_invite_pending: false };
+      try { await admin.auth.admin.updateUserById(user.id, { user_metadata: userMetadata }); } catch { /* membership is authoritative; invitation is single-use */ }
+      return response(req, 200, { accepted: true, workspaceId: result.workspace_id, workspaceName: result.workspace_name });
+    }
+
     const context = await getWorkspaceContext(user.id);
     if (!context.workspace) return fail(req, 403, "This account does not belong to a workspace. Accept a team invitation or create your own workspace first.");
     const workspaceId = context.workspace.id;

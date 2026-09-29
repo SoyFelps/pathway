@@ -52,7 +52,7 @@
     root.querySelector('#auth-form').addEventListener('submit', submitAuth);
   }
   function renderWorkspaceSetup(errorMessage = '') {
-    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Your next chapter</div><h1>Create your own workspace.</h1><p>Your Pathway account remains yours. Choose a workspace name to get started as its owner.</p></div><div class="muted" style="font-size:11px">Pathway · Early access</div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Workspace setup</div><h2>Start a private workspace</h2><p class="auth-card-intro">You are signed in as ${window.PathwayCore.esc(state.email)}. Creating a workspace does not delete your existing account.</p><div class="auth-error ${errorMessage ? 'show' : ''}" role="alert">${errorMessage ? window.PathwayCore.esc(errorMessage) : ''}</div><form id="workspace-form"><div class="field-group"><label for="setup-workspace">Company / workspace name</label><input id="setup-workspace" class="text-input" name="workspaceName" autocomplete="organization" maxlength="120" required placeholder="e.g. Northstar Studio" value="${window.PathwayCore.esc(state.workspaceName)}"></div><button class="btn btn-primary auth-submit" type="submit" ${busy ? 'disabled' : ''}>${busy ? 'Please wait…' : 'Create workspace →'}</button></form><button class="btn btn-quiet auth-submit" id="setup-signout" type="button">Sign out</button><p class="auth-legal">If you were invited to a team, open the original invitation link while signed in with the invited email.</p></div></section></main>`;
+    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Your next chapter</div><h1>Create your own workspace.</h1><p>Your Pathway account remains yours. Choose a workspace name to get started as its owner.</p></div><div class="muted" style="font-size:11px">Pathway · Early access</div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Workspace setup</div><h2>Start a private workspace</h2><p class="auth-card-intro">You are signed in as ${window.PathwayCore.esc(state.email)}. Creating a workspace does not delete your existing account.</p><div class="auth-error ${errorMessage ? 'show' : ''}" role="alert">${errorMessage ? window.PathwayCore.esc(errorMessage) : ''}</div><form id="workspace-form"><div class="field-group"><label for="setup-workspace">Company / workspace name</label><input id="setup-workspace" class="text-input" name="workspaceName" autocomplete="organization" maxlength="120" required placeholder="e.g. Northstar Studio" value="${window.PathwayCore.esc(state.workspaceName)}"></div><button class="btn btn-primary auth-submit" type="submit" ${busy ? 'disabled' : ''}>${busy ? 'Please wait…' : 'Create workspace →'}</button></form><button class="btn btn-quiet auth-submit" id="setup-signout" type="button">Sign out</button><p class="auth-legal">You can join an existing team from an invitation link, or create your own workspace.</p></div></section></main>`;
     root.querySelector('#workspace-form').addEventListener('submit', async event => {
       event.preventDefault(); if (busy) return;
       const data = new FormData(event.currentTarget);
@@ -69,15 +69,16 @@
     });
   }
   function renderInviteConflict(message) {
-    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Workspace invitation</div><h1>One workspace per account.</h1><p>To join this team, this account must first leave its current workspace. The existing workspace owner cannot leave their own workspace.</p></div><div class="muted" style="font-size:11px">Pathway · Early access</div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Invitation not accepted</div><h2>Check your account</h2><div class="auth-error show" role="alert">${window.PathwayCore.esc(message)}</div><p class="auth-card-intro">If you meant to use a different account, sign out and reopen the invitation link.</p><button class="btn btn-primary auth-submit" id="invite-conflict-signout">Sign out</button></div></section></main>`;
+    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Workspace invitation</div><h1>One workspace per account.</h1><p>To join this team, this account must first leave its current workspace. The existing workspace owner cannot leave their own workspace.</p></div><div class="muted" style="font-size:11px">Pathway · Early access</div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Invitation not accepted</div><h2>Check your account</h2><div class="auth-error show" role="alert">${window.PathwayCore.esc(message)}</div><p class="auth-card-intro">Sign out, then sign in with the email address invited to this workspace.</p><button class="btn btn-primary auth-submit" id="invite-conflict-signout">Sign out</button></div></section></main>`;
     root.querySelector('#invite-conflict-signout').addEventListener('click', async () => {
       try { await window.PathwayBackend.signOut(); } finally { state = { mode: 'signup', workspaceName: '', email: '', password: '' }; renderAuth(); }
     });
   }
-  function renderInviteConfirmationNeeded() {
-    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Email confirmed</div><h1>Your account is ready.</h1><p>Return to the original team invitation link in this browser to join the workspace. The link is single-use and works only for your confirmed email address.</p></div><div class="muted" style="font-size:11px">Pathway · Early access</div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Finish joining your team</div><h2>Open your invitation link</h2><p class="auth-card-intro">You are signed in. Reopen the copied invitation link to finish joining. If the invite has expired or was revoked, ask the team manager for a new one.</p><button class="btn btn-quiet auth-submit" id="invite-confirmation-signout" type="button">Sign out</button></div></section></main>`;
-    root.querySelector('#invite-confirmation-signout')?.addEventListener('click', async () => {
-      await window.PathwayBackend.signOut(); state = { mode: 'signup', workspaceName: '', email: '', password: '' }; renderAuth();
+  function renderInviteAcceptanceFailure(message) {
+    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Workspace invitation</div><h1>Your account is ready.</h1><p>Pathway couldn't finish adding this account to the invited workspace automatically.</p></div><div class="muted" style="font-size:11px">Pathway · Early access</div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Finish joining your team</div><h2>We couldn't join this workspace</h2><div class="auth-error show" role="alert">${window.PathwayCore.esc(message)}</div><p class="auth-card-intro">Try again. If the invitation expired, was revoked, or the workspace no longer has Premium access, ask its manager to send a new invitation.</p><button class="btn btn-primary auth-submit" id="retry-team-acceptance" type="button">Try again</button><button class="btn btn-quiet auth-submit" id="team-acceptance-signout" type="button">Sign out</button></div></section></main>`;
+    root.querySelector('#retry-team-acceptance')?.addEventListener('click', () => window.location.reload());
+    root.querySelector('#team-acceptance-signout')?.addEventListener('click', async () => {
+      await window.PathwayBackend.signOut(); state = { mode: 'signup', workspaceName: '', email: '', password: '' }; clearInviteUrl(); renderAuth();
     });
   }
   function renderInvalidInvite(message) {
@@ -108,6 +109,7 @@
       clearInviteUrl();
       context = await window.PathwayBackend.bootstrap();
     }
+    context = await acceptPendingTeamIfNeeded(context);
     if (!context.workspace) {
       busy = false;
       state.email = context.user?.email || state.email;
@@ -116,6 +118,15 @@
     }
     busy = false;
     onAuthenticated(context);
+  }
+  async function acceptPendingTeamIfNeeded(context) {
+    if (context.workspace || context.user?.user_metadata?.pathway_team_invite_pending !== true) return context;
+    const result = await window.PathwayBackend.acceptPendingTeamInvitation();
+    clearInviteUrl();
+    if (!result.accepted) return context;
+    const joined = await window.PathwayBackend.bootstrap();
+    if (!joined.workspace) throw new Error('Your invitation was accepted, but the workspace could not be loaded yet.');
+    return joined;
   }
   async function submitAuth(event) {
     event.preventDefault(); if (busy) return;
@@ -127,7 +138,7 @@
         if (error) throw error;
         if (!data.session) {
           busy = false; state.password = '';
-          renderAuth('', inviteToken ? 'Check your email to confirm your account, then reopen the invitation link. Your team access begins after you sign in and accept it.' : 'Check your email for the confirmation link. Your private workspace will be ready once you confirm your account.');
+          renderAuth('', inviteToken ? 'Check your email to confirm your account. After confirmation, Pathway will add you to the invited workspace automatically.' : 'Check your email for the confirmation link. Your private workspace will be ready once you confirm your account.');
           return;
         }
       } else {
@@ -166,8 +177,15 @@
         if (inviteToken && context.workspace) { renderInviteConflict('This account already belongs to a workspace. Leave it first, or sign out and reopen the invitation with the invited account.'); return; }
         if (!context.workspace) {
           state.email = context.user?.email || '';
-          if (context.user?.user_metadata?.pathway_team_invite_pending === true) renderInviteConfirmationNeeded();
-          else renderWorkspaceSetup();
+          if (context.user?.user_metadata?.pathway_team_invite_pending === true) {
+            try {
+              const joined = await acceptPendingTeamIfNeeded(context);
+              if (joined.workspace) onAuthenticated(joined);
+              else renderWorkspaceSetup();
+            } catch (error) { renderInviteAcceptanceFailure(friendlyError(error)); }
+            return;
+          }
+          renderWorkspaceSetup();
           return;
         }
         onAuthenticated(context); return;

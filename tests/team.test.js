@@ -51,14 +51,33 @@ test('invitation auth accepts the invited email, allows existing-account sign-in
   assert.match(auth, /Already registered\? Sign in/);
   assert.match(auth, /Create account and join/);
   assert.match(auth, /acceptTeamInvitation\(inviteToken\)/);
+  assert.match(auth, /acceptPendingTeamInvitation\(\)/);
   assert.match(auth, /Create your own workspace/);
-  assert.match(auth, /renderInviteConfirmationNeeded/);
+  assert.match(auth, /After confirmation, Pathway will add you to the invited workspace automatically/);
+  assert.doesNotMatch(auth, /reopen the copied invitation link to finish joining/i);
   assert.match(backend, /pathway_team_invite_pending/);
   assert.match(backend, /emailRedirectTo: window\.location\.origin \+ window\.location\.pathname/);
   assert.match(sql, /u\.email_confirmed_at is not null into actor_email, actor_email_verified/);
   assert.doesNotMatch(backend, /pathway_team_invite_token/);
   assert.match(sql, /delete from public\.workspace_members where workspace_id = p_workspace_id and user_id = auth\.uid\(\)/);
   assert.doesNotMatch(sql, /auth\.admin|delete from auth\.users/i);
+});
+
+test('confirmed invite signups are joined automatically from the standard app URL using the verified email', () => {
+  const auth = read('auth.js');
+  const backend = read('backend.js');
+  const edge = read('supabase/functions/team/index.ts');
+  assert.match(auth, /if \(context\.user\?\.user_metadata\?\.pathway_team_invite_pending === true\)/);
+  assert.match(auth, /const result = await window\.PathwayBackend\.acceptPendingTeamInvitation\(\)/);
+  assert.match(auth, /context = await acceptPendingTeamIfNeeded\(context\)/);
+  assert.match(auth, /clearInviteUrl\(\)/);
+  assert.match(backend, /acceptPendingTeamInvitation\(\) \{ return callTeam\(\{ action: 'acceptPendingInvitation' \}\); \}/);
+  assert.match(edge, /body\.action === "acceptPendingInvitation"/);
+  assert.match(edge, /if \(!user\.email_confirmed_at\) return fail\(req, 403, "Confirm your email address before joining a workspace\."\)/);
+  assert.match(edge, /user\.user_metadata\?\.pathway_team_invite_pending !== true/);
+  assert.match(edge, /\.eq\("invited_email", email\)\.eq\("status", "pending"\)/);
+  assert.match(edge, /userClient\.rpc\("accept_team_invitation", \{ p_token_hash: invitation\.token_hash \}\)/);
+  assert.match(edge, /pathway_team_invite_pending: false/);
 });
 
 test('team Edge Function separates public invite preview from authenticated membership changes', () => {
@@ -102,7 +121,8 @@ test('My Team shows up to three included seats, defaults permissions on, and sup
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=my-team-20260929/);
+  assert.match(html, /auth\.js\?v=team-auto-accept-20260929/);
+  assert.match(html, /backend\.js\?v=team-auto-accept-20260929/);
   assert.match(html, /builder\.js\?v=my-team-20260929/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);

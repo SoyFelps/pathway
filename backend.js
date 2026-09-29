@@ -57,6 +57,7 @@
 
   async function listTeam() { return callTeam({ action: 'listTeam' }); }
   async function acceptTeamInvitation(token) { return callTeam({ action: 'acceptInvitation', token }); }
+  async function acceptPendingTeamInvitation() { return callTeam({ action: 'acceptPendingInvitation' }); }
   async function updateTeamMemberPermissions(memberId, permissions) { return callTeam({ action: 'updateMemberPermissions', memberId, permissions }); }
   async function updateTeamInvitationPermissions(invitationId, permissions) { return callTeam({ action: 'updateInvitationPermissions', invitationId, permissions }); }
   async function revokeTeamInvitation(invitationId) { return callTeam({ action: 'revokeInvitation', invitationId }); }
@@ -472,6 +473,7 @@
     createTeamInvitation,
     listTeam,
     acceptTeamInvitation,
+    acceptPendingTeamInvitation,
     updateTeamMemberPermissions,
     updateTeamInvitationPermissions,
     revokeTeamInvitation,
