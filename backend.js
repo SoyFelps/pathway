@@ -405,6 +405,17 @@
     return data || [];
   }
 
+  async function countNewApplicants(workspaceId) {
+    await requireSession();
+    if (typeof workspaceId !== 'string' || !/^[0-9a-f-]{36}$/i.test(workspaceId)) throw new Error('A valid workspace is required to count applicants.');
+    const { count, error } = await client.from('applicants')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'new');
+    if (error) throw error;
+    return count || 0;
+  }
+
   async function listApplicantFlowLabels() {
     const session = await requireSession();
     const payload = await callApplications({ action: 'listApplicantFlowLabels' }, session.access_token);
@@ -496,6 +507,7 @@
     getPublishedFlow,
     getPublishedJobUrl,
     listApplicants,
+    countNewApplicants,
     listApplicantFlowLabels,
     updateApplicantStatus,
     getApplicantResumeUrl,

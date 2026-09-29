@@ -149,3 +149,22 @@ test('resume Storage policies qualify the object-path column to avoid workspace.
   assert.equal((migration.match(/storage\.foldername\(storage\.objects\.name\)/g) || []).length, 2);
   assert.doesNotMatch(migration, /storage\.foldername\(name\)/);
 });
+
+test('dashboard shows new applicant and published-flow counts without loading applicant details', () => {
+  const backend = read('backend.js');
+  const builder = read('builder.js');
+  const css = read('styles.css');
+  assert.match(backend, /async function countNewApplicants\(workspaceId\)[\s\S]*select\('id', \{ count: 'exact', head: true \}\)[\s\S]*eq\('workspace_id', workspaceId\)[\s\S]*eq\('status', 'new'\)/);
+  assert.match(backend, /countNewApplicants,/);
+  const dashboardStart = builder.indexOf('function renderDashboard()');
+  const dashboardEnd = builder.indexOf('async function renderApplicants()', dashboardStart);
+  const dashboard = builder.slice(dashboardStart, dashboardEnd);
+  assert.ok(dashboardStart >= 0 && dashboardEnd > dashboardStart);
+  assert.match(dashboard, /id="dashboard-new-applicant-count"/);
+  assert.match(dashboard, /<span>New applicants<\/span>/);
+  assert.match(dashboard, /<span>Published flows<\/span>/);
+  assert.match(dashboard, /if \(hasPermission\('applicants'\)\) void loadDashboardNewApplicantCount/);
+  assert.doesNotMatch(dashboard, /Steps in your journeys|Saved to Supabase/);
+  assert.match(css, /\.draft-tag\{color:#647789\}\.draft-tag \.status-dot\{background:#8395a5/);
+  assert.match(css, /\.published-tag \.status-dot\{background:#4f865d/);
+});
