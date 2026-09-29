@@ -19,8 +19,10 @@ test('team schema reserves three Premium seats and supports hashed acceptance wi
   assert.match(sql, /pathway_team_invite_pending/);
   assert.match(invitationFix, /wi\.expires_at <= now\(\)/);
   const recoverableLinks = read('supabase/migrations/20260929194000_recoverable_team_invite_links.sql');
+  const inviteReadHardening = read('supabase/migrations/20260929194800_restrict_invitation_token_reads.sql');
   assert.match(recoverableLinks, /encrypted_token text/);
   assert.match(recoverableLinks, /Acceptance still uses only token_hash/);
+  assert.match(inviteReadHardening, /revoke select on public\.workspace_invitations from authenticated/);
 });
 
 test('team permissions independently gate flows, candidates, team administration, and resume access', () => {
