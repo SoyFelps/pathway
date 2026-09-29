@@ -90,6 +90,7 @@ test('pending invitations can copy their active link from encrypted token storag
   const builder = read('builder.js');
   const edge = read('supabase/functions/team/index.ts');
   const migration = read('supabase/migrations/20260929194000_recoverable_team_invite_links.sql');
+  const expiryFix = read('supabase/migrations/20260929195300_fix_recoverable_invitation_expiry_ambiguity.sql');
   assert.match(builder, /data-copy-invitation-link="\$\{esc\(invite\.id\)\}"/);
   assert.match(builder, /copyTeamInviteLink\(button\)/);
   assert.match(builder, /previous link no longer works/);
@@ -106,6 +107,9 @@ test('pending invitations can copy their active link from encrypted token storag
   assert.match(migration, /encrypted_token ~ '\^v1\[\.\]\[A-Za-z0-9_-\]\{16\}\[\.\]\[A-Za-z0-9_-\]\{107\}\$'/);
   assert.match(migration, /insert into public\.workspace_invitations as i \([\s\S]*token_hash, encrypted_token, can_flows/);
   assert.match(migration, /grant execute on function public\.create_team_invitation\(uuid, text, text, text, boolean, boolean, boolean\) to authenticated/);
+  assert.match(expiryFix, /returns table \(invitation_id uuid, expires_at timestamptz\)/);
+  assert.match(expiryFix, /update public\.workspace_invitations as wi set status = 'expired'[\s\S]*wi\.expires_at <= now\(\)/);
+  assert.doesNotMatch(expiryFix, /and expires_at <= now\(\)/);
 });
 
 test('team Edge Function separates public invite preview from authenticated membership changes', () => {
