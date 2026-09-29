@@ -82,6 +82,24 @@ test('flow deletion is authenticated, pauses intake, removes private files, then
   assert.match(read('builder.js'), /Permanent deletion\.<\/strong> Removing this job also deletes every application and private resume/);
 });
 
+test('Applicants-only members receive job labels without opening full Flows data', () => {
+  const edge = read('supabase/functions/applications/index.ts');
+  const handlerStart = edge.indexOf('if (body.action === "listApplicantFlowLabels")');
+  const handlerEnd = edge.indexOf('if (body.action === "deleteFlow")', handlerStart);
+  const handler = edge.slice(handlerStart, handlerEnd);
+  const backend = read('backend.js');
+  const builder = read('builder.js');
+  assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
+  assert.match(handler, /admin\.auth\.getUser\(bearer\)/);
+  assert.match(handler, /membership\?\.can_applicants/);
+  assert.match(handler, /workspace_subscriptions/);
+  assert.match(handler, /select\("id,job_title,company_name"\)/);
+  assert.doesNotMatch(handler, /flow_data|snapshot|responses|resume_path/);
+  assert.match(backend, /listApplicantFlowLabels/);
+  assert.match(builder, /applicantFlowLabels = await window\.PathwayBackend\.listApplicantFlowLabels\(\)/);
+  assert.match(builder, /applicantFlowLabels\.find\(item => item\.cloudId === applicant\.flow_id\)/);
+});
+
 test('live published form submits while builder preview remains non-persistent', () => {
   const candidate = read('candidate.js');
   assert.match(candidate, /const live = Boolean\(!options\.preview && options\.publishedFlowId/);

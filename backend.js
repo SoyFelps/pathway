@@ -8,6 +8,7 @@
   const saveQueues = new Map();
   const APPLICATIONS_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/applications`;
   const BILLING_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/billing`;
+  const TEAM_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/team`;
   const APPLICANT_STATUSES = new Set(['new', 'failed', 'promising', 'approved']);
 
   async function callApplications(body, accessToken = '') {
@@ -31,13 +32,63 @@
     return data.session;
   }
 
+  async function callTeam(body, accessToken = null) {
+    const session = accessToken === null ? await requireSession() : null;
+    const token = accessToken === null ? session.access_token : accessToken;
+    const headers = { apikey: config.publishableKey, 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    let result;
+    try { result = await fetch(TEAM_FUNCTION, { method: 'POST', headers, body: JSON.stringify(body) }); }
+    catch (_) { throw new Error('Could not reach the team service. Check your connection and try again.'); }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error || 'The team service could not complete this request.');
+    return payload;
+  }
+
+  async function previewTeamInvitation(token) {
+    if (typeof token !== 'string' || !/^[a-f0-9]{64}$/i.test(token)) throw new Error('This invitation link is invalid.');
+    return callTeam({ action: 'previewInvitation', token }, '');
+  }
+
+  async function createTeamInvitation(email, permissions) {
+    return callTeam({ action: 'createInvitation', email, permissions, appUrl: window.location.origin + window.location.pathname });
+  }
+
+  async function listTeam() { return callTeam({ action: 'listTeam' }); }
+  async function acceptTeamInvitation(token) { return callTeam({ action: 'acceptInvitation', token }); }
+  async function updateTeamMemberPermissions(memberId, permissions) { return callTeam({ action: 'updateMemberPermissions', memberId, permissions }); }
+  async function updateTeamInvitationPermissions(invitationId, permissions) { return callTeam({ action: 'updateInvitationPermissions', invitationId, permissions }); }
+  async function revokeTeamInvitation(invitationId) { return callTeam({ action: 'revokeInvitation', invitationId }); }
+  async function removeTeamMember(memberId) { return callTeam({ action: 'removeMember', memberId }); }
+  async function leaveTeam() { return callTeam({ action: 'leaveTeam' }); }
+
+  async function createWorkspace(name) {
+    const session = await requireSession();
+    const cleanName = String(name || '').trim().slice(0, 120);
+    if (!cleanName) throw new Error('Enter a name for your workspace.');
+    const { data, error } = await client.from('workspaces').insert({ owner_id: session.user.id, name: cleanName }).select('id,name,created_at').single();
+    if (error) throw error;
+    return data;
+  }
+
   async function getSubscriptionState(workspaceId) {
-    await requireSession();
+    const session = await requireSession();
     const { data, error } = await client.from('workspace_subscriptions')
       .select('status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id')
       .eq('workspace_id', workspaceId).maybeSingle();
     if (error) throw error;
     const currentPeriodEnd = data?.current_period_end ? Date.parse(data.current_period_end) : 0;
+    if (!data) {
+      const { data: membership, error: membershipError } = await client.from('workspace_members').select('id').eq('workspace_id', workspaceId).eq('user_id', session.user.id).maybeSingle();
+      if (membershipError) throw membershipError;
+      if (membership) {
+        const team = await callTeam({ action: 'context' });
+        if (team.workspace?.id === workspaceId && team.isMember) {
+          return { status: team.premiumActive ? 'active' : 'expired', currentPeriodEnd: null, cancelAtPeriodEnd: false, hasBillingHistory: false, active: Boolean(team.premiumActive) };
+        }
+      }
+    }
     return {
       status: data?.status || 'free',
       currentPeriodEnd: data?.current_period_end || null,
@@ -227,13 +278,25 @@
   async function bootstrap() {
     const { data: authData, error: authError } = await client.auth.getSession();
     if (authError) throw authError;
-    if (!authData.session) return { session: null, workspace: null, flows: [] };
+    if (!authData.session) return { session: null, workspace: null, flows: [], teamMember: null, canCreateWorkspace: false };
     const user = authData.session.user;
-    const { data: workspace, error: workspaceError } = await client.from('workspaces').select('id,name,created_at').eq('owner_id', user.id).single();
-    if (workspaceError) throw new Error(`Could not load your workspace: ${workspaceError.message}`);
-    const subscription = await getSubscriptionState(workspace.id);
-    const flows = await listFlows(workspace.id);
-    return { session: authData.session, user, workspace, subscription, flows };
+    const { data: ownedWorkspace, error: ownerError } = await client.from('workspaces').select('id,name,created_at').eq('owner_id', user.id).maybeSingle();
+    if (ownerError) throw new Error(`Could not load your workspace: ${ownerError.message}`);
+    if (ownedWorkspace) {
+      const subscription = await getSubscriptionState(ownedWorkspace.id);
+      const flows = await listFlows(ownedWorkspace.id);
+      return { session: authData.session, user, workspace: ownedWorkspace, subscription, flows, isOwner: true, teamMember: null, canCreateWorkspace: false };
+    }
+    const team = await callTeam({ action: 'context' });
+    if (team.workspace) {
+      const subscription = { status: team.premiumActive ? 'active' : 'expired', currentPeriodEnd: null, cancelAtPeriodEnd: false, hasBillingHistory: false, active: Boolean(team.premiumActive) };
+      const member = team.member || {};
+      const flows = team.premiumActive && member.can_flows ? await listFlows(team.workspace.id) : [];
+      return { session: authData.session, user, workspace: team.workspace, subscription, flows, isOwner: false, teamMember: member, canCreateWorkspace: false };
+    }
+    const { data: canCreateWorkspace, error: setupError } = await client.rpc('current_user_can_create_workspace');
+    if (setupError) throw new Error(`Could not verify workspace setup: ${setupError.message}`);
+    return { session: authData.session, user, workspace: null, subscription: null, flows: [], isOwner: false, teamMember: null, canCreateWorkspace: Boolean(canCreateWorkspace) };
   }
 
   async function listFlows(workspaceId) {
@@ -248,14 +311,14 @@
     const pending = previous.catch(() => {}).then(async () => {
       const session = await requireSession();
       const { cloudId, workspaceId, createdBy, publicationStatus, activePublishedFlowId, ...flowData } = flow;
-      const row = { workspace_id: workspace.id, created_by: session.user.id, company_name: flow.companyName, job_title: flow.jobTitle, flow_data: flowData };
+      const row = { workspace_id: workspace.id, created_by: cloudId ? (createdBy || session.user.id) : session.user.id, company_name: flow.companyName, job_title: flow.jobTitle, flow_data: flowData };
       let result;
       if (cloudId) result = await client.from('application_flows').update(row).eq('id', cloudId).eq('workspace_id', workspace.id).select('id').single();
       else result = await client.from('application_flows').insert(row).select('id').single();
       if (result.error) throw result.error;
       flow.cloudId = result.data.id;
       flow.workspaceId = workspace.id;
-      flow.createdBy = session.user.id;
+      flow.createdBy = row.created_by;
       return flow;
     });
     saveQueues.set(flow.id, pending);
@@ -340,6 +403,18 @@
     return data || [];
   }
 
+  async function listApplicantFlowLabels() {
+    const session = await requireSession();
+    const payload = await callApplications({ action: 'listApplicantFlowLabels' }, session.access_token);
+    if (!Array.isArray(payload.flows) || payload.flows.length > 1000) throw new Error('The applicant job filters could not be validated.');
+    return payload.flows.map(flow => {
+      if (!flow || typeof flow.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(flow.id) || typeof flow.jobTitle !== 'string' || typeof flow.companyName !== 'string') {
+        throw new Error('The applicant job filters could not be validated.');
+      }
+      return { cloudId: flow.id, jobTitle: flow.jobTitle, companyName: flow.companyName };
+    });
+  }
+
   async function updateApplicantStatus(applicantId, status) {
     if (!APPLICANT_STATUSES.has(status)) throw new Error('Choose a valid applicant stage.');
     await requireSession();
@@ -392,6 +467,16 @@
     client,
     bootstrap,
     getSubscriptionState,
+    createWorkspace,
+    previewTeamInvitation,
+    createTeamInvitation,
+    listTeam,
+    acceptTeamInvitation,
+    updateTeamMemberPermissions,
+    updateTeamInvitationPermissions,
+    revokeTeamInvitation,
+    removeTeamMember,
+    leaveTeam,
     createCheckoutSession,
     createPaymentMethodUpdateSession,
     getCurrentPaymentMethodSummary,
@@ -407,16 +492,20 @@
     getPublishedFlow,
     getPublishedJobUrl,
     listApplicants,
+    listApplicantFlowLabels,
     updateApplicantStatus,
     getApplicantResumeUrl,
     submitApplication,
     updateWorkspaceName,
     signOut,
     signIn: (email, password) => client.auth.signInWithPassword({ email, password }),
-    signUp: (email, password, workspaceName) => client.auth.signUp({
+    signUp: (email, password, workspaceName, inviteToken = '') => client.auth.signUp({
       email,
       password,
-      options: { data: { workspace_name: workspaceName }, emailRedirectTo: window.location.origin + window.location.pathname }
+      options: {
+        data: inviteToken ? { pathway_team_invite_pending: true } : { workspace_name: workspaceName },
+        emailRedirectTo: window.location.origin + window.location.pathname
+      }
     })
   };
 })();

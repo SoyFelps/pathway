@@ -1,0 +1,4 @@
+[functions.team]
+# Invitation links must be previewable before the invitee signs in. The function validates
+# the public token for preview and requires a verified Bearer session for every other action.
+verify_jwt = false

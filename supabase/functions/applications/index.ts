@@ -282,8 +282,16 @@ async function deleteFlowForOwner(req: Request, body: Record<string, unknown>) {
   if (flowError) return fail(req, 503, "The job flow could not be checked.");
   let workspaceId = flow?.workspace_id as string | undefined;
   if (workspaceId) {
-    const { data: workspace, error: workspaceError } = await admin.from("workspaces").select("id").eq("id", workspaceId).eq("owner_id", auth.user.id).maybeSingle();
+    const { data: workspace, error: workspaceError } = await admin.from("workspaces").select("id,owner_id").eq("id", workspaceId).maybeSingle();
     if (workspaceError || !workspace) return fail(req, 403, "You do not have access to this job flow.");
+    if (workspace.owner_id !== auth.user.id) {
+      const [{ data: membership, error: membershipError }, { data: subscription, error: subscriptionError }] = await Promise.all([
+        admin.from("workspace_members").select("can_flows").eq("workspace_id", workspaceId).eq("user_id", auth.user.id).maybeSingle(),
+        admin.from("workspace_subscriptions").select("status,current_period_end").eq("workspace_id", workspaceId).maybeSingle(),
+      ]);
+      const active = subscription?.status === "active" && Date.parse(subscription.current_period_end || "") > Date.now();
+      if (membershipError || subscriptionError || !membership?.can_flows || !active) return fail(req, 403, "You do not have active Flow access to this workspace.");
+    }
   } else {
     const { data: workspaces, error: workspaceError } = await admin.from("workspaces").select("id").eq("owner_id", auth.user.id).limit(1);
     if (workspaceError || !workspaces?.length) return fail(req, 403, "You do not have access to this workspace.");
@@ -346,6 +354,29 @@ Deno.serve(async (req: Request) => {
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Invalid body");
   } catch {
     return fail(req, 400, "The application request is invalid.");
+  }
+  if (body.action === "listApplicantFlowLabels") {
+    const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
+    if (!bearer) return fail(req, 401, "Sign in to review applicants.");
+    const { data: auth, error: authError } = await admin.auth.getUser(bearer);
+    if (authError || !auth.user) return fail(req, 401, "Your session expired. Sign in again.");
+    const { data: ownedWorkspace, error: ownerError } = await admin.from("workspaces").select("id").eq("owner_id", auth.user.id).maybeSingle();
+    if (ownerError) return fail(req, 503, "Your workspace could not be checked.");
+    let workspaceId = ownedWorkspace?.id as string | undefined;
+    if (!workspaceId) {
+      const { data: membership, error: memberError } = await admin.from("workspace_members")
+        .select("workspace_id,can_applicants").eq("user_id", auth.user.id).maybeSingle();
+      if (memberError) return fail(req, 503, "Your team access could not be checked.");
+      workspaceId = membership?.workspace_id as string | undefined;
+      if (!membership?.can_applicants || !workspaceId) return fail(req, 403, "You do not have Applicants access to a workspace.");
+      const { data: plan, error: planError } = await admin.from("workspace_subscriptions").select("status,current_period_end").eq("workspace_id", workspaceId).maybeSingle();
+      if (planError) return fail(req, 503, "Your workspace access could not be checked.");
+      if (plan?.status !== "active" || Date.parse(plan.current_period_end || "") <= Date.now()) return fail(req, 403, "Active Premium access is required to review shared applicants.");
+    }
+    const { data: flowLabels, error: flowError } = await admin.from("application_flows")
+      .select("id,job_title,company_name").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(1000);
+    if (flowError) return fail(req, 503, "Job filters could not be loaded.");
+    return response(req, 200, { flows: (flowLabels || []).map((flow) => ({ id: flow.id, jobTitle: flow.job_title || "Untitled role", companyName: flow.company_name || "" })) });
   }
   if (body.action === "deleteFlow") return await deleteFlowForOwner(req, body);
   return fail(req, 400, "Unknown application action.");
