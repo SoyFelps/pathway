@@ -29,6 +29,13 @@
   let applicantFilter = '';
   let applicantSearch = '';
   let currentCardSummaryRequest = 0;
+  let paymentHistoryOpen = false;
+  let paymentHistoryLoaded = false;
+  let paymentHistoryLoading = false;
+  let paymentHistoryRequestId = 0;
+  let paymentHistoryInvoices = [];
+  let paymentHistoryNextAfter = null;
+  let paymentHistoryHasMore = false;
   const applicantStages = [
     { key: 'new', label: 'New', color: 'stage-new' },
     { key: 'failed', label: 'Failed', color: 'stage-failed' },
@@ -254,20 +261,62 @@
     return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
+  function paymentHistoryPanelMarkup() {
+    return `<section class="payment-history-panel" id="payment-history-panel" ${paymentHistoryOpen ? '' : 'hidden'} aria-live="polite"><p class="payment-history-message" id="payment-history-message">Your invoices will appear here.</p><div class="payment-history-list" id="payment-history-list"></div><div class="payment-history-more-wrap" id="payment-history-more-wrap" hidden><button class="btn" id="load-more-payment-history">Load older invoices</button></div></section>`;
+  }
+
+  function formatInvoiceAmount(invoice) {
+    try {
+      const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: invoice.currency.toUpperCase() });
+      const divisor = 10 ** formatter.resolvedOptions().maximumFractionDigits;
+      return formatter.format(invoice.amountMinor / divisor);
+    } catch (_) { return `${invoice.currency.toUpperCase()} ${(invoice.amountMinor / 100).toFixed(2)}`; }
+  }
+
+  function paymentHistoryRowsMarkup() {
+    const labels = { draft: 'Draft', open: 'Payment due', paid: 'Paid', uncollectible: 'Uncollectible', void: 'Voided' };
+    const reasons = { subscription_create: 'Subscription started', subscription_cycle: 'Subscription renewal', subscription_update: 'Subscription updated', manual: 'Invoice' };
+    return paymentHistoryInvoices.map(invoice => {
+      const timestamp = invoice.paidAt || invoice.createdAt;
+      const date = timestamp ? new Date(timestamp * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Date unavailable';
+      const links = [
+        invoice.hostedInvoiceUrl ? `<a href="${esc(invoice.hostedInvoiceUrl)}" target="_blank" rel="noopener noreferrer">View invoice</a>` : '',
+        invoice.invoicePdf ? `<a href="${esc(invoice.invoicePdf)}" target="_blank" rel="noopener noreferrer">PDF</a>` : ''
+      ].filter(Boolean).join('');
+      return `<article class="payment-history-item"><div class="payment-history-main"><strong>${esc(invoice.number || reasons[invoice.billingReason] || 'Invoice')}</strong><span>${esc(date)}</span></div><div class="payment-history-total"><strong>${esc(formatInvoiceAmount(invoice))}</strong><span class="payment-status is-${esc(invoice.status)}">${esc(labels[invoice.status] || 'Invoice')}</span></div><div class="payment-history-links">${links || '<span class="payment-history-no-link">No invoice link available</span>'}</div></article>`;
+    }).join('');
+  }
+
   function renderMyPlan() {
     currentId = null; selectedId = null;
+    paymentHistoryRequestId += 1;
+    paymentHistoryOpen = false; paymentHistoryLoaded = false; paymentHistoryLoading = false;
+    paymentHistoryInvoices = []; paymentHistoryNextAfter = null; paymentHistoryHasMore = false;
     const premium = Boolean(subscription?.active);
     const periodEnd = formatPlanDate(subscription?.currentPeriodEnd);
     const statusText = premium
       ? subscription.cancelAtPeriodEnd && periodEnd ? `Scheduled to end on ${periodEnd}` : periodEnd ? `Renews on ${periodEnd}` : 'Your Premium subscription is active.'
       : 'You are currently on the Free plan.';
     const management = premium
-      ? `<section class="plan-management-card"><div class="plan-section-heading"><div><div class="eyebrow">Subscription management</div><h2>Billing details</h2><p>Manage the payment method and history for this workspace.</p></div></div><div class="plan-action-list"><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment history</strong><span>View invoices and previous payments.</span></div><button class="btn plan-placeholder" disabled>Coming soon</button></div><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment method</strong><span>Change the card used for your subscription.</span></div><button class="btn plan-placeholder" disabled>Coming soon</button></div><div class="plan-action-row plan-cancel-row"><div class="plan-action-copy"><strong>Cancel subscription</strong><span>${subscription.cancelAtPeriodEnd && periodEnd ? `Premium will remain active until ${esc(periodEnd)}.` : `Schedule cancellation for the end of your paid period${periodEnd ? ` (${esc(periodEnd)})` : ''}.`}</span></div><button class="btn btn-danger" id="cancel-subscription" ${subscription.cancelAtPeriodEnd ? 'disabled' : ''}>${subscription.cancelAtPeriodEnd ? 'Cancellation scheduled' : 'Cancel subscription'}</button></div></div><p class="plan-placeholder-note">Payment history will be available here soon. Card details are managed securely by Stripe. If you cancel, Premium and published jobs remain active through the date shown above.</p></section>`
+      ? `<section class="plan-management-card"><div class="plan-section-heading"><div><div class="eyebrow">Subscription management</div><h2>Billing details</h2><p>Manage the payment method and history for this workspace.</p></div></div><div class="plan-action-list"><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment history</strong><span>View invoices and previous payments.</span></div><button class="btn plan-placeholder" disabled>Loading history</button></div><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment method</strong><span>Change the card used for your subscription.</span></div><button class="btn plan-placeholder" disabled>Coming soon</button></div><div class="plan-action-row plan-cancel-row"><div class="plan-action-copy"><strong>Cancel subscription</strong><span>${subscription.cancelAtPeriodEnd && periodEnd ? `Premium will remain active until ${esc(periodEnd)}.` : `Schedule cancellation for the end of your paid period${periodEnd ? ` (${esc(periodEnd)})` : ''}.`}</span></div><button class="btn btn-danger" id="cancel-subscription" ${subscription.cancelAtPeriodEnd ? 'disabled' : ''}>${subscription.cancelAtPeriodEnd ? 'Cancellation scheduled' : 'Cancel subscription'}</button></div></div><p class="plan-placeholder-note">Invoices and receipts are retrieved securely from Stripe. Card details are managed there; Pathway never stores your card number. If you cancel, Premium and published jobs remain active through the date shown above.</p></section>`
       : `<section class="plan-free-note"><div class="plan-free-mark" aria-hidden="true">↗</div><div><strong>Build and preview for free</strong><p>Create and refine application flows at no cost. Upgrade when you are ready to publish a job.</p></div></section>`;
     const freeBenefits = !premium
       ? `<section class="premium-benefits-card"><div class="premium-benefits-heading"><span class="premium-benefits-mark" aria-hidden="true">✦</span><div><div class="eyebrow">Premium plan</div><h2>Everything you need to move from job post to decision</h2><p>Publish a role and manage the full applicant journey in Pathway.</p></div></div><ul class="premium-benefits-list"><li><span aria-hidden="true">↗</span><div><strong>Publish your job flow</strong><p>Turn your application journey into a live job posting.</p></div></li><li><span aria-hidden="true">⤴</span><div><strong>Share a public job link</strong><p>Send one simple link to candidates wherever you recruit.</p></div></li><li><span aria-hidden="true">＋</span><div><strong>Receive applications in Pathway</strong><p>Collect candidate details and answers in your workspace.</p></div></li><li><span aria-hidden="true">▤</span><div><strong>Review candidates and resumes</strong><p>See application responses and preview or download resumes.</p></div></li><li><span aria-hidden="true">✓</span><div><strong>Approve or reject candidates</strong><p>Organize your pipeline and make hiring decisions as applications come in.</p></div></li></ul><button class="btn btn-primary" id="my-plan-benefits-upgrade">Upgrade to Premium</button></section>`
       : '';
     root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-plan')}<main class="my-plan-page"><div class="my-plan-heading"><div class="eyebrow">Workspace billing</div><h1>My Plan</h1><p>View your plan and manage billing for ${esc(workspace.name)}.</p></div><section class="plan-overview-card ${premium ? 'is-premium' : 'is-free'}"><div class="plan-overview-copy"><h2>${premium ? 'Premium' : 'Free'}</h2><p>${statusText}</p></div>${premium ? `<div class="plan-overview-price"><strong>US$ 24.90</strong><span>per month</span></div>` : '<button class="btn btn-primary" id="my-plan-upgrade">Upgrade to Premium</button>'}</section>${premium ? '<section class="plan-benefit-strip"><span class="plan-benefit-icon">✓</span><div><strong>Job publishing is enabled</strong><p>You can publish and manage job application links while your subscription is active.</p></div></section>' : ''}${freeBenefits}${management}</main></div></div>`;
+    if (premium) {
+      const historyRow = [...root.querySelectorAll('.plan-action-row')].find(row => row.querySelector('strong')?.textContent === 'Payment history');
+      const historyButton = historyRow?.querySelector('button');
+      if (historyRow && historyButton) {
+        historyButton.className = 'btn'; historyButton.disabled = false; historyButton.id = 'payment-history-toggle';
+        historyButton.textContent = 'View history'; historyButton.setAttribute('aria-expanded', 'false');
+        historyRow.insertAdjacentHTML('afterend', paymentHistoryPanelMarkup());
+      }
+      const note = root.querySelector('.plan-placeholder-note');
+      if (note) note.textContent = 'Invoices and receipts are retrieved securely from Stripe. Card details are managed there; Pathway never stores your card number.';
+    } else if (subscription?.hasBillingHistory) {
+      root.querySelector('.my-plan-page')?.insertAdjacentHTML('beforeend', `<section class="plan-management-card payment-history-standalone"><div class="plan-section-heading"><div class="eyebrow">Billing records</div><h2>Payment history</h2><p>Invoices for this workspace’s previous subscription.</p></div><button class="btn payment-history-free-toggle" id="payment-history-toggle-free" data-closed-label="View history" aria-expanded="false">View history</button>${paymentHistoryPanelMarkup()}</section>`);
+    }
     bindSidebar();
     bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
@@ -275,6 +324,7 @@
     root.querySelector('#my-plan-upgrade')?.addEventListener('click', openSubscriptionPage);
     root.querySelector('#my-plan-benefits-upgrade')?.addEventListener('click', openSubscriptionPage);
     root.querySelector('#cancel-subscription')?.addEventListener('click', showCancelSubscriptionConfirmation);
+    bindPaymentHistory();
     const paymentMethodRow = [...root.querySelectorAll('.plan-action-row')].find(row => row.querySelector('strong')?.textContent === 'Payment method');
     const paymentMethodButton = paymentMethodRow?.querySelector('button');
     if (premium && paymentMethodButton) {
@@ -290,6 +340,56 @@
     if (premium && subscription.cancelAtPeriodEnd) {
       root.querySelector('.plan-action-list')?.insertAdjacentHTML('beforeend', '<div class="plan-action-row plan-keep-row"><div class="plan-action-copy"><strong>Keep Premium</strong><span>Remove the scheduled cancellation and restore automatic renewal at US$ 24.90 per month.</span></div><button class="btn" id="keep-premium">Keep Premium</button></div>');
       root.querySelector('#keep-premium')?.addEventListener('click', showKeepPremiumConfirmation);
+    }
+  }
+
+  function bindPaymentHistory() {
+    const toggle = root.querySelector('#payment-history-toggle, #payment-history-toggle-free');
+    const panel = root.querySelector('#payment-history-panel');
+    toggle?.addEventListener('click', () => {
+      paymentHistoryOpen = !paymentHistoryOpen;
+      panel.hidden = !paymentHistoryOpen;
+      toggle.setAttribute('aria-expanded', String(paymentHistoryOpen));
+      toggle.textContent = paymentHistoryOpen ? 'Hide history' : (toggle.dataset.closedLabel || 'View history');
+      if (paymentHistoryOpen && !paymentHistoryLoaded) void loadPaymentHistory(false);
+    });
+    root.querySelector('#load-more-payment-history')?.addEventListener('click', () => void loadPaymentHistory(true));
+  }
+
+  async function loadPaymentHistory(append) {
+    if (paymentHistoryLoading) return;
+    const requestId = paymentHistoryRequestId;
+    paymentHistoryLoading = true;
+    const message = root.querySelector('#payment-history-message');
+    const list = root.querySelector('#payment-history-list');
+    const moreWrap = root.querySelector('#payment-history-more-wrap');
+    const moreButton = root.querySelector('#load-more-payment-history');
+    if (!message || !list) { paymentHistoryLoading = false; return; }
+    if (!append) {
+      paymentHistoryInvoices = []; paymentHistoryNextAfter = null; paymentHistoryHasMore = false;
+      list.innerHTML = ''; message.hidden = false; message.textContent = 'Loading invoices…';
+    }
+    if (moreButton) { moreButton.disabled = true; moreButton.textContent = 'Loading…'; }
+    try {
+      const page = await window.PathwayBackend.listPaymentHistory(append ? paymentHistoryNextAfter : null);
+      if (requestId !== paymentHistoryRequestId) return;
+      paymentHistoryInvoices = append ? [...paymentHistoryInvoices, ...page.invoices] : page.invoices;
+      paymentHistoryLoaded = true; paymentHistoryHasMore = page.hasMore; paymentHistoryNextAfter = page.nextAfter;
+      list.innerHTML = paymentHistoryRowsMarkup();
+      message.hidden = paymentHistoryInvoices.length > 0;
+      message.textContent = paymentHistoryHasMore
+        ? 'No invoices on this page belong to Pathway. Load older invoices to continue.'
+        : 'No invoices have been created for this subscription yet.';
+      if (moreWrap) moreWrap.hidden = !paymentHistoryHasMore;
+      if (moreButton) { moreButton.disabled = false; moreButton.textContent = 'Load older invoices'; }
+    } catch (error) {
+      if (requestId !== paymentHistoryRequestId) return;
+      message.hidden = false;
+      message.textContent = error.message || 'Payment history could not be loaded. Please try again.';
+      if (moreButton) { moreButton.disabled = false; moreButton.textContent = 'Retry'; }
+      if (moreWrap) moreWrap.hidden = false;
+    } finally {
+      if (requestId === paymentHistoryRequestId) paymentHistoryLoading = false;
     }
   }
 

@@ -34,7 +34,7 @@
   async function getSubscriptionState(workspaceId) {
     await requireSession();
     const { data, error } = await client.from('workspace_subscriptions')
-      .select('status,current_period_end,cancel_at_period_end')
+      .select('status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id')
       .eq('workspace_id', workspaceId).maybeSingle();
     if (error) throw error;
     const currentPeriodEnd = data?.current_period_end ? Date.parse(data.current_period_end) : 0;
@@ -42,6 +42,7 @@
       status: data?.status || 'free',
       currentPeriodEnd: data?.current_period_end || null,
       cancelAtPeriodEnd: Boolean(data?.cancel_at_period_end),
+      hasBillingHistory: Boolean(data?.stripe_customer_id && data?.stripe_subscription_id),
       active: data?.status === 'active' && currentPeriodEnd > Date.now()
     };
   }
@@ -110,6 +111,60 @@
       throw new Error('Stripe returned incomplete payment method details.');
     }
     return { brand: card.brand, last4: card.last4, expMonth: card.exp_month, expYear: card.exp_year };
+  }
+
+  async function listPaymentHistory(startingAfter = null) {
+    const session = await requireSession();
+    if (startingAfter != null && (typeof startingAfter !== 'string' || !/^in_[A-Za-z0-9]{1,64}$/.test(startingAfter))) {
+      throw new Error('The invoice history cursor is invalid.');
+    }
+    let result;
+    try {
+      result = await fetch(BILLING_FUNCTION, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'listPaymentHistory', ...(startingAfter ? { starting_after: startingAfter } : {}) })
+      });
+    } catch (_) {
+      throw new Error('Could not reach the billing service. Check your connection and try again.');
+    }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error || 'Payment history could not be loaded.');
+    if (!Array.isArray(payload.invoices) || payload.invoices.length > 10 || typeof payload.has_more !== 'boolean') {
+      throw new Error('Stripe returned an invalid invoice history page.');
+    }
+    const allowedStatuses = new Set(['draft', 'open', 'paid', 'uncollectible', 'void']);
+    const invoices = payload.invoices.map(invoice => {
+      if (!invoice || typeof invoice.id !== 'string' || !/^in_[A-Za-z0-9]+$/.test(invoice.id)
+        || typeof invoice.status !== 'string' || !allowedStatuses.has(invoice.status)
+        || typeof invoice.currency !== 'string' || !/^[a-z]{3}$/.test(invoice.currency)
+        || !Number.isSafeInteger(invoice.amount_minor) || !Number.isFinite(invoice.created_at)) {
+        throw new Error('Stripe returned an invalid invoice record.');
+      }
+      const safeUrl = value => {
+        if (typeof value !== 'string') return null;
+        let url;
+        try { url = new URL(value); } catch (_) { return null; }
+        return url.protocol === 'https:' && (url.hostname === 'stripe.com' || url.hostname.endsWith('.stripe.com')) ? url.href : null;
+      };
+      return {
+        id: invoice.id,
+        number: typeof invoice.number === 'string' ? invoice.number : null,
+        billingReason: typeof invoice.billing_reason === 'string' ? invoice.billing_reason : 'manual',
+        status: invoice.status,
+        currency: invoice.currency,
+        amountMinor: invoice.amount_minor,
+        createdAt: invoice.created_at,
+        paidAt: Number.isFinite(invoice.paid_at) ? invoice.paid_at : null,
+        hostedInvoiceUrl: safeUrl(invoice.hosted_invoice_url),
+        invoicePdf: safeUrl(invoice.invoice_pdf)
+      };
+    });
+    if (payload.has_more && (typeof payload.next_after !== 'string' || !/^in_[A-Za-z0-9]+$/.test(payload.next_after))) {
+      throw new Error('Stripe returned an invalid invoice history cursor.');
+    }
+    return { invoices, hasMore: payload.has_more, nextAfter: payload.has_more ? payload.next_after : null };
   }
 
   async function syncPaymentMethodFromCustomer() {
@@ -340,6 +395,7 @@
     createCheckoutSession,
     createPaymentMethodUpdateSession,
     getCurrentPaymentMethodSummary,
+    listPaymentHistory,
     syncPaymentMethodFromCustomer,
     cancelSubscriptionAtPeriodEnd,
     keepPremiumSubscription,

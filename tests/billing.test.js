@@ -42,7 +42,9 @@ test('My Plan shows account status and requires confirmation before scheduling c
   assert.ok(builder.includes("query.get('billing') === 'payment-method-updated'"));
   assert.match(builder, /Cancel subscription/);
   assert.match(builder, /class="btn plan-placeholder" disabled/);
-  assert.match(builder, /Payment history will be available here soon/);
+  assert.match(builder, /historyButton\.id = 'payment-history-toggle'/);
+  assert.match(builder, /id="payment-history-panel"/);
+  assert.match(builder, /Load older invoices/);
   assert.match(builder, /subscriptionReturnPage === 'my-plan'/);
   assert.match(builder, /function showCancelSubscriptionConfirmation\(\)/);
   assert.match(builder, /if \(premium && subscription\.cancelAtPeriodEnd\)/);
@@ -120,12 +122,41 @@ test('payment-method summary is authenticated, uses Stripe default-method preced
   assert.doesNotMatch(builder, /card\.number|card\.cvc/);
 });
 
+test('payment history is authenticated, paginated, and restricted to verified Pathway subscriptions', () => {
+  const edge = read('supabase/functions/billing/index.ts');
+  const backend = read('backend.js');
+  const builder = read('builder.js');
+  assert.match(edge, /action === "listPaymentHistory"/);
+  assert.match(edge, /stripe\.invoices\.list\(\{\s*customer: existing\.stripe_customer_id,\s*limit: 10/);
+  assert.match(edge, /invoiceSubscriptionId\(item\)/);
+  assert.match(edge, /invoice\.parent[\s\S]*details\.subscription/);
+  assert.match(edge, /subscription\.metadata\?\.workspace_id === workspace\.id/);
+  assert.match(edge, /verifiedSubscriptionIds\.has\(subscriptionId\)/);
+  assert.match(edge, /if \(rawStatus === "draft"\) return \[\]/);
+  assert.match(edge, /safeStripeInvoiceUrl\(invoice\.hosted_invoice_url\)/);
+  assert.match(edge, /safeStripeInvoiceUrl\(invoice\.invoice_pdf\)/);
+  assert.match(edge, /has_more: Boolean\(page\.has_more\)/);
+  assert.match(edge, /limit: 10/);
+  assert.match(backend, /async function listPaymentHistory\(startingAfter = null\)/);
+  assert.match(backend, /JSON\.stringify\(\{ action: 'listPaymentHistory'/);
+  assert.match(backend, /invoices\.length > 10/);
+  assert.match(backend, /url\.protocol === 'https:'/);
+  assert.match(backend, /listPaymentHistory,/);
+  assert.match(backend, /hasBillingHistory: Boolean\(data\?\.stripe_customer_id && data\?\.stripe_subscription_id\)/);
+  assert.match(builder, /historyButton\.id = 'payment-history-toggle'/);
+  assert.match(builder, /loadPaymentHistory\(true\)/);
+  assert.match(builder, /View invoice/);
+  assert.match(builder, /invoice\.invoicePdf/);
+  assert.match(builder, /formatInvoiceAmount\(invoice\)/);
+  assert.match(builder, /subscription\?\.hasBillingHistory/);
+});
+
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=current-card-20260929/);
-  assert.match(html, /builder\.js\?v=current-card-20260929/);
-  assert.match(html, /styles\.css\?v=current-card-20260929/);
+  assert.match(html, /backend\.js\?v=payment-history-20260929/);
+  assert.match(html, /builder\.js\?v=payment-history-20260929/);
+  assert.match(html, /styles\.css\?v=payment-history-20260929/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);
@@ -161,7 +192,7 @@ test('Checkout Session is server-created as a recurring embedded form using the 
 
 test('billing endpoint schedules cancellation only at period end after verifying the owner and Stripe subscription', () => {
   const edge = read('supabase/functions/billing/index.ts');
-  assert.match(edge, /action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer"/);
+  assert.match(edge, /action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer" && action !== "listPaymentHistory"/);
   assert.match(edge, /auth\.getUser\(bearer\)/);
   assert.match(edge, /owner_id", auth\.user\.id/);
   assert.match(edge, /stripe_subscription_id/);

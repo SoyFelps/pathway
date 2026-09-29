@@ -69,6 +69,24 @@ function safeCardSummary(value: unknown, customerId: string) {
   return { brand, last4, exp_month: month, exp_year: year };
 }
 
+function invoiceSubscriptionId(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const invoice = value as Record<string, unknown>;
+  const parent = invoice.parent && typeof invoice.parent === "object" ? invoice.parent as Record<string, unknown> : {};
+  const details = parent.subscription_details && typeof parent.subscription_details === "object"
+    ? parent.subscription_details as Record<string, unknown> : {};
+  return stripeObjectId(details.subscription) || stripeObjectId(invoice.subscription);
+}
+
+function safeStripeInvoiceUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    const stripeHost = url.hostname === "stripe.com" || url.hostname.endsWith(".stripe.com");
+    return url.protocol === "https:" && stripeHost ? url.href : null;
+  } catch { return null; }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return response(req, 204, {});
   if (req.method !== "POST") return fail(req, 405, "Use POST for this endpoint.");
@@ -77,13 +95,15 @@ Deno.serve(async (req: Request) => {
   if (!admin || !stripe) return fail(req, 503, "Billing is not configured yet.");
 
   let action = "checkout";
+  let startingAfter = "";
   try {
     const body = await req.json();
     if (body && typeof body.action === "string") action = body.action;
+    if (body && typeof body.starting_after === "string") startingAfter = body.starting_after;
   } catch {
     return fail(req, 400, "The request body must be valid JSON.");
   }
-  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer") return fail(req, 400, "This billing action is not supported.");
+  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer" && action !== "listPaymentHistory") return fail(req, 400, "This billing action is not supported.");
 
   const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
   if (!bearer) return fail(req, 401, "Sign in to manage your subscription.");
@@ -99,6 +119,66 @@ Deno.serve(async (req: Request) => {
     .eq("workspace_id", workspace.id).maybeSingle();
   if (subscriptionError) return fail(req, 503, "Your subscription status could not be checked.");
   const periodEnd = existing?.current_period_end ? Date.parse(existing.current_period_end) : 0;
+
+  if (action === "listPaymentHistory") {
+    if (!existing?.stripe_customer_id) return fail(req, 409, "No subscription payment history was found for this workspace.");
+    if (startingAfter && !/^in_[A-Za-z0-9]{1,64}$/.test(startingAfter)) return fail(req, 400, "The invoice history cursor is invalid.");
+    try {
+      const page = await stripe.invoices.list({
+        customer: existing.stripe_customer_id,
+        limit: 10,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+      const subscriptionIds = [...new Set(page.data.map(item => invoiceSubscriptionId(item)).filter((id): id is string => Boolean(id)))];
+      const verificationResults = await Promise.all(subscriptionIds.map(async id => {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(id);
+          return stripeObjectId(subscription.customer) === existing.stripe_customer_id
+            && subscription.metadata?.workspace_id === workspace.id ? id : null;
+        } catch {
+          return null;
+        }
+      }));
+      const verifiedSubscriptionIds = new Set(verificationResults.filter((id): id is string => Boolean(id)));
+      const invoices = page.data.flatMap(item => {
+        const invoice = item as unknown as Record<string, unknown>;
+        const subscriptionId = invoiceSubscriptionId(invoice);
+        if (stripeObjectId(invoice.customer) !== existing.stripe_customer_id || !subscriptionId || !verifiedSubscriptionIds.has(subscriptionId)) return [];
+        const validStatuses = new Set(["draft", "open", "paid", "uncollectible", "void"]);
+        const rawStatus = typeof invoice.status === "string" ? invoice.status : "draft";
+        if (rawStatus === "draft") return [];
+        const status = validStatuses.has(rawStatus) ? rawStatus : "draft";
+        const transitions = invoice.status_transitions && typeof invoice.status_transitions === "object"
+          ? invoice.status_transitions as Record<string, unknown> : {};
+        const amount = status === "paid" ? invoice.amount_paid : invoice.total ?? invoice.amount_due;
+        const amountMinor = Number(amount);
+        const createdAt = Number(invoice.created);
+        const paidAt = Number(transitions.paid_at);
+        const currency = typeof invoice.currency === "string" && /^[a-z]{3}$/i.test(invoice.currency) ? invoice.currency.toLowerCase() : "usd";
+        return [{
+          id: typeof invoice.id === "string" ? invoice.id : "",
+          number: typeof invoice.number === "string" ? invoice.number : null,
+          billing_reason: typeof invoice.billing_reason === "string" ? invoice.billing_reason : "manual",
+          status,
+          currency,
+          amount_minor: Number.isSafeInteger(amountMinor) ? amountMinor : 0,
+          created_at: Number.isFinite(createdAt) ? createdAt : 0,
+          paid_at: Number.isFinite(paidAt) && paidAt > 0 ? paidAt : null,
+          hosted_invoice_url: safeStripeInvoiceUrl(invoice.hosted_invoice_url),
+          invoice_pdf: safeStripeInvoiceUrl(invoice.invoice_pdf),
+        }];
+      });
+      const lastInvoiceId = page.data.length ? page.data[page.data.length - 1].id : null;
+      return response(req, 200, {
+        invoices,
+        has_more: Boolean(page.has_more),
+        next_after: page.has_more ? lastInvoiceId : null,
+      });
+    } catch (error) {
+      console.error("Stripe invoice history retrieval failed", error);
+      return fail(req, 502, "Payment history could not be loaded. Please try again.");
+    }
+  }
 
   if (action === "cancelSubscription") {
     if (!existing?.stripe_subscription_id) return fail(req, 409, "No active subscription was found for this workspace.");
