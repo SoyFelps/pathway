@@ -156,7 +156,7 @@ test('My Team stylesheet and static page load are versioned for immediate deploy
   assert.match(html, /auth\.js\?v=team-auto-accept-20260929/);
   assert.match(html, /backend\.js\?v=team-invite-recovery-20260929/);
   assert.match(html, /builder\.js\?v=team-people-icon-20260929/);
-  assert.match(html, /styles\.css\?v=team-loading-20260929/);
+  assert.match(html, /styles\.css\?v=fixed-sidebar-20260929/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
@@ -184,4 +184,10 @@ test('My Team sidebar uses a distinct three-person icon from Applicants', () => 
   assert.match(teamIcon, /cx="6" cy="7\.5"/);
   assert.match(teamIcon, /cx="12" cy="6\.5"/);
   assert.match(teamIcon, /cx="18" cy="7\.5"/);
+});
+
+test('workspace sidebar stays visible on desktop and sticks below the topbar on mobile', () => {
+  const css = read('styles.css');
+  assert.match(css, /@media\(min-width:761px\)\{\.workspace-body\{align-items:flex-start\}\.app-sidebar\{position:sticky;top:70px;align-self:flex-start;height:calc\(100vh - 70px\);max-height:calc\(100vh - 70px\);overflow-y:auto/);
+  assert.match(css, /@media\(max-width:760px\)\{\.app-sidebar\{position:sticky;top:70px;z-index:25\}\}/);
 });
