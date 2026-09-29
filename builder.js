@@ -274,6 +274,10 @@
     root.querySelector('#my-plan-upgrade')?.addEventListener('click', openSubscriptionPage);
     root.querySelector('#my-plan-benefits-upgrade')?.addEventListener('click', openSubscriptionPage);
     root.querySelector('#cancel-subscription')?.addEventListener('click', showCancelSubscriptionConfirmation);
+    if (premium && subscription.cancelAtPeriodEnd) {
+      root.querySelector('.plan-action-list')?.insertAdjacentHTML('beforeend', '<div class="plan-action-row plan-keep-row"><div class="plan-action-copy"><strong>Keep Premium</strong><span>Remove the scheduled cancellation and restore automatic renewal at US$ 24.90 per month.</span></div><button class="btn" id="keep-premium">Keep Premium</button></div>');
+      root.querySelector('#keep-premium')?.addEventListener('click', showKeepPremiumConfirmation);
+    }
   }
 
   function showCancelSubscriptionConfirmation() {
@@ -302,6 +306,36 @@
         const message = modalRoot.querySelector('.cancellation-error');
         if (message) message.textContent = error.message || 'Could not schedule cancellation. Try again.';
         else confirmButton.closest('.modal').insertAdjacentHTML('beforeend', `<div class="auth-error show cancellation-error" role="alert">${esc(error.message || 'Could not schedule cancellation. Try again.')}</div>`);
+      }
+    });
+  }
+
+  function showKeepPremiumConfirmation() {
+    if (!subscription?.active || !subscription.cancelAtPeriodEnd) return;
+    const periodEnd = formatPlanDate(subscription.currentPeriodEnd);
+    setModal(`<div class="modal-head"><div><h2>Keep your Premium plan?</h2><p>Your cancellation is scheduled${periodEnd ? ` for ${esc(periodEnd)}` : ' for the end of your paid period'}.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="renewal-confirm"><strong>Automatic renewal will resume:</strong> The cancellation will be removed, your Premium access will continue, and your subscription will renew at US$ 24.90 per month. There is no immediate charge.</div><div class="modal-actions"><button class="btn" data-close>Not now</button><button class="btn btn-primary" id="confirm-keep-premium">Keep Premium</button></div>`);
+    const confirmButton = modalRoot.querySelector('#confirm-keep-premium');
+    confirmButton.addEventListener('click', async () => {
+      confirmButton.disabled = true;
+      confirmButton.textContent = 'Updating…';
+      try {
+        const result = await window.PathwayBackend.keepPremiumSubscription();
+        subscription = {
+          ...subscription,
+          status: result.status || 'active',
+          currentPeriodEnd: result.current_period_end || subscription.currentPeriodEnd,
+          cancelAtPeriodEnd: false,
+          active: true
+        };
+        closeModal();
+        renderMyPlan();
+        showToast('Cancellation removed. Your Premium plan will renew at US$ 24.90 per month.');
+      } catch (error) {
+        confirmButton.disabled = false;
+        confirmButton.textContent = 'Keep Premium';
+        const message = modalRoot.querySelector('.renewal-error');
+        if (message) message.textContent = error.message || 'Could not restore automatic renewal. Try again.';
+        else confirmButton.closest('.modal').insertAdjacentHTML('beforeend', `<div class="auth-error show renewal-error" role="alert">${esc(error.message || 'Could not restore automatic renewal. Try again.')}</div>`);
       }
     });
   }

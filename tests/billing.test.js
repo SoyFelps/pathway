@@ -41,6 +41,12 @@ test('My Plan shows account status and requires confirmation before scheduling c
   assert.match(builder, /Payment history and card changes will be added later/);
   assert.match(builder, /subscriptionReturnPage === 'my-plan'/);
   assert.match(builder, /function showCancelSubscriptionConfirmation\(\)/);
+  assert.match(builder, /if \(premium && subscription\.cancelAtPeriodEnd\)/);
+  assert.match(builder, /plan-action-row plan-keep-row/);
+  assert.match(builder, /id="keep-premium"/);
+  assert.match(builder, /function showKeepPremiumConfirmation\(\)/);
+  assert.match(builder, /Automatic renewal will resume/);
+  assert.match(builder, /keepPremiumSubscription\(\)/);
   assert.match(builder, /Schedule cancellation/);
   assert.match(builder, /keep Premium access and published job links until/);
   assert.match(builder, /Pathway will turn off renewal with Stripe/);
@@ -66,12 +72,20 @@ test('cancellation adapter sends the authenticated period-end cancellation actio
   assert.match(backend, /cancelSubscriptionAtPeriodEnd,/);
 });
 
+test('Keep Premium adapter sends an authenticated request to remove scheduled cancellation', () => {
+  const backend = read('backend.js');
+  assert.match(backend, /async function keepPremiumSubscription\(\)/);
+  assert.match(backend, /JSON\.stringify\(\{ action: 'resumeSubscription' \}\)/);
+  assert.match(backend, /payload\.cancel_at_period_end !== false/);
+  assert.match(backend, /keepPremiumSubscription,/);
+});
+
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=cancel-subscription-20260929/);
-  assert.match(html, /builder\.js\?v=cancel-subscription-20260929/);
-  assert.match(html, /styles\.css\?v=cancel-subscription-20260929/);
+  assert.match(html, /backend\.js\?v=keep-premium-20260929/);
+  assert.match(html, /builder\.js\?v=keep-premium-20260929/);
+  assert.match(html, /styles\.css\?v=keep-premium-20260929/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);
@@ -107,12 +121,15 @@ test('Checkout Session is server-created as a recurring embedded form using the 
 
 test('billing endpoint schedules cancellation only at period end after verifying the owner and Stripe subscription', () => {
   const edge = read('supabase/functions/billing/index.ts');
-  assert.match(edge, /action !== "checkout" && action !== "cancelSubscription"/);
+  assert.match(edge, /action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription"/);
   assert.match(edge, /auth\.getUser\(bearer\)/);
   assert.match(edge, /owner_id", auth\.user\.id/);
   assert.match(edge, /stripe_subscription_id/);
   assert.match(edge, /current\.metadata\?\.workspace_id !== workspace\.id/);
   assert.match(edge, /stripe\.subscriptions\.update\(existing\.stripe_subscription_id, \{ cancel_at_period_end: true \}\)/);
+  assert.match(edge, /if \(action === "resumeSubscription"\)/);
+  assert.match(edge, /current\.cancel_at_period_end/);
+  assert.match(edge, /stripe\.subscriptions\.update\(existing\.stripe_subscription_id, \{ cancel_at_period_end: false \}\)/);
   assert.match(edge, /cancel_at_period_end: Boolean\(updated\.cancel_at_period_end\)/);
   assert.doesNotMatch(edge, /subscriptions\.cancel\(/);
   assert.doesNotMatch(edge, /refunds\.create\(/);

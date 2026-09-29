@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
   } catch {
     return fail(req, 400, "The request body must be valid JSON.");
   }
-  if (action !== "checkout" && action !== "cancelSubscription") return fail(req, 400, "This billing action is not supported.");
+  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription") return fail(req, 400, "This billing action is not supported.");
 
   const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
   if (!bearer) return fail(req, 401, "Sign in to manage your subscription.");
@@ -114,6 +114,43 @@ Deno.serve(async (req: Request) => {
     } catch (error) {
       console.error("Stripe period-end cancellation request failed", error);
       return fail(req, 502, "Stripe could not schedule the subscription cancellation. Please try again.");
+    }
+  }
+
+  if (action === "resumeSubscription") {
+    if (!existing?.stripe_subscription_id || !existing.cancel_at_period_end) {
+      return fail(req, 409, "No scheduled cancellation was found for this workspace.");
+    }
+    if (existing.status !== "active" || periodEnd <= Date.now()) {
+      return fail(req, 409, "Only an active subscription can have its cancellation removed.");
+    }
+
+    try {
+      const current = await stripe.subscriptions.retrieve(existing.stripe_subscription_id);
+      if (current.status !== "active" || stripeObjectId(current.customer) !== existing.stripe_customer_id) {
+        return fail(req, 409, "The Stripe subscription no longer matches this workspace's active plan.");
+      }
+      if (current.metadata?.workspace_id !== workspace.id) {
+        return fail(req, 403, "The Stripe subscription could not be verified for this workspace.");
+      }
+      const updated = current.cancel_at_period_end
+        ? await stripe.subscriptions.update(existing.stripe_subscription_id, { cancel_at_period_end: false })
+        : current;
+      const { error: syncError } = await admin.from("workspace_subscriptions")
+        .update({ status: updated.status, current_period_end: existing.current_period_end, cancel_at_period_end: false })
+        .eq("workspace_id", workspace.id);
+      if (syncError) {
+        console.error("Subscription renewal was restored in Stripe but could not be synced to Pathway", syncError);
+        return fail(req, 503, "Stripe restored your renewal, but Pathway is still syncing. Refresh the page in a moment.");
+      }
+      return response(req, 200, {
+        status: updated.status,
+        current_period_end: existing.current_period_end,
+        cancel_at_period_end: Boolean(updated.cancel_at_period_end),
+      });
+    } catch (error) {
+      console.error("Stripe renewal restoration request failed", error);
+      return fail(req, 502, "Stripe could not remove the scheduled cancellation. Please try again.");
     }
   }
 

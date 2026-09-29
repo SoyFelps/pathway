@@ -84,6 +84,25 @@
     return payload;
   }
 
+  async function keepPremiumSubscription() {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(BILLING_FUNCTION, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resumeSubscription' })
+      });
+    } catch (_) {
+      throw new Error('Could not reach the billing service. Check your connection and try again.');
+    }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error || 'The subscription renewal could not be restored.');
+    if (payload.cancel_at_period_end !== false) throw new Error('Stripe did not confirm that cancellation was removed.');
+    return payload;
+  }
+
   async function bootstrap() {
     const { data: authData, error: authError } = await client.auth.getSession();
     if (authError) throw authError;
@@ -254,6 +273,7 @@
     getSubscriptionState,
     createCheckoutSession,
     cancelSubscriptionAtPeriodEnd,
+    keepPremiumSubscription,
     listFlows,
     saveFlow,
     deleteFlow,
