@@ -155,7 +155,7 @@ test('My Team stylesheet and static page load are versioned for immediate deploy
   const css = read('styles.css');
   assert.match(html, /auth\.js\?v=team-auto-accept-20260929/);
   assert.match(html, /backend\.js\?v=team-invite-recovery-20260929/);
-  assert.match(html, /builder\.js\?v=team-loading-20260929/);
+  assert.match(html, /builder\.js\?v=team-people-icon-20260929/);
   assert.match(html, /styles\.css\?v=team-loading-20260929/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
@@ -173,4 +173,15 @@ test('My Team renders loading cards before its list request resolves and ignores
   assert.match(edge, /Promise\.all\(\[\s*admin\.from\("workspace_members"\)[\s\S]*admin\.from\("workspace_invitations"\)[\s\S]*admin\.auth\.admin\.getUserById/);
   assert.doesNotMatch(edge, /await admin\.from\("workspace_invitations"\)\.update\(\{ status: "expired" \}\)/);
   assert.doesNotMatch(edge, /const \{ data: ownMembership, error: ownError \} = await admin\.from\("workspace_members"\)/);
+});
+
+test('My Team sidebar uses a distinct three-person icon from Applicants', () => {
+  const builder = read('builder.js');
+  const applicantsIcon = builder.match(/applicants: '(.*?)',\n\s*team:/s)?.[1];
+  const teamIcon = builder.match(/team: '(.*?)',\n\s*node:/s)?.[1];
+  assert.ok(applicantsIcon && teamIcon, 'both sidebar icons must be defined');
+  assert.notEqual(teamIcon, applicantsIcon);
+  assert.match(teamIcon, /cx="6" cy="7\.5"/);
+  assert.match(teamIcon, /cx="12" cy="6\.5"/);
+  assert.match(teamIcon, /cx="18" cy="7\.5"/);
 });

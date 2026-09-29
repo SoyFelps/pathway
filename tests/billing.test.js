@@ -155,7 +155,7 @@ test('header loads Stripe.js directly and checkout form uses the configured beta
   const html = read('index.html');
   const builder = read('builder.js');
   assert.match(html, /backend\.js\?v=team-invite-recovery-20260929/);
-  assert.match(html, /builder\.js\?v=team-loading-20260929/);
+  assert.match(html, /builder\.js\?v=team-people-icon-20260929/);
   assert.match(html, /styles\.css\?v=team-loading-20260929/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
