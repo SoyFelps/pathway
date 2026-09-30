@@ -154,9 +154,9 @@ test('payment history is authenticated, paginated, and restricted to verified Pa
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=dashboard-stats-20260929/);
-  assert.match(html, /builder\.js\?v=dashboard-stats-20260929/);
-  assert.match(html, /styles\.css\?v=dashboard-stats-20260929/);
+  assert.match(html, /backend\.js\?v=settings-delete-20260930/);
+  assert.match(html, /builder\.js\?v=settings-delete-20260930/);
+  assert.match(html, /styles\.css\?v=settings-delete-20260930/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);
@@ -212,7 +212,9 @@ test('billing endpoint schedules cancellation only at period end after verifying
   assert.match(edge, /type: "payment_method_update"/);
   assert.match(edge, /billing", "payment-method-updated"/);
   assert.match(edge, /cancel_at_period_end: Boolean\(updated\.cancel_at_period_end\)/);
-  assert.doesNotMatch(edge, /subscriptions\.cancel\(/);
+  const deleteWorkspaceIndex = edge.indexOf('if (action === "deleteWorkspace")');
+  assert.ok(deleteWorkspaceIndex >= 0, 'workspace deletion must be a separate owner action');
+  assert.doesNotMatch(edge.slice(0, deleteWorkspaceIndex), /subscriptions\.cancel\(/, 'ordinary plan cancellation must remain at period end');
   assert.doesNotMatch(edge, /refunds\.create\(/);
 });
 

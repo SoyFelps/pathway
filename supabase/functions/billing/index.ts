@@ -20,6 +20,9 @@ const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY") || "";
 // This public Stripe Price ID is a test-mode fallback; override it via an Edge Function secret for production.
 const stripePriceId = Deno.env.get("STRIPE_PRICE_ID") || "price_1UKFrzLxHJwAlJp9n6W70f8k";
 const appUrl = Deno.env.get("PATHWAY_APP_URL") || "https://soyfelps.github.io/pathway/";
+const RESUME_BUCKET = "applicant-resumes";
+const STORAGE_LIST_LIMIT = 100;
+const MAX_STORAGE_PAGES_PER_FOLDER = 10000;
 const projectUrl = Deno.env.get("SUPABASE_URL") || "";
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || envJsonValue("SUPABASE_SECRET_KEYS");
 const stripe = stripeSecret
@@ -87,6 +90,43 @@ function safeStripeInvoiceUrl(value: unknown): string | null {
   } catch { return null; }
 }
 
+async function collectWorkspaceResumePaths(workspaceId: string): Promise<string[]> {
+  if (!admin) throw new Error("Workspace storage is not configured.");
+  const folders = [workspaceId];
+  const visited = new Set<string>();
+  const paths: string[] = [];
+  while (folders.length) {
+    const folder = folders.pop()!;
+    if (visited.has(folder)) continue;
+    visited.add(folder);
+    let offset = 0;
+    let complete = false;
+    for (let page = 0; page < MAX_STORAGE_PAGES_PER_FOLDER; page++) {
+      const { data: entries, error } = await admin.storage.from(RESUME_BUCKET).list(folder, { limit: STORAGE_LIST_LIMIT, offset });
+      if (error) throw new Error("Private resume files could not be listed. The workspace was kept; retry deletion.");
+      const listed = entries || [];
+      for (const entry of listed) {
+        if (entry.id) paths.push(`${folder}/${entry.name}`);
+        else if (entry.name) folders.push(`${folder}/${entry.name}`);
+      }
+      if (listed.length < STORAGE_LIST_LIMIT) { complete = true; break; }
+      offset += listed.length;
+    }
+    if (!complete) throw new Error("The workspace has too many private storage entries to delete safely in one request.");
+  }
+  return paths;
+}
+
+async function removeWorkspaceResumeFiles(workspaceId: string): Promise<number> {
+  if (!admin) throw new Error("Workspace storage is not configured.");
+  const paths = await collectWorkspaceResumePaths(workspaceId);
+  for (let index = 0; index < paths.length; index += STORAGE_LIST_LIMIT) {
+    const { error } = await admin.storage.from(RESUME_BUCKET).remove(paths.slice(index, index + STORAGE_LIST_LIMIT));
+    if (error) throw new Error("Private resume cleanup is incomplete. Workspace records were kept; retry deletion.");
+  }
+  return paths.length;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return response(req, 204, {});
   if (req.method !== "POST") return fail(req, 405, "Use POST for this endpoint.");
@@ -103,7 +143,7 @@ Deno.serve(async (req: Request) => {
   } catch {
     return fail(req, 400, "The request body must be valid JSON.");
   }
-  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer" && action !== "listPaymentHistory") return fail(req, 400, "This billing action is not supported.");
+  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer" && action !== "listPaymentHistory" && action !== "deleteWorkspace") return fail(req, 400, "This billing action is not supported.");
 
   const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
   if (!bearer) return fail(req, 401, "Sign in to manage your subscription.");
@@ -119,6 +159,55 @@ Deno.serve(async (req: Request) => {
     .eq("workspace_id", workspace.id).maybeSingle();
   if (subscriptionError) return fail(req, 503, "Your subscription status could not be checked.");
   const periodEnd = existing?.current_period_end ? Date.parse(existing.current_period_end) : 0;
+
+  if (action === "deleteWorkspace") {
+    const { error: unpublishError } = await admin.from("application_flows")
+      .update({ publication_status: "draft", active_published_flow_id: null })
+      .eq("workspace_id", workspace.id);
+    if (unpublishError) return fail(req, 503, "Published job pages could not be taken offline. The workspace was kept; retry deletion.");
+
+    let subscriptionCancelled = false;
+    if (existing?.stripe_subscription_id) {
+      try {
+        const current = await stripe.subscriptions.retrieve(existing.stripe_subscription_id);
+        if (existing.stripe_customer_id && stripeObjectId(current.customer) !== existing.stripe_customer_id) {
+          return fail(req, 403, "The Stripe subscription does not match this workspace. The workspace was kept.");
+        }
+        if (current.metadata?.workspace_id !== workspace.id) {
+          return fail(req, 403, "The Stripe subscription could not be verified for this workspace. The workspace was kept.");
+        }
+        if (current.status !== "canceled" && current.status !== "incomplete_expired") {
+          await stripe.subscriptions.cancel(existing.stripe_subscription_id, { invoice_now: false, prorate: false });
+        }
+        subscriptionCancelled = true;
+        const { error: syncError } = await admin.from("workspace_subscriptions")
+          .update({ status: "canceled", current_period_end: new Date().toISOString(), cancel_at_period_end: false })
+          .eq("workspace_id", workspace.id);
+        if (syncError) return fail(req, 503, "Stripe canceled the subscription, but Pathway could not finish workspace cleanup. The workspace was kept; retry deletion.");
+      } catch (error) {
+        console.error("Stripe immediate cancellation during workspace deletion failed", error);
+        return fail(req, 502, "Stripe could not cancel the subscription. The workspace was kept; retry deletion before deleting it.");
+      }
+    }
+
+    const { error: invitationsError } = await admin.from("workspace_invitations").delete().eq("workspace_id", workspace.id);
+    if (invitationsError) return fail(req, 503, "The subscription was canceled, but invitations could not be revoked. The workspace was kept; retry deletion.");
+    const { error: membersError } = await admin.from("workspace_members").delete().eq("workspace_id", workspace.id);
+    if (membersError) return fail(req, 503, "The subscription was canceled, but member access could not be fully revoked. The workspace was kept; retry deletion.");
+
+    let resumesRemoved = 0;
+    try {
+      resumesRemoved = await removeWorkspaceResumeFiles(workspace.id);
+    } catch (error) {
+      console.error("Workspace private resume cleanup failed", error);
+      return fail(req, 503, error instanceof Error ? error.message : "Private resume cleanup failed. The workspace was kept; retry deletion.");
+    }
+
+    const { error: deleteError } = await admin.from("workspaces").delete()
+      .eq("id", workspace.id).eq("owner_id", auth.user.id);
+    if (deleteError) return fail(req, 503, "Private resumes were removed, but the workspace could not be deleted. Retry to finish cleanup.");
+    return response(req, 200, { deleted: true, subscription_cancelled: subscriptionCancelled, resumes_removed: resumesRemoved });
+  }
 
   if (action === "listPaymentHistory") {
     if (!existing?.stripe_customer_id) return fail(req, 409, "No subscription payment history was found for this workspace.");

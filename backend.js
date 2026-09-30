@@ -65,6 +65,25 @@
   async function removeTeamMember(memberId) { return callTeam({ action: 'removeMember', memberId }); }
   async function leaveTeam() { return callTeam({ action: 'leaveTeam' }); }
 
+  async function deleteWorkspace() {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(BILLING_FUNCTION, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteWorkspace' })
+      });
+    } catch (_) {
+      throw new Error('Could not reach the workspace service. Check your connection and try again.');
+    }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error || 'The workspace could not be deleted.');
+    if (!payload.deleted) throw new Error('The workspace deletion was not confirmed. Refresh the page before retrying.');
+    return payload;
+  }
+
   async function createWorkspace(name) {
     const session = await requireSession();
     const cleanName = String(name || '').trim().slice(0, 120);
@@ -492,6 +511,7 @@
     revokeTeamInvitation,
     removeTeamMember,
     leaveTeam,
+    deleteWorkspace,
     createCheckoutSession,
     createPaymentMethodUpdateSession,
     getCurrentPaymentMethodSummary,

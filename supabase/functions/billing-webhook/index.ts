@@ -45,8 +45,22 @@ function subscriptionPeriodEnd(subscription: SubscriptionSnapshot): number | nul
   return Number.isFinite(subscription.current_period_end) ? subscription.current_period_end! : null;
 }
 
+async function cancelSubscriptionForDeletedWorkspace(subscriptionId: string) {
+  if (!stripe) throw new Error("Stripe is not configured.");
+  const current = await stripe.subscriptions.retrieve(subscriptionId);
+  if (current.status === "canceled" || current.status === "incomplete_expired") return;
+  await stripe.subscriptions.cancel(subscriptionId, { invoice_now: false, prorate: false });
+}
+
 async function syncSubscription(subscription: SubscriptionSnapshot, workspaceId: string, customerId?: string | null) {
   if (!admin) throw new Error("Subscription database is not configured.");
+  const { data: workspace, error: workspaceError } = await admin.from("workspaces")
+    .select("id").eq("id", workspaceId).maybeSingle();
+  if (workspaceError) throw workspaceError;
+  if (!workspace) {
+    await cancelSubscriptionForDeletedWorkspace(subscription.id);
+    return;
+  }
   const validStatuses = new Set(["active", "trialing", "past_due", "canceled", "unpaid", "incomplete", "incomplete_expired", "paused"]);
   const status = validStatuses.has(subscription.status) ? subscription.status : "incomplete";
   const periodEndTimestamp = subscriptionPeriodEnd(subscription);

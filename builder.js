@@ -97,7 +97,7 @@
   function closeModal() { modalRoot.innerHTML = ''; root.querySelector('.app-shell')?.classList.remove('is-creating-flow'); }
 
   function renderSidebar(active) {
-    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>Applicants</button>${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.team}</span>My Team</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">◈</span>My Plan</button>` : ''}<div class="sidebar-bottom">${esc(workspace?.name || 'Workspace')}<br>Access follows your team permissions.</div></aside>`;
+    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>Applicants</button>${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.team}</span>My Team</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">◈</span>My Plan</button>` : ''}<button class="sidebar-link ${active === 'settings' ? 'active' : ''}" data-route="settings"><span class="sidebar-icon" aria-hidden="true">⚙</span>Settings</button><div class="sidebar-bottom">${esc(workspace?.name || 'Workspace')}<br>Access follows your team permissions.</div></aside>`;
   }
 
   function bindSidebar() {
@@ -105,6 +105,7 @@
     root.querySelector('[data-route="applicants"]')?.addEventListener('click', () => { void renderApplicants(); });
     root.querySelector('[data-route="my-plan"]')?.addEventListener('click', renderMyPlan);
     root.querySelector('[data-route="my-team"]')?.addEventListener('click', () => { void renderMyTeam(); });
+    root.querySelector('[data-route="settings"]')?.addEventListener('click', renderSettings);
   }
 
   function renderPlanControl() {
@@ -461,6 +462,38 @@
       try { await window.PathwayBackend.leaveTeam(); closeModal(); await doSignOut(); }
       catch (error) { closeModal(); showToast(error.message || 'Could not leave the workspace.'); }
     });
+  }
+
+  function renderSettings() {
+    currentId = null; selectedId = null;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email || '')}">${esc(user.email || '—')}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">Your account and workspace</div><h1>Settings</h1><p>View your account details and manage workspace access.</p></div></div><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">Account and workspace</h2><p>These details are read-only.</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>Email address</span><strong>${esc(user.email || '—')}</strong><small>Your sign-in email.</small></div><div class="settings-info-item"><span>Workspace</span><strong>${esc(workspace.name)}</strong><small>The workspace you currently belong to.</small></div></div></section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>Sign out</h2><p>End your current Pathway session on this device.</p></div><button class="btn" id="settings-signout" type="button">Sign out</button></div></section><section class="settings-card settings-danger-card"><div class="settings-card-heading"><div><h2>Workspace access</h2><p>${isOwner ? 'Permanently remove this workspace and its data.' : 'Leave this workspace without deleting your Pathway account.'}</p></div></div>${isOwner ? '<button class="btn btn-danger" id="settings-delete-workspace" type="button">Delete workspace</button>' : teamMember ? '<button class="btn btn-danger" id="settings-leave-workspace" type="button">Leave workspace</button>' : ''}</section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>Delete account</h2><p>Account deletion is not available yet. This option will not take any action.</p></div><button class="btn btn-danger" type="button" disabled aria-disabled="true">Delete account · Coming soon</button></div></section></main></div></div>`;
+    bindSidebar(); bindPlanControl();
+    root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
+    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+    root.querySelector('#settings-signout')?.addEventListener('click', doSignOut);
+    root.querySelector('#settings-leave-workspace')?.addEventListener('click', showLeaveTeamConfirmation);
+    root.querySelector('#settings-delete-workspace')?.addEventListener('click', showDeleteWorkspaceConfirmation);
+  }
+
+  function showDeleteWorkspaceConfirmation() {
+    const name = String(workspace?.name || '');
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Delete workspace</div><h2>Permanently delete ${esc(name)}?</h2><p>This removes the workspace, job flows and public pages, candidate applications and private resumes, pending invitations, and all member access. Other members' Pathway accounts will remain active.</p><p>Any Stripe subscription will be canceled immediately. This stops future renewals; unused paid time is not automatically refunded. Your own Pathway account will remain, and you can create another workspace.</p><p><strong>This action is irreversible.</strong></p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="field-group settings-delete-confirmation"><label for="delete-workspace-name">Type <strong>${esc(name)}</strong> to enable deletion.</label><input class="text-input" id="delete-workspace-name" autocomplete="off" autocapitalize="off" spellcheck="false"></div><p class="settings-delete-error" id="delete-workspace-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" data-close>Keep workspace</button><button class="btn btn-danger" id="confirm-delete-workspace" type="button" disabled>Delete workspace permanently</button></div>`);
+    const input = modalRoot.querySelector('#delete-workspace-name');
+    const button = modalRoot.querySelector('#confirm-delete-workspace');
+    const errorBox = modalRoot.querySelector('#delete-workspace-error');
+    input.addEventListener('input', () => { button.disabled = input.value.trim() !== name; });
+    button.addEventListener('click', async () => {
+      if (input.value.trim() !== name || button.disabled) return;
+      input.disabled = true; button.disabled = true; button.textContent = 'Deleting workspace…'; errorBox.hidden = true;
+      try {
+        await window.PathwayBackend.deleteWorkspace();
+        closeModal(); window.location.hash = ''; window.location.reload();
+      } catch (error) {
+        errorBox.textContent = error.message || 'Workspace deletion could not be completed. Refresh the page or retry.';
+        errorBox.hidden = false; input.disabled = false; button.disabled = input.value.trim() !== name; button.textContent = 'Delete workspace permanently';
+      }
+    });
+    input.focus();
   }
 
   function formatInvoiceAmount(invoice) {
@@ -1208,6 +1241,7 @@
     if (requestedPage === 'applicants') void renderApplicants();
     else if (requestedPage === 'my-plan') renderMyPlan();
     else if (requestedPage === 'my-team') void renderMyTeam();
+    else if (requestedPage === 'settings') renderSettings();
     else if (requestedPage === 'dashboard' && !hasPermission('flows')) renderAccessMessage('flows');
     else renderDashboard();
     if (checkoutComplete) void refreshSubscriptionAfterCheckout();
