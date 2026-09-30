@@ -29,6 +29,22 @@ test('editor canvas element does not shadow workspace data used by its header', 
   assert.doesNotMatch(editor, /const workspace\s*=/);
 });
 
+test('flow creation and editing hide the sidebar, restoring it when creation is cancelled', () => {
+  const editorStart = builder.indexOf('function renderEditor()');
+  const editorEnd = builder.indexOf('function bindCanvasPan(', editorStart);
+  const editor = builder.slice(editorStart, editorEnd);
+  const createStart = builder.indexOf('function showNewFlow()');
+  const createEnd = builder.indexOf('function showFlowMenu(', createStart);
+  const createFlow = builder.slice(createStart, createEnd);
+
+  assert.doesNotMatch(editor, /renderSidebar\('dashboard'\)|bindSidebar\(\)/);
+  assert.match(editor, /<div class="workspace-body"><main class="editor-main">/);
+  assert.match(createFlow, /classList\.add\('is-creating-flow'\)/);
+  assert.match(createFlow, /openFlow\(flow\.id\)/);
+  assert.match(builder, /function closeModal\(\) \{[^}]*classList\.remove\('is-creating-flow'\)/);
+  assert.match(styles, /\.app-shell\.is-creating-flow \.app-sidebar\{display:none\}/);
+});
+
 test('job details are shown only when the fixed candidate-details node is selected', () => {
   const start = builder.indexOf('function drawInspector()');
   const end = builder.indexOf('function updateNodeLabel(', start);
