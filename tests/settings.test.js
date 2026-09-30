@@ -16,12 +16,13 @@ test('Settings is in workspace navigation and shows email/workspace read-only wi
   assert.match(builder, /else if \(requestedPage === 'settings'\) renderSettings\(\)/);
 });
 
-test('Settings exposes leave only to members, delete only to owners, and account deletion is a no-op placeholder', () => {
+test('Settings exposes leave only to members, workspace deletion only to owners, and password-confirmed account deletion', () => {
   const builder = read('builder.js');
   assert.match(builder, /isOwner \? '<button class="btn btn-danger" id="settings-delete-workspace"/);
   assert.match(builder, /: teamMember \? '<button class="btn btn-danger" id="settings-leave-workspace"/);
-  assert.match(builder, /Delete account · Coming soon/);
-  assert.match(builder, /aria-disabled="true"/);
+  assert.match(builder, /id="settings-delete-account"/);
+  assert.match(builder, /showAccountDeletionConfirmation/);
+  assert.doesNotMatch(builder, /Delete account · Coming soon/);
   assert.match(builder, /showLeaveTeamConfirmation/);
   assert.match(builder, /immediately lose access to this workspace and its data/);
 });
@@ -79,7 +80,8 @@ test('late signed Stripe events cannot recreate a deleted workspace subscription
 
 test('Settings uses a fresh cache version for frontend assets', () => {
   const html = read('index.html');
-  assert.match(html, /styles\.css\?v=settings-delete-20260930/);
-  assert.match(html, /backend\.js\?v=settings-delete-20260930/);
-  assert.match(html, /builder\.js\?v=settings-delete-20260930/);
+  assert.match(html, /styles\.css\?v=account-delete-20260930/);
+  assert.match(html, /backend\.js\?v=account-delete-20260930/);
+  assert.match(html, /auth\.js\?v=account-delete-20260930/);
+  assert.match(html, /builder\.js\?v=account-delete-20260930/);
 });

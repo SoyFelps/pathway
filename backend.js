@@ -9,6 +9,7 @@
   const APPLICATIONS_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/applications`;
   const BILLING_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/billing`;
   const TEAM_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/team`;
+  const DELETE_ACCOUNT_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/delete-account`;
   const APPLICANT_STATUSES = new Set(['new', 'failed', 'promising', 'approved']);
 
   async function callApplications(body, accessToken = '') {
@@ -81,6 +82,27 @@
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
     if (!result.ok) throw new Error(payload.error || 'The workspace could not be deleted.');
     if (!payload.deleted) throw new Error('The workspace deletion was not confirmed. Refresh the page before retrying.');
+    return payload;
+  }
+
+  async function deleteAccount(password) {
+    if (typeof password !== 'string' || !password.length) throw new Error('Enter your password to confirm account deletion.');
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(DELETE_ACCOUNT_FUNCTION, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        body: JSON.stringify({ password })
+      });
+    } catch (_) {
+      throw new Error('Could not reach the account service. Check your connection and try again.');
+    }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error || 'Your account could not be deleted.');
+    if (!payload.deleted) throw new Error('The account deletion was not confirmed. Refresh the page before retrying.');
+    try { await client.auth.signOut({ scope: 'local' }); } catch (_) { /* the Auth user and refresh sessions were already deleted server-side */ }
     return payload;
   }
 
@@ -512,6 +534,7 @@
     removeTeamMember,
     leaveTeam,
     deleteWorkspace,
+    deleteAccount,
     createCheckoutSession,
     createPaymentMethodUpdateSession,
     getCurrentPaymentMethodSummary,

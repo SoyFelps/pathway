@@ -1,6 +1,7 @@
 /* Pathway account screens and Supabase Auth bootstrap. */
 (function () {
   const root = document.getElementById('app');
+  const modalRoot = document.getElementById('modal-root');
   let onAuthenticated = null;
   let busy = false;
   let state = { mode: 'signup', workspaceName: '', email: '', password: '' };
@@ -67,6 +68,13 @@
     root.querySelector('#setup-signout').addEventListener('click', async () => {
       await window.PathwayBackend.signOut(); state = { mode: 'signup', workspaceName: '', email: '', password: '' }; inviteToken = ''; invitePreview = null; renderAuth();
     });
+    const deleteAccountButton = document.createElement('button');
+    deleteAccountButton.className = 'btn btn-quiet auth-submit';
+    deleteAccountButton.id = 'setup-delete-account';
+    deleteAccountButton.type = 'button';
+    deleteAccountButton.textContent = 'Delete account…';
+    root.querySelector('#setup-signout')?.insertAdjacentElement('afterend', deleteAccountButton);
+    deleteAccountButton.addEventListener('click', () => showAccountDeletionConfirmation({ isOwner: false, workspaceName: '', email: state.email }));
   }
   function renderInviteConflict(message) {
     root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Workspace invitation</div><h1>One workspace per account.</h1><p>To join this team, this account must first leave its current workspace. The existing workspace owner cannot leave their own workspace.</p></div><div class="muted" style="font-size:11px">Pathway · Early access</div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Invitation not accepted</div><h2>Check your account</h2><div class="auth-error show" role="alert">${window.PathwayCore.esc(message)}</div><p class="auth-card-intro">Sign out, then sign in with the email address invited to this workspace.</p><button class="btn btn-primary auth-submit" id="invite-conflict-signout">Sign out</button></div></section></main>`;
@@ -196,5 +204,55 @@
       else renderAuth(friendlyError(error));
     }
   }
-  window.PathwayAuth = { start, renderAuth, renderWorkspaceSetup, showLoading };
+  function showAccountDeletionConfirmation(options = {}) {
+    if (!modalRoot) return;
+    const isOwner = Boolean(options.isOwner);
+    const workspaceName = String(options.workspaceName || '');
+    const email = String(options.email || state.email || '');
+    const workspaceLabel = workspaceName ? ` ${window.PathwayCore.esc(workspaceName)}` : '';
+    const title = isOwner ? `Delete your account and${workspaceLabel}?` : 'Permanently delete your account?';
+    const explanation = isOwner
+      ? `This permanently deletes your Pathway account and workspace${workspaceLabel}, including job flows, public job pages, candidate applications, private resumes, invitations, and all member access. Any subscription attached to the workspace will be canceled immediately; unused paid time is not automatically refunded. This action is irreversible.`
+      : workspaceName
+        ? `This permanently deletes your Pathway account and removes your access and membership from${workspaceLabel}. The workspace, job flows, candidate applications, private resumes, and subscription remain for the owner and team. Any pending invitations you sent will be revoked. This action is irreversible.`
+        : 'This permanently deletes your Pathway account. There is no workspace attached to this account right now. Any pending invitations you sent will be revoked. This action is irreversible.';
+    modalRoot.innerHTML = `<div class="modal-backdrop account-delete-backdrop" role="presentation"><section class="modal account-delete-modal" role="dialog" aria-modal="true" aria-labelledby="account-delete-title"><div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Delete account</div><h2 id="account-delete-title">${title}</h2><p>${explanation}</p>${email ? `<p class="account-delete-email">Account: <strong>${window.PathwayCore.esc(email)}</strong></p>` : ''}</div><button class="modal-x" data-account-delete-close type="button" aria-label="Close">×</button></div><div class="account-delete-warning"><strong>Confirm with your current password.</strong> Pathway verifies it with Supabase Auth and does not store it.</div><form id="account-delete-form"><div class="field-group"><label for="account-delete-password">Current password</label><input class="text-input" id="account-delete-password" name="password" type="password" autocomplete="current-password" maxlength="1024" required></div><p class="account-delete-error" id="account-delete-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" data-account-delete-close type="button">Keep my account</button><button class="btn btn-danger" id="confirm-delete-account" type="submit" disabled>Delete account permanently</button></div></form></section></div>`;
+    let submitting = false;
+    let escapeHandler = null;
+    const previousFocus = document.activeElement;
+    const cleanupEscapeHandler = () => { if (escapeHandler) document.removeEventListener('keydown', escapeHandler); escapeHandler = null; };
+    const close = () => {
+      if (submitting) return;
+      cleanupEscapeHandler(); modalRoot.innerHTML = '';
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+    escapeHandler = event => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', escapeHandler);
+    const backdrop = modalRoot.querySelector('.account-delete-backdrop');
+    backdrop.addEventListener('click', event => { if (event.target === backdrop) close(); });
+    modalRoot.querySelectorAll('[data-account-delete-close]').forEach(button => button.addEventListener('click', close));
+    const form = modalRoot.querySelector('#account-delete-form');
+    const passwordInput = modalRoot.querySelector('#account-delete-password');
+    const confirmButton = modalRoot.querySelector('#confirm-delete-account');
+    const errorBox = modalRoot.querySelector('#account-delete-error');
+    passwordInput.addEventListener('input', () => { confirmButton.disabled = passwordInput.value.length === 0 || submitting; errorBox.hidden = true; errorBox.textContent = ''; });
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (submitting || !passwordInput.value) return;
+      submitting = true; passwordInput.disabled = true; confirmButton.disabled = true; confirmButton.textContent = 'Deleting account…'; errorBox.hidden = true;
+      try {
+        const result = await window.PathwayBackend.deleteAccount(passwordInput.value);
+        if (!result.deleted) throw new Error('The account deletion was not confirmed.');
+        cleanupEscapeHandler(); modalRoot.innerHTML = '';
+        state = { mode: 'signup', workspaceName: '', email: '', password: '' }; inviteToken = ''; invitePreview = null;
+        renderAuth('', 'Your Pathway account has been permanently deleted.');
+      } catch (error) {
+        submitting = false; passwordInput.disabled = false; confirmButton.disabled = passwordInput.value.length === 0; confirmButton.textContent = 'Delete account permanently';
+        errorBox.textContent = String(error && error.message || 'Your account could not be deleted.'); errorBox.hidden = false;
+        passwordInput.focus();
+      }
+    });
+    passwordInput.focus();
+  }
+  window.PathwayAuth = { start, renderAuth, renderWorkspaceSetup, showLoading, showAccountDeletionConfirmation };
 })();
