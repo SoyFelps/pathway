@@ -1,48 +1,48 @@
 # Pathway
 
-**A calmer, clearer way to hire.** Pathway is an early-access web app for creating thoughtful job pages and application flows. The current foundation adds authenticated company workspaces and cloud-saved flows on Supabase.
+**A calmer, clearer way to hire.** Pathway is an early-access hiring app for employers and recruiting teams. Build branching application journeys, publish job links, and review applicants in a private workspace.
 
-## Run the app
+## Run locally
 
-This repository is a static HTML/CSS/JavaScript app with no build step. Publish the root of `main` with GitHub Pages. `supabase-config.js` contains the project URL and browser-safe publishable key; the Supabase `service_role` key must never be placed in client code.
+Pathway is a static HTML/CSS/JavaScript app with no build step or `package.json`. Serve the repository root with any static server, for example:
 
-For local development, serve the repository root with any static file server (for example `python3 -m http.server 8000`). Authentication and data access still use the configured Supabase project.
+```sh
+python3 -m http.server 8000
+```
 
-Run the local checks with `node --test tests/*.test.js`.
+Run automated checks with:
 
-## What is implemented
+```sh
+node --test tests/*.test.js
+```
 
-- Email/password sign-up and sign-in through Supabase Auth. A new account receives exactly one private workspace, created by a database trigger.
-- Job-flow drafts are saved to Supabase under the authenticated owner’s workspace. Autosaves are debounced; the browser no longer acts as the primary data store.
-- Workspace-scoped Row Level Security protects reading, creating, updating, and deleting drafts. Owners cannot create a flow under another workspace.
-- Publish creates an immutable snapshot. The share link contains an unguessable snapshot ID; `apply.html` fetches the snapshot through a narrowly scoped public Postgres function, not from the private drafts table.
-- Flows have a persisted Draft/Published status. The editor provides a **Copy job link** action while published. Unpublishing clears the active snapshot pointer, immediately invalidating its public link; republishing creates a new snapshot and link.
-- The visual builder supports a pannable canvas (drag empty background to move around), draggable question nodes, connection ports, branching answers, preview, and distinct completion paths.
-- Public job applications collect the configured contact details, a required PDF/DOC/DOCX resume (10 MB maximum), and the exact answers reached in the published journey. Candidate details are validated against the active snapshot server-side before any applicant row is inserted.
-- Candidate files live in a private `applicant-resumes` Storage bucket. Short-lived links are generated only after the authenticated workspace owner requests access. PDFs can be previewed inside the application; a separate download action remains available for every resume type. DOC/DOCX files are download-only. No third-party document viewer receives candidate files.
-- The Applicants section has a job filter, search, four-stage Kanban (New, Failed, Promising, Approved), card drag-and-drop, and a full-height application review view. Candidate details and answers occupy the left pane; PDFs open automatically in the full-height right pane, with a **Hide preview** control. A separate download action remains available, and Word files are download-only. Disqualified flow endings start in Failed; other completed applications start in New.
-- Applicants and resume reads are scoped to the authenticated workspace by RLS. Only the status column can be changed through the authenticated client. Public visitors cannot query the private applicant table or bucket.
-- Deleting a job pauses its public intake, removes its private resume files, and then cascades the flow, snapshots, and applicant records. The deletion flow explicitly warns that the operation is permanent.
-- A privacy notice and required acknowledgment appear before candidates proceed. Applications are used for role selection, visible only to the hiring workspace, retained while the job exists, and no email receipt/notification is sent in this first release.
+The app connects to the configured Supabase project. Supabase Auth Site URL and redirect URLs must include the deployed GitHub Pages app URL.
 
-## Database migration
+## Current features
 
-The migrations are under `supabase/migrations/`. They create `workspaces`, `application_flows`, `published_flows`, and `applicants`; add owner RLS, private resume Storage policies, flow lifecycle fields, bounded intake rate limiting, and a database trigger that accepts applications only for the currently active published snapshot. Applicant data is inserted by the `applications` Supabase Edge Function; the client does not receive an insert grant.
+- Email/password sign-up and sign-in, with one workspace per account. Supabase Auth, PostgreSQL and Row Level Security (RLS) protect workspace data.
+- Visual flow builder with branching steps, candidate preview and cloud saving. Free workspaces can create and edit flows; publishing requires active Premium.
+- Published jobs use immutable snapshots and public application links. Unpublishing or loss of paid access invalidates the active link.
+- Candidate applications include routed answers, contact information, privacy acknowledgment and a PDF/DOC/DOCX resume (up to 10 MB). Applicants can be reviewed in a searchable, flow-filtered Kanban with New, Failed, Promising and Approved stages.
+- Resumes are stored in a private Supabase Storage bucket. PDFs can be previewed in the app; downloads remain available. Access is scoped to the workspace.
+- **My Team:** Premium workspaces can add up to three members at no additional seat charge. Owners assign Flows, Candidates and Team permissions. Invitations are copyable links, expire after seven days, and are bound to the invited email. Members can leave without deleting their account.
+- **My Plan:** workspace owners can view plan status, start checkout, schedule cancellation or resume renewal, update payment methods through Stripe, and view payment history. Team members cannot access billing.
+- Dashboard reports flow totals, new applicants and published flows.
 
-Deploy or update the public Edge Function using the Supabase dashboard or `supabase functions deploy applications --no-verify-jwt`. It is intentionally deployed with platform JWT verification disabled because applicants are not logged in; the function implements custom publishable-key/origin checks, server-side form and branch validation, and separately verifies the authenticated owner before flow deletion. It uses the Edge Function's server-only Supabase service key and must never be copied into `supabase-config.js`.
+## Architecture and security
 
-## Important configuration
+The hiring UI is on `index.html`; the public application is served by `apply.html`. Frontend code is organized in `builder.js`, `backend.js`, `auth.js`, `candidate.js` and `pathway.js`. Supabase migrations live in `supabase/migrations/`; Edge Functions are `applications`, `team`, `billing` and `billing-webhook`.
 
-Before using a deployed site, configure Supabase Auth’s **Site URL** and allowed **Redirect URLs** for the exact GitHub Pages origin and repository path. The app sends confirmation links to its current page. Configure email delivery and confirmation policies in Supabase Auth as appropriate for the launch.
+RLS and server-side checks enforce workspace isolation and permissions; hidden UI controls are not security boundaries. Candidate rows cannot be inserted directly by the browser. The `applications` function validates public submissions against the active published flow. Resume storage is private. Invitation links require verified email matching and are single-use. Supabase publishable and Stripe publishable keys may be used in the browser; Supabase service-role keys and Stripe secret/webhook keys must remain server-side and must never be committed.
 
-The currently selected project is **PathwayAPP**. The publishable key committed in `supabase-config.js` is intentionally public. Security relies on Auth, RLS, and the restricted publish RPC—not secrecy of that key. Never use a service-role/secret key in the browser.
+The configured subscription is **US$24.90/month**. Confirm Stripe test/live mode and server secrets before changing or accepting real payments. See [Stripe integration notes](STRIPE_INTEGRATION_TODO.md).
 
-## Deliberate limits in this first backend phase
+## Deployment
 
-Each user owns one workspace; team invites and multiple-workspace membership are not implemented. Applications do not send confirmation emails, notify recruiters by email, scan uploaded files for malware, or support bulk export/deletion. The intake endpoint limits resumes to PDF/DOC/DOCX under 10 MB and rate-limits public attempts. The privacy notice is product copy, not a substitute for your legal privacy policy; add a reviewed policy URL before broad production hiring use. Use test candidate data while the product is in early access.
+The static site is hosted on GitHub Pages from the repository root. Supabase project-specific configuration is in `supabase/config.toml`; database changes are timestamped migrations. Do not assume a migration or function in Git has reached production: check the project's deployed migration/function state before making operational claims or applying changes. Add database changes as forward migrations; do not rewrite migrations already applied to production.
 
-## Subscription-based publishing
+For more detail, see [AI collaborator context](docs/ai-context/README.md), especially its [security and data model](docs/ai-context/SECURITY.md) and [development and operations](docs/ai-context/DEVELOPMENT.md) guides.
 
-Draft creation, editing, and candidate preview remain free. Publishing requires an active recurring Stripe subscription. The builder reads the workspace subscription status for its header and replaces free-plan Publish actions with **Upgrade to publish** and an embedded Stripe Checkout Form. The browser receives only a publishable key; Checkout Sessions are created server-side by `supabase/functions/billing` for the authenticated workspace.
+## Current limitations
 
-`supabase/functions/billing-webhook` verifies Stripe signatures and syncs subscription lifecycle events into `workspace_subscriptions`. When access ends, published flows are returned to Draft and their active links are invalidated. Database triggers, the public flow lookup, and candidate intake independently verify the active paid entitlement so client-side UI changes cannot bypass the gate. Deployment values and exact Stripe Dashboard/webhook setup are in [STRIPE_INTEGRATION_TODO.md](STRIPE_INTEGRATION_TODO.md). The separate Payment management page remains deferred.
+Pathway does not currently send recruiter notifications or candidate receipt emails, scan uploaded resumes for malware, or provide bulk applicant export. The in-app privacy notice is not a substitute for a reviewed legal privacy policy.
