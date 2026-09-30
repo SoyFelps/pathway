@@ -154,7 +154,7 @@ test('payment history is authenticated, paginated, and restricted to verified Pa
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=account-delete-20260930/);
+  assert.match(html, /backend\.js\?v=account-delete-cors-20260930/);
   assert.match(html, /builder\.js\?v=account-delete-20260930/);
   assert.match(html, /styles\.css\?v=account-delete-20260930/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);

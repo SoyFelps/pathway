@@ -36,6 +36,17 @@ test('browser sends the password only to the authenticated delete-account functi
   assert.match(backend, /deleteAccount,/);
 });
 
+test('account deletion request uses only headers allowed by the Edge Function CORS preflight', () => {
+  const backend = read('backend.js');
+  const edge = read('supabase/functions/delete-account/index.ts');
+  const start = backend.indexOf('async function deleteAccount(password)');
+  const end = backend.indexOf('async function createWorkspace', start);
+  const request = backend.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.doesNotMatch(request, /['"]Cache-Control['"]\s*:/);
+  assert.match(edge, /Access-Control-Allow-Headers", "authorization, apikey, x-client-info, content-type/);
+});
+
 test('server requires a valid bearer user and matching password before any destructive operation', () => {
   const edge = read('supabase/functions/delete-account/index.ts');
   const userAuth = edge.indexOf('admin.auth.getUser(bearer)');
@@ -88,7 +99,7 @@ test('delete-account Edge Function is explicitly JWT-protected and frontend asse
   const html = read('index.html');
   assert.match(config, /\[functions\.delete-account\]\s*\nverify_jwt = true/);
   assert.match(html, /styles\.css\?v=account-delete-20260930/);
-  assert.match(html, /backend\.js\?v=account-delete-20260930/);
+  assert.match(html, /backend\.js\?v=account-delete-cors-20260930/);
   assert.match(html, /auth\.js\?v=account-delete-20260930/);
   assert.match(html, /builder\.js\?v=account-delete-20260930/);
 });

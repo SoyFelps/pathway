@@ -92,7 +92,7 @@
     try {
       result = await fetch(DELETE_ACCOUNT_FUNCTION, {
         method: 'POST',
-        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })
       });
     } catch (_) {

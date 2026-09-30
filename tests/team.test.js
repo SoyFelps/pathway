@@ -154,7 +154,7 @@ test('My Team stylesheet and static page load are versioned for immediate deploy
   const html = read('index.html');
   const css = read('styles.css');
   assert.match(html, /auth\.js\?v=account-delete-20260930/);
-  assert.match(html, /backend\.js\?v=account-delete-20260930/);
+  assert.match(html, /backend\.js\?v=account-delete-cors-20260930/);
   assert.match(html, /builder\.js\?v=account-delete-20260930/);
   assert.match(html, /styles\.css\?v=account-delete-20260930/);
   assert.match(css, /\/\* My Team \*\//);
