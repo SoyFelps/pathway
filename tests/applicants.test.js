@@ -111,14 +111,14 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /candidate\.js\?v=completion-share-20261001/);
-  assert.match(read('index.html'), /candidate\.js\?v=completion-share-20261001/);
+  assert.match(read('apply.html'), /candidate\.js\?v=completion-return-20261001/);
+  assert.match(read('index.html'), /candidate\.js\?v=completion-return-20261001/);
   assert.match(read('apply.html'), /styles\.css\?v=completion-share-20261001/);
   assert.match(read('index.html'), /styles\.css\?v=completion-share-20261001/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
-test('all live outcomes share a neutral submission screen with a job return link and clipboard share', () => {
+test('all live outcomes share a neutral submission screen with a working job-details return and clipboard share', () => {
   const candidate = read('candidate.js');
   const start = candidate.indexOf('function renderComplete()');
   const end = candidate.indexOf('\n    function complete(', start);
@@ -128,7 +128,15 @@ test('all live outcomes share a neutral submission screen with a job return link
   assert.doesNotMatch(completion, /disqualif|accepted|subtype/i);
   assert.match(completion, /Your application has been received by/);
   assert.match(completion, /const vacancyUrl = window\.location\.href/);
-  assert.match(completion, /href="\$\{C\.esc\(vacancyUrl\)\}"/);
+  assert.match(completion, /<button class="btn btn-primary" id="finish-link" type="button">Done<\/button>/);
+  assert.doesNotMatch(completion, /href="\$\{C\.esc\(vacancyUrl\)\}"/);
+  assert.match(completion, /else returnToStart\(\)/);
+  const resetStart = candidate.slice(candidate.indexOf('function returnToStart()'), candidate.indexOf('\n    async function copyJobLink'));
+  assert.match(resetStart, /state\.screen = 'landing'/);
+  assert.match(resetStart, /state\.current = start/);
+  assert.match(resetStart, /state\.answers = \{\}/);
+  assert.match(resetStart, /state\.submissionKey = crypto\.randomUUID\(\)/);
+  assert.match(resetStart, /render\(\)/);
   assert.match(completion, /id="share-job"[\s\S]*?Share this job/);
   assert.doesNotMatch(completion, /Your application and resume are stored in this job/);
   assert.match(candidate, /navigator\.clipboard[\s\S]*?writeText\(url\)/);

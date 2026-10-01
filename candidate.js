@@ -168,6 +168,19 @@
       root.querySelector('#retry-submit').addEventListener('click', () => submitApplication(state.current && state.current.subtype || 'submitted'));
     }
 
+    function returnToStart() {
+      state.screen = 'landing';
+      state.current = start;
+      state.history = [];
+      state.answers = {};
+      state.info = {};
+      state.resumeFile = null;
+      state.questionCount = 0;
+      state.submitting = false;
+      state.submissionKey = crypto.randomUUID();
+      render();
+    }
+
     async function copyJobLink(url) {
       const clipboard = window.navigator && window.navigator.clipboard;
       if (clipboard && typeof clipboard.writeText === 'function') {
@@ -204,9 +217,12 @@
       const previewNote = isPreview
         ? '<div class="prototype-note">Preview only · Your details and answers were not stored or sent to the company.</div>'
         : '';
-      root.innerHTML = `<main class="completion-screen"><section class="completion-content"><div class="completion-mark" aria-hidden="true">✓</div><div class="eyebrow" style="margin-bottom:13px">${C.esc(isPreview ? 'Preview complete' : 'Thank you')}</div><h1>${title}</h1><p>${intro}</p>${isPreview ? `<a class="btn btn-primary" href="#" id="finish-link">Return to preview</a>` : `<div class="completion-actions"><a class="btn btn-primary" href="${C.esc(vacancyUrl)}" id="finish-link">Done</a><button class="btn" id="share-job" type="button">Share this job</button></div>`}${previewNote}</section></main>`;
-      const finishLink = root.querySelector('#finish-link');
-      finishLink.addEventListener('click', event => { if (isPreview) { event.preventDefault(); options.onFinish && options.onFinish(); } });
+      root.innerHTML = `<main class="completion-screen"><section class="completion-content"><div class="completion-mark" aria-hidden="true">✓</div><div class="eyebrow" style="margin-bottom:13px">${C.esc(isPreview ? 'Preview complete' : 'Thank you')}</div><h1>${title}</h1><p>${intro}</p>${isPreview ? `<a class="btn btn-primary" href="#" id="finish-link">Return to preview</a>` : `<div class="completion-actions"><button class="btn btn-primary" id="finish-link" type="button">Done</button><button class="btn" id="share-job" type="button">Share this job</button></div>`}${previewNote}</section></main>`;
+      const finishButton = root.querySelector('#finish-link');
+      finishButton.addEventListener('click', event => {
+        if (isPreview) { event.preventDefault(); options.onFinish && options.onFinish(); }
+        else returnToStart();
+      });
       const shareButton = root.querySelector('#share-job');
       if (shareButton) {
         let feedbackTimer;
@@ -235,7 +251,7 @@
     render();
     return {
       destroy() { root.innerHTML = ''; },
-      restart() { state.screen = 'landing'; state.current = start; state.history = []; state.answers = {}; state.info = {}; state.resumeFile = null; state.questionCount = 0; state.submitting = false; render(); }
+      restart() { returnToStart(); }
     };
   }
 
