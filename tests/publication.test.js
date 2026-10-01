@@ -7,7 +7,10 @@ function createBackendHarness({ paid = true } = {}) {
   const calls = [];
   let snapshotSequence = 0;
   const client = {
-    auth: { getSession: async () => ({ data: { session: { user: { id: 'user-1' } } }, error: null }) },
+    auth: {
+      getSession: async () => ({ data: { session: { user: { id: 'user-1' } } }, error: null }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } })
+    },
     from(table) {
       const query = {
         payload: null,

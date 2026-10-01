@@ -5,6 +5,8 @@
   const client = window.supabase.createClient(config.url, config.publishableKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
+  let passwordRecoveryPending = false;
+  client.auth.onAuthStateChange(event => { if (event === 'PASSWORD_RECOVERY') passwordRecoveryPending = true; });
   const saveQueues = new Map();
   const APPLICATIONS_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/applications`;
   const BILLING_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/billing`;
@@ -517,6 +519,39 @@
     if (error) throw error;
   }
 
+  async function sendPasswordReset(email) {
+    const cleanEmail = String(email || '').trim();
+    if (!cleanEmail) throw new Error('Enter your work email address.');
+    const { error } = await client.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: window.location.origin + window.location.pathname
+    });
+    if (error) throw error;
+  }
+
+  async function updatePassword(password) {
+    if (typeof password !== 'string' || password.length < 8) throw new Error('Choose a password with at least 8 characters.');
+    const { data, error } = await client.auth.updateUser({ password });
+    if (error) throw error;
+    return data;
+  }
+
+  async function signOutLocal() {
+    const { error } = await client.auth.signOut({ scope: 'local' });
+    if (error) throw error;
+  }
+
+  function consumePasswordRecovery() {
+    const currentUrl = new URL(window.location.href);
+    const hashType = new URLSearchParams(currentUrl.hash.replace(/^#/, '')).get('type');
+    const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ''));
+    const expiredLink = currentUrl.searchParams.get('error_code') === 'otp_expired' || hashParams.get('error_code') === 'otp_expired';
+    const eventPending = passwordRecoveryPending;
+    const detected = passwordRecoveryPending || currentUrl.searchParams.get('type') === 'recovery' || hashType === 'recovery';
+    passwordRecoveryPending = false;
+    if (expiredLink && !eventPending) return 'expired';
+    return detected ? 'recovery' : '';
+  }
+
   window.PathwayBackend = {
     client,
     bootstrap,
@@ -557,6 +592,10 @@
     submitApplication,
     updateWorkspaceName,
     signOut,
+    sendPasswordReset,
+    updatePassword,
+    signOutLocal,
+    consumePasswordRecovery,
     signIn: (email, password) => client.auth.signInWithPassword({ email, password }),
     signUp: (email, password, workspaceName, inviteToken = '') => client.auth.signUp({
       email,

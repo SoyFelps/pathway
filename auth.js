@@ -51,6 +51,17 @@
       });
     }
     root.querySelector('#auth-form').addEventListener('submit', submitAuth);
+    if (!isInvite && state.mode === 'signin') {
+      const forgotPassword = document.createElement('button');
+      forgotPassword.className = 'auth-forgot-link';
+      forgotPassword.type = 'button';
+      forgotPassword.textContent = 'Forgot your password?';
+      root.querySelector('#auth-password')?.closest('.field-group')?.insertAdjacentElement('afterend', forgotPassword);
+      forgotPassword.addEventListener('click', () => {
+        captureForm(); state.password = '';
+        renderPasswordResetRequest();
+      });
+    }
   }
   function renderWorkspaceSetup(errorMessage = '') {
     root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Your next chapter</div><h1>Create your own workspace.</h1><p>Your Pathway account remains yours. Choose a workspace name to get started as its owner.</p></div><div class="muted" style="font-size:11px">Pathway · Early access</div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Workspace setup</div><h2>Start a private workspace</h2><p class="auth-card-intro">You are signed in as ${window.PathwayCore.esc(state.email)}. Creating a workspace does not delete your existing account.</p><div class="auth-error ${errorMessage ? 'show' : ''}" role="alert">${errorMessage ? window.PathwayCore.esc(errorMessage) : ''}</div><form id="workspace-form"><div class="field-group"><label for="setup-workspace">Company / workspace name</label><input id="setup-workspace" class="text-input" name="workspaceName" autocomplete="organization" maxlength="120" required placeholder="e.g. Northstar Studio" value="${window.PathwayCore.esc(state.workspaceName)}"></div><button class="btn btn-primary auth-submit" type="submit" ${busy ? 'disabled' : ''}>${busy ? 'Please wait…' : 'Create workspace →'}</button></form><button class="btn btn-quiet auth-submit" id="setup-signout" type="button">Sign out</button><p class="auth-legal">You can join an existing team from an invitation link, or create your own workspace.</p></div></section></main>`;
@@ -162,6 +173,55 @@
       else renderAuth(message);
     }
   }
+  function clearPasswordRecoveryUrl() {
+    try {
+      const url = new URL(window.location.href);
+      ['type', 'code', 'access_token', 'refresh_token', 'expires_in', 'expires_at', 'token_type', 'token_hash', 'password_recovery', 'error', 'error_description'].forEach(key => url.searchParams.delete(key));
+      url.hash = '';
+      window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+    } catch (_) { window.history.replaceState({}, '', window.location.pathname); }
+  }
+  function renderPasswordResetRequest(errorMessage = '', successMessage = '') {
+    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Account recovery</div><h1>Get back on your path.</h1><p>Reset your password securely using the email address connected to your Pathway account.</p></div><div class="muted" style="font-size:11px">Pathway · Early access</div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Password recovery</div><h2>Forgot your password?</h2><p class="auth-card-intro">Enter your work email and we’ll send a link to choose a new password.</p>${successMessage ? `<div class="auth-success" role="status">${window.PathwayCore.esc(successMessage)}</div>` : ''}<div class="auth-error ${errorMessage ? 'show' : ''}" role="alert">${errorMessage ? window.PathwayCore.esc(errorMessage) : ''}</div><form id="password-reset-request-form"><div class="field-group"><label for="password-reset-email">Work email</label><input id="password-reset-email" class="text-input" name="email" type="email" autocomplete="email" value="${window.PathwayCore.esc(state.email)}" required></div><button class="btn btn-primary auth-submit" type="submit" ${busy ? 'disabled' : ''}>${busy ? 'Sending link…' : 'Send reset link →'}</button></form><button class="btn btn-quiet auth-submit" id="password-reset-back" type="button">Back to sign in</button><p class="auth-legal">For your privacy, this page gives the same confirmation whether or not an account uses that email.</p></div></section></main>`;
+    root.querySelector('#password-reset-request-form')?.addEventListener('submit', submitPasswordResetRequest);
+    root.querySelector('#password-reset-back')?.addEventListener('click', () => {
+      state.email = String(root.querySelector('#password-reset-email')?.value || state.email).trim();
+      state.mode = 'signin'; state.password = ''; renderAuth();
+    });
+  }
+  async function submitPasswordResetRequest(event) {
+    event.preventDefault(); if (busy) return;
+    state.email = String(new FormData(event.currentTarget).get('email') || '').trim();
+    state.password = ''; busy = true; renderPasswordResetRequest();
+    try {
+      await window.PathwayBackend.sendPasswordReset(state.email);
+      busy = false;
+      renderPasswordResetRequest('', 'If an account exists for this email, a password reset link is on its way. Check your inbox and spam folder.');
+    } catch (error) { busy = false; renderPasswordResetRequest(friendlyError(error)); }
+  }
+  function renderPasswordUpdate(errorMessage = '') {
+    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Account recovery</div><h1>A fresh start.</h1><p>Choose a strong new password to secure your Pathway account.</p></div><div class="muted" style="font-size:11px">Pathway · Early access</div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Password recovery</div><h2>Choose a new password</h2><p class="auth-card-intro">${state.email ? `Set a new password for ${window.PathwayCore.esc(state.email)}.` : 'Set a new password for your Pathway account.'} Use at least 8 characters.</p><div class="auth-error ${errorMessage ? 'show' : ''}" role="alert">${errorMessage ? window.PathwayCore.esc(errorMessage) : ''}</div><form id="password-update-form"><div class="field-group"><label for="new-password">New password</label><input id="new-password" class="text-input" name="password" type="password" autocomplete="new-password" minlength="8" required></div><div class="field-group"><label for="confirm-new-password">Confirm new password</label><input id="confirm-new-password" class="text-input" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></div><button class="btn btn-primary auth-submit" type="submit" ${busy ? 'disabled' : ''}>${busy ? 'Updating password…' : 'Update password →'}</button></form><button class="btn btn-quiet auth-submit" id="password-update-back" type="button" ${busy ? 'disabled' : ''}>Back to sign in</button></div></section></main>`;
+    root.querySelector('#password-update-form')?.addEventListener('submit', submitPasswordUpdate);
+    root.querySelector('#password-update-back')?.addEventListener('click', leavePasswordRecovery);
+  }
+  async function leavePasswordRecovery() {
+    try { await window.PathwayBackend.signOutLocal(); } catch (_) { /* The local recovery session can expire independently. */ }
+    clearPasswordRecoveryUrl(); state.mode = 'signin'; state.password = ''; renderAuth();
+  }
+  async function submitPasswordUpdate(event) {
+    event.preventDefault(); if (busy) return;
+    const values = new FormData(event.currentTarget);
+    const password = String(values.get('password') || '');
+    const confirmation = String(values.get('confirmPassword') || '');
+    if (password !== confirmation) { renderPasswordUpdate('The passwords do not match.'); return; }
+    busy = true; renderPasswordUpdate();
+    try {
+      await window.PathwayBackend.updatePassword(password);
+      try { await window.PathwayBackend.signOutLocal(); } catch (_) { /* Password has already been updated; continue to sign-in. */ }
+      clearPasswordRecoveryUrl(); busy = false; state.mode = 'signin'; state.password = '';
+      renderAuth('', 'Your password has been updated. Sign in with your new password.');
+    } catch (error) { busy = false; renderPasswordUpdate(friendlyError(error)); }
+  }
   async function start(callback) {
     onAuthenticated = callback; inviteToken = getInviteToken(); showLoading();
     try {
@@ -170,6 +230,17 @@
         state.email = invitePreview.invitedEmail || '';
       }
       const context = await window.PathwayBackend.bootstrap();
+      const passwordRecoveryState = window.PathwayBackend.consumePasswordRecovery();
+      if (passwordRecoveryState) {
+        if (passwordRecoveryState === 'recovery' && context.session) {
+          state.mode = 'signin'; state.email = context.user?.email || ''; state.password = '';
+          renderPasswordUpdate();
+        } else {
+          clearPasswordRecoveryUrl(); state.mode = 'signin';
+          renderAuth('This password reset link is invalid or expired. Request a new one.');
+        }
+        return;
+      }
       if (context.session) {
         if (inviteToken && !context.workspace) {
           try {
