@@ -135,3 +135,9 @@
 .auth-forgot-link{display:block;margin:-9px 0 15px auto;padding:0;border:0;background:transparent;color:var(--green);font-size:12px;font-weight:600;cursor:pointer}
 .auth-forgot-link:hover{text-decoration:underline}
 .auth-forgot-link:focus-visible{outline:2px solid #7a9f82;outline-offset:3px;border-radius:2px}
+
+
+/* Candidate completion actions */
+.completion-actions{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+.completion-actions .btn{min-width:128px}
+@media(max-width:480px){.completion-actions{width:100%}.completion-actions .btn{flex:1}}

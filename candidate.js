@@ -136,7 +136,7 @@
     }
 
     async function submitApplication(subtype) {
-      if (!live) { renderComplete(subtype, false); return; }
+      if (!live) { renderComplete(); return; }
       if (state.submitting) return;
       state.submitting = true;
       state.screen = 'submitting';
@@ -155,7 +155,7 @@
         });
         state.submitting = false;
         state.screen = 'complete';
-        renderComplete(subtype, true, result && result.accepted);
+        renderComplete();
       } catch (error) {
         state.submitting = false;
         state.screen = 'complete';
@@ -168,27 +168,68 @@
       root.querySelector('#retry-submit').addEventListener('click', () => submitApplication(state.current && state.current.subtype || 'submitted'));
     }
 
-    function renderComplete(subtype, saved = live, accepted = false) {
-      const isDisqualified = subtype === 'disqualified';
+    async function copyJobLink(url) {
+      const clipboard = window.navigator && window.navigator.clipboard;
+      if (clipboard && typeof clipboard.writeText === 'function') {
+        try {
+          await clipboard.writeText(url);
+          return;
+        } catch (_) {
+          // Fall back to a temporary input when clipboard permissions are unavailable.
+        }
+      }
+      const input = document.createElement('textarea');
+      input.value = url;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      let copied = false;
+      try {
+        input.select();
+        copied = document.execCommand('copy');
+      } finally {
+        input.remove();
+      }
+      if (!copied) throw new Error('Clipboard access was denied.');
+    }
+
+    function renderComplete() {
       const isPreview = options.preview || !live;
-      const title = isPreview ? 'Preview complete' : (isDisqualified ? 'Thank you for your time.' : 'Application submitted.');
+      const vacancyUrl = window.location.href;
+      const title = isPreview ? 'Preview complete' : 'Application submitted.';
       const intro = isPreview
         ? 'You have reached the end of this application preview for ' + C.esc(flow.companyName || 'the hiring team') + '.'
-        : (isDisqualified
-          ? `Your application has been received. Thank you for taking the time to apply to ${C.esc(flow.companyName || 'the team')}.`
-          : `Your application has been received by ${C.esc(flow.companyName || 'the hiring team')}. Thank you for your interest.`);
-      const note = isPreview
-        ? 'Preview only · Your details and answers were not stored or sent to the company.'
-        : 'Your application and resume are stored in this job’s private hiring workspace. No automatic confirmation email is sent in this early release.';
-      root.innerHTML = `<main class="completion-screen ${isDisqualified ? 'disqualified' : ''}"><section class="completion-content"><div class="completion-mark" aria-hidden="true">${isPreview ? '✓' : isDisqualified ? '↗' : '✓'}</div><div class="eyebrow" style="margin-bottom:13px">${C.esc(isPreview ? 'Preview complete' : accepted ? 'Thank you' : isDisqualified ? 'Application received' : 'You’re all set')}</div><h1>${title}</h1><p>${intro}</p><a class="btn btn-primary" href="${isPreview ? '#' : 'index.html'}" id="finish-link">${isPreview ? 'Return to preview' : 'Done'}</a><div class="prototype-note">${note}</div></section></main>`;
-      root.querySelector('#finish-link').addEventListener('click', event => { if (isPreview) { event.preventDefault(); options.onFinish && options.onFinish(); } });
+        : `Your application has been received by ${C.esc(flow.companyName || 'the hiring team')}. Thank you for your interest.`;
+      const previewNote = isPreview
+        ? '<div class="prototype-note">Preview only · Your details and answers were not stored or sent to the company.</div>'
+        : '';
+      root.innerHTML = `<main class="completion-screen"><section class="completion-content"><div class="completion-mark" aria-hidden="true">✓</div><div class="eyebrow" style="margin-bottom:13px">${C.esc(isPreview ? 'Preview complete' : 'Thank you')}</div><h1>${title}</h1><p>${intro}</p>${isPreview ? `<a class="btn btn-primary" href="#" id="finish-link">Return to preview</a>` : `<div class="completion-actions"><a class="btn btn-primary" href="${C.esc(vacancyUrl)}" id="finish-link">Done</a><button class="btn" id="share-job" type="button">Share this job</button></div>`}${previewNote}</section></main>`;
+      const finishLink = root.querySelector('#finish-link');
+      finishLink.addEventListener('click', event => { if (isPreview) { event.preventDefault(); options.onFinish && options.onFinish(); } });
+      const shareButton = root.querySelector('#share-job');
+      if (shareButton) {
+        let feedbackTimer;
+        shareButton.addEventListener('click', async () => {
+          try {
+            await copyJobLink(vacancyUrl);
+            shareButton.textContent = 'Link copied!';
+          } catch (_) {
+            shareButton.textContent = 'Copy failed';
+          }
+          window.clearTimeout(feedbackTimer);
+          feedbackTimer = window.setTimeout(() => {
+            if (shareButton.isConnected) shareButton.textContent = 'Share this job';
+          }, 2200);
+        });
+      }
     }
 
     function complete(subtype, endingLabel) {
       state.screen = 'complete';
       if (live) { void submitApplication(subtype); return; }
       // Candidate details and answers remain entirely in memory while previewing.
-      renderComplete(subtype, false);
+      renderComplete();
     }
 
     render();

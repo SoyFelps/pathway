@@ -104,16 +104,36 @@ test('Applicants-only members receive job labels without opening full Flows data
 test('live published form submits while builder preview remains non-persistent', () => {
   const candidate = read('candidate.js');
   assert.match(candidate, /const live = Boolean\(!options\.preview && options\.publishedFlowId/);
-  assert.match(candidate, /if \(!live\) \{ renderComplete\(subtype, false\); return; \}/);
+  assert.match(candidate, /if \(!live\) \{ renderComplete\(\); return; \}/);
   assert.match(candidate, /window\.PathwayBackend\.submitApplication/);
   const notice = 'By submitting, you allow the company to use your information and answers to review your application';
   assert.ok(candidate.indexOf('Apply for this role') >= 0 && candidate.indexOf(notice) > candidate.indexOf('Apply for this role'));
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /candidate\.js\?v=application-consent-20261001/);
-  assert.match(read('index.html'), /candidate\.js\?v=application-consent-20261001/);
+  assert.match(read('apply.html'), /candidate\.js\?v=completion-share-20261001/);
+  assert.match(read('index.html'), /candidate\.js\?v=completion-share-20261001/);
+  assert.match(read('apply.html'), /styles\.css\?v=completion-share-20261001/);
+  assert.match(read('index.html'), /styles\.css\?v=completion-share-20261001/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
+});
+
+test('all live outcomes share a neutral submission screen with a job return link and clipboard share', () => {
+  const candidate = read('candidate.js');
+  const start = candidate.indexOf('function renderComplete()');
+  const end = candidate.indexOf('\n    function complete(', start);
+  const completion = candidate.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(completion, /const title = isPreview \? 'Preview complete' : 'Application submitted\.'/);
+  assert.doesNotMatch(completion, /disqualif|accepted|subtype/i);
+  assert.match(completion, /Your application has been received by/);
+  assert.match(completion, /const vacancyUrl = window\.location\.href/);
+  assert.match(completion, /href="\$\{C\.esc\(vacancyUrl\)\}"/);
+  assert.match(completion, /id="share-job"[\s\S]*?Share this job/);
+  assert.doesNotMatch(completion, /Your application and resume are stored in this job/);
+  assert.match(candidate, /navigator\.clipboard[\s\S]*?writeText\(url\)/);
+  assert.match(candidate, /document\.execCommand\('copy'\)/);
+  assert.match(completion, /Preview only · Your details and answers were not stored or sent to the company/);
 });
 
 test('Edge Function preflight uses a bodyless 204 response and allowlists the published Pages origin', () => {
