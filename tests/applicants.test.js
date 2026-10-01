@@ -113,8 +113,8 @@ test('live published form submits while builder preview remains non-persistent',
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
   assert.match(read('apply.html'), /candidate\.js\?v=completion-return-20261001/);
   assert.match(read('index.html'), /candidate\.js\?v=completion-return-20261001/);
-  assert.match(read('apply.html'), /styles\.css\?v=flow-publish-20261001/);
-  assert.match(read('index.html'), /styles\.css\?v=flow-publish-20261001/);
+  assert.match(read('apply.html'), /styles\.css\?v=editor-hint-cleanup-20261001/);
+  assert.match(read('index.html'), /styles\.css\?v=editor-hint-cleanup-20261001/);
   assert.match(read('apply.html'), /backend\.js\?v=flow-publish-20261001/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });

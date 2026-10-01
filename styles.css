@@ -152,3 +152,5 @@
 .unpublished-changes .btn:disabled{cursor:wait;opacity:.7}
 @media(max-width:1200px){.editor-top{align-items:flex-start;flex-direction:column}.editor-actions{width:100%;flex-wrap:wrap;align-items:center}#publish-changes-slot:not(:empty){flex-basis:100%}}
 @media(max-width:620px){.unpublished-changes{width:100%;max-width:100%}.unpublished-changes span{max-width:none}.save-indicator{min-height:34px}}
+
+#canvas-status:empty{display:none}

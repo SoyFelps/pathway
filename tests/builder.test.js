@@ -18,6 +18,13 @@ test('empty flow-canvas background pans both axes without hijacking node or conn
   assert.match(styles, /\.workspace\.is-panning\{cursor:grabbing/);
 });
 
+test('canvas instruction behind Add a step is removed while transient status remains available', () => {
+  assert.ok(builder.includes('<div class="canvas-status" id="canvas-status"></div>'));
+  assert.doesNotMatch(builder, /Drag empty background to move around · Drag a connection point to another step/);
+  assert.match(builder, /function setStatus\(text\)/);
+  assert.match(styles, /#canvas-status:empty\{display:none\}/);
+});
+
 test('editor canvas element does not shadow workspace data used by its header', () => {
   const start = builder.indexOf('function renderEditor()');
   const end = builder.indexOf('function bindCanvasPan(', start);
