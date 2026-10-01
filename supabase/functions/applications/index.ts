@@ -13,7 +13,7 @@ const APP_ORIGINS = new Set([
 const BUCKET = "applicant-resumes";
 const MAX_RESUME_BYTES = 10 * 1024 * 1024;
 const MAX_FORM_BYTES = MAX_RESUME_BYTES + 128 * 1024;
-const NOTICE_VERSION = "2026-09-26-v1";
+const NOTICE_VERSION = "2026-10-01-v1";
 const MIME_EXTENSIONS: Record<string, string> = {
   "application/pdf": "pdf",
   "application/msword": "doc",

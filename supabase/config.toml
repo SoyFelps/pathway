@@ -1,3 +1,7 @@
+[functions.applications]
+# Public candidate intake uses API-key/origin checks and server-side validation instead of user JWTs.
+verify_jwt = false
+
 [functions.team]
 # Invitation links must be previewable before the invitee signs in. The function validates
 # the public token for preview and requires a verified Bearer session for every other action.

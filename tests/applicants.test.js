@@ -55,6 +55,7 @@ test('public application endpoint validates the active snapshot, branch answers,
   for (const text of ['loadActiveFlow', 'active_published_flow_id', 'validateApplicantSubmission', 'privacyAcknowledged', 'MAX_RESUME_BYTES', 'consume_applicant_submission_limit', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']) {
     assert.ok(edge.includes(text), `missing intake protection: ${text}`);
   }
+  assert.match(edge, /const NOTICE_VERSION = "2026-10-01-v1"/);
   assert.match(edge, /outcomeStatus:\s*current\.subtype === "disqualified" \? "failed" : "new"/);
   assert.match(edge, /published_flow_id:\s*active\.publication\.id/);
   assert.match(read('supabase/migrations/20260926185250_enforce_active_publication_on_applicant_insert.sql'), /applicants_require_active_publication/);
@@ -105,7 +106,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.match(candidate, /const live = Boolean\(!options\.preview && options\.publishedFlowId/);
   assert.match(candidate, /if \(!live\) \{ renderComplete\(subtype, false\); return; \}/);
   assert.match(candidate, /window\.PathwayBackend\.submitApplication/);
-  assert.match(candidate, /I have read and agree to this use of my application data/);
+  const notice = 'By submitting, you allow the company to use your information and answers to review your application';
+  assert.ok(candidate.indexOf('Apply for this role') >= 0 && candidate.indexOf(notice) > candidate.indexOf('Apply for this role'));
+  assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
+  assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
+  assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
+  assert.match(read('apply.html'), /candidate\.js\?v=application-consent-20261001/);
+  assert.match(read('index.html'), /candidate\.js\?v=application-consent-20261001/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
