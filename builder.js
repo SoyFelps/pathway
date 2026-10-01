@@ -42,6 +42,8 @@
   let paymentHistoryHasMore = false;
   let teamRenderRequestId = 0;
   let dashboardApplicantCountRequestId = 0;
+  const locallyUnpublishedFlows = new WeakSet();
+  const flowEditRevisions = new WeakMap();
   const applicantStages = [
     { key: 'new', label: 'New', color: 'stage-new' },
     { key: 'failed', label: 'Failed', color: 'stage-failed' },
@@ -53,10 +55,32 @@
   const hasPermission = permission => Boolean(isOwner || (subscription?.active && teamMember?.[`can_${permission}`]));
   const canManageTeam = () => Boolean(isOwner || (subscription?.active && teamMember?.can_manage_team));
   const esc = C.esc;
+  function hasUnpublishedChanges(flow) {
+    if (!flow || flow.publicationStatus !== 'published' || !flow.activePublishedFlowId) return false;
+    if (locallyUnpublishedFlows.has(flow)) return true;
+    const updatedAt = Date.parse(flow.updatedAt || '');
+    const publishedAt = Date.parse(flow.publishedAt || '');
+    return !Number.isFinite(publishedAt) || (Number.isFinite(updatedAt) && updatedAt > publishedAt);
+  }
+  const publishingFlows = new WeakSet();
+  function updatePublicationNotice() {
+    const slot = root.querySelector('#publish-changes-slot');
+    if (!slot) return;
+    const flow = currentFlow();
+    if (!hasUnpublishedChanges(flow)) { slot.innerHTML = ''; return; }
+    slot.innerHTML = `<div class="unpublished-changes" role="status"><span>You have changes that aren’t published yet.</span><button type="button" class="btn btn-sm btn-primary" id="publish-changes">Publish changes</button></div>`;
+    const button = slot.querySelector('#publish-changes');
+    button.disabled = publishingFlows.has(flow);
+    if (button.disabled) button.textContent = 'Publishing…';
+    button.addEventListener('click', publishFlowChanges);
+  }
   const save = () => {
     const flow = currentFlow();
     if (!flow || !workspace) return;
+    flowEditRevisions.set(flow, (flowEditRevisions.get(flow) || 0) + 1);
+    if (flow.publicationStatus === 'published' && flow.activePublishedFlowId) locallyUnpublishedFlows.add(flow);
     flow.updatedAt = new Date().toISOString();
+    updatePublicationNotice();
     const indicator = document.querySelector('.save-indicator');
     if (indicator) indicator.innerHTML = '<span class="status-dot"></span> Saving…';
     clearTimeout(cloudSaveTimer);
@@ -65,6 +89,7 @@
         await window.PathwayBackend.saveFlow(flow, workspace);
         const item = document.querySelector('.save-indicator');
         if (item) item.innerHTML = '<span class="status-dot"></span> Saved securely';
+        updatePublicationNotice();
         clearTimeout(saveTimer);
         saveTimer = setTimeout(() => { const current = document.querySelector('.save-indicator'); if (current) current.innerHTML = '<span class="status-dot"></span> Saved to workspace'; }, 1800);
       } catch (error) {
@@ -925,6 +950,8 @@
     const flow = currentFlow(); if (!flow) return renderDashboard();
     root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name">${esc(workspace.name)}</span><span class="auth-user">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body"><main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' || !subscription?.active ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status">Drag empty background to move around · Drag a connection point to another step</div></main></div></div>`;
     bindPlanControl();
+    root.querySelector('.save-indicator')?.insertAdjacentHTML('afterend', '<div id="publish-changes-slot"></div>');
+    updatePublicationNotice();
     root.querySelector('#brand-home').addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
     root.querySelector('#signout').addEventListener('click', doSignOut);
     root.querySelector('#dashboard-back').addEventListener('click', renderDashboard);
@@ -1215,12 +1242,50 @@
     let link;
     try { const token = await window.PathwayBackend.publishFlow(flow, workspace); renderEditor(); const url = new URL('apply.html', window.location.href); url.hash = `id=${encodeURIComponent(token)}`; link = url.href; }
     catch (error) { if (publishButton) { publishButton.disabled = false; publishButton.textContent = 'Publish ↗'; } showToast(error.message || 'This application could not be published.'); return; }
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Published snapshot</div><h2>Your job page is ready to share.</h2><p>This link opens a read-only version of the flow stored in your workspace. New edits won't change this published snapshot.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="publish-link" id="share-url">${esc(link)}</div><div class="prototype-note">The candidate form is public, but this early release does not yet save or deliver application responses. Avoid using real applicant data.</div><div class="modal-actions"><button class="btn" id="open-link">Open candidate page</button><button class="btn btn-primary" id="copy-link">${ICONS.copy} &nbsp;Copy link</button></div>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Published snapshot</div><h2>Your job page is ready to share.</h2><p>Candidates see the currently published version. Use Publish changes to update this same job link after editing.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="publish-link" id="share-url">${esc(link)}</div><div class="modal-actions"><button class="btn" id="open-link">Open candidate page</button><button class="btn btn-primary" id="copy-link">${ICONS.copy} &nbsp;Copy link</button></div>`);
     modalRoot.querySelector('#copy-link').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(link); showToast('Application link copied.'); closeModal(); }
       catch (_) { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(modalRoot.querySelector('#share-url')); selection.removeAllRanges(); selection.addRange(range); showToast('Select and copy the highlighted link.'); }
     });
     modalRoot.querySelector('#open-link').addEventListener('click', () => window.open(link, '_blank', 'noopener'));
+  }
+
+  async function publishFlowChanges(event) {
+    const flow = currentFlow();
+    if (!flow || !event?.currentTarget || publishingFlows.has(flow)) return;
+    try { C.normalizeFlow(flow); }
+    catch (error) { showToast(error.message || 'This flow needs a fix before it can be published.'); return; }
+    const editRevision = flowEditRevisions.get(flow) || 0;
+    publishingFlows.add(flow);
+    clearTimeout(cloudSaveTimer);
+    clearTimeout(saveTimer);
+    updatePublicationNotice();
+    const indicator = root.querySelector('.save-indicator');
+    if (indicator) indicator.innerHTML = '<span class="status-dot"></span> Saving & publishing…';
+    let savedToWorkspace = false;
+    try {
+      await window.PathwayBackend.saveFlow(flow, workspace);
+      savedToWorkspace = true;
+      if (indicator?.isConnected) indicator.innerHTML = '<span class="status-dot"></span> Saved to workspace';
+      const publishedAt = await window.PathwayBackend.updatePublishedFlow(flow, workspace);
+      flow.publishedAt = publishedAt;
+      if ((flowEditRevisions.get(flow) || 0) === editRevision) {
+        flow.updatedAt = publishedAt;
+        locallyUnpublishedFlows.delete(flow);
+      }
+      updatePublicationNotice();
+      showToast((flowEditRevisions.get(flow) || 0) === editRevision
+        ? 'Changes published to your existing job link.'
+        : 'Changes published. Newer edits still need to be published.');
+    } catch (error) {
+      if (indicator?.isConnected) indicator.innerHTML = savedToWorkspace
+        ? '<span class="status-dot"></span> Saved to workspace'
+        : '<span style="color:#b94841">Save failed</span>';
+      showToast(`Could not publish changes: ${error.message || 'please try again'}`);
+    } finally {
+      publishingFlows.delete(flow);
+      updatePublicationNotice();
+    }
   }
 
   window.addEventListener('pointerup', () => { if (connectFrom && window.pendingPointer) { connectFrom = null; window.pendingPointer = null; drawCanvas(); } });

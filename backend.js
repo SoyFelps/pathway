@@ -346,24 +346,25 @@
 
   async function listFlows(workspaceId) {
     await requireSession();
-    const { data, error } = await client.from('application_flows').select('id,workspace_id,created_by,company_name,job_title,flow_data,publication_status,active_published_flow_id,created_at,updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false });
+    const { data, error } = await client.from('application_flows').select('id,workspace_id,created_by,company_name,job_title,flow_data,publication_status,active_published_flow_id,published_at,created_at,updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false });
     if (error) throw error;
-    return (data || []).map(row => ({ ...row.flow_data, id: row.flow_data.id || row.id, cloudId: row.id, workspaceId: row.workspace_id, createdBy: row.created_by, companyName: row.company_name, jobTitle: row.job_title, publicationStatus: row.publication_status || 'draft', activePublishedFlowId: row.active_published_flow_id || null, updatedAt: row.updated_at }));
+    return (data || []).map(row => ({ ...row.flow_data, id: row.flow_data.id || row.id, cloudId: row.id, workspaceId: row.workspace_id, createdBy: row.created_by, companyName: row.company_name, jobTitle: row.job_title, publicationStatus: row.publication_status || 'draft', activePublishedFlowId: row.active_published_flow_id || null, publishedAt: row.published_at || null, updatedAt: row.updated_at }));
   }
 
   function saveFlow(flow, workspace) {
     const previous = saveQueues.get(flow.id) || Promise.resolve();
     const pending = previous.catch(() => {}).then(async () => {
       const session = await requireSession();
-      const { cloudId, workspaceId, createdBy, publicationStatus, activePublishedFlowId, ...flowData } = flow;
+      const { cloudId, workspaceId, createdBy, publicationStatus, activePublishedFlowId, publishedAt, ...flowData } = flow;
       const row = { workspace_id: workspace.id, created_by: cloudId ? (createdBy || session.user.id) : session.user.id, company_name: flow.companyName, job_title: flow.jobTitle, flow_data: flowData };
       let result;
-      if (cloudId) result = await client.from('application_flows').update(row).eq('id', cloudId).eq('workspace_id', workspace.id).select('id').single();
-      else result = await client.from('application_flows').insert(row).select('id').single();
+      if (cloudId) result = await client.from('application_flows').update(row).eq('id', cloudId).eq('workspace_id', workspace.id).select('id,updated_at').single();
+      else result = await client.from('application_flows').insert(row).select('id,updated_at').single();
       if (result.error) throw result.error;
       flow.cloudId = result.data.id;
       flow.workspaceId = workspace.id;
       flow.createdBy = row.created_by;
+      if (result.data.updated_at) flow.updatedAt = result.data.updated_at;
       return flow;
     });
     saveQueues.set(flow.id, pending);
@@ -387,7 +388,7 @@
     if (!subscription.active) throw new Error('An active subscription is required to publish job flows.');
     await saveFlow(flow, workspace);
     const session = await requireSession();
-    const { cloudId, workspaceId, createdBy, publicationStatus, activePublishedFlowId, ...flowData } = flow;
+    const { cloudId, workspaceId, createdBy, publicationStatus, activePublishedFlowId, publishedAt, ...flowData } = flow;
     const { data, error } = await client.from('published_flows').insert({
       workspace_id: workspace.id,
       flow_id: flow.cloudId,
@@ -395,16 +396,34 @@
       snapshot: flowData
     }).select('id').single();
     if (error) throw error;
-    const { error: stateError } = await client.from('application_flows')
+    const { data: activeFlow, error: stateError } = await client.from('application_flows')
       .update({ publication_status: 'published', active_published_flow_id: data.id })
-      .eq('id', flow.cloudId).eq('workspace_id', workspace.id).select('id').single();
+      .eq('id', flow.cloudId).eq('workspace_id', workspace.id).select('id,published_at,updated_at').single();
     if (stateError) {
       await client.from('published_flows').delete().eq('id', data.id).eq('workspace_id', workspace.id);
       throw stateError;
     }
     flow.publicationStatus = 'published';
     flow.activePublishedFlowId = data.id;
+    flow.publishedAt = activeFlow.published_at || new Date().toISOString();
+    flow.updatedAt = activeFlow.updated_at || flow.updatedAt;
     return data.id;
+  }
+
+  async function updatePublishedFlow(flow, workspace) {
+    await saveQueues.get(flow.id)?.catch(() => {});
+    const subscription = await getSubscriptionState(workspace.id);
+    if (!subscription.active) throw new Error('An active subscription is required to publish job flows.');
+    if (!flow.cloudId || flow.publicationStatus !== 'published' || !flow.activePublishedFlowId) {
+      throw new Error('This flow does not have an active public link to update.');
+    }
+    await requireSession();
+    const { data, error } = await client.rpc('update_published_flow_snapshot', { p_flow_id: flow.cloudId });
+    if (error) throw error;
+    if (!data) throw new Error('The published form could not be updated.');
+    flow.publishedAt = data;
+    flow.updatedAt = data;
+    return data;
   }
 
   async function unpublishFlow(flow, workspace) {
@@ -581,6 +600,7 @@
     saveFlow,
     deleteFlow,
     publishFlow,
+    updatePublishedFlow,
     unpublishFlow,
     getPublishedFlow,
     getPublishedJobUrl,

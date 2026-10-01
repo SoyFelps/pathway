@@ -22,7 +22,7 @@ The app connects to the configured Supabase project. Supabase Auth Site URL and 
 
 - Email/password sign-up and sign-in, with one workspace per account. Supabase Auth, PostgreSQL and Row Level Security (RLS) protect workspace data.
 - Visual flow builder with branching steps, candidate preview and cloud saving. Free workspaces can create and edit flows; publishing requires active Premium.
-- Published jobs use immutable snapshots and public application links. Unpublishing or loss of paid access invalidates the active link.
+- Published jobs use a stable public link backed by the active snapshot. Flow editors can explicitly publish saved edits into that snapshot without changing the link; unpublishing or loss of paid access invalidates it.
 - Candidate applications include routed answers, contact information, privacy acknowledgment and a PDF/DOC/DOCX resume (up to 10 MB). Applicants can be reviewed in a searchable, flow-filtered Kanban with New, Failed, Promising and Approved stages.
 - Resumes are stored in a private Supabase Storage bucket. PDFs can be previewed in the app; downloads remain available. Access is scoped to the workspace.
 - **My Team:** Premium workspaces can add up to three members at no additional seat charge. Owners assign Flows, Candidates and Team permissions. Invitations are copyable links, expire after seven days, and are bound to the invited email. Members can leave without deleting their account.

@@ -34,7 +34,11 @@ function createBackendHarness({ paid = true } = {}) {
       };
       return query;
     },
-    rpc: async () => ({ data: null, error: null })
+    rpc: async (name, args) => {
+      calls.push({ table: 'rpc', method: name, payload: args });
+      if (name === 'update_published_flow_snapshot') return { data: '2026-10-01T14:00:00.000Z', error: null };
+      return { data: null, error: null };
+    }
   };
   const context = {
     console,
@@ -65,6 +69,36 @@ test('publishing saves the flow, inserts a snapshot, and activates its public to
   const activation = calls.find(call => call.table === 'application_flows' && call.payload?.publication_status === 'published');
   assert.equal(activation.payload.active_published_flow_id, token);
   assert.equal(snapshot.payload.snapshot.publicationStatus, undefined);
+});
+
+test('publishing changes updates the existing snapshot and keeps its active public token', async () => {
+  const { backend, calls } = createBackendHarness();
+  const activeToken = 'snapshot-existing';
+  const flow = {
+    id: 'flow-1', cloudId: 'flow-db-1', companyName: 'Acme', jobTitle: 'Designer',
+    jobDescription: 'Updated description.', publicationStatus: 'published', activePublishedFlowId: activeToken,
+    publishedAt: '2026-10-01T12:00:00.000Z', nodes: [], edges: []
+  };
+  const publishedAt = await backend.updatePublishedFlow(flow, { id: 'workspace-1' });
+  assert.equal(publishedAt, '2026-10-01T14:00:00.000Z');
+  assert.equal(flow.activePublishedFlowId, activeToken);
+  assert.equal(flow.publishedAt, publishedAt);
+  assert.equal(calls.some(call => call.table === 'published_flows' && call.method === 'insert'), false);
+  assert.equal(calls.some(call => call.table === 'application_flows' && call.method === 'update'), false);
+  const rpc = calls.find(call => call.table === 'rpc' && call.method === 'update_published_flow_snapshot');
+  assert.equal(rpc.payload.p_flow_id, 'flow-db-1');
+});
+
+test('republish RPC updates only the active snapshot and requires an authorized paid flow editor', () => {
+  const sql = fs.readFileSync(require.resolve('../supabase/migrations/20261001132237_republish_flow_snapshots_in_place.sql'), 'utf8');
+  const rpc = sql.slice(sql.indexOf('create or replace function public.update_published_flow_snapshot'));
+  assert.match(sql, /add column if not exists published_at timestamptz/);
+  assert.match(rpc, /auth\.uid\(\)/);
+  assert.match(rpc, /workspace_user_has_permission\(v_workspace_id, 'flows'\)/);
+  assert.match(rpc, /workspace_has_active_subscription\(v_workspace_id\)/);
+  assert.match(rpc, /update public\.published_flows pf\s+set snapshot = v_snapshot[\s\S]*?pf\.id = v_publication_id/);
+  assert.doesNotMatch(rpc, /insert into public\.published_flows/i);
+  assert.match(rpc, /grant execute on function public\.update_published_flow_snapshot\(uuid\) to authenticated/);
 });
 
 test('free workspaces cannot publish through the authenticated backend adapter', async () => {
@@ -126,4 +160,21 @@ test('dashboard flow menu replaces Keep flow with status-aware lifecycle and lin
   assert.ok(source.includes("isPublished ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'"));
   assert.ok(source.includes("isPublished || !subscription?.active ? '' : 'btn-primary'"));
   assert.ok(source.includes("id=\"copy-flow-url\">Copy job link"));
+});
+
+test('editor surfaces publish changes between workspace save status and candidate preview', () => {
+  const source = fs.readFileSync(require.resolve('../builder.js'), 'utf8');
+  assert.ok(source.includes("insertAdjacentHTML('afterend', '<div id=\"publish-changes-slot\"></div>')"));
+  assert.ok(source.includes('You have changes that aren’t published yet.'));
+  assert.ok(source.includes('Publish changes'));
+  assert.ok(source.includes('function hasUnpublishedChanges(flow)'));
+  assert.ok(source.includes("Date.parse(flow.updatedAt || '')"));
+  assert.ok(source.includes('window.PathwayBackend.updatePublishedFlow(flow, workspace)'));
+});
+
+test('publish instructions explain that edits update the current public job link', () => {
+  const source = fs.readFileSync(require.resolve('../builder.js'), 'utf8');
+  assert.ok(source.includes('Use Publish changes to update this same job link after editing.'));
+  assert.ok(!source.includes("New edits won't change this published snapshot."));
+  assert.ok(!source.includes('this early release does not yet save or deliver application responses'));
 });

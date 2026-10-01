@@ -141,3 +141,14 @@
 .completion-actions{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
 .completion-actions .btn{min-width:128px}
 @media(max-width:480px){.completion-actions{width:100%}.completion-actions .btn{flex:1}}
+
+
+/* Republish saved flow edits without changing the public link */
+#publish-changes-slot:empty{display:none}
+#publish-changes-slot:not(:empty){display:flex;align-items:center;flex:0 1 auto}
+.unpublished-changes{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 7px 5px 10px;border:1px solid #efdcb9;border-radius:9px;background:#fffaf0;color:#785b2b;font-size:10px;line-height:1.35}
+.unpublished-changes span{max-width:210px}
+.unpublished-changes .btn{flex-shrink:0}
+.unpublished-changes .btn:disabled{cursor:wait;opacity:.7}
+@media(max-width:1200px){.editor-top{align-items:flex-start;flex-direction:column}.editor-actions{width:100%;flex-wrap:wrap;align-items:center}#publish-changes-slot:not(:empty){flex-basis:100%}}
+@media(max-width:620px){.unpublished-changes{width:100%;max-width:100%}.unpublished-changes span{max-width:none}.save-indicator{min-height:34px}}
