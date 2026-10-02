@@ -62,6 +62,8 @@ test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied col
   assert.match(builder, /applicantFitStagesEnabled = loadApplicantFitStagesPreference\(\)/);
   assert.match(builder, /applicantFitStagesEnabled\[stage\.key\]/);
   assert.match(builder, /applicant-fit-stage-\$\{stage\.key\}/);
+  assert.match(builder, /const lockTooltip = occupied \? 'title="This column contains applicants\. Move them to another stage before disabling it\."'/);
+  assert.match(builder, /applicant-stage-toggle-control" \$\{lockTooltip\}/);
   assert.match(builder, /if \(!event\.target\.checked && applicantHasStage\(stageKey\)\)/);
   assert.doesNotMatch(builder, /applicant-stage-toggle-help|Move all applicants out of Team Fit and Skill Fit/);
   assert.match(migration, /status in \('new', 'failed', 'promising', 'approved', 'team_fit', 'skill_fit'\)/);
@@ -69,8 +71,9 @@ test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied col
   const styles = read('styles.css');
   assert.match(styles, /\.kanban-board\.has-one-fit-stage/);
   assert.match(styles, /\.kanban-board\.has-two-fit-stages/);
+  assert.match(styles, /\.applicant-stage-toggle-control input:disabled\{pointer-events:none\}/);
   assert.doesNotMatch(styles, /\.applicant-stage-toggle-wrap\{[^}]*background:/);
-  assert.match(read('index.html'), /builder\.js\?v=applicant-fit-order-20261002/);
+  assert.match(read('index.html'), /builder\.js\?v=applicant-stage-tooltip-20261002/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -146,8 +149,8 @@ test('live published form submits while builder preview remains non-persistent',
   assert.match(read('index.html'), /pathway\.js\?v=digits-only-20261002/);
   assert.match(read('apply.html'), /candidate\.js\?v=digits-only-20261002/);
   assert.match(read('index.html'), /candidate\.js\?v=digits-only-20261002/);
-  assert.match(read('apply.html'), /styles\.css\?v=applicant-fit-toggles-20261002/);
-  assert.match(read('index.html'), /styles\.css\?v=applicant-fit-toggles-20261002/);
+  assert.match(read('apply.html'), /styles\.css\?v=applicant-stage-tooltip-20261002/);
+  assert.match(read('index.html'), /styles\.css\?v=applicant-stage-tooltip-20261002/);
   assert.match(read('apply.html'), /backend\.js\?v=flow-publish-20261001/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });

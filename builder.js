@@ -775,7 +775,11 @@
     }
     const toggleWrap = root.querySelector('#applicant-stage-toggle-wrap');
     if (toggleWrap) {
-      toggleWrap.innerHTML = optionalStages.map(stage => `<label class="applicant-stage-toggle" for="applicant-fit-stage-${stage.key}"><input id="applicant-fit-stage-${stage.key}" type="checkbox" data-stage-key="${stage.key}" ${applicantFitStagesEnabled[stage.key] ? 'checked' : ''} ${applicantHasStage(stage.key) ? 'disabled' : ''}><span>${stage.label}</span></label>`).join('');
+      toggleWrap.innerHTML = optionalStages.map(stage => {
+        const occupied = applicantHasStage(stage.key);
+        const lockTooltip = occupied ? 'title="This column contains applicants. Move them to another stage before disabling it."' : '';
+        return `<label class="applicant-stage-toggle" for="applicant-fit-stage-${stage.key}"><span class="applicant-stage-toggle-control" ${lockTooltip}><input id="applicant-fit-stage-${stage.key}" type="checkbox" data-stage-key="${stage.key}" ${applicantFitStagesEnabled[stage.key] ? 'checked' : ''} ${occupied ? 'disabled' : ''}></span><span>${stage.label}</span></label>`;
+      }).join('');
       toggleWrap.querySelectorAll('.applicant-stage-toggle input').forEach(toggle => {
         toggle.addEventListener('change', event => {
           const stageKey = event.target.dataset.stageKey;

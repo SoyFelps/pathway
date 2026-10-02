@@ -169,8 +169,11 @@
 /* Optional Team Fit and Skill Fit applicant stages */
 .applicant-stage-toggle-wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin:0 0 14px}
 .applicant-stage-toggle{display:inline-flex;align-items:center;gap:7px;color:#34463a;font-size:12px;font-weight:600;cursor:pointer}
+.applicant-stage-toggle-control{display:inline-flex;align-items:center;justify-content:center}
 .applicant-stage-toggle input{width:15px;height:15px;margin:0;accent-color:var(--green)}
 .applicant-stage-toggle input:disabled{cursor:not-allowed;opacity:.7}
+.applicant-stage-toggle-control input:disabled{pointer-events:none}
+.applicant-stage-toggle-control[title]{cursor:not-allowed}
 .kanban-board.has-one-fit-stage{grid-template-columns:repeat(5,minmax(215px,1fr))}
 .kanban-board.has-two-fit-stages{grid-template-columns:repeat(6,minmax(215px,1fr))}
 .stage-team-fit{background:#8271b3}
