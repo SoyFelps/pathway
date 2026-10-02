@@ -72,6 +72,7 @@ test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied col
   assert.match(styles, /\.kanban-board\.has-one-fit-stage/);
   assert.match(styles, /\.kanban-board\.has-two-fit-stages/);
   assert.match(styles, /\.applicant-stage-toggle-control input:disabled\{pointer-events:none\}/);
+  assert.match(styles, /\.applicant-stage-toggle-wrap\{[^}]*justify-content:flex-end/);
   assert.doesNotMatch(styles, /\.applicant-stage-toggle-wrap\{[^}]*background:/);
   assert.match(read('index.html'), /builder\.js\?v=applicant-stage-tooltip-20261002/);
 });
@@ -149,8 +150,8 @@ test('live published form submits while builder preview remains non-persistent',
   assert.match(read('index.html'), /pathway\.js\?v=digits-only-20261002/);
   assert.match(read('apply.html'), /candidate\.js\?v=digits-only-20261002/);
   assert.match(read('index.html'), /candidate\.js\?v=digits-only-20261002/);
-  assert.match(read('apply.html'), /styles\.css\?v=applicant-stage-tooltip-20261002/);
-  assert.match(read('index.html'), /styles\.css\?v=applicant-stage-tooltip-20261002/);
+  assert.match(read('apply.html'), /styles\.css\?v=applicant-fit-right-20261002/);
+  assert.match(read('index.html'), /styles\.css\?v=applicant-fit-right-20261002/);
   assert.match(read('apply.html'), /backend\.js\?v=flow-publish-20261001/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });

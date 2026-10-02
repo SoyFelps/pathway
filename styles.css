@@ -167,7 +167,7 @@
 
 
 /* Optional Team Fit and Skill Fit applicant stages */
-.applicant-stage-toggle-wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin:0 0 14px}
+.applicant-stage-toggle-wrap{display:flex;align-items:center;justify-content:flex-end;gap:20px;flex-wrap:wrap;margin:0 0 14px}
 .applicant-stage-toggle{display:inline-flex;align-items:center;gap:7px;color:#34463a;font-size:12px;font-weight:600;cursor:pointer}
 .applicant-stage-toggle-control{display:inline-flex;align-items:center;justify-content:center}
 .applicant-stage-toggle input{width:15px;height:15px;margin:0;accent-color:var(--green)}
