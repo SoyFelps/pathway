@@ -83,5 +83,5 @@ test('Settings uses a fresh cache version for frontend assets', () => {
   assert.match(html, /styles\.css\?v=applicant-fit-toggles-20261002/);
   assert.match(html, /backend\.js\?v=flow-publish-20261001/);
   assert.match(html, /auth\.js\?v=password-recovery-20261001/);
-  assert.match(html, /builder\.js\?v=applicant-fit-toggles-20261002/);
+  assert.match(html, /builder\.js\?v=applicant-fit-order-20261002/);
 });

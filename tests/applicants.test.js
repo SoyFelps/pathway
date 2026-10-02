@@ -42,6 +42,15 @@ test('workspace UI includes search, flow filter, standard and fit Kanban stages,
   }
 });
 
+test('Team Fit and Skill Fit columns appear between Failed and Promising', () => {
+  const builder = read('builder.js');
+  const stages = builder.match(/const applicantStages = \[([\s\S]*?)\n  \];/)?.[1];
+  assert.ok(stages, 'applicant stage list exists');
+  const order = ['new', 'failed', 'team_fit', 'skill_fit', 'promising', 'approved'].map(key => stages.indexOf(`key: '${key}'`));
+  assert.ok(order.every(index => index >= 0));
+  assert.deepEqual(order, [...order].sort((a, b) => a - b));
+});
+
 test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied columns stay enabled', () => {
   const builder = read('builder.js');
   const migration = read('supabase/migrations/20261002113654_add_team_fit_skill_fit_applicant_stages.sql');
@@ -61,7 +70,7 @@ test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied col
   assert.match(styles, /\.kanban-board\.has-one-fit-stage/);
   assert.match(styles, /\.kanban-board\.has-two-fit-stages/);
   assert.doesNotMatch(styles, /\.applicant-stage-toggle-wrap\{[^}]*background:/);
-  assert.match(read('index.html'), /builder\.js\?v=applicant-fit-toggles-20261002/);
+  assert.match(read('index.html'), /builder\.js\?v=applicant-fit-order-20261002/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {

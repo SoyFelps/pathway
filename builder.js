@@ -48,10 +48,10 @@
   const applicantStages = [
     { key: 'new', label: 'New', color: 'stage-new' },
     { key: 'failed', label: 'Failed', color: 'stage-failed' },
-    { key: 'promising', label: 'Promising', color: 'stage-promising' },
-    { key: 'approved', label: 'Approved', color: 'stage-approved' },
     { key: 'team_fit', label: 'Team Fit', color: 'stage-team-fit', optional: true },
-    { key: 'skill_fit', label: 'Skill Fit', color: 'stage-skill-fit', optional: true }
+    { key: 'skill_fit', label: 'Skill Fit', color: 'stage-skill-fit', optional: true },
+    { key: 'promising', label: 'Promising', color: 'stage-promising' },
+    { key: 'approved', label: 'Approved', color: 'stage-approved' }
   ];
   const optionalApplicantStageKeys = new Set(['team_fit', 'skill_fit']);
   function applicantFitStagePreferenceKey(stageKey) { return `pathway:applicant-fit-stage:${workspace?.id || 'default'}:${stageKey}`; }
