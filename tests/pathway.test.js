@@ -46,15 +46,18 @@ test('sample choice answers lead to distinct candidate paths', () => {
   assert.notEqual(yes.id, exploring.id);
 });
 
-test('numeric-only short answers default off for old flows and preserve the setting across publication encoding', async () => {
+test('digits-only short answers default off for old flows and preserve the setting across publication encoding', async () => {
   const createdQuestion = Core.createNode('shortText', 400, 200);
   assert.equal(createdQuestion.numericOnly, false);
-  assert.equal(Core.isNumericAnswer('0'), true);
-  assert.equal(Core.isNumericAnswer('-12.75'), true);
-  assert.equal(Core.isNumericAnswer('2.1e4'), true);
-  assert.equal(Core.isNumericAnswer('0x10'), false);
-  assert.equal(Core.isNumericAnswer('12abc'), false);
-  assert.equal(Core.isNumericAnswer('Infinity'), false);
+  assert.equal(Core.isDigitsOnlyAnswer('0'), true);
+  assert.equal(Core.isDigitsOnlyAnswer('001234'), true);
+  assert.equal(Core.isDigitsOnlyAnswer('-12'), false);
+  assert.equal(Core.isDigitsOnlyAnswer('12.75'), false);
+  assert.equal(Core.isDigitsOnlyAnswer('12,75'), false);
+  assert.equal(Core.isDigitsOnlyAnswer('2.1e4'), false);
+  assert.equal(Core.isDigitsOnlyAnswer('2E4'), false);
+  assert.equal(Core.isDigitsOnlyAnswer('12abc'), false);
+  assert.equal(Core.isDigitsOnlyAnswer(' 12 '), false);
 
   const flow = Core.createSampleFlow();
   const question = flow.nodes.find(node => node.type === 'shortText');

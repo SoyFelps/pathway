@@ -88,7 +88,7 @@
       const previousAnswer = state.answers[node.id];
       if (node.type === 'shortText') {
         input = node.numericOnly === true
-          ? `<input class="answer-text" type="number" inputmode="decimal" step="any" name="answer" placeholder="Enter a number…" required value="${C.esc(previousAnswer ?? '')}">`
+          ? `<input class="answer-text" type="text" inputmode="numeric" pattern="[0-9]*" data-numeric-only="true" name="answer" placeholder="Enter digits only…" autocomplete="off" required maxlength="4000" value="${C.esc(typeof previousAnswer === 'string' ? previousAnswer.replace(/[^0-9]/g, '') : '')}">`
           : `<textarea class="answer-text" name="answer" placeholder="Write your answer here…" required maxlength="4000">${C.esc(previousAnswer || '')}</textarea>`;
       } else if (node.type === 'singleChoice') {
         input = `<div class="answer-area">${(node.options || []).map(value => `<label class="answer-option"><input type="radio" name="answer" value="${C.esc(value)}" required ${previousAnswer === value ? 'checked' : ''}><span>${C.esc(value)}</span></label>`).join('')}</div>`;
@@ -100,6 +100,20 @@
       const progress = Math.min(92, Math.max(10, state.questionCount * 17 + 18));
       root.innerHTML = `<main class="question-screen"><header class="question-top"><a class="brand" href="#" aria-label="Pathway"><span class="brand-mark">↗</span>pathway</a><span class="candidate-header-note">${C.esc(flow.companyName || 'Your application')}</span></header><section class="question-main"><div class="question-progress"><span>Question ${state.questionCount + 1}</span><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div></div><form id="question-form"><h1 class="question-heading">${C.esc(node.label || 'A question for you')}</h1>${input}<div class="question-actions"><button type="button" class="btn btn-quiet btn-sm" id="question-back">← Back</button><button type="submit" class="btn btn-primary">Continue <span aria-hidden="true">→</span></button></div></form><p class="question-footnote">${live ? 'Your answers are saved securely when you submit the completed application.' : 'Preview mode · Your answers are not saved.'}</p></section></main>`;
       const form = root.querySelector('#question-form');
+      const digitInput = form.querySelector('[data-numeric-only="true"]');
+      digitInput?.addEventListener('beforeinput', event => {
+        if (event.inputType.startsWith('delete')) return;
+        if (event.data != null && /[^0-9]/.test(event.data)) event.preventDefault();
+      });
+      digitInput?.addEventListener('input', () => {
+        const caret = digitInput.selectionStart ?? digitInput.value.length;
+        const digitsBeforeCaret = digitInput.value.slice(0, caret).replace(/[^0-9]/g, '').length;
+        const digits = digitInput.value.replace(/[^0-9]/g, '');
+        if (digitInput.value !== digits) {
+          digitInput.value = digits;
+          digitInput.setSelectionRange(digitsBeforeCaret, digitsBeforeCaret);
+        }
+      });
       form.addEventListener('submit', event => {
         event.preventDefault();
         if (node.type === 'multiChoice' && !form.querySelector('input:checked')) {
@@ -111,9 +125,9 @@
         const answer = node.type === 'multiChoice'
           ? [...form.querySelectorAll('input:checked')].map(inputEl => inputEl.value)
           : new FormData(form).get('answer');
-        if (node.type === 'shortText' && node.numericOnly === true && !C.isNumericAnswer(answer)) {
+        if (node.type === 'shortText' && node.numericOnly === true && !C.isDigitsOnlyAnswer(answer)) {
           const numericInput = form.querySelector('[name="answer"]');
-          if (numericInput) { numericInput.setCustomValidity('Enter a valid number.'); numericInput.reportValidity(); numericInput.setCustomValidity(''); }
+          if (numericInput) { numericInput.setCustomValidity('Use digits only (0–9).'); numericInput.reportValidity(); numericInput.setCustomValidity(''); }
           return;
         }
         state.answers[node.id] = answer;

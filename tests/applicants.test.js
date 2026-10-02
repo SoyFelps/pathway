@@ -111,23 +111,27 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=numeric-answer-20261002/);
-  assert.match(read('index.html'), /pathway\.js\?v=numeric-answer-20261002/);
-  assert.match(read('apply.html'), /candidate\.js\?v=numeric-answer-20261002/);
-  assert.match(read('index.html'), /candidate\.js\?v=numeric-answer-20261002/);
-  assert.match(read('apply.html'), /styles\.css\?v=numeric-answer-20261002/);
-  assert.match(read('index.html'), /styles\.css\?v=numeric-answer-20261002/);
+  assert.match(read('apply.html'), /pathway\.js\?v=digits-only-20261002/);
+  assert.match(read('index.html'), /pathway\.js\?v=digits-only-20261002/);
+  assert.match(read('apply.html'), /candidate\.js\?v=digits-only-20261002/);
+  assert.match(read('index.html'), /candidate\.js\?v=digits-only-20261002/);
+  assert.match(read('apply.html'), /styles\.css\?v=digits-only-20261002/);
+  assert.match(read('index.html'), /styles\.css\?v=digits-only-20261002/);
   assert.match(read('apply.html'), /backend\.js\?v=flow-publish-20261001/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
-test('numeric-only short answers render as number fields and are enforced by the public endpoint', () => {
+test('numeric-only short answers render as digits-only text fields and are enforced by the public endpoint', () => {
   const candidate = read('candidate.js');
   const edge = read('supabase/functions/applications/index.ts');
-  assert.match(candidate, /node\.numericOnly === true[\s\S]*?type="number"[\s\S]*?step="any"/);
-  assert.match(candidate, /C\.isNumericAnswer\(answer\)/);
-  assert.match(edge, /function isNumericAnswer\(value: unknown\)/);
-  assert.match(edge, /current\.numericOnly === true && !isNumericAnswer\(answer\)/);
+  assert.match(candidate, /node\.numericOnly === true[\s\S]*?type="text" inputmode="numeric" pattern="\[0-9\]\*" data-numeric-only="true"/);
+  assert.match(candidate, /addEventListener\('beforeinput'/);
+  assert.match(candidate, /value\.replace\(\/\[\^0-9\]\/g, ''\)/);
+  assert.match(candidate, /C\.isDigitsOnlyAnswer\(answer\)/);
+  assert.match(edge, /function isDigitsOnlyAnswer\(value: unknown\)/);
+  assert.match(edge, /return \/\^\[0-9\]\+\$\/\.test\(value\)/);
+  assert.match(edge, /current\.numericOnly === true && !isDigitsOnlyAnswer\(answer\)/);
+  assert.match(edge, /Use digits only \(0-9\)\./);
 });
 
 test('all live outcomes share a neutral submission screen with a working job-details return and clipboard share', () => {

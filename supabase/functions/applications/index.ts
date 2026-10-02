@@ -59,11 +59,9 @@ function cleanName(value: unknown, max = 200): string {
   return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
 }
 
-function isNumericAnswer(value: unknown): boolean {
+function isDigitsOnlyAnswer(value: unknown): boolean {
   if (typeof value !== "string") return false;
-  const normalized = value.trim();
-  return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(normalized)
-    && Number.isFinite(Number(normalized));
+  return /^[0-9]+$/.test(value);
 }
 
 async function sha256Hex(value: string): Promise<string> {
@@ -179,7 +177,7 @@ async function validateApplicantSubmission(snapshot: Record<string, unknown>, in
     const answer = responseItem.answer;
     if (type === "shortText") {
       if (typeof answer !== "string" || !answer.trim() || answer.length > 4000) throw new Error("A written answer is missing or too long.");
-      if (current.numericOnly === true && !isNumericAnswer(answer)) throw new Error("Enter a valid number.");
+      if (current.numericOnly === true && !isDigitsOnlyAnswer(answer)) throw new Error("Use digits only (0-9).");
     } else if (type === "singleChoice") {
       if (typeof answer !== "string" || !options.includes(answer)) throw new Error("Choose one of the listed options.");
     } else if (!Array.isArray(answer) || answer.length < 1 || answer.length > options.length || answer.some((item) => typeof item !== "string" || !options.includes(item)) || new Set(answer).size !== answer.length) {

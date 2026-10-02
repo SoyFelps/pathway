@@ -163,4 +163,4 @@
 .numeric-only-switch input:checked+.numeric-only-track{background:#315f4a}
 .numeric-only-switch input:checked+.numeric-only-track::after{transform:translateX(16px)}
 .numeric-only-switch input:focus-visible+.numeric-only-track{outline:2px solid #315f4a;outline-offset:3px}
-.answer-text[type=number]{min-height:0;height:54px;resize:none}
+.answer-text[data-numeric-only=true]{min-height:0;height:54px;resize:none}

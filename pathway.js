@@ -22,10 +22,9 @@
   const clone = value => JSON.parse(JSON.stringify(value));
   const uid = prefix => `${prefix || 'id'}-${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-  function isNumericAnswer(value) {
+  function isDigitsOnlyAnswer(value) {
     if (typeof value !== 'string') return false;
-    const normalized = value.trim();
-    return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(normalized) && Number.isFinite(Number(normalized));
+    return /^[0-9]+$/.test(value);
   }
 
   function createNode(type, x, y) {
@@ -190,5 +189,5 @@
     return [example];
   }
 
-  window.PathwayCore = { STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isNumericAnswer, createNode, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
+  window.PathwayCore = { STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
 })();
