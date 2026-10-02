@@ -164,3 +164,16 @@
 .numeric-only-switch input:checked+.numeric-only-track::after{transform:translateX(16px)}
 .numeric-only-switch input:focus-visible+.numeric-only-track{outline:2px solid #315f4a;outline-offset:3px}
 .answer-text[data-numeric-only=true]{min-height:0;height:54px;resize:none}
+
+
+/* Optional Team Fit and Skill Fit applicant stages */
+.applicant-stage-toggle-wrap{margin:0 0 14px;padding:11px 13px;background:#fff;border:1px solid var(--line);border-radius:9px}
+.applicant-stage-toggle{display:inline-flex;align-items:center;gap:9px;color:#34463a;font-size:12px;font-weight:650;cursor:pointer}
+.applicant-stage-toggle input{width:15px;height:15px;margin:0;accent-color:var(--green)}
+.applicant-stage-toggle input:disabled{cursor:not-allowed;opacity:.7}
+.applicant-stage-toggle-help{margin:5px 0 0 24px;color:var(--muted);font-size:11px;line-height:1.45}
+.kanban-board.has-fit-stages{grid-template-columns:repeat(6,minmax(215px,1fr))}
+.stage-team-fit{background:#8271b3}
+.stage-skill-fit{background:#4e8da2}
+@media(max-width:1100px){.kanban-board.has-fit-stages{grid-template-columns:repeat(6,minmax(200px,1fr))}}
+@media(max-width:760px){.kanban-board.has-fit-stages{grid-template-columns:repeat(6,minmax(245px,80vw))}}

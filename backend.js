@@ -12,7 +12,7 @@
   const BILLING_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/billing`;
   const TEAM_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/team`;
   const DELETE_ACCOUNT_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/delete-account`;
-  const APPLICANT_STATUSES = new Set(['new', 'failed', 'promising', 'approved']);
+  const APPLICANT_STATUSES = new Set(['new', 'failed', 'promising', 'approved', 'team_fit', 'skill_fit']);
 
   async function callApplications(body, accessToken = '') {
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
