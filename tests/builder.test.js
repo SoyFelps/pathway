@@ -62,3 +62,14 @@ test('job details are shown only when the fixed candidate-details node is select
   assert.match(inspector, /<div class="inspector-kicker">Selected step<\/div>/);
   assert.match(inspector, /querySelector\('#role-company'\)\?\./);
 });
+
+test('short-answer nodes expose an accessible numeric-only switch', () => {
+  const start = builder.indexOf('function drawInspector()');
+  const end = builder.indexOf('function updateNodeLabel(', start);
+  const inspector = builder.slice(start, end);
+  assert.match(inspector, /selected\.type === 'shortText'[\s\S]*?class="numeric-only-toggle"[\s\S]*?role="switch"/);
+  assert.match(inspector, /numericToggle\?\.addEventListener\('change',[\s\S]*selected\.numericOnly = event\.target\.checked/);
+  assert.match(builder, /node\.numericOnly \? 'Number response' : 'Open-ended response'/);
+  assert.match(styles, /\.numeric-only-switch input:checked\+\.numeric-only-track/);
+  assert.match(styles, /\.answer-text\[type=number\]/);
+});

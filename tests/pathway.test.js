@@ -46,6 +46,26 @@ test('sample choice answers lead to distinct candidate paths', () => {
   assert.notEqual(yes.id, exploring.id);
 });
 
+test('numeric-only short answers default off for old flows and preserve the setting across publication encoding', async () => {
+  const createdQuestion = Core.createNode('shortText', 400, 200);
+  assert.equal(createdQuestion.numericOnly, false);
+  assert.equal(Core.isNumericAnswer('0'), true);
+  assert.equal(Core.isNumericAnswer('-12.75'), true);
+  assert.equal(Core.isNumericAnswer('2.1e4'), true);
+  assert.equal(Core.isNumericAnswer('0x10'), false);
+  assert.equal(Core.isNumericAnswer('12abc'), false);
+  assert.equal(Core.isNumericAnswer('Infinity'), false);
+
+  const flow = Core.createSampleFlow();
+  const question = flow.nodes.find(node => node.type === 'shortText');
+  question.numericOnly = true;
+  const restored = await Core.decodeFlow(await Core.encodeFlow(flow));
+  assert.equal(restored.nodes.find(node => node.id === question.id).numericOnly, true);
+
+  delete question.numericOnly;
+  assert.equal(Core.normalizeFlow(flow).nodes.find(node => node.id === question.id).numericOnly, false);
+});
+
 test('published flow compresses and decodes without losing branching', async () => {
   const flow = Core.createSampleFlow();
   const urlData = await Core.encodeFlow(flow);

@@ -111,12 +111,23 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /candidate\.js\?v=completion-return-20261001/);
-  assert.match(read('index.html'), /candidate\.js\?v=completion-return-20261001/);
-  assert.match(read('apply.html'), /styles\.css\?v=editor-hint-cleanup-20261001/);
-  assert.match(read('index.html'), /styles\.css\?v=editor-hint-cleanup-20261001/);
+  assert.match(read('apply.html'), /pathway\.js\?v=numeric-answer-20261002/);
+  assert.match(read('index.html'), /pathway\.js\?v=numeric-answer-20261002/);
+  assert.match(read('apply.html'), /candidate\.js\?v=numeric-answer-20261002/);
+  assert.match(read('index.html'), /candidate\.js\?v=numeric-answer-20261002/);
+  assert.match(read('apply.html'), /styles\.css\?v=numeric-answer-20261002/);
+  assert.match(read('index.html'), /styles\.css\?v=numeric-answer-20261002/);
   assert.match(read('apply.html'), /backend\.js\?v=flow-publish-20261001/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
+});
+
+test('numeric-only short answers render as number fields and are enforced by the public endpoint', () => {
+  const candidate = read('candidate.js');
+  const edge = read('supabase/functions/applications/index.ts');
+  assert.match(candidate, /node\.numericOnly === true[\s\S]*?type="number"[\s\S]*?step="any"/);
+  assert.match(candidate, /C\.isNumericAnswer\(answer\)/);
+  assert.match(edge, /function isNumericAnswer\(value: unknown\)/);
+  assert.match(edge, /current\.numericOnly === true && !isNumericAnswer\(answer\)/);
 });
 
 test('all live outcomes share a neutral submission screen with a working job-details return and clipboard share', () => {

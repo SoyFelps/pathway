@@ -87,7 +87,9 @@
       let input = '';
       const previousAnswer = state.answers[node.id];
       if (node.type === 'shortText') {
-        input = `<textarea class="answer-text" name="answer" placeholder="Write your answer here…" required maxlength="4000">${C.esc(previousAnswer || '')}</textarea>`;
+        input = node.numericOnly === true
+          ? `<input class="answer-text" type="number" inputmode="decimal" step="any" name="answer" placeholder="Enter a number…" required value="${C.esc(previousAnswer ?? '')}">`
+          : `<textarea class="answer-text" name="answer" placeholder="Write your answer here…" required maxlength="4000">${C.esc(previousAnswer || '')}</textarea>`;
       } else if (node.type === 'singleChoice') {
         input = `<div class="answer-area">${(node.options || []).map(value => `<label class="answer-option"><input type="radio" name="answer" value="${C.esc(value)}" required ${previousAnswer === value ? 'checked' : ''}><span>${C.esc(value)}</span></label>`).join('')}</div>`;
       } else if (node.type === 'multiChoice') {
@@ -109,6 +111,11 @@
         const answer = node.type === 'multiChoice'
           ? [...form.querySelectorAll('input:checked')].map(inputEl => inputEl.value)
           : new FormData(form).get('answer');
+        if (node.type === 'shortText' && node.numericOnly === true && !C.isNumericAnswer(answer)) {
+          const numericInput = form.querySelector('[name="answer"]');
+          if (numericInput) { numericInput.setCustomValidity('Enter a valid number.'); numericInput.reportValidity(); numericInput.setCustomValidity(''); }
+          return;
+        }
         state.answers[node.id] = answer;
         const next = C.nextNode(flow, node, answer);
         if (!next) { renderInvalid(root, 'This question does not have a next step.'); return; }

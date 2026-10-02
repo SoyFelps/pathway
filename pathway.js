@@ -22,11 +22,16 @@
   const clone = value => JSON.parse(JSON.stringify(value));
   const uid = prefix => `${prefix || 'id'}-${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`;
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  function isNumericAnswer(value) {
+    if (typeof value !== 'string') return false;
+    const normalized = value.trim();
+    return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(normalized) && Number.isFinite(Number(normalized));
+  }
 
   function createNode(type, x, y) {
     const base = { id: uid(type), type, x: Math.max(24, x || 0), y: Math.max(24, y || 0), label: '', options: [] };
     if (type === 'candidateInfo') base.label = 'Your details';
-    if (type === 'shortText') base.label = 'A question for your candidate';
+    if (type === 'shortText') { base.label = 'A question for your candidate'; base.numericOnly = false; }
     if (type === 'singleChoice') { base.label = 'Choose one option'; base.options = ['Option one', 'Option two']; }
     if (type === 'multiChoice') { base.label = 'Select all that apply'; base.options = ['Option one', 'Option two']; }
     if (type === 'end') { base.label = 'Application received'; base.subtype = 'submitted'; }
@@ -81,6 +86,7 @@
     OPTIONAL_FIELDS.forEach(field => { normalized.candidateInfoFields[field.key] = Boolean(normalized.candidateInfoFields[field.key]); });
     normalized.nodes = Array.isArray(normalized.nodes) ? normalized.nodes : [];
     normalized.edges = Array.isArray(normalized.edges) ? normalized.edges : [];
+    normalized.nodes.forEach(node => { if (node.type === 'shortText') node.numericOnly = Boolean(node.numericOnly); });
     const mandatory = normalized.nodes.filter(node => node.type === 'candidateInfo');
     if (mandatory.length !== 1) throw new Error('A flow must contain one candidate information step.');
     if (normalized.nodes.length < 2) throw new Error('This flow is incomplete.');
@@ -184,5 +190,5 @@
     return [example];
   }
 
-  window.PathwayCore = { STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, createNode, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
+  window.PathwayCore = { STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isNumericAnswer, createNode, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
 })();
