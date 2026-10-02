@@ -42,7 +42,7 @@ test('workspace UI includes search, flow filter, standard and fit Kanban stages,
   }
 });
 
-test('Team Fit and Skill Fit are opt-in and cannot be hidden while applicants remain in them', () => {
+test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied columns stay enabled', () => {
   const builder = read('builder.js');
   const migration = read('supabase/migrations/20261002113654_add_team_fit_skill_fit_applicant_stages.sql');
   const templateStart = builder.indexOf('async function renderApplicants()');
@@ -51,14 +51,17 @@ test('Team Fit and Skill Fit are opt-in and cannot be hidden while applicants re
   assert.ok(template.indexOf('applicant-stage-toggle-wrap') < template.indexOf('id="applicants-content"'));
   assert.match(builder, /const optionalApplicantStageKeys = new Set\(\['team_fit', 'skill_fit'\]\)/);
   assert.match(builder, /applicantFitStagesEnabled = loadApplicantFitStagesPreference\(\)/);
-  assert.match(builder, /if \(hasFitApplicants && !applicantFitStagesEnabled\)/);
-  assert.match(builder, /hasFitApplicants \? 'disabled' : ''/);
-  assert.match(builder, /if \(!event\.target\.checked && applicantsInFitStages\(\)\)/);
-  assert.match(builder, /Move all applicants out of Team Fit and Skill Fit before disabling these columns/);
+  assert.match(builder, /applicantFitStagesEnabled\[stage\.key\]/);
+  assert.match(builder, /applicant-fit-stage-\$\{stage\.key\}/);
+  assert.match(builder, /if \(!event\.target\.checked && applicantHasStage\(stageKey\)\)/);
+  assert.doesNotMatch(builder, /applicant-stage-toggle-help|Move all applicants out of Team Fit and Skill Fit/);
   assert.match(migration, /status in \('new', 'failed', 'promising', 'approved', 'team_fit', 'skill_fit'\)/);
   assert.match(migration, /public\.workspace_user_has_permission\(workspace_id, 'applicants'\)/);
-  assert.match(read('styles.css'), /\.kanban-board\.has-fit-stages/);
-  assert.match(read('index.html'), /builder\.js\?v=applicant-fit-stages-20261002/);
+  const styles = read('styles.css');
+  assert.match(styles, /\.kanban-board\.has-one-fit-stage/);
+  assert.match(styles, /\.kanban-board\.has-two-fit-stages/);
+  assert.doesNotMatch(styles, /\.applicant-stage-toggle-wrap\{[^}]*background:/);
+  assert.match(read('index.html'), /builder\.js\?v=applicant-fit-toggles-20261002/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -134,8 +137,8 @@ test('live published form submits while builder preview remains non-persistent',
   assert.match(read('index.html'), /pathway\.js\?v=digits-only-20261002/);
   assert.match(read('apply.html'), /candidate\.js\?v=digits-only-20261002/);
   assert.match(read('index.html'), /candidate\.js\?v=digits-only-20261002/);
-  assert.match(read('apply.html'), /styles\.css\?v=applicant-fit-stages-20261002/);
-  assert.match(read('index.html'), /styles\.css\?v=applicant-fit-stages-20261002/);
+  assert.match(read('apply.html'), /styles\.css\?v=applicant-fit-toggles-20261002/);
+  assert.match(read('index.html'), /styles\.css\?v=applicant-fit-toggles-20261002/);
   assert.match(read('apply.html'), /backend\.js\?v=flow-publish-20261001/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });

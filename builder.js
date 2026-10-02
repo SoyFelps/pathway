@@ -32,7 +32,7 @@
   let applicantFlowLabels = [];
   let applicantFilter = '';
   let applicantSearch = '';
-  let applicantFitStagesEnabled = false;
+  let applicantFitStagesEnabled = { team_fit: false, skill_fit: false };
   let currentCardSummaryRequest = 0;
   let paymentHistoryOpen = false;
   let paymentHistoryLoaded = false;
@@ -54,18 +54,19 @@
     { key: 'skill_fit', label: 'Skill Fit', color: 'stage-skill-fit', optional: true }
   ];
   const optionalApplicantStageKeys = new Set(['team_fit', 'skill_fit']);
-  function applicantFitStagePreferenceKey() { return `pathway:applicant-fit-stages:${workspace?.id || 'default'}`; }
+  function applicantFitStagePreferenceKey(stageKey) { return `pathway:applicant-fit-stage:${workspace?.id || 'default'}:${stageKey}`; }
   function loadApplicantFitStagesPreference() {
-    try { return localStorage.getItem(applicantFitStagePreferenceKey()) === 'true'; }
-    catch (_) { return false; }
+    try {
+      return Object.fromEntries([...optionalApplicantStageKeys].map(stageKey => [stageKey, localStorage.getItem(applicantFitStagePreferenceKey(stageKey)) === 'true']));
+    } catch (_) { return { team_fit: false, skill_fit: false }; }
   }
-  function saveApplicantFitStagesPreference() {
-    try { localStorage.setItem(applicantFitStagePreferenceKey(), String(applicantFitStagesEnabled)); }
+  function saveApplicantFitStagePreference(stageKey) {
+    try { localStorage.setItem(applicantFitStagePreferenceKey(stageKey), String(applicantFitStagesEnabled[stageKey])); }
     catch (_) { /* Keep the checkbox usable when browser storage is unavailable. */ }
   }
-  function applicantsInFitStages() { return applicants.some(applicant => optionalApplicantStageKeys.has(applicant.status)); }
+  function applicantHasStage(stageKey) { return applicants.some(applicant => applicant.status === stageKey); }
   function visibleApplicantStages() {
-    return applicantFitStagesEnabled ? applicantStages : applicantStages.filter(stage => !stage.optional);
+    return applicantStages.filter(stage => !stage.optional || applicantFitStagesEnabled[stage.key] || applicantHasStage(stage.key));
   }
 
   const currentFlow = () => flows.find(flow => flow.id === currentId);
@@ -765,23 +766,27 @@
   function renderApplicantBoard() {
     const content = root.querySelector('#applicants-content');
     if (!content) return;
-    const hasFitApplicants = applicantsInFitStages();
-    if (hasFitApplicants && !applicantFitStagesEnabled) {
-      applicantFitStagesEnabled = true;
-      saveApplicantFitStagesPreference();
+    const optionalStages = applicantStages.filter(stage => stage.optional);
+    for (const stage of optionalStages) {
+      if (applicantHasStage(stage.key) && !applicantFitStagesEnabled[stage.key]) {
+        applicantFitStagesEnabled[stage.key] = true;
+        saveApplicantFitStagePreference(stage.key);
+      }
     }
     const toggleWrap = root.querySelector('#applicant-stage-toggle-wrap');
     if (toggleWrap) {
-      toggleWrap.innerHTML = `<label class="applicant-stage-toggle" for="applicant-fit-stages-toggle"><input id="applicant-fit-stages-toggle" type="checkbox" ${applicantFitStagesEnabled ? 'checked' : ''} ${hasFitApplicants ? 'disabled' : ''}><span>Enable Team Fit and Skill Fit columns</span></label><p class="applicant-stage-toggle-help" id="applicant-fit-stages-help" role="status">${hasFitApplicants ? 'Move all applicants out of Team Fit and Skill Fit before disabling these columns.' : 'Optional stages for evaluating team fit and skill fit.'}</p>`;
-      toggleWrap.querySelector('#applicant-fit-stages-toggle')?.addEventListener('change', event => {
-        if (!event.target.checked && applicantsInFitStages()) {
-          event.target.checked = true;
-          showToast('Move applicants out of Team Fit and Skill Fit before disabling these columns.');
-          return;
-        }
-        applicantFitStagesEnabled = event.target.checked;
-        saveApplicantFitStagesPreference();
-        renderApplicantBoard();
+      toggleWrap.innerHTML = optionalStages.map(stage => `<label class="applicant-stage-toggle" for="applicant-fit-stage-${stage.key}"><input id="applicant-fit-stage-${stage.key}" type="checkbox" data-stage-key="${stage.key}" ${applicantFitStagesEnabled[stage.key] ? 'checked' : ''} ${applicantHasStage(stage.key) ? 'disabled' : ''}><span>${stage.label}</span></label>`).join('');
+      toggleWrap.querySelectorAll('.applicant-stage-toggle input').forEach(toggle => {
+        toggle.addEventListener('change', event => {
+          const stageKey = event.target.dataset.stageKey;
+          if (!event.target.checked && applicantHasStage(stageKey)) {
+            event.target.checked = true;
+            return;
+          }
+          applicantFitStagesEnabled[stageKey] = event.target.checked;
+          saveApplicantFitStagePreference(stageKey);
+          renderApplicantBoard();
+        });
       });
     }
     const term = applicantSearch.trim().toLowerCase();
@@ -798,7 +803,9 @@
       return;
     }
     const stages = visibleApplicantStages();
-    content.innerHTML = `<div class="kanban-summary"><strong>${visible.length}</strong> ${visible.length === 1 ? 'applicant' : 'applicants'}${filterName ? ` for <strong>${esc(filterName)}</strong>` : ' across all jobs'}${applicants.length >= 1000 ? ' · Showing the latest 1,000; filter by job to narrow the list.' : ''}</div><section class="kanban-board ${applicantFitStagesEnabled ? 'has-fit-stages' : ''}" aria-label="Applicant pipeline">${stages.map(stage => {
+    const optionalStageCount = stages.filter(stage => stage.optional).length;
+    const boardSizeClass = optionalStageCount === 1 ? 'has-one-fit-stage' : optionalStageCount === 2 ? 'has-two-fit-stages' : '';
+    content.innerHTML = `<div class="kanban-summary"><strong>${visible.length}</strong> ${visible.length === 1 ? 'applicant' : 'applicants'}${filterName ? ` for <strong>${esc(filterName)}</strong>` : ' across all jobs'}${applicants.length >= 1000 ? ' · Showing the latest 1,000; filter by job to narrow the list.' : ''}</div><section class="kanban-board ${boardSizeClass}" aria-label="Applicant pipeline">${stages.map(stage => {
       const cards = visible.filter(applicant => applicant.status === stage.key);
       return `<section class="kanban-column" data-stage="${stage.key}" aria-label="${stage.label}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${stage.label}</div><span class="kanban-count">${cards.length}</span></div><div class="applicant-list">${cards.length ? cards.map(applicant => `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div></article>`).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
     }).join('')}</section>`;
