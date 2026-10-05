@@ -13,6 +13,7 @@
     copy: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>'
   };
   let flows = [];
+  let companies = [];
   let workspace = null;
   let user = null;
   let isOwner = false;
@@ -122,6 +123,10 @@
     toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
   }
   function initials(name) { return (name || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
+  function companySnapshot(company) { return company ? { id: company.id, name: company.name, description: company.description || '', logoUrl: company.logoUrl || '' } : null; }
+  function companyOptionsHtml(selectedId = '') {
+    return `<option value="" ${selectedId ? '' : 'selected'}>Use workspace name (${esc(workspace.name)})</option>${companies.map(company => `<option value="${esc(company.id)}" ${company.id === selectedId ? 'selected' : ''}>${esc(company.name)}</option>`).join('')}`;
+  }
   function nodeSummary(flow) { return `${flow.nodes.length} steps · ${flow.edges.length} connections`; }
   function ago(value) {
     if (!value) return 'Just created';
@@ -140,15 +145,49 @@
   function closeModal() { modalRoot.innerHTML = ''; root.querySelector('.app-shell')?.classList.remove('is-creating-flow'); }
 
   function renderSidebar(active) {
-    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>Applicants</button>${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.team}</span>My Team</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">◈</span>My Plan</button>` : ''}<button class="sidebar-link ${active === 'settings' ? 'active' : ''}" data-route="settings"><span class="sidebar-icon" aria-hidden="true">⚙</span>Settings</button><div class="sidebar-bottom">${esc(workspace?.name || 'Workspace')}<br>Access follows your team permissions.</div></aside>`;
+    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button>${hasPermission('flows') ? `<button class="sidebar-link ${active === 'my-companies' ? 'active' : ''}" data-route="my-companies"><span class="sidebar-icon" aria-hidden="true">▣</span>My Companies</button>` : ''}<button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>Applicants</button>${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.team}</span>My Team</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">◈</span>My Plan</button>` : ''}<button class="sidebar-link ${active === 'settings' ? 'active' : ''}" data-route="settings"><span class="sidebar-icon" aria-hidden="true">⚙</span>Settings</button><div class="sidebar-bottom">${esc(workspace?.name || 'Workspace')}<br>Access follows your team permissions.</div></aside>`;
   }
 
   function bindSidebar() {
     root.querySelector('[data-route="dashboard"]')?.addEventListener('click', () => renderDashboard());
+    root.querySelector('[data-route="my-companies"]')?.addEventListener('click', renderMyCompanies);
     root.querySelector('[data-route="applicants"]')?.addEventListener('click', () => { void renderApplicants(); });
     root.querySelector('[data-route="my-plan"]')?.addEventListener('click', renderMyPlan);
     root.querySelector('[data-route="my-team"]')?.addEventListener('click', () => { void renderMyTeam(); });
     root.querySelector('[data-route="settings"]')?.addEventListener('click', renderSettings);
+  }
+
+  function renderMyCompanies() {
+    if (!hasPermission('flows')) return renderAccessMessage('flows');
+    currentId = null; selectedId = null;
+    const atLimit = companies.length >= 3;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-companies')}<main class="companies-page"><div class="companies-heading"><div><div class="eyebrow">Hiring workspace</div><h1>My Companies</h1><p>Choose a company to represent a job on its public application page.</p></div><div class="companies-heading-actions"><span class="companies-count">${companies.length} / 3 companies</span><button class="btn btn-primary" id="new-company" ${atLimit ? 'disabled title="You can add up to three companies."' : ''}>＋ &nbsp;New company</button></div></div>${companies.length ? `<section class="companies-grid" aria-label="Your companies">${companies.map(company => `<article class="company-card"><div class="company-card-heading">${company.logoUrl ? `<img class="company-card-logo" src="${esc(company.logoUrl)}" alt="${esc(company.name)} logo">` : `<span class="company-card-logo company-card-logo-fallback" aria-hidden="true">${esc(initials(company.name))}</span>`}<div><h2>${esc(company.name)}</h2><span>Company profile</span></div></div><p>${esc(company.description)}</p></article>`).join('')}</section>` : `<section class="companies-empty"><span class="brand-mark">↗</span><h2>No companies yet</h2><p>New flows will use ${esc(workspace.name)} until you add a company profile.</p><button class="btn btn-primary" id="empty-new-company">＋ &nbsp;New company</button></section>`}</main></div></div>`;
+    bindSidebar(); bindPlanControl();
+    root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
+    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+    root.querySelector('#new-company')?.addEventListener('click', showNewCompany);
+    root.querySelector('#empty-new-company')?.addEventListener('click', showNewCompany);
+  }
+
+  function showNewCompany() {
+    if (!hasPermission('flows')) return renderAccessMessage('flows');
+    if (companies.length >= 3) { showToast('You can add up to three companies to your workspace.'); return; }
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Company profile</div><h2>New company</h2><p>Details are shown to candidates when this company is selected for a job.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-company-form"><div class="field-group"><label for="company-name">Company name</label><input class="text-input" id="company-name" name="name" maxlength="120" required placeholder="e.g. Northstar Studio"></div><div class="field-group"><label for="company-logo">Logo <span class="muted">(optional)</span></label><input class="text-input company-logo-upload" id="company-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"><small class="field-help">PNG, JPG, or WebP · Maximum 2 MB</small></div><div class="field-group"><label for="company-description">Company description</label><textarea class="text-area" id="company-description" name="description" maxlength="3000" required placeholder="Tell candidates about the company…"></textarea><small class="field-help">Up to 3,000 characters</small></div><div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit" id="create-company-submit">Save company</button></div></form>`);
+    modalRoot.querySelector('#new-company-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = event.currentTarget; const button = form.querySelector('#create-company-submit'); const errorBox = form.querySelector('#company-form-error');
+      const file = form.elements.logo.files?.[0] || null;
+      if (file && (file.size > 2 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
+        errorBox.textContent = 'Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.'; errorBox.classList.add('show'); return;
+      }
+      button.disabled = true; button.textContent = 'Saving…'; errorBox.classList.remove('show');
+      try {
+        const company = await window.PathwayBackend.createCompany({ name: form.elements.name.value, description: form.elements.description.value, logoFile: file }, workspace);
+        companies.push(company); closeModal(); renderMyCompanies(); showToast('Company added.');
+      } catch (error) {
+        errorBox.textContent = error.message || 'The company could not be saved.'; errorBox.classList.add('show'); button.disabled = false; button.textContent = 'Save company';
+      }
+    });
   }
 
   function renderPlanControl() {
@@ -172,6 +211,9 @@
     } else if (root.querySelector('.my-plan-page')) {
       subscriptionReturnPage = 'my-plan';
       subscriptionReturnFlowId = null;
+    } else if (root.querySelector('.companies-page')) {
+      subscriptionReturnPage = 'my-companies';
+      subscriptionReturnFlowId = null;
     } else {
       subscriptionReturnPage = 'dashboard';
       subscriptionReturnFlowId = null;
@@ -186,6 +228,8 @@
       void renderApplicants();
     } else if (subscriptionReturnPage === 'my-plan') {
       renderMyPlan();
+    } else if (subscriptionReturnPage === 'my-companies') {
+      renderMyCompanies();
     } else {
       renderDashboard();
     }
@@ -944,16 +988,18 @@
     setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Private workspace</div><h2>${esc(workspace.name)}</h2><p>Signed in as ${esc(user.email)}.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="prototype-note" style="margin:0">Workspace data is isolated in Supabase. On Premium, the owner can add up to 3 teammates at no extra per-seat charge and choose their access to flows, candidates, and team management. Team invitations are shared as secure links.</div><div class="modal-actions"><button class="btn btn-primary" data-close>Got it</button></div>`);
   }
   async function doSignOut() {
-    try { await window.PathwayBackend.signOut(); flows = []; applicants = []; workspace = null; user = null; window.PathwayAuth.renderAuth(); }
+    try { await window.PathwayBackend.signOut(); flows = []; companies = []; applicants = []; workspace = null; user = null; window.PathwayAuth.renderAuth(); }
     catch (error) { showToast(`Could not sign out: ${error.message || 'please retry'}`); }
   }
 
   function showNewFlow() {
     root.querySelector('.app-shell')?.classList.add('is-creating-flow');
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Start with the role</div><h2>Create a new application flow</h2><p>Give candidates a clear picture of the opportunity before they apply.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-flow-form"><div class="field-group"><label for="new-company">Company name</label><input class="text-input" id="new-company" name="companyName" placeholder="e.g. Northstar Studio" required></div><div class="field-group"><label for="new-title">Job title</label><input class="text-input" id="new-title" name="jobTitle" placeholder="e.g. Senior Product Designer" required></div><div class="field-group"><label for="new-description">Job description</label><textarea class="text-area" id="new-description" name="jobDescription" placeholder="A short, welcoming overview of the role and the team…" required></textarea></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit">Create flow</button></div></form>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Start with the role</div><h2>Create a new application flow</h2><p>Give candidates a clear picture of the opportunity before they apply.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-flow-form">${companies.length ? `<div class="field-group"><label for="new-company-id">Company</label><select class="select-input" id="new-company-id" name="companyId">${companyOptionsHtml()}</select></div>` : `<p class="field-help">This job will use your workspace name: ${esc(workspace.name)}. Add a company profile from My Companies to choose another.</p>`}<div class="field-group"><label for="new-title">Job title</label><input class="text-input" id="new-title" name="jobTitle" placeholder="e.g. Senior Product Designer" required></div><div class="field-group"><label for="new-description">Job description</label><textarea class="text-area" id="new-description" name="jobDescription" placeholder="A short, welcoming overview of the role and the team…" required></textarea></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit">Create flow</button></div></form>`);
     modalRoot.querySelector('#new-flow-form').addEventListener('submit', event => {
       event.preventDefault(); const data = new FormData(event.currentTarget);
-      const flow = C.createFlow(data.get('companyName').trim(), data.get('jobTitle').trim(), data.get('jobDescription').trim());
+      const company = companies.find(item => item.id === data.get('companyId')) || null;
+      const flow = C.createFlow(company?.name || workspace.name, data.get('jobTitle').trim(), data.get('jobDescription').trim());
+      flow.companyId = company?.id || null; flow.companyProfile = companySnapshot(company);
       flows.unshift(flow); closeModal(); openFlow(flow.id); save();
     });
   }
@@ -1154,11 +1200,11 @@
     const selected = flow.nodes.find(node => node.id === selectedId) || flow.nodes[0];
     const [title] = typeInfo(selected);
     const roleSettings = selected.type === 'candidateInfo'
-      ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div><button class="icon-btn" id="edit-role" aria-label="Edit role details">✎</button></div><div class="field-group"><label for="role-company">Company</label><input class="text-input" id="role-company" value="${esc(flow.companyName)}"></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><label for="role-description">Job description</label><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><hr class="inspector-divider">`
+      ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div><button class="icon-btn" id="edit-role" aria-label="Edit role details">✎</button></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><label for="role-description">Job description</label><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><hr class="inspector-divider">`
       : '';
     panel.innerHTML = `${roleSettings}<div class="inspector-title"><div><div class="inspector-kicker">Selected step</div><h2>${esc(title)}</h2></div>${selected.type === 'candidateInfo' ? '<span class="node-badge">Fixed start</span>' : ''}</div><div id="node-editor"></div>`;
     const syncRole = (key, value) => { flow[key] = value; const crumb = document.querySelector('.crumb-title'); if (crumb && key === 'jobTitle') crumb.textContent = value || 'Untitled role'; save(); };
-    panel.querySelector('#role-company')?.addEventListener('input', event => syncRole('companyName', event.target.value));
+    panel.querySelector('#role-company-profile')?.addEventListener('change', event => { const company = companies.find(item => item.id === event.target.value) || null; flow.companyId = company?.id || null; flow.companyProfile = companySnapshot(company); flow.companyName = company?.name || workspace.name; save(); });
     panel.querySelector('#role-title')?.addEventListener('input', event => syncRole('jobTitle', event.target.value));
     panel.querySelector('#role-description')?.addEventListener('input', event => syncRole('jobDescription', event.target.value));
     panel.querySelector('#edit-role')?.addEventListener('click', () => { panel.querySelector('#role-title')?.focus(); });
@@ -1347,6 +1393,7 @@
     teamMember = context.teamMember || null;
     subscription = context.subscription || { status: 'free', active: false, currentPeriodEnd: null, cancelAtPeriodEnd: false };
     flows = context.flows;
+    companies = context.companies || [];
     applicants = []; applicantFilter = ''; applicantSearch = '';
     const requestedPage = window.location.hash.replace(/^#/, '');
     const query = new URLSearchParams(window.location.search);
@@ -1355,7 +1402,8 @@
     if (checkoutComplete || paymentMethodUpdated) {
       window.history.replaceState({}, '', window.location.pathname + window.location.hash);
     }
-    if (requestedPage === 'applicants') void renderApplicants();
+    if (requestedPage === 'my-companies') renderMyCompanies();
+    else if (requestedPage === 'applicants') void renderApplicants();
     else if (requestedPage === 'my-plan') renderMyPlan();
     else if (requestedPage === 'my-team') void renderMyTeam();
     else if (requestedPage === 'settings') renderSettings();

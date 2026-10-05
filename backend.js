@@ -320,43 +320,93 @@
     return payload;
   }
 
+  function companyRecord(row) {
+    const logoUrl = row.logo_path ? client.storage.from('company-logos').getPublicUrl(row.logo_path).data?.publicUrl || '' : '';
+    return { id: row.id, workspaceId: row.workspace_id, name: row.name, description: row.description || '', logoPath: row.logo_path || null, logoUrl, createdAt: row.created_at };
+  }
+
+  async function listCompanies(workspaceId) {
+    await requireSession();
+    const { data, error } = await client.from('workspace_companies').select('id,workspace_id,name,description,logo_path,created_at')
+      .eq('workspace_id', workspaceId).order('created_at', { ascending: true }).limit(3);
+    if (error) throw error;
+    return (data || []).map(companyRecord);
+  }
+
+  async function createCompany(input, workspace) {
+    const session = await requireSession();
+    const name = String(input?.name || '').trim();
+    const description = String(input?.description || '').trim();
+    const logoFile = input?.logoFile || null;
+    if (!name || name.length > 120) throw new Error('Enter a company name (up to 120 characters).');
+    if (!description || description.length > 3000) throw new Error('Enter a company description (up to 3,000 characters).');
+    const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+    if (logoFile && (!(logoFile instanceof File) || !allowedTypes.has(logoFile.type) || logoFile.size < 1 || logoFile.size > 2 * 1024 * 1024)) {
+      throw new Error('Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.');
+    }
+    const id = crypto.randomUUID();
+    let logoPath = null;
+    const { data, error } = await client.from('workspace_companies').insert({ id, workspace_id: workspace.id, created_by: session.user.id, name, description })
+      .select('id,workspace_id,name,description,logo_path,created_at').single();
+    if (error) throw error;
+    if (logoFile) {
+      const extension = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' })[logoFile.type];
+      logoPath = `${workspace.id}/${id}/logo.${extension}`;
+      const bucket = client.storage.from('company-logos');
+      try {
+        const uploaded = await bucket.upload(logoPath, logoFile, { contentType: logoFile.type, upsert: false });
+        if (uploaded.error) throw uploaded.error;
+        const updated = await client.from('workspace_companies').update({ logo_path: logoPath }).eq('workspace_id', workspace.id).eq('id', id).select('id').single();
+        if (updated.error) throw updated.error;
+        data.logo_path = logoPath;
+      } catch (uploadError) {
+        try { await bucket.remove([logoPath]); } catch (_) { /* best-effort cleanup after failed upload */ }
+        await client.from('workspace_companies').delete().eq('workspace_id', workspace.id).eq('id', id);
+        throw uploadError;
+      }
+    }
+    return companyRecord(data);
+  }
+
   async function bootstrap() {
     const { data: authData, error: authError } = await client.auth.getSession();
     if (authError) throw authError;
-    if (!authData.session) return { session: null, workspace: null, flows: [], teamMember: null, canCreateWorkspace: false };
+    if (!authData.session) return { session: null, workspace: null, flows: [], companies: [], teamMember: null, canCreateWorkspace: false };
     const user = authData.session.user;
     const { data: ownedWorkspace, error: ownerError } = await client.from('workspaces').select('id,name,created_at').eq('owner_id', user.id).maybeSingle();
     if (ownerError) throw new Error(`Could not load your workspace: ${ownerError.message}`);
     if (ownedWorkspace) {
       const subscription = await getSubscriptionState(ownedWorkspace.id);
       const flows = await listFlows(ownedWorkspace.id);
-      return { session: authData.session, user, workspace: ownedWorkspace, subscription, flows, isOwner: true, teamMember: null, canCreateWorkspace: false };
+      const companies = await listCompanies(ownedWorkspace.id);
+      return { session: authData.session, user, workspace: ownedWorkspace, subscription, flows, companies, isOwner: true, teamMember: null, canCreateWorkspace: false };
     }
     const team = await callTeam({ action: 'context' });
     if (team.workspace) {
       const subscription = { status: team.premiumActive ? 'active' : 'expired', currentPeriodEnd: null, cancelAtPeriodEnd: false, hasBillingHistory: false, active: Boolean(team.premiumActive) };
       const member = team.member || {};
       const flows = team.premiumActive && member.can_flows ? await listFlows(team.workspace.id) : [];
-      return { session: authData.session, user, workspace: team.workspace, subscription, flows, isOwner: false, teamMember: member, canCreateWorkspace: false };
+      const companies = team.premiumActive && member.can_flows ? await listCompanies(team.workspace.id) : [];
+      return { session: authData.session, user, workspace: team.workspace, subscription, flows, companies, isOwner: false, teamMember: member, canCreateWorkspace: false };
     }
     const { data: canCreateWorkspace, error: setupError } = await client.rpc('current_user_can_create_workspace');
     if (setupError) throw new Error(`Could not verify workspace setup: ${setupError.message}`);
-    return { session: authData.session, user, workspace: null, subscription: null, flows: [], isOwner: false, teamMember: null, canCreateWorkspace: Boolean(canCreateWorkspace) };
+    return { session: authData.session, user, workspace: null, subscription: null, flows: [], companies: [], isOwner: false, teamMember: null, canCreateWorkspace: Boolean(canCreateWorkspace) };
   }
 
   async function listFlows(workspaceId) {
     await requireSession();
-    const { data, error } = await client.from('application_flows').select('id,workspace_id,created_by,company_name,job_title,flow_data,publication_status,active_published_flow_id,published_at,created_at,updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false });
+    const { data, error } = await client.from('application_flows').select('id,workspace_id,created_by,company_id,company_name,job_title,flow_data,publication_status,active_published_flow_id,published_at,created_at,updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false });
     if (error) throw error;
-    return (data || []).map(row => ({ ...row.flow_data, id: row.flow_data.id || row.id, cloudId: row.id, workspaceId: row.workspace_id, createdBy: row.created_by, companyName: row.company_name, jobTitle: row.job_title, publicationStatus: row.publication_status || 'draft', activePublishedFlowId: row.active_published_flow_id || null, publishedAt: row.published_at || null, updatedAt: row.updated_at }));
+    return (data || []).map(row => ({ ...row.flow_data, id: row.flow_data.id || row.id, cloudId: row.id, workspaceId: row.workspace_id, createdBy: row.created_by, companyId: row.company_id || null, companyProfile: row.company_id ? row.flow_data.companyProfile || null : null, companyName: row.company_name, jobTitle: row.job_title, publicationStatus: row.publication_status || 'draft', activePublishedFlowId: row.active_published_flow_id || null, publishedAt: row.published_at || null, updatedAt: row.updated_at }));
   }
 
   function saveFlow(flow, workspace) {
     const previous = saveQueues.get(flow.id) || Promise.resolve();
     const pending = previous.catch(() => {}).then(async () => {
       const session = await requireSession();
-      const { cloudId, workspaceId, createdBy, publicationStatus, activePublishedFlowId, publishedAt, ...flowData } = flow;
-      const row = { workspace_id: workspace.id, created_by: cloudId ? (createdBy || session.user.id) : session.user.id, company_name: flow.companyName, job_title: flow.jobTitle, flow_data: flowData };
+      const { cloudId, workspaceId, createdBy, companyId, publicationStatus, activePublishedFlowId, publishedAt, ...flowData } = flow;
+      const row = { workspace_id: workspace.id, created_by: cloudId ? (createdBy || session.user.id) : session.user.id, company_id: companyId || null, company_name: flow.companyName, job_title: flow.jobTitle, flow_data: flowData };
       let result;
       if (cloudId) result = await client.from('application_flows').update(row).eq('id', cloudId).eq('workspace_id', workspace.id).select('id,updated_at').single();
       else result = await client.from('application_flows').insert(row).select('id,updated_at').single();
@@ -388,7 +438,7 @@
     if (!subscription.active) throw new Error('An active subscription is required to publish job flows.');
     await saveFlow(flow, workspace);
     const session = await requireSession();
-    const { cloudId, workspaceId, createdBy, publicationStatus, activePublishedFlowId, publishedAt, ...flowData } = flow;
+    const { cloudId, workspaceId, createdBy, companyId, publicationStatus, activePublishedFlowId, publishedAt, ...flowData } = flow;
     const { data, error } = await client.from('published_flows').insert({
       workspace_id: workspace.id,
       flow_id: flow.cloudId,
@@ -596,6 +646,8 @@
     syncPaymentMethodFromCustomer,
     cancelSubscriptionAtPeriodEnd,
     keepPremiumSubscription,
+    listCompanies,
+    createCompany,
     listFlows,
     saveFlow,
     deleteFlow,

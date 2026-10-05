@@ -60,7 +60,20 @@ test('job details are shown only when the fixed candidate-details node is select
   assert.match(inspector, /<h2>Job details<\/h2>/);
   assert.match(inspector, /panel\.innerHTML = `\$\{roleSettings\}/);
   assert.match(inspector, /<div class="inspector-kicker">Selected step<\/div>/);
-  assert.match(inspector, /querySelector\('#role-company'\)\?\./);
+  assert.match(inspector, /querySelector\('#role-company-profile'\)\?\./);
+  assert.match(inspector, /companyOptionsHtml\(flow\.companyId/);
+});
+
+test('My Companies is permission-gated, limited to three profiles, and exposes capped image uploads', () => {
+  assert.match(builder, /data-route="my-companies"/);
+  assert.match(builder, /function renderMyCompanies\(\)/);
+  assert.match(builder, /companies\.length >= 3/);
+  assert.match(builder, /type="file" accept="image\/png,image\/jpeg,image\/webp"/);
+  assert.match(builder, /Maximum 2 MB/);
+  assert.match(builder, /company\.logoUrl/);
+  assert.match(builder, /flow\.companyProfile = companySnapshot\(company\)/);
+  assert.match(builder, /C\.createFlow\(company\?\.name \|\| workspace\.name/);
+  assert.match(builder, /flow\.companyName = company\?\.name \|\| workspace\.name/);
 });
 
 test('short-answer nodes expose an accessible numeric-only switch', () => {

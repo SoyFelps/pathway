@@ -42,7 +42,7 @@
     const end = createNode('end', 1140, 270);
     return {
       id: uid('flow'), companyName: companyName || 'Your company', jobTitle: jobTitle || 'Untitled role',
-      jobDescription: jobDescription || '', publicationStatus: 'draft', activePublishedFlowId: null, candidateInfoFields: Object.fromEntries(OPTIONAL_FIELDS.map(field => [field.key, false])),
+      jobDescription: jobDescription || '', companyId: null, companyProfile: null, publicationStatus: 'draft', activePublishedFlowId: null, candidateInfoFields: Object.fromEntries(OPTIONAL_FIELDS.map(field => [field.key, false])),
       nodes: [candidate, end], edges: [{ id: uid('edge'), fromNodeId: candidate.id, toNodeId: end.id }], updatedAt: new Date().toISOString()
     };
   }
@@ -81,6 +81,16 @@
   function normalizeFlow(flow) {
     if (!flow || typeof flow !== 'object') throw new Error('This link does not contain a flow.');
     const normalized = clone(flow);
+    normalized.companyId = typeof normalized.companyId === 'string' && normalized.companyId.length <= 80 ? normalized.companyId : null;
+    if (normalized.companyProfile && typeof normalized.companyProfile === 'object' && !Array.isArray(normalized.companyProfile)) {
+      const profile = normalized.companyProfile;
+      const profileId = typeof profile.id === 'string' ? profile.id.slice(0, 80) : '';
+      const name = typeof profile.name === 'string' ? profile.name.trim().slice(0, 120) : '';
+      normalized.companyProfile = profileId && name && (!normalized.companyId || normalized.companyId === profileId)
+        ? { id: profileId, name, description: typeof profile.description === 'string' ? profile.description.slice(0, 3000) : '', logoUrl: typeof profile.logoUrl === 'string' ? profile.logoUrl.slice(0, 2048) : '' }
+        : null;
+      if (normalized.companyProfile && !normalized.companyId) normalized.companyId = profileId;
+    } else normalized.companyProfile = null;
     normalized.candidateInfoFields = normalized.candidateInfoFields || {};
     OPTIONAL_FIELDS.forEach(field => { normalized.candidateInfoFields[field.key] = Boolean(normalized.candidateInfoFields[field.key]); });
     normalized.nodes = Array.isArray(normalized.nodes) ? normalized.nodes : [];

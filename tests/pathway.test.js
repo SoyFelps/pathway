@@ -27,6 +27,8 @@ const Core = context.PathwayCore;
 
 test('new flow always starts with a fixed candidate-details node and a connected ending', () => {
   const flow = Core.createFlow('Acme', 'Designer', 'Build accessible software.');
+  assert.equal(flow.companyId, null);
+  assert.equal(flow.companyProfile, null);
   assert.equal(flow.publicationStatus, 'draft');
   assert.equal(flow.activePublishedFlowId, null);
   assert.equal(flow.nodes.filter(node => node.type === 'candidateInfo').length, 1);
@@ -34,6 +36,19 @@ test('new flow always starts with a fixed candidate-details node and a connected
   assert.equal(flow.edges.length, 1);
   assert.equal(flow.edges[0].fromNodeId, flow.nodes[0].id);
   assert.doesNotThrow(() => Core.normalizeFlow(flow));
+});
+
+test('selected company profile is normalized and preserved for public snapshots', async () => {
+  const flow = Core.createFlow('Acme', 'Designer', 'Build accessible software.');
+  flow.companyId = 'company-123';
+  flow.companyName = 'Acme Labs';
+  flow.companyProfile = { id: 'company-123', name: 'Acme Labs', description: 'A product studio.', logoUrl: 'https://example.com/logo.png', ignored: 'not retained' };
+  const normalized = Core.normalizeFlow(flow);
+  assert.deepEqual(JSON.parse(JSON.stringify(normalized.companyProfile)), { id: 'company-123', name: 'Acme Labs', description: 'A product studio.', logoUrl: 'https://example.com/logo.png' });
+  const restored = await Core.decodeFlow(await Core.encodeFlow(normalized));
+  assert.equal(restored.companyId, 'company-123');
+  assert.equal(restored.companyProfile.name, 'Acme Labs');
+  assert.equal(restored.companyProfile.description, 'A product studio.');
 });
 
 test('sample choice answers lead to distinct candidate paths', () => {
