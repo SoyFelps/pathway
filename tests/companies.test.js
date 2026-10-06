@@ -104,15 +104,18 @@ test('company Storage policies qualify the outer object path instead of shadowed
 
 test('candidate page shows the selected company logo and description below vacancy details', () => {
   const candidate = read('candidate.js');
+  const styles = read('styles.css');
   const lockup = candidate.indexOf('class="company-lockup"');
   const about = candidate.indexOf('class="company-details"');
   const apply = candidate.indexOf('class="job-about"');
   assert.ok(lockup >= 0 && about > lockup && apply > about);
   assert.match(candidate, /safeCompanyLogoUrl\(profile\?\.logoUrl/);
   assert.match(candidate, /class="company-avatar\$\{logoUrl \? ' has-logo'/);
-  assert.match(candidate, /<h2>About \$\{C\.esc\(brandName\)\}<\/h2>/);
+  assert.match(candidate, /<h2>About \$\{C\.esc\(brandName\)}<\/h2>/);
   assert.match(candidate, /PATHWAY_SUPABASE_CONFIG\?\.url/);
   assert.match(candidate, /company-logos/);
   assert.match(candidate, /function companyLogoUrl\(profile\)/);
   assert.match(candidate, /profile\?\.logoPath/);
+  assert.match(styles, /\.company-avatar\{width:68px;height:68px;flex:0 0 68px;border-radius:16px\}/);
+  assert.match(styles, /@media\(max-width:760px\)\{\.company-avatar\{width:58px;height:58px;flex-basis:58px\}\}/);
 });

@@ -150,8 +150,8 @@ test('live published form submits while builder preview remains non-persistent',
   assert.match(read('index.html'), /pathway\.js\?v=company-management-20261005/);
   assert.match(read('apply.html'), /candidate\.js\?v=company-management-20261005/);
   assert.match(read('index.html'), /candidate\.js\?v=company-management-20261005/);
-  assert.match(read('apply.html'), /styles\.css\?v=company-management-20261005/);
-  assert.match(read('index.html'), /styles\.css\?v=company-management-20261005/);
+  assert.match(read('apply.html'), /styles\.css\?v=company-logo-size-20261006/);
+  assert.match(read('index.html'), /styles\.css\?v=company-logo-size-20261006/);
   assert.match(read('apply.html'), /backend\.js\?v=company-management-20261005/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });

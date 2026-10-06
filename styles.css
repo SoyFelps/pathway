@@ -222,3 +222,8 @@
 .company-card-actions .btn-danger{border-color:#e7c9c7}
 .company-card-actions .btn-danger:hover{color:#fff}
 @media(max-width:760px){.company-card-actions{justify-content:flex-start}}
+
+/* Give company logos more visual weight in public job details. */
+.company-lockup{gap:15px}
+.company-avatar{width:68px;height:68px;flex:0 0 68px;border-radius:16px}
+@media(max-width:760px){.company-avatar{width:58px;height:58px;flex-basis:58px}}
