@@ -51,6 +51,21 @@ test('selected company profile is normalized and preserved for public snapshots'
   assert.equal(restored.companyProfile.description, 'A product studio.');
 });
 
+test('company logo storage path survives published-flow normalization while invalid paths are discarded', () => {
+  const flow = Core.createFlow('Acme', 'Designer', 'Build accessible software.');
+  const companyId = '11111111-2222-3333-4444-555555555555';
+  const workspaceId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const logoPath = `${workspaceId}/${companyId}/logo-99999999-8888-7777-6666-555555555555.webp`;
+  flow.companyProfile = { id: companyId, name: 'Acme Labs', description: 'A product studio.', logoPath };
+
+  const normalized = Core.normalizeFlow(flow);
+  assert.equal(normalized.companyProfile.logoPath, logoPath);
+  assert.equal(normalized.companyId, companyId);
+
+  flow.companyProfile.logoPath = 'https://example.com/logo.webp';
+  assert.equal(Core.normalizeFlow(flow).companyProfile.logoPath, undefined);
+});
+
 test('sample choice answers lead to distinct candidate paths', () => {
   const flow = Core.normalizeFlow(Core.createSampleFlow());
   const branch = flow.nodes.find(node => node.type === 'singleChoice');

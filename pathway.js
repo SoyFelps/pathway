@@ -86,8 +86,11 @@
       const profile = normalized.companyProfile;
       const profileId = typeof profile.id === 'string' ? profile.id.slice(0, 80) : '';
       const name = typeof profile.name === 'string' ? profile.name.trim().slice(0, 120) : '';
+      const logoPath = typeof profile.logoPath === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/logo(?:-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?\.(?:png|jpg|webp)$/i.test(profile.logoPath)
+        ? profile.logoPath
+        : '';
       normalized.companyProfile = profileId && name && (!normalized.companyId || normalized.companyId === profileId)
-        ? { id: profileId, name, description: typeof profile.description === 'string' ? profile.description.slice(0, 3000) : '', logoUrl: typeof profile.logoUrl === 'string' ? profile.logoUrl.slice(0, 2048) : '' }
+        ? { id: profileId, name, description: typeof profile.description === 'string' ? profile.description.slice(0, 3000) : '', ...(logoPath ? { logoPath } : {}), logoUrl: typeof profile.logoUrl === 'string' ? profile.logoUrl.slice(0, 2048) : '' }
         : null;
       if (normalized.companyProfile && !normalized.companyId) normalized.companyId = profileId;
     } else normalized.companyProfile = null;
