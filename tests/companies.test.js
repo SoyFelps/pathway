@@ -9,6 +9,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const migrationPath = 'supabase/migrations/20261005180004_workspace_companies_and_logos.sql';
 const managementMigrationPath = 'supabase/migrations/20261005183104_manage_workspace_companies.sql';
 const policyFixMigrationPath = 'supabase/migrations/20261006113046_fix_company_logo_storage_policies.sql';
+const legacyLogoConstraintMigrationPath = 'supabase/migrations/20261006114843_drop_legacy_company_logo_constraint.sql';
 
 test('company profiles are workspace-scoped and capped at three by a serialized database trigger', () => {
   const migration = read(migrationPath);
@@ -22,6 +23,13 @@ test('company profiles are workspace-scoped and capped at three by a serialized 
   assert.match(migration, /count\(\*\).*workspace_companies[\s\S]*?>= 3/);
   assert.match(migration, /add column if not exists company_id uuid references public\.workspace_companies\(id\)/);
   assert.match(migration, /validate_flow_company_workspace/);
+});
+
+test('legacy logo check is removed while the UUID-compatible logo path check remains enforced', () => {
+  const migration = read(legacyLogoConstraintMigrationPath);
+  const managementMigration = read(managementMigrationPath);
+  assert.match(migration, /drop constraint if exists workspace_companies_check/i);
+  assert.match(managementMigration, /add constraint workspace_companies_logo_path_check[\s\S]*?logo\(-\[0-9a-f\]\{8\}/i);
 });
 
 test('logo bucket limits files to 2 MB and secure formats with workspace permission policies', () => {
