@@ -123,7 +123,7 @@
     toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
   }
   function initials(name) { return (name || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
-  function companySnapshot(company) { return company ? { id: company.id, name: company.name, description: company.description || '', logoUrl: company.logoUrl || '' } : null; }
+  function companySnapshot(company) { return company ? { id: company.id, name: company.name, description: company.description || '', logoPath: company.logoPath || null, logoUrl: company.logoUrl || '' } : null; }
   function companyOptionsHtml(selectedId = '') {
     return `<option value="" ${selectedId ? '' : 'selected'}>Use workspace name (${esc(workspace.name)})</option>${companies.map(company => `<option value="${esc(company.id)}" ${company.id === selectedId ? 'selected' : ''}>${esc(company.name)}</option>`).join('')}`;
   }
@@ -157,16 +157,28 @@
     root.querySelector('[data-route="settings"]')?.addEventListener('click', renderSettings);
   }
 
+  function companyCardHtml(company) {
+    return `<article class="company-card"><div class="company-card-heading">${company.logoUrl ? `<img class="company-card-logo" src="${esc(company.logoUrl)}" alt="${esc(company.name)} logo">` : `<span class="company-card-logo company-card-logo-fallback" aria-hidden="true">${esc(initials(company.name))}</span>`}<div><h2>${esc(company.name)}</h2><span>Company profile</span></div></div><p>${esc(company.description)}</p><div class="company-card-actions"><button type="button" class="btn btn-sm" data-edit-company="${esc(company.id)}">Edit</button><button type="button" class="btn btn-sm btn-danger" data-delete-company="${esc(company.id)}">Delete</button></div></article>`;
+  }
+
   function renderMyCompanies() {
     if (!hasPermission('flows')) return renderAccessMessage('flows');
     currentId = null; selectedId = null;
     const atLimit = companies.length >= 3;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-companies')}<main class="companies-page"><div class="companies-heading"><div><div class="eyebrow">Hiring workspace</div><h1>My Companies</h1><p>Choose a company to represent a job on its public application page.</p></div><div class="companies-heading-actions"><span class="companies-count">${companies.length} / 3 companies</span><button class="btn btn-primary" id="new-company" ${atLimit ? 'disabled title="You can add up to three companies."' : ''}>＋ &nbsp;New company</button></div></div>${companies.length ? `<section class="companies-grid" aria-label="Your companies">${companies.map(company => `<article class="company-card"><div class="company-card-heading">${company.logoUrl ? `<img class="company-card-logo" src="${esc(company.logoUrl)}" alt="${esc(company.name)} logo">` : `<span class="company-card-logo company-card-logo-fallback" aria-hidden="true">${esc(initials(company.name))}</span>`}<div><h2>${esc(company.name)}</h2><span>Company profile</span></div></div><p>${esc(company.description)}</p></article>`).join('')}</section>` : `<section class="companies-empty"><span class="brand-mark">↗</span><h2>No companies yet</h2><p>New flows will use ${esc(workspace.name)} until you add a company profile.</p><button class="btn btn-primary" id="empty-new-company">＋ &nbsp;New company</button></section>`}</main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-companies')}<main class="companies-page"><div class="companies-heading"><div><div class="eyebrow">Hiring workspace</div><h1>My Companies</h1><p>Choose a company to represent a job on its public application page.</p></div><div class="companies-heading-actions"><span class="companies-count">${companies.length} / 3 companies</span><button class="btn btn-primary" id="new-company" ${atLimit ? 'disabled title="You can add up to three companies."' : ''}>＋ &nbsp;New company</button></div></div>${companies.length ? `<section class="companies-grid" aria-label="Your companies">${companies.map(companyCardHtml).join('')}</section>` : `<section class="companies-empty"><span class="brand-mark">↗</span><h2>No companies yet</h2><p>New flows will use ${esc(workspace.name)} until you add a company profile.</p><button class="btn btn-primary" id="empty-new-company">＋ &nbsp;New company</button></section>`}</main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
     root.querySelector('#signout')?.addEventListener('click', doSignOut);
     root.querySelector('#new-company')?.addEventListener('click', showNewCompany);
     root.querySelector('#empty-new-company')?.addEventListener('click', showNewCompany);
+    root.querySelectorAll('[data-edit-company]').forEach(button => button.addEventListener('click', () => {
+      const company = companies.find(item => item.id === button.dataset.editCompany);
+      if (company) showEditCompany(company);
+    }));
+    root.querySelectorAll('[data-delete-company]').forEach(button => button.addEventListener('click', () => {
+      const company = companies.find(item => item.id === button.dataset.deleteCompany);
+      if (company) showDeleteCompany(company);
+    }));
   }
 
   function showNewCompany() {
@@ -186,6 +198,96 @@
         companies.push(company); closeModal(); renderMyCompanies(); showToast('Company added.');
       } catch (error) {
         errorBox.textContent = error.message || 'The company could not be saved.'; errorBox.classList.add('show'); button.disabled = false; button.textContent = 'Save company';
+      }
+    });
+  }
+
+  function companyFormHtml(company, editing) {
+    const title = editing ? 'Edit company' : 'New company';
+    const action = editing ? 'Save changes' : 'Save company';
+    const existingLogo = editing && company.logoUrl
+      ? `<div class="company-logo-current"><img src="${esc(company.logoUrl)}" alt="Current ${esc(company.name)} logo"><label><input id="remove-company-logo" name="removeLogo" type="checkbox"> Remove current logo</label></div>`
+      : '';
+    return `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Company profile</div><h2>${title}</h2><p>Details are shown to candidates when this company is selected for a job.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="company-profile-form"><div class="field-group"><label for="company-name">Company name</label><input class="text-input" id="company-name" name="name" maxlength="120" required value="${editing ? esc(company.name) : ''}" placeholder="e.g. Northstar Studio"></div><div class="field-group"><label for="company-logo">${editing ? 'Replace logo' : 'Logo'} <span class="muted">(optional)</span></label>${existingLogo}<input class="text-input company-logo-upload" id="company-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"><small class="field-help">PNG, JPG, or WebP · Maximum 2 MB</small></div><div class="field-group"><label for="company-description">Company description</label><textarea class="text-area" id="company-description" name="description" maxlength="3000" required placeholder="Tell candidates about the company…">${editing ? esc(company.description) : ''}</textarea><small class="field-help">Up to 3,000 characters</small></div><div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit" id="company-profile-submit">${action}</button></div></form>`;
+  }
+
+  function validateCompanyLogo(file, errorBox) {
+    if (file && (file.size > 2 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
+      errorBox.textContent = 'Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.';
+      errorBox.classList.add('show');
+      return false;
+    }
+    return true;
+  }
+
+  function showEditCompany(company) {
+    if (!hasPermission('flows')) return renderAccessMessage('flows');
+    setModal(companyFormHtml(company, true));
+    modalRoot.querySelector('#company-profile-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const button = form.querySelector('#company-profile-submit');
+      const errorBox = form.querySelector('#company-form-error');
+      const file = form.elements.logo.files?.[0] || null;
+      if (!validateCompanyLogo(file, errorBox)) return;
+      button.disabled = true; button.textContent = 'Saving…'; errorBox.classList.remove('show');
+      try {
+        const result = await window.PathwayBackend.updateCompany({
+          name: form.elements.name.value,
+          description: form.elements.description.value,
+          logoFile: file,
+          removeLogo: Boolean(form.elements.removeLogo?.checked)
+        }, company, workspace);
+        companies = companies.map(item => item.id === result.company.id ? result.company : item);
+        const updatedAt = new Date().toISOString();
+        flows.filter(flow => flow.companyId === result.company.id).forEach(flow => {
+          flow.companyName = result.company.name;
+          flow.companyProfile = companySnapshot(result.company);
+          flow.updatedAt = updatedAt;
+          if (flow.publicationStatus === 'published' && flow.activePublishedFlowId) flow.publishedAt = updatedAt;
+        });
+        closeModal(); renderMyCompanies();
+        showToast(result.cleanupWarning ? 'Company updated. The previous logo could not be removed.' : 'Company updated in its linked flows.');
+      } catch (error) {
+        errorBox.textContent = error.message || 'The company could not be updated.'; errorBox.classList.add('show');
+        button.disabled = false; button.textContent = 'Save changes';
+      }
+    });
+  }
+
+  function showDeleteCompany(company) {
+    if (!hasPermission('flows')) return renderAccessMessage('flows');
+    const linkedFlows = flows.filter(flow => flow.companyId === company.id);
+    const flowList = linkedFlows.length
+      ? `<ul class="company-delete-flow-list">${linkedFlows.slice(0, 8).map(flow => `<li>${esc(flow.jobTitle || 'Untitled role')}</li>`).join('')}${linkedFlows.length > 8 ? `<li>and ${linkedFlows.length - 8} more</li>` : ''}</ul>`
+      : '';
+    const consequences = linkedFlows.length
+      ? `This also permanently deletes ${linkedFlows.length} linked ${linkedFlows.length === 1 ? 'flow' : 'flows'}, all candidate applications and answers, uploaded resumes, and their public job links. This cannot be undone.`
+      : 'This permanently deletes this company profile. This cannot be undone.';
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Delete company</div><h2>Delete ${esc(company.name)}?</h2><p>${esc(consequences)}</p>${flowList}</div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="delete-company-form"><div class="field-group"><label for="confirm-company-name">Type <strong>${esc(company.name)}</strong> to confirm</label><input class="text-input" id="confirm-company-name" name="confirmation" autocomplete="off" required></div><div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-danger" type="submit" id="delete-company-submit" disabled>Delete company${linkedFlows.length ? ' and flows' : ''}</button></div></form>`);
+    const form = modalRoot.querySelector('#delete-company-form');
+    const confirmation = form.elements.confirmation;
+    const button = form.querySelector('#delete-company-submit');
+    confirmation.addEventListener('input', () => { button.disabled = confirmation.value !== company.name; });
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (confirmation.value !== company.name) return;
+      const errorBox = form.querySelector('#company-form-error');
+      button.disabled = true; button.textContent = 'Deleting…'; errorBox.classList.remove('show');
+      try {
+        const result = await window.PathwayBackend.deleteCompany(company, workspace, linkedFlows, deletedFlow => {
+          flows = flows.filter(flow => flow.id !== deletedFlow.id);
+        });
+        flows = flows.filter(flow => !result.deletedFlowIds.includes(flow.id));
+        companies = companies.filter(item => item.id !== company.id);
+        closeModal(); renderMyCompanies(); showToast('Company and linked flows deleted.');
+      } catch (error) {
+        const deleted = Array.isArray(error.deletedFlowIds) ? new Set(error.deletedFlowIds) : new Set();
+        if (deleted.size) flows = flows.filter(flow => !deleted.has(flow.id));
+        const message = `${deleted.size ? `${deleted.size} linked ${deleted.size === 1 ? 'flow was' : 'flows were'} deleted. ` : ''}${error.message || 'The company could not be deleted.'}`;
+        if (deleted.size) { closeModal(); renderMyCompanies(); showToast(message); return; }
+        errorBox.textContent = message;
+        errorBox.classList.add('show'); button.disabled = false; button.textContent = `Delete company${linkedFlows.length ? ' and flows' : ''}`;
       }
     });
   }

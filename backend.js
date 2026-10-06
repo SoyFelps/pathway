@@ -368,6 +368,80 @@
     return companyRecord(data);
   }
 
+  async function updateCompany(input, company, workspace) {
+    await requireSession();
+    const name = String(input?.name || '').trim();
+    const description = String(input?.description || '').trim();
+    const logoFile = input?.logoFile || null;
+    if (!name || name.length > 120) throw new Error('Enter a company name (up to 120 characters).');
+    if (!description || description.length > 3000) throw new Error('Enter a company description (up to 3,000 characters).');
+    const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+    if (logoFile && (!(logoFile instanceof File) || !allowedTypes.has(logoFile.type) || logoFile.size < 1 || logoFile.size > 2 * 1024 * 1024)) {
+      throw new Error('Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.');
+    }
+
+    const bucket = client.storage.from('company-logos');
+    const previousLogoPath = company.logoPath || null;
+    let nextLogoPath = input?.removeLogo ? null : previousLogoPath;
+    let uploadedLogoPath = null;
+    if (logoFile) {
+      const extension = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' })[logoFile.type];
+      uploadedLogoPath = `${workspace.id}/${company.id}/logo-${crypto.randomUUID()}.${extension}`;
+      const uploaded = await bucket.upload(uploadedLogoPath, logoFile, { contentType: logoFile.type, upsert: false });
+      if (uploaded.error) throw uploaded.error;
+      nextLogoPath = uploadedLogoPath;
+    }
+
+    let result;
+    try {
+      result = await client.rpc('update_workspace_company_profile', {
+        p_company_id: company.id,
+        p_name: name,
+        p_description: description,
+        p_logo_path: nextLogoPath
+      });
+      if (result.error) throw result.error;
+    } catch (error) {
+      if (uploadedLogoPath) {
+        try { await bucket.remove([uploadedLogoPath]); } catch (_) { /* best-effort cleanup after failed profile update */ }
+      }
+      throw error;
+    }
+
+    const updatedCompany = companyRecord(result.data);
+    let cleanupWarning = false;
+    if (previousLogoPath && previousLogoPath !== nextLogoPath) {
+      const removed = await bucket.remove([previousLogoPath]);
+      cleanupWarning = Boolean(removed.error);
+    }
+    return { company: updatedCompany, cleanupWarning };
+  }
+
+  async function deleteCompany(company, workspace, linkedFlows, onFlowDeleted = () => {}) {
+    await requireSession();
+    const deletedFlowIds = [];
+    try {
+      for (const flow of linkedFlows || []) {
+        await deleteFlow(flow, workspace);
+        deletedFlowIds.push(flow.id);
+        onFlowDeleted(flow);
+      }
+
+      if (company.logoPath) {
+        const { error: logoError } = await client.storage.from('company-logos').remove([company.logoPath]);
+        if (logoError) throw logoError;
+      }
+      const { data, error } = await client.rpc('delete_workspace_company', { p_company_id: company.id });
+      if (error) throw error;
+      if (data !== true) throw new Error('The company deletion was not confirmed. Refresh the page before retrying.');
+      return { deletedFlowIds };
+    } catch (error) {
+      const failure = new Error(error?.message || 'The company or its linked flows could not be deleted.');
+      failure.deletedFlowIds = deletedFlowIds;
+      throw failure;
+    }
+  }
+
   async function bootstrap() {
     const { data: authData, error: authError } = await client.auth.getSession();
     if (authError) throw authError;
@@ -648,6 +722,8 @@
     keepPremiumSubscription,
     listCompanies,
     createCompany,
+    updateCompany,
+    deleteCompany,
     listFlows,
     saveFlow,
     deleteFlow,

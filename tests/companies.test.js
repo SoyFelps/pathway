@@ -7,6 +7,8 @@ const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
 const migrationPath = 'supabase/migrations/20261005180004_workspace_companies_and_logos.sql';
+const managementMigrationPath = 'supabase/migrations/20261005183104_manage_workspace_companies.sql';
+const policyFixMigrationPath = 'supabase/migrations/20261006113046_fix_company_logo_storage_policies.sql';
 
 test('company profiles are workspace-scoped and capped at three by a serialized database trigger', () => {
   const migration = read(migrationPath);
@@ -54,15 +56,63 @@ test('My Companies page lists profiles, creates them, and selects a profile on f
   assert.match(backend, /company_id: companyId \|\| null/);
 });
 
+test('company edits propagate atomically to linked drafts and active published snapshots', () => {
+  const migration = read(managementMigrationPath);
+  const backend = read('backend.js');
+  const builder = read('builder.js');
+  const styles = read('styles.css');
+  assert.match(migration, /function public\.update_workspace_company_profile/i);
+  assert.match(migration, /security definer[\s\S]*workspace_user_has_permission\(v_company\.workspace_id, 'flows'\)/);
+  assert.match(migration, /update public\.application_flows f[\s\S]*company_name = v_company\.name[\s\S]*'\{companyProfile\}', v_profile/);
+  assert.match(migration, /update public\.published_flows pf[\s\S]*active_published_flow_id = pf\.id/);
+  assert.match(migration, /'logoPath', v_company\.logo_path/);
+  assert.match(backend, /async function updateCompany\(input, company, workspace\)/);
+  assert.match(backend, /rpc\('update_workspace_company_profile'/);
+  assert.match(builder, /window\.PathwayBackend\.updateCompany/);
+  assert.match(builder, /Company updated in its linked flows/);
+  assert.match(styles, /\.company-card-actions/);
+  assert.match(read('index.html'), /builder\.js\?v=company-management-20261005/);
+  assert.match(read('apply.html'), /candidate\.js\?v=company-management-20261005/);
+});
+
+test('company deletion requires all linked flows removed first and the UI confirms candidate-data loss', () => {
+  const migration = read(managementMigrationPath);
+  const backend = read('backend.js');
+  const builder = read('builder.js');
+  const appFunction = read('supabase/functions/applications/index.ts');
+  assert.match(migration, /function public\.delete_workspace_company/i);
+  assert.match(migration, /workspace_user_has_permission\(v_workspace_id, 'flows'\)/);
+  assert.match(migration, /if exists \(select 1 from public\.application_flows where company_id = p_company_id\)/);
+  assert.match(backend, /async function deleteCompany\(company, workspace, linkedFlows/);
+  assert.match(backend, /await deleteFlow\(flow, workspace\)/);
+  assert.match(backend, /rpc\('delete_workspace_company'/);
+  assert.match(backend, /failure\.deletedFlowIds = deletedFlowIds/);
+  assert.match(appFunction, /async function deleteFlowForOwner/);
+  assert.match(appFunction, /applicant-resumes|const BUCKET = "applicant-resumes"/);
+  assert.match(builder, /all candidate applications and answers, uploaded resumes, and their public job links/);
+  assert.match(builder, /Type <strong>\$\{esc\(company\.name\)\}<\/strong> to confirm/);
+  assert.match(builder, /Delete company\$\{linkedFlows\.length \? ' and flows'/);
+});
+
+test('company Storage policies qualify the outer object path instead of shadowed company name', () => {
+  const migration = read(policyFixMigrationPath);
+  assert.equal((migration.match(/storage\.foldername\(objects\.name\)/g) || []).length, 4);
+  assert.match(migration, /objects\.name ~/);
+  assert.match(migration, /workspace_user_has_permission\(c\.workspace_id, 'flows'\)/);
+  assert.doesNotMatch(migration, /storage\.foldername\(name\)/);
+});
+
 test('candidate page shows the selected company logo and description below vacancy details', () => {
   const candidate = read('candidate.js');
   const lockup = candidate.indexOf('class="company-lockup"');
   const about = candidate.indexOf('class="company-details"');
   const apply = candidate.indexOf('class="job-about"');
   assert.ok(lockup >= 0 && about > lockup && apply > about);
-  assert.match(candidate, /safeCompanyLogoUrl\(flow\.companyProfile\?\.logoUrl/);
+  assert.match(candidate, /safeCompanyLogoUrl\(profile\?\.logoUrl/);
   assert.match(candidate, /class="company-avatar\$\{logoUrl \? ' has-logo'/);
   assert.match(candidate, /<h2>About \$\{C\.esc\(brandName\)\}<\/h2>/);
   assert.match(candidate, /PATHWAY_SUPABASE_CONFIG\?\.url/);
   assert.match(candidate, /company-logos/);
+  assert.match(candidate, /function companyLogoUrl\(profile\)/);
+  assert.match(candidate, /profile\?\.logoPath/);
 });

@@ -27,6 +27,17 @@
     } catch (_) { return ''; }
   }
 
+  function companyLogoUrl(profile) {
+    const directUrl = safeCompanyLogoUrl(profile?.logoUrl || '');
+    if (directUrl) return directUrl;
+    const logoPath = String(profile?.logoPath || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/logo(?:-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?\.(?:png|jpg|webp)$/i.test(logoPath)) return '';
+    try {
+      const supabase = new URL(window.PATHWAY_SUPABASE_CONFIG?.url || '');
+      return safeCompanyLogoUrl(`${supabase.origin}/storage/v1/object/public/company-logos/${logoPath.split('/').map(encodeURIComponent).join('/')}`);
+    } catch (_) { return ''; }
+  }
+
   function mountCandidate(root, sourceFlow, options = {}) {
     let flow;
     try { flow = C.normalizeFlow(sourceFlow); }
@@ -50,7 +61,7 @@
       const optional = C.OPTIONAL_FIELDS.filter(field => flow.candidateInfoFields && flow.candidateInfoFields[field.key]);
       const brandName = flow.companyProfile?.name || flow.companyName || 'Hiring team';
       const initials = brandName.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-      const logoUrl = safeCompanyLogoUrl(flow.companyProfile?.logoUrl || '');
+      const logoUrl = companyLogoUrl(flow.companyProfile);
       root.innerHTML = `<div class="candidate-app"><header class="candidate-header"><a class="brand" href="#" aria-label="Pathway"><span class="brand-mark">↗</span>pathway</a><span class="candidate-header-note">${live ? 'Secure application' : 'Application preview'}</span></header><main class="candidate-landing"><section class="job-copy"><div class="company-lockup"><span class="company-avatar${logoUrl ? ' has-logo' : ''}">${logoUrl ? `<img src="${C.esc(logoUrl)}" alt="${C.esc(brandName)} logo">` : C.esc(initials || 'P')}</span><div><div class="company-label">${C.esc(brandName)}</div><div class="muted" style="font-size:11px;margin-top:3px">Careers</div></div></div><div class="job-kicker">Open position</div><h1 class="job-title">${C.esc(flow.jobTitle || 'Open position')}</h1><div class="job-description">${C.esc(flow.jobDescription || 'We’re excited to meet you. Tell us a little about yourself to get started.')}</div><div class="job-meta"><span class="meta-chip">${live ? 'Accepting applications' : 'Preview'}</span><span class="meta-chip">${C.esc(flow.companyName || 'Hiring team')}</span></div>${flow.companyProfile?.description ? `<section class="company-details"><h2>About ${C.esc(brandName)}</h2><p>${C.esc(flow.companyProfile.description)}</p></section>` : ''}<div class="job-about"><h2>How to apply</h2><p>Start with a few details, upload your resume, and answer a small number of questions tailored to this role. ${live ? 'Your application will be saved securely when you submit it.' : 'Nothing entered in this preview is saved.'}</p></div></section><section class="candidate-form-card"><h2>Start your application</h2><p class="form-intro">A few details to introduce yourself to ${C.esc(flow.companyName || 'the hiring team')}.</p><form id="candidate-info-form" novalidate>${candidateFieldHtml('name')}${candidateFieldHtml('email')}${candidateFieldHtml('resume')}${optional.map(field => candidateFieldHtml(field.key, true)).join('')}<div class="candidate-honeypot" aria-hidden="true"><label for="candidate-website">Leave this field empty</label><input id="candidate-website" name="website" type="text" tabindex="-1" autocomplete="off"></div><button class="btn btn-primary candidate-apply" type="submit">${live ? 'Apply for this role' : 'Preview application'} <span aria-hidden="true">→</span></button><p class="privacy-note">${live ? 'By submitting, you allow the company to use your information and answers to review your application' : 'Preview mode · Your details are not uploaded or stored.'}</p></form></section></main><footer class="candidate-footer">Powered by Pathway · A clearer way to hire</footer></div>`;
       const form = root.querySelector('#candidate-info-form');
       Object.entries(state.info).forEach(([key, value]) => { const input = form.elements[key]; if (input && input.type !== 'file' && input.type !== 'checkbox') input.value = value; });
