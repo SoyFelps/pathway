@@ -154,9 +154,9 @@ test('My Team stylesheet and static page load are versioned for immediate deploy
   const html = read('index.html');
   const css = read('styles.css');
   assert.match(html, /auth\.js\?v=password-recovery-20261001/);
-  assert.match(html, /backend\.js\?v=company-public-logo-path-20261006/);
-  assert.match(html, /builder\.js\?v=company-public-logo-path-20261006/);
-  assert.match(html, /styles\.css\?v=company-public-logo-path-20261006/);
+  assert.match(html, /backend\.js\?v=workspace-nav-order-20261006/);
+  assert.match(html, /builder\.js\?v=workspace-nav-order-20261006/);
+  assert.match(html, /styles\.css\?v=workspace-nav-order-20261006/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
@@ -184,6 +184,16 @@ test('My Team sidebar uses a distinct three-person icon from Applicants', () => 
   assert.match(teamIcon, /cx="6" cy="7\.5"/);
   assert.match(teamIcon, /cx="12" cy="6\.5"/);
   assert.match(teamIcon, /cx="18" cy="7\.5"/);
+});
+
+test('My Companies appears immediately below My Team in the sidebar', () => {
+  const sidebar = read('builder.js').split('function renderSidebar(active) {')[1].split('\n  }')[0];
+  const teamEnd = sidebar.indexOf('My Team</button>') + 'My Team</button>'.length;
+  const nextLink = sidebar.indexOf('data-route="', teamEnd);
+  const companiesLink = sidebar.indexOf('data-route="my-companies"', teamEnd);
+  assert.ok(teamEnd > 'My Team</button>'.length - 1);
+  assert.ok(companiesLink >= 0, 'My Companies link must be present after My Team');
+  assert.equal(nextLink, companiesLink);
 });
 
 test('workspace sidebar stays visible on desktop and sticks below the topbar on mobile', () => {
