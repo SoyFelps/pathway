@@ -156,7 +156,7 @@ test('My Team stylesheet and static page load are versioned for immediate deploy
   assert.match(html, /auth\.js\?v=password-recovery-20261001/);
   assert.match(html, /backend\.js\?v=company-management-20261005/);
   assert.match(html, /builder\.js\?v=company-management-20261005/);
-  assert.match(html, /styles\.css\?v=company-management-20261005/);
+  assert.match(html, /styles\.css\?v=company-logo-size-20261006/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });

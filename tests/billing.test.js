@@ -156,7 +156,7 @@ test('header loads Stripe.js directly and checkout form uses the configured beta
   const builder = read('builder.js');
   assert.match(html, /backend\.js\?v=company-management-20261005/);
   assert.match(html, /builder\.js\?v=company-management-20261005/);
-  assert.match(html, /styles\.css\?v=company-management-20261005/);
+  assert.match(html, /styles\.css\?v=company-logo-size-20261006/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);
