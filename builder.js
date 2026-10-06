@@ -206,9 +206,10 @@
     const title = editing ? 'Edit company' : 'New company';
     const action = editing ? 'Save changes' : 'Save company';
     const existingLogo = editing && company.logoUrl
-      ? `<div class="company-logo-current"><img src="${esc(company.logoUrl)}" alt="Current ${esc(company.name)} logo"><label><input id="remove-company-logo" name="removeLogo" type="checkbox"> Remove current logo</label></div>`
+      ? `<div class="company-logo-current" id="company-logo-current"><img src="${esc(company.logoUrl)}" alt="Current ${esc(company.name)} logo"><button class="icon-btn company-logo-remove" id="remove-company-logo" type="button" aria-label="Remove current logo" title="Remove current logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg></button></div><div class="company-logo-removal-pending" id="company-logo-removal-pending" hidden><span id="company-logo-removal-message">Logo will be removed when you save.</span><button class="btn btn-sm" id="restore-company-logo" type="button">Undo</button></div><input type="hidden" name="removeLogo" value="false">`
       : '';
-    return `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Company profile</div><h2>${title}</h2><p>Details are shown to candidates when this company is selected for a job.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="company-profile-form"><div class="field-group"><label for="company-name">Company name</label><input class="text-input" id="company-name" name="name" maxlength="120" required value="${editing ? esc(company.name) : ''}" placeholder="e.g. Northstar Studio"></div><div class="field-group"><label for="company-logo">${editing ? 'Replace logo' : 'Logo'} <span class="muted">(optional)</span></label>${existingLogo}<input class="text-input company-logo-upload" id="company-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"><small class="field-help">PNG, JPG, or WebP · Maximum 2 MB</small></div><div class="field-group"><label for="company-description">Company description</label><textarea class="text-area" id="company-description" name="description" maxlength="3000" required placeholder="Tell candidates about the company…">${editing ? esc(company.description) : ''}</textarea><small class="field-help">Up to 3,000 characters</small></div><div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit" id="company-profile-submit">${action}</button></div></form>`;
+    const deleteButton = editing ? '<button class="btn btn-danger company-delete-from-edit" id="delete-company-from-edit" type="button">Delete</button>' : '';
+    return `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Company profile</div><h2>${title}</h2><p>Details are shown to candidates when this company is selected for a job.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="company-profile-form"><div class="field-group"><label for="company-name">Company name</label><input class="text-input" id="company-name" name="name" maxlength="120" required value="${editing ? esc(company.name) : ''}" placeholder="e.g. Northstar Studio"></div><div class="field-group"><label for="company-logo">${editing ? 'Replace logo' : 'Logo'} <span class="muted">(optional)</span></label>${existingLogo}<input class="text-input company-logo-upload" id="company-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"><small class="field-help">PNG, JPG, or WebP · Maximum 2 MB</small></div><div class="field-group"><label for="company-description">Company description</label><textarea class="text-area" id="company-description" name="description" maxlength="3000" required placeholder="Tell candidates about the company…">${editing ? esc(company.description) : ''}</textarea><small class="field-help">Up to 3,000 characters</small></div><div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions company-edit-actions">${deleteButton}<button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit" id="company-profile-submit">${action}</button></div></form>`;
   }
 
   function validateCompanyLogo(file, errorBox) {
@@ -223,7 +224,29 @@
   function showEditCompany(company) {
     if (!hasPermission('flows')) return renderAccessMessage('flows');
     setModal(companyFormHtml(company, true));
-    modalRoot.querySelector('#company-profile-form').addEventListener('submit', async event => {
+    const form = modalRoot.querySelector('#company-profile-form');
+    const logoPreview = form.querySelector('#company-logo-current');
+    const removalPending = form.querySelector('#company-logo-removal-pending');
+    const removalMessage = form.querySelector('#company-logo-removal-message');
+    const removeLogoInput = form.elements.removeLogo;
+    form.querySelector('#remove-company-logo')?.addEventListener('click', () => {
+      logoPreview.hidden = true;
+      removalPending.hidden = false;
+      removeLogoInput.value = 'true';
+      removalMessage.textContent = form.elements.logo.files?.length ? 'Logo will be changed when you save.' : 'Logo will be removed when you save.';
+    });
+    form.elements.logo.addEventListener('change', () => {
+      if (!logoPreview?.hidden || !removalPending) return;
+      removalMessage.textContent = form.elements.logo.files?.length ? 'Logo will be changed when you save.' : 'Logo will be removed when you save.';
+    });
+    form.querySelector('#restore-company-logo')?.addEventListener('click', () => {
+      form.elements.logo.value = '';
+      logoPreview.hidden = false;
+      removalPending.hidden = true;
+      removeLogoInput.value = 'false';
+    });
+    form.querySelector('#delete-company-from-edit')?.addEventListener('click', () => showDeleteCompany(company));
+    form.addEventListener('submit', async event => {
       event.preventDefault();
       const form = event.currentTarget;
       const button = form.querySelector('#company-profile-submit');
@@ -236,7 +259,7 @@
           name: form.elements.name.value,
           description: form.elements.description.value,
           logoFile: file,
-          removeLogo: Boolean(form.elements.removeLogo?.checked)
+          removeLogo: form.elements.removeLogo?.value === 'true'
         }, company, workspace);
         companies = companies.map(item => item.id === result.company.id ? result.company : item);
         const updatedAt = new Date().toISOString();

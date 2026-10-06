@@ -65,6 +65,21 @@ test('company cards have fixed height and truncate long descriptions', () => {
   assert.match(styles, /\.company-card-actions\{[^}]*margin-top:auto/);
 });
 
+test('edit modal defers logo removal until save and offers the confirmed company delete flow', () => {
+  const builder = read('builder.js');
+  const styles = read('styles.css');
+  assert.match(builder, /id="remove-company-logo" type="button" aria-label="Remove current logo"/);
+  assert.match(builder, /name="removeLogo" value="false"/);
+  assert.match(builder, /id="company-logo-removal-pending" hidden/);
+  assert.match(builder, /removeLogoInput\.value = 'true'/);
+  assert.match(builder, /removeLogo: form\.elements\.removeLogo\?\.value === 'true'/);
+  assert.match(builder, /id="restore-company-logo" type="button"/);
+  assert.match(builder, /id="delete-company-from-edit" type="button">Delete/);
+  assert.match(builder, /addEventListener\('click', \(\) => showDeleteCompany\(company\)\)/);
+  assert.match(styles, /\.company-logo-remove\{[^}]*color:var\(--red\)/);
+  assert.match(styles, /\.company-edit-actions \.company-delete-from-edit\{[^}]*margin-right:auto/);
+});
+
 test('company edits propagate atomically to linked drafts and active published snapshots', () => {
   const migration = read(managementMigrationPath);
   const backend = read('backend.js');
@@ -80,8 +95,8 @@ test('company edits propagate atomically to linked drafts and active published s
   assert.match(builder, /window\.PathwayBackend\.updateCompany/);
   assert.match(builder, /Company updated in its linked flows/);
   assert.match(styles, /\.company-card-actions/);
-  assert.match(read('index.html'), /builder\.js\?v=company-cards-20261006/);
-  assert.match(read('apply.html'), /candidate\.js\?v=company-cards-20261006/);
+  assert.match(read('index.html'), /builder\.js\?v=company-edit-controls-20261006/);
+  assert.match(read('apply.html'), /candidate\.js\?v=company-edit-controls-20261006/);
 });
 
 test('company deletion requires all linked flows removed first and the UI confirms candidate-data loss', () => {
