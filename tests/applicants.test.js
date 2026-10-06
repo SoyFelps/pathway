@@ -74,7 +74,7 @@ test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied col
   assert.match(styles, /\.applicant-stage-toggle-control input:disabled\{pointer-events:none\}/);
   assert.match(styles, /\.applicant-stage-toggle-wrap\{[^}]*justify-content:flex-end/);
   assert.doesNotMatch(styles, /\.applicant-stage-toggle-wrap\{[^}]*background:/);
-  assert.match(read('index.html'), /builder\.js\?v=workspace-nav-order-20261006/);
+  assert.match(read('index.html'), /builder\.js\?v=candidate-home-link-20261006/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -146,14 +146,24 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=workspace-nav-order-20261006/);
-  assert.match(read('index.html'), /pathway\.js\?v=workspace-nav-order-20261006/);
-  assert.match(read('apply.html'), /candidate\.js\?v=workspace-nav-order-20261006/);
-  assert.match(read('index.html'), /candidate\.js\?v=workspace-nav-order-20261006/);
-  assert.match(read('apply.html'), /styles\.css\?v=workspace-nav-order-20261006/);
-  assert.match(read('index.html'), /styles\.css\?v=workspace-nav-order-20261006/);
-  assert.match(read('apply.html'), /backend\.js\?v=workspace-nav-order-20261006/);
+  assert.match(read('apply.html'), /pathway\.js\?v=candidate-home-link-20261006/);
+  assert.match(read('index.html'), /pathway\.js\?v=candidate-home-link-20261006/);
+  assert.match(read('apply.html'), /candidate\.js\?v=candidate-home-link-20261006/);
+  assert.match(read('index.html'), /candidate\.js\?v=candidate-home-link-20261006/);
+  assert.match(read('apply.html'), /styles\.css\?v=candidate-home-link-20261006/);
+  assert.match(read('index.html'), /styles\.css\?v=candidate-home-link-20261006/);
+  assert.match(read('apply.html'), /backend\.js\?v=candidate-home-link-20261006/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
+});
+
+test('Pathway brand in candidate details and questions returns to app home', () => {
+  const candidate = read('candidate.js');
+  const auth = read('auth.js');
+  const builder = read('builder.js');
+  assert.equal((candidate.match(/<a class="brand" href="\.\/" aria-label="Pathway home">/g) || []).length, 2);
+  assert.doesNotMatch(candidate, /<a class="brand" href="#" aria-label="Pathway">/);
+  assert.match(auth, /if \(context\.session\)[\s\S]*?onAuthenticated\(context\); return;[\s\S]*?renderAuth\(\);/);
+  assert.match(builder, /else renderDashboard\(\);/);
 });
 
 test('numeric-only short answers render as digits-only text fields and are enforced by the public endpoint', () => {
