@@ -190,13 +190,14 @@
 .companies-heading-actions{display:flex;align-items:center;gap:14px;flex-shrink:0}
 .companies-count{color:var(--muted);font-size:12px;font-weight:600}
 .companies-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-.company-card{min-width:0;padding:21px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 3px 12px rgba(25,47,34,.035)}
+.company-card{height:260px;min-width:0;padding:21px;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 3px 12px rgba(25,47,34,.035)}
 .company-card-heading{display:flex;align-items:center;gap:13px;margin-bottom:17px}
 .company-card-logo{width:46px;height:46px;flex:0 0 46px;object-fit:contain;border-radius:11px;background:#f3f6f3;border:1px solid #e7ece7}
 .company-card-logo-fallback{display:grid;place-items:center;background:#315f4a;color:#d2f37a;font:700 15px var(--display)}
-.company-card h2{font:700 16px/1.3 var(--display);margin:0 0 3px;overflow-wrap:anywhere}
+.company-card-heading div{min-width:0}
+.company-card h2{font:700 16px/1.3 var(--display);margin:0 0 3px;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 .company-card-heading div>span{font-size:11px;color:var(--muted)}
-.company-card>p{white-space:pre-line;color:#647168;font-size:12px;line-height:1.7;margin:0;overflow-wrap:anywhere}
+.company-card>p{white-space:pre-line;color:#647168;font-size:12px;line-height:1.6;margin:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden}
 .companies-empty{min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;border:1px dashed #d9e1da;border-radius:13px;background:#fff}
 .companies-empty h2{font:700 20px var(--display);margin:13px 0 7px}
 .companies-empty p{max-width:430px;color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 19px}
@@ -213,7 +214,7 @@
 
 
 /* Company profile edit and removal controls */
-.company-card-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid #edf0ed}
+.company-card-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:auto;padding-top:14px;border-top:1px solid #edf0ed}
 .company-logo-current{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;color:var(--muted);font-size:11px}
 .company-logo-current img{width:38px;height:38px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
 .company-logo-current label{display:flex;align-items:center;gap:6px;cursor:pointer}

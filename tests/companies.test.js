@@ -56,6 +56,15 @@ test('My Companies page lists profiles, creates them, and selects a profile on f
   assert.match(backend, /company_id: companyId \|\| null/);
 });
 
+test('company cards have fixed height and truncate long descriptions', () => {
+  const builder = read('builder.js');
+  const styles = read('styles.css');
+  assert.match(builder, /<p title="\$\{esc\(company\.description\)\}">\$\{esc\(company\.description\)\}<\/p>/);
+  assert.match(styles, /\.company-card\{[^}]*height:260px;[^}]*display:flex;[^}]*flex-direction:column/);
+  assert.match(styles, /\.company-card>p\{[^}]*-webkit-line-clamp:4[^}]*overflow:hidden/);
+  assert.match(styles, /\.company-card-actions\{[^}]*margin-top:auto/);
+});
+
 test('company edits propagate atomically to linked drafts and active published snapshots', () => {
   const migration = read(managementMigrationPath);
   const backend = read('backend.js');
@@ -71,8 +80,8 @@ test('company edits propagate atomically to linked drafts and active published s
   assert.match(builder, /window\.PathwayBackend\.updateCompany/);
   assert.match(builder, /Company updated in its linked flows/);
   assert.match(styles, /\.company-card-actions/);
-  assert.match(read('index.html'), /builder\.js\?v=company-management-20261005/);
-  assert.match(read('apply.html'), /candidate\.js\?v=company-management-20261005/);
+  assert.match(read('index.html'), /builder\.js\?v=company-cards-20261006/);
+  assert.match(read('apply.html'), /candidate\.js\?v=company-cards-20261006/);
 });
 
 test('company deletion requires all linked flows removed first and the UI confirms candidate-data loss', () => {

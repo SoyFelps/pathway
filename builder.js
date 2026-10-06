@@ -158,7 +158,7 @@
   }
 
   function companyCardHtml(company) {
-    return `<article class="company-card"><div class="company-card-heading">${company.logoUrl ? `<img class="company-card-logo" src="${esc(company.logoUrl)}" alt="${esc(company.name)} logo">` : `<span class="company-card-logo company-card-logo-fallback" aria-hidden="true">${esc(initials(company.name))}</span>`}<div><h2>${esc(company.name)}</h2><span>Company profile</span></div></div><p>${esc(company.description)}</p><div class="company-card-actions"><button type="button" class="btn btn-sm" data-edit-company="${esc(company.id)}">Edit</button><button type="button" class="btn btn-sm btn-danger" data-delete-company="${esc(company.id)}">Delete</button></div></article>`;
+    return `<article class="company-card"><div class="company-card-heading">${company.logoUrl ? `<img class="company-card-logo" src="${esc(company.logoUrl)}" alt="${esc(company.name)} logo">` : `<span class="company-card-logo company-card-logo-fallback" aria-hidden="true">${esc(initials(company.name))}</span>`}<div><h2>${esc(company.name)}</h2><span>Company profile</span></div></div><p title="${esc(company.description)}">${esc(company.description)}</p><div class="company-card-actions"><button type="button" class="btn btn-sm" data-edit-company="${esc(company.id)}">Edit</button><button type="button" class="btn btn-sm btn-danger" data-delete-company="${esc(company.id)}">Delete</button></div></article>`;
   }
 
   function renderMyCompanies() {
