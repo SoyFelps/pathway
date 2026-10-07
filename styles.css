@@ -242,6 +242,7 @@
 .failed-column .failed-toggle{width:100%;justify-content:center;margin-bottom:10px}
 .failed-actions{display:flex;gap:8px;margin-bottom:10px}
 .failed-actions .btn{flex:1;justify-content:center;white-space:nowrap}
+.failed-actions .failed-toggle{margin-bottom:0}
 .failed-clear{color:#b8483e;border-color:#c66c62}
 .failed-clear:hover{background:#fbeeec}
 .failed-drop{min-height:265px;display:grid;place-items:center;border:1.5px dashed #d58b83;border-radius:9px;color:#b8483e;font:700 12px var(--display)}

@@ -87,7 +87,7 @@ test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied col
   assert.match(styles, /\.applicant-stage-toggle-control input:disabled\{pointer-events:none\}/);
   assert.match(styles, /\.applicant-stage-toggle-wrap\{[^}]*justify-content:flex-end/);
   assert.doesNotMatch(styles, /\.applicant-stage-toggle-wrap\{[^}]*background:/);
-  assert.match(read('index.html'), /builder\.js\?v=applicant-failed-column-20261007/);
+  assert.match(read('index.html'), /builder\.js\?v=applicant-failed-buttons-20261007/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -159,13 +159,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=applicant-failed-column-20261007/);
-  assert.match(read('index.html'), /pathway\.js\?v=applicant-failed-column-20261007/);
-  assert.match(read('apply.html'), /candidate\.js\?v=applicant-failed-column-20261007/);
-  assert.match(read('index.html'), /candidate\.js\?v=applicant-failed-column-20261007/);
-  assert.match(read('apply.html'), /styles\.css\?v=applicant-failed-column-20261007/);
-  assert.match(read('index.html'), /styles\.css\?v=applicant-failed-column-20261007/);
-  assert.match(read('apply.html'), /backend\.js\?v=applicant-failed-column-20261007/);
+  assert.match(read('apply.html'), /pathway\.js\?v=applicant-failed-buttons-20261007/);
+  assert.match(read('index.html'), /pathway\.js\?v=applicant-failed-buttons-20261007/);
+  assert.match(read('apply.html'), /candidate\.js\?v=applicant-failed-buttons-20261007/);
+  assert.match(read('index.html'), /candidate\.js\?v=applicant-failed-buttons-20261007/);
+  assert.match(read('apply.html'), /styles\.css\?v=applicant-failed-buttons-20261007/);
+  assert.match(read('index.html'), /styles\.css\?v=applicant-failed-buttons-20261007/);
+  assert.match(read('apply.html'), /backend\.js\?v=applicant-failed-buttons-20261007/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
