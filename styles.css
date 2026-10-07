@@ -233,3 +233,6 @@
 .company-lockup{gap:15px}
 .company-avatar{width:68px;height:68px;flex:0 0 68px;border-radius:16px}
 @media(max-width:760px){.company-avatar{width:58px;height:58px;flex-basis:58px}}
+/* Mobile apply page: job details, then the form, then company details; the Apply button jumps to the form. */
+.mobile-apply-cta{display:none}
+@media(max-width:760px){.candidate-landing{gap:0}.job-copy{display:contents}.company-lockup{order:1;margin-bottom:18px}.mobile-apply-cta{display:inline-flex;justify-content:center;align-items:center;gap:8px;order:2;width:100%;margin-bottom:26px}.job-kicker{order:3}.job-title{order:4}.job-description{order:5}.job-meta{order:6}.candidate-form-card{order:7;margin-top:6px;scroll-margin-top:14px}.company-details{order:8;margin:26px 0 0}.job-about{order:9}}
