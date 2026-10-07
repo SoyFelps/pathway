@@ -330,6 +330,51 @@ async function deleteFlowForOwner(req: Request, body: Record<string, unknown>) {
   return response(req, 200, { deleted: true, resumesRemoved: true, remainingResumeCount: 0 });
 }
 
+async function deleteFailedApplicants(req: Request, body: Record<string, unknown>) {
+  if (!admin) return fail(req, 500, "Application service is not configured.");
+  const bearer = (req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i)?.[1] || "";
+  if (!bearer) return fail(req, 401, "Sign in to manage applicants.");
+  const { data: auth, error: authError } = await admin.auth.getUser(bearer);
+  if (authError || !auth.user) return fail(req, 401, "Your session expired. Sign in again.");
+  const flowId = String(body.flowId || "");
+  if (flowId && !UUID_RE.test(flowId)) return fail(req, 400, "This job flow is invalid.");
+
+  const { data: ownedWorkspace, error: ownerError } = await admin.from("workspaces").select("id").eq("owner_id", auth.user.id).maybeSingle();
+  if (ownerError) return fail(req, 503, "Your workspace could not be checked.");
+  let workspaceId = ownedWorkspace?.id as string | undefined;
+  if (!workspaceId) {
+    const { data: membership, error: memberError } = await admin.from("workspace_members")
+      .select("workspace_id,can_applicants").eq("user_id", auth.user.id).maybeSingle();
+    if (memberError) return fail(req, 503, "Your team access could not be checked.");
+    workspaceId = membership?.workspace_id as string | undefined;
+    if (!membership?.can_applicants || !workspaceId) return fail(req, 403, "You do not have Applicants access to a workspace.");
+    const { data: plan, error: planError } = await admin.from("workspace_subscriptions").select("status,current_period_end").eq("workspace_id", workspaceId).maybeSingle();
+    if (planError) return fail(req, 503, "Your workspace access could not be checked.");
+    if (plan?.status !== "active" || Date.parse(plan.current_period_end || "") <= Date.now()) return fail(req, 403, "Active Premium access is required to manage shared applicants.");
+  }
+
+  let deleted = 0;
+  for (let batch = 0; batch < 100; batch++) {
+    let query = admin.from("applicants").select("id,resume_path").eq("workspace_id", workspaceId).eq("status", "failed").limit(100);
+    if (flowId) query = query.eq("flow_id", flowId);
+    const { data: rows, error: listError } = await query;
+    if (listError) return fail(req, 503, "The failed applicants could not be listed; nothing more was deleted.");
+    if (!rows?.length) break;
+    const paths = rows.map((row) => String(row.resume_path || "")).filter((path) => path.startsWith(`${workspaceId}/`));
+    if (paths.length) {
+      const { error: removeError } = await admin.storage.from(BUCKET).remove(paths);
+      if (removeError) return fail(req, 503, "Resume cleanup failed; the remaining failed applicants were kept. Try again.");
+    }
+    let deleteQuery = admin.from("applicants").delete().eq("workspace_id", workspaceId).eq("status", "failed").in("id", rows.map((row) => row.id));
+    if (flowId) deleteQuery = deleteQuery.eq("flow_id", flowId);
+    const { error: deleteError } = await deleteQuery;
+    if (deleteError) return fail(req, 503, "Resumes were removed, but some applicant records could not be deleted. Try again.");
+    deleted += rows.length;
+    if (rows.length < 100) break;
+  }
+  return response(req, 200, { deleted, resumesRemoved: true });
+}
+
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("origin") || "";
   if (req.method === "OPTIONS") return response(req, 204, {});
@@ -385,5 +430,6 @@ Deno.serve(async (req: Request) => {
     return response(req, 200, { flows: (flowLabels || []).map((flow) => ({ id: flow.id, jobTitle: flow.job_title || "Untitled role", companyName: flow.company_name || "" })) });
   }
   if (body.action === "deleteFlow") return await deleteFlowForOwner(req, body);
+  if (body.action === "deleteFailedApplicants") return await deleteFailedApplicants(req, body);
   return fail(req, 400, "Unknown application action.");
 });

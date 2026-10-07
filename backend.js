@@ -622,6 +622,15 @@
     return data;
   }
 
+  async function deleteFailedApplicants(flowId = '') {
+    const session = await requireSession();
+    const body = { action: 'deleteFailedApplicants' };
+    if (flowId) body.flowId = flowId;
+    const result = await callApplications(body, session.access_token);
+    if (typeof result.deleted !== 'number') throw new Error('The failed applicants could not be deleted.');
+    return result;
+  }
+
   async function getApplicantResumeUrl(path, download = false, filename = '') {
     await requireSession();
     if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('..')) throw new Error('This resume link is not valid.');
@@ -736,6 +745,7 @@
     countNewApplicants,
     listApplicantFlowLabels,
     updateApplicantStatus,
+    deleteFailedApplicants,
     getApplicantResumeUrl,
     submitApplication,
     updateWorkspaceName,

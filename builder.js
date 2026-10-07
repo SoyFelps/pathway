@@ -32,6 +32,7 @@
   let applicants = [];
   let applicantFlowLabels = [];
   let applicantFilter = '';
+  let failedColumnOpen = false;
   let applicantSearch = '';
   let applicantFitStagesEnabled = { team_fit: false, skill_fit: false };
   let currentCardSummaryRequest = 0;
@@ -47,8 +48,8 @@
   const locallyUnpublishedFlows = new WeakSet();
   const flowEditRevisions = new WeakMap();
   const applicantStages = [
-    { key: 'new', label: 'New', color: 'stage-new' },
     { key: 'failed', label: 'Failed', color: 'stage-failed' },
+    { key: 'new', label: 'New', color: 'stage-new' },
     { key: 'team_fit', label: 'Team Fit', color: 'stage-team-fit', optional: true },
     { key: 'skill_fit', label: 'Skill Fit', color: 'stage-skill-fit', optional: true },
     { key: 'promising', label: 'Promising', color: 'stage-promising' },
@@ -977,11 +978,20 @@
     }
     const stages = visibleApplicantStages();
     const optionalStageCount = stages.filter(stage => stage.optional).length;
-    const boardSizeClass = optionalStageCount === 1 ? 'has-one-fit-stage' : optionalStageCount === 2 ? 'has-two-fit-stages' : '';
-    content.innerHTML = `<div class="kanban-summary"><strong>${visible.length}</strong> ${visible.length === 1 ? 'applicant' : 'applicants'}${filterName ? ` for <strong>${esc(filterName)}</strong>` : ' across all jobs'}${applicants.length >= 1000 ? ' · Showing the latest 1,000; filter by job to narrow the list.' : ''}</div><section class="kanban-board ${boardSizeClass}" aria-label="Applicant pipeline">${stages.map(stage => {
+    const otherStageCount = stages.length - 1;
+    content.innerHTML = `<div class="kanban-summary"><strong>${visible.length}</strong> ${visible.length === 1 ? 'applicant' : 'applicants'}${filterName ? ` for <strong>${esc(filterName)}</strong>` : ' across all jobs'}${applicants.length >= 1000 ? ' · Showing the latest 1,000; filter by job to narrow the list.' : ''}</div><section class="kanban-board failed-board${failedColumnOpen ? ' failed-open' : ''}" style="--other-stages:${otherStageCount}" aria-label="Applicant pipeline">${stages.map(stage => {
       const cards = visible.filter(applicant => applicant.status === stage.key);
+      const cardHtml = applicant => `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div></article>`;
+      if (stage.key === 'failed') {
+        const head = `<div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${stage.label}</div><span class="kanban-count">${cards.length}</span></div>`;
+        if (!failedColumnOpen) return `<section class="kanban-column failed-column is-collapsed" data-stage="failed" aria-label="Failed">${head}<button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="false">Open &gt;</button><div class="failed-drop">Drag here</div></section>`;
+        const hasFailed = applicants.some(applicant => applicant.status === 'failed');
+        return `<section class="kanban-column failed-column is-open" data-stage="failed" aria-label="Failed">${head}<div class="failed-actions"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="true">&lt; Collapse</button>${hasFailed ? '<button class="btn btn-sm failed-clear" type="button" data-failed-clear>Clear all failed</button>' : ''}</div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
+      }
       return `<section class="kanban-column" data-stage="${stage.key}" aria-label="${stage.label}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${stage.label}</div><span class="kanban-count">${cards.length}</span></div><div class="applicant-list">${cards.length ? cards.map(applicant => `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div></article>`).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
     }).join('')}</section>`;
+    content.querySelectorAll('[data-failed-toggle]').forEach(button => button.addEventListener('click', () => { failedColumnOpen = !failedColumnOpen; renderApplicantBoard(); }));
+    content.querySelector('[data-failed-clear]')?.addEventListener('click', confirmClearFailedApplicants);
     content.querySelectorAll('.applicant-card').forEach(card => {
       card.addEventListener('click', () => showApplicantDetails(card.dataset.applicant));
       card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showApplicantDetails(card.dataset.applicant); } });
@@ -1000,6 +1010,26 @@
         const applicantId = event.dataTransfer.getData('text/plain');
         if (applicantId) void moveApplicant(applicantId, column.dataset.stage);
       });
+    });
+  }
+
+  function confirmClearFailedApplicants() {
+    const failed = applicants.filter(applicant => applicant.status === 'failed');
+    if (!failed.length) return;
+    const jobCount = new Set(failed.map(applicant => applicant.flow_id)).size;
+    const filterName = applicantFilter ? applicantFlowLabels.find(flow => flow.cloudId === applicantFilter)?.jobTitle : '';
+    const scope = filterName ? `for ${filterName}` : `across ${jobCount} ${jobCount === 1 ? 'job' : 'jobs'}`;
+    const noun = failed.length === 1 ? 'failed applicant' : 'failed applicants';
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Clear failed applicants</div><h2>Permanently delete ${failed.length} ${noun}?</h2><p>This removes ${failed.length === 1 ? 'the application and its resume' : 'their applications and uploaded resumes'} ${esc(scope)}. This can't be undone.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-danger" type="button" id="confirm-clear-failed">Delete ${failed.length} ${noun}</button></div>`);
+    const button = modalRoot.querySelector('#confirm-clear-failed');
+    button.addEventListener('click', async () => {
+      button.disabled = true; button.textContent = 'Deleting…';
+      try {
+        const result = await window.PathwayBackend.deleteFailedApplicants(applicantFilter);
+        applicants = applicants.filter(applicant => applicant.status !== 'failed');
+        closeModal(); renderApplicantBoard();
+        showToast(result && result.resumesRemoved === false ? 'Failed applicants deleted. Some resume files may need cleanup.' : 'Failed applicants deleted.');
+      } catch (error) { button.disabled = false; button.textContent = `Delete ${failed.length} ${noun}`; showToast(`Could not delete failed applicants: ${error.message || 'try again'}`); }
     });
   }
 

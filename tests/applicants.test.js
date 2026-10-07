@@ -42,13 +42,26 @@ test('workspace UI includes search, flow filter, standard and fit Kanban stages,
   }
 });
 
-test('Team Fit and Skill Fit columns appear between Failed and Promising', () => {
+test('Failed is the first column and Team Fit and Skill Fit sit between New and Promising', () => {
   const builder = read('builder.js');
   const stages = builder.match(/const applicantStages = \[([\s\S]*?)\n  \];/)?.[1];
   assert.ok(stages, 'applicant stage list exists');
-  const order = ['new', 'failed', 'team_fit', 'skill_fit', 'promising', 'approved'].map(key => stages.indexOf(`key: '${key}'`));
+  const order = ['failed', 'new', 'team_fit', 'skill_fit', 'promising', 'approved'].map(key => stages.indexOf(`key: '${key}'`));
   assert.ok(order.every(index => index >= 0));
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
+});
+
+test('Failed column is collapsed by default, opens on demand, and can clear failed applicants', () => {
+  const builder = read('builder.js');
+  const backend = read('backend.js');
+  const styles = read('styles.css');
+  assert.match(builder, /let failedColumnOpen = false;/);
+  assert.match(builder, /data-failed-toggle/);
+  assert.match(builder, /Drag here/);
+  assert.match(builder, /Clear all failed/);
+  assert.ok(builder.includes('deleteFailedApplicants(applicantFilter)'));
+  assert.match(backend, /action: 'deleteFailedApplicants'/);
+  assert.ok(styles.includes('.kanban-board.failed-board{grid-template-columns:132px'));
 });
 
 test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied columns stay enabled', () => {
@@ -74,7 +87,7 @@ test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied col
   assert.match(styles, /\.applicant-stage-toggle-control input:disabled\{pointer-events:none\}/);
   assert.match(styles, /\.applicant-stage-toggle-wrap\{[^}]*justify-content:flex-end/);
   assert.doesNotMatch(styles, /\.applicant-stage-toggle-wrap\{[^}]*background:/);
-  assert.match(read('index.html'), /builder\.js\?v=candidate-mobile-apply-20261007/);
+  assert.match(read('index.html'), /builder\.js\?v=applicant-failed-column-20261007/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -146,13 +159,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=candidate-mobile-apply-20261007/);
-  assert.match(read('index.html'), /pathway\.js\?v=candidate-mobile-apply-20261007/);
-  assert.match(read('apply.html'), /candidate\.js\?v=candidate-mobile-apply-20261007/);
-  assert.match(read('index.html'), /candidate\.js\?v=candidate-mobile-apply-20261007/);
-  assert.match(read('apply.html'), /styles\.css\?v=candidate-mobile-apply-20261007/);
-  assert.match(read('index.html'), /styles\.css\?v=candidate-mobile-apply-20261007/);
-  assert.match(read('apply.html'), /backend\.js\?v=candidate-mobile-apply-20261007/);
+  assert.match(read('apply.html'), /pathway\.js\?v=applicant-failed-column-20261007/);
+  assert.match(read('index.html'), /pathway\.js\?v=applicant-failed-column-20261007/);
+  assert.match(read('apply.html'), /candidate\.js\?v=applicant-failed-column-20261007/);
+  assert.match(read('index.html'), /candidate\.js\?v=applicant-failed-column-20261007/);
+  assert.match(read('apply.html'), /styles\.css\?v=applicant-failed-column-20261007/);
+  assert.match(read('index.html'), /styles\.css\?v=applicant-failed-column-20261007/);
+  assert.match(read('apply.html'), /backend\.js\?v=applicant-failed-column-20261007/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 

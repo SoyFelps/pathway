@@ -236,3 +236,15 @@
 /* Mobile apply page: job details, then the form, then company details; the Apply button jumps to the form. */
 .mobile-apply-cta{display:none}
 @media(max-width:760px){.candidate-landing{gap:0}.job-copy{display:contents}.company-lockup{order:1;margin-bottom:18px}.mobile-apply-cta{display:inline-flex;justify-content:center;align-items:center;gap:8px;order:2;width:100%;margin-bottom:26px}.job-kicker{order:3}.job-title{order:4}.job-description{order:5}.job-meta{order:6}.candidate-form-card{order:7;margin-top:6px;scroll-margin-top:14px}.company-details{order:8;margin:26px 0 0}.job-about{order:9}}
+/* Applicant board: Failed is a narrow, collapsible column on the left. */
+.kanban-board.failed-board{grid-template-columns:132px repeat(var(--other-stages,3),minmax(215px,1fr))}
+.kanban-board.failed-board.failed-open{grid-template-columns:minmax(215px,1fr) repeat(var(--other-stages,3),minmax(215px,1fr))}
+.failed-column .failed-toggle{width:100%;justify-content:center;margin-bottom:10px}
+.failed-actions{display:flex;gap:8px;margin-bottom:10px}
+.failed-actions .btn{flex:1;justify-content:center;white-space:nowrap}
+.failed-clear{color:#b8483e;border-color:#c66c62}
+.failed-clear:hover{background:#fbeeec}
+.failed-drop{min-height:265px;display:grid;place-items:center;border:1.5px dashed #d58b83;border-radius:9px;color:#b8483e;font:700 12px var(--display)}
+.failed-column.drag-over .failed-drop{background:#fbeeec}
+@media(max-width:1100px){.kanban-board.failed-board{grid-template-columns:120px repeat(var(--other-stages,3),minmax(200px,1fr))}.kanban-board.failed-board.failed-open{grid-template-columns:minmax(200px,1fr) repeat(var(--other-stages,3),minmax(200px,1fr))}}
+@media(max-width:760px){.kanban-board.failed-board{grid-template-columns:120px repeat(var(--other-stages,3),minmax(245px,80vw))}.kanban-board.failed-board.failed-open{grid-template-columns:minmax(245px,80vw) repeat(var(--other-stages,3),minmax(245px,80vw))}}
