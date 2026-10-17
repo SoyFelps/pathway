@@ -5,5 +5,5 @@
  * Leave siteKey empty to run without a CAPTCHA (the server only enforces it when it has the secret).
  */
 window.PATHWAY_TURNSTILE = {
-  siteKey: ''
+  siteKey: '0x4AAAAAAFZky1B_pMur1z2L'
 };
