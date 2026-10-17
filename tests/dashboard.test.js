@@ -18,3 +18,10 @@ test('sidebar no longer shows the workspace footer note', () => {
   assert.equal(builder.includes('sidebar-bottom'), false);
   assert.equal(builder.includes('Access follows your team permissions'), false);
 });
+
+test('flow cards no longer show the "A glimpse of your flow" label', () => {
+  assert.equal(builder.includes('A glimpse of your flow'), false);
+  assert.equal(builder.includes('flow-preview-label'), false);
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.equal(css.includes('flow-preview-label'), false);
+});
