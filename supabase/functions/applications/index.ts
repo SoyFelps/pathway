@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { buildConfirmationEmail } from "./email.ts";
 
 const APP_ORIGINS = new Set([
   "https://soyfelps.github.io",
@@ -33,6 +34,9 @@ const envJsonValue = (name: string): string => {
 const projectUrl = Deno.env.get("SUPABASE_URL") || "";
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || envJsonValue("SUPABASE_SECRET_KEYS");
 const publicKey = envJsonValue("SUPABASE_PUBLISHABLE_KEYS") || Deno.env.get("SUPABASE_ANON_KEY") || "sb_publishable_YReNH0qn4Y68VHnCjpqg7g_x9lsdu_I";
+// Candidate confirmation e-mail (Resend). Without a verified sending domain Resend only delivers to the account owner's own address.
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
+const EMAIL_FROM_ADDRESS = Deno.env.get("EMAIL_FROM") || "onboarding@resend.dev";
 const admin = projectUrl && serviceKey
   ? createClient(projectUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
   : null;
@@ -221,6 +225,37 @@ async function validateApplicantSubmission(snapshot: Record<string, unknown>, in
   };
 }
 
+// Best effort: a failed confirmation e-mail must never fail or undo an application that is already saved.
+async function sendApplicationConfirmation(applicantId: string, to: string, name: string, snapshot: Record<string, unknown>) {
+  if (!RESEND_API_KEY) {
+    console.log("Confirmation e-mail skipped: RESEND_API_KEY is not configured.");
+    return;
+  }
+  try {
+    const profile = snapshot.companyProfile && typeof snapshot.companyProfile === "object" ? snapshot.companyProfile as Record<string, unknown> : {};
+    const content = buildConfirmationEmail({ name, jobTitle: snapshot.jobTitle, companyName: profile.name || snapshot.companyName });
+    const from = EMAIL_FROM_ADDRESS.includes("<") ? EMAIL_FROM_ADDRESS : `${content.fromName} <${EMAIL_FROM_ADDRESS}>`;
+    const result = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": `application-confirmation/${applicantId}`,
+      },
+      body: JSON.stringify({ from, to: [to], subject: content.subject, text: content.text, html: content.html }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (result.ok) {
+      console.log("Confirmation e-mail accepted by Resend.");
+    } else {
+      const detail = await result.json().catch(() => ({})) as { name?: string; message?: string };
+      console.error(`Confirmation e-mail rejected (HTTP ${result.status}): ${cleanName(detail.name, 60)} ${cleanName(detail.message, 160)}`);
+    }
+  } catch (error) {
+    console.error("Confirmation e-mail failed:", error instanceof Error ? error.name : "unknown error");
+  }
+}
+
 async function submitApplicant(req: Request, form: FormData) {
   if (!admin) return fail(req, 500, "Application service is not configured.");
   const publishedId = cleanName(form.get("publishedFlowId"), 100);
@@ -272,6 +307,10 @@ async function submitApplicant(req: Request, form: FormData) {
     if (insertError.code === "23505") return response(req, 200, { submitted: true, accepted: true });
     return fail(req, 503, "Your application could not be saved. Please try again.");
   }
+  // Only a newly saved, validated application reaches this point: honeypot hits, invalid forms and duplicate submissions return earlier.
+  const confirmation = sendApplicationConfirmation(submissionKey, normalized.email, normalized.name, active.snapshot);
+  const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void } }).EdgeRuntime;
+  if (runtime?.waitUntil) runtime.waitUntil(confirmation); else await confirmation;
   return response(req, 200, { submitted: true, accepted: true });
 }
 
