@@ -80,8 +80,8 @@ test('late signed Stripe events cannot recreate a deleted workspace subscription
 
 test('Settings uses a fresh cache version for frontend assets', () => {
   const html = read('index.html');
-  assert.match(html, /styles\.css\?v=design-tokens-js-20261017/);
-  assert.match(html, /backend\.js\?v=design-tokens-js-20261017/);
+  assert.match(html, /styles\.css\?v=bg-page-20261017/);
+  assert.match(html, /backend\.js\?v=bg-page-20261017/);
   assert.match(html, /auth\.js\?v=password-recovery-20261001/);
-  assert.match(html, /builder\.js\?v=design-tokens-js-20261017/);
+  assert.match(html, /builder\.js\?v=bg-page-20261017/);
 });
