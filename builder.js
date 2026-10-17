@@ -107,6 +107,7 @@
     cloudSaveTimer = setTimeout(async () => {
       try {
         await window.PathwayBackend.saveFlow(flow, workspace);
+        if (flow.cloudId && currentFlow() === flow) setRoute(`flow=${flow.cloudId}`); // a brand-new flow only gets its id after the first save
         const item = document.querySelector('.save-indicator');
         if (item) item.innerHTML = '<span class="status-dot"></span> Saved securely';
         updatePublicationNotice();
@@ -119,6 +120,13 @@
       }
     }, 350);
   };
+  // Keep the current page in the URL hash so a browser refresh returns to it. replaceState avoids polluting history.
+  function setRoute(route) {
+    try {
+      const hash = `#${route}`;
+      if (window.location.hash !== hash) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
+    } catch (_) { /* Navigation still works without URL persistence. */ }
+  }
   function cssToken(name, fallback) { return getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim() || fallback; }
   function showToast(message) {
     toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer);
@@ -165,6 +173,7 @@
 
   function renderMyCompanies() {
     if (!hasPermission('flows')) return renderAccessMessage('flows');
+    setRoute('my-companies');
     currentId = null; selectedId = null;
     const atLimit = companies.length >= 3;
     root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-companies')}<main class="companies-page"><div class="companies-heading"><div><div class="eyebrow">Hiring workspace</div><h1>My Companies</h1><p>Choose a company to represent a job on its public application page.</p></div><div class="companies-heading-actions"><span class="companies-count">${companies.length} / 3 companies</span><button class="btn btn-primary" id="new-company" ${atLimit ? 'disabled title="You can add up to three companies."' : ''}>＋ &nbsp;New company</button></div></div>${companies.length ? `<section class="companies-grid" aria-label="Your companies">${companies.map(companyCardHtml).join('')}</section>` : `<section class="companies-empty"><span class="brand-mark">↗</span><h2>No companies yet</h2><p>New flows will use ${esc(workspace.name)} until you add a company profile.</p><button class="btn btn-primary" id="empty-new-company">＋ &nbsp;New company</button></section>`}</main></div></div>`;
@@ -443,6 +452,7 @@
 
   function renderDashboard() {
     if (!hasPermission('flows')) return renderAccessMessage('flows');
+    setRoute('dashboard');
     currentId = null; selectedId = null;
     const metricsRequestId = ++dashboardApplicantCountRequestId;
     const count = flows.length;
@@ -482,6 +492,7 @@
 
   async function renderApplicants() {
     if (!hasPermission('applicants')) return renderAccessMessage('applicants');
+    setRoute('applicants');
     applicantFitStagesEnabled = loadApplicantFitStagesPreference();
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
@@ -562,6 +573,7 @@
   async function renderMyTeam() {
     currentId = null; selectedId = null;
     if (!isOwner && !teamMember) return renderDashboard();
+    setRoute('my-team');
     const requestId = ++teamRenderRequestId;
     renderMyTeamLoading();
     try {
@@ -683,6 +695,7 @@
 
   function renderSettings() {
     currentId = null; selectedId = null;
+    setRoute('settings');
     root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email || '')}">${esc(user.email || '—')}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">Your account and workspace</div><h1>Settings</h1><p>View your account details and manage workspace access.</p></div></div><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">Account and workspace</h2><p>These details are read-only.</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>Email address</span><strong>${esc(user.email || '—')}</strong><small>Your sign-in email.</small></div><div class="settings-info-item"><span>Workspace</span><strong>${esc(workspace.name)}</strong><small>The workspace you currently belong to.</small></div></div></section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>Sign out</h2><p>End your current Pathway session on this device.</p></div><button class="btn" id="settings-signout" type="button">Sign out</button></div></section><section class="settings-card settings-danger-card"><div class="settings-card-heading"><div><h2>Workspace access</h2><p>${isOwner ? 'Permanently remove this workspace and its data.' : 'Leave this workspace without deleting your Pathway account.'}</p></div></div>${isOwner ? '<button class="btn btn-danger" id="settings-delete-workspace" type="button">Delete workspace</button>' : teamMember ? '<button class="btn btn-danger" id="settings-leave-workspace" type="button">Leave workspace</button>' : ''}</section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>Delete account</h2><p>${isOwner ? 'This also deletes your workspace and all its data, and immediately cancels any subscription.' : 'Your workspace, flows, candidates and subscription will remain for the owner and team.'}</p></div><button class="btn btn-danger" id="settings-delete-account" type="button">Delete account</button></div></section></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
@@ -738,6 +751,7 @@
 
   function renderMyPlan() {
     if (!isOwner) return hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows');
+    setRoute('my-plan');
     currentId = null; selectedId = null;
     paymentHistoryRequestId += 1;
     paymentHistoryOpen = false; paymentHistoryLoaded = false; paymentHistoryLoading = false;
@@ -1201,6 +1215,7 @@
 
   function renderEditor() {
     const flow = currentFlow(); if (!flow) return renderDashboard();
+    if (flow.cloudId) setRoute(`flow=${flow.cloudId}`);
     root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name">${esc(workspace.name)}</span><span class="auth-user">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body"><main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' || !subscription?.active ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status"></div></main></div></div>`;
     bindPlanControl();
     root.querySelector('.save-indicator')?.insertAdjacentHTML('afterend', '<div id="publish-changes-slot"></div>');
@@ -1565,6 +1580,10 @@
     else if (requestedPage === 'my-plan') renderMyPlan();
     else if (requestedPage === 'my-team') void renderMyTeam();
     else if (requestedPage === 'settings') renderSettings();
+    else if (requestedPage.startsWith('flow=')) {
+      const savedFlow = flows.find(item => item.cloudId === requestedPage.slice(5));
+      if (savedFlow && hasPermission('flows')) openFlow(savedFlow.id); else renderDashboard();
+    }
     else if (requestedPage === 'dashboard' && !hasPermission('flows')) renderAccessMessage('flows');
     else renderDashboard();
     if (checkoutComplete) void refreshSubscriptionAfterCheckout();
