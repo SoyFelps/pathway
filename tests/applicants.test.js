@@ -87,7 +87,7 @@ test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied col
   assert.match(styles, /\.applicant-stage-toggle-control input:disabled\{pointer-events:none\}/);
   assert.match(styles, /\.applicant-stage-toggle-wrap\{[^}]*justify-content:flex-end/);
   assert.doesNotMatch(styles, /\.applicant-stage-toggle-wrap\{[^}]*background:/);
-  assert.match(read('index.html'), /builder\.js\?v=applicant-failed-buttons-20261007/);
+  assert.match(read('index.html'), /builder\.js\?v=design-tokens-20261017/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -159,13 +159,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=applicant-failed-buttons-20261007/);
-  assert.match(read('index.html'), /pathway\.js\?v=applicant-failed-buttons-20261007/);
-  assert.match(read('apply.html'), /candidate\.js\?v=applicant-failed-buttons-20261007/);
-  assert.match(read('index.html'), /candidate\.js\?v=applicant-failed-buttons-20261007/);
-  assert.match(read('apply.html'), /styles\.css\?v=applicant-failed-buttons-20261007/);
-  assert.match(read('index.html'), /styles\.css\?v=applicant-failed-buttons-20261007/);
-  assert.match(read('apply.html'), /backend\.js\?v=applicant-failed-buttons-20261007/);
+  assert.match(read('apply.html'), /pathway\.js\?v=design-tokens-20261017/);
+  assert.match(read('index.html'), /pathway\.js\?v=design-tokens-20261017/);
+  assert.match(read('apply.html'), /candidate\.js\?v=design-tokens-20261017/);
+  assert.match(read('index.html'), /candidate\.js\?v=design-tokens-20261017/);
+  assert.match(read('apply.html'), /styles\.css\?v=design-tokens-20261017/);
+  assert.match(read('index.html'), /styles\.css\?v=design-tokens-20261017/);
+  assert.match(read('apply.html'), /backend\.js\?v=design-tokens-20261017/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
@@ -274,6 +274,6 @@ test('dashboard shows new applicant and published-flow counts without loading ap
   assert.match(dashboard, /<span>Published flows<\/span>/);
   assert.match(dashboard, /if \(hasPermission\('applicants'\)\) void loadDashboardNewApplicantCount/);
   assert.doesNotMatch(dashboard, /Steps in your journeys|Saved to Supabase/);
-  assert.match(css, /\.draft-tag\{color:#647789\}\.draft-tag \.status-dot\{background:#8395a5/);
-  assert.match(css, /\.published-tag \.status-dot\{background:#4f865d/);
+  assert.ok(css.includes('.draft-tag{color:var(--slate-text)}.draft-tag .status-dot{background:var(--slate)'));
+  assert.ok(css.includes('.published-tag .status-dot{background:var(--published-dot)'));
 });
