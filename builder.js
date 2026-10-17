@@ -114,11 +114,12 @@
         saveTimer = setTimeout(() => { const current = document.querySelector('.save-indicator'); if (current) current.innerHTML = '<span class="status-dot"></span> Saved to workspace'; }, 1800);
       } catch (error) {
         const item = document.querySelector('.save-indicator');
-        if (item) item.innerHTML = '<span style="color:#b94841">Save failed</span>';
+        if (item) item.innerHTML = '<span class="save-failed">Save failed</span>';
         showToast(`Could not save this flow: ${error.message || 'check your connection'}`);
       }
     }, 350);
   };
+  function cssToken(name, fallback) { return getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim() || fallback; }
   function showToast(message) {
     toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
@@ -413,7 +414,9 @@
           appearance: {
             theme: 'stripe', labels: 'auto', inputs: 'spaced',
             variables: {
-              borderRadius: '4px', colorBackground: '#ffffff', colorDanger: '#df1b41', colorPrimary: '#315f4a',
+              // Stripe renders in an iframe and cannot read our CSS variables, so brand colours come from the tokens;
+              // danger, success and text keep Stripe's own defaults.
+              borderRadius: '4px', colorBackground: cssToken('surface', '#ffffff'), colorDanger: '#df1b41', colorPrimary: cssToken('green', '#315f4a'),
               colorSuccess: '#00c853', colorText: '#30313d', fontFamily: 'default', fontSizeBase: '16px', spacingUnit: '4px'
             }
           }
@@ -1532,7 +1535,7 @@
     } catch (error) {
       if (indicator?.isConnected) indicator.innerHTML = savedToWorkspace
         ? '<span class="status-dot"></span> Saved to workspace'
-        : '<span style="color:#b94841">Save failed</span>';
+        : '<span class="save-failed">Save failed</span>';
       showToast(`Could not publish changes: ${error.message || 'please try again'}`);
     } finally {
       publishingFlows.delete(flow);
