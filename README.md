@@ -28,6 +28,8 @@ The app connects to the configured Supabase project. Supabase Auth Site URL and 
 - **My Team:** Premium workspaces can add up to three members at no additional seat charge. Owners assign Flows, Candidates and Team permissions. Invitations are copyable links, expire after seven days, and are bound to the invited email. Members can leave without deleting their account.
 - **My Plan:** workspace owners can view plan status, start checkout, schedule cancellation or resume renewal, update payment methods through Stripe, and view payment history. Team members cannot access billing.
 - Dashboard reports flow totals, new applicants and published flows.
+- **Confirmation e-mail:** after a new application is saved, the candidate receives an English confirmation through [Resend](https://resend.com), sent by the `applications` function. Sending is best effort and never fails an application, and only the first application from an address to a job triggers an e-mail. See [Candidate e-mail and abuse protection](#candidate-e-mail-and-abuse-protection).
+- **Abuse protection on the public application form:** Cloudflare Turnstile CAPTCHA, a per-visitor limit (8 attempts per hour per job), per-job ceilings (300 per hour and 2,000 per day by default) and a hidden honeypot field.
 
 ## Architecture and security
 
@@ -37,6 +39,22 @@ RLS and server-side checks enforce workspace isolation and permissions; hidden U
 
 The configured subscription is **US$24.90/month**. Confirm Stripe test/live mode and server secrets before changing or accepting real payments. See [Stripe integration notes](STRIPE_INTEGRATION_TODO.md).
 
+## Candidate e-mail and abuse protection
+
+Both run inside the `applications` Edge Function (`supabase/functions/applications/`: `index.ts`, `email.ts`, `captcha.ts`). Secrets are set in each Supabase project's dashboard (Edge Functions → Secrets) and are never committed.
+
+| Secret | Purpose |
+|---|---|
+| `RESEND_API_KEY` | Enables the candidate confirmation e-mail. Without it, sending is skipped. |
+| `EMAIL_FROM` | Sender address. Defaults to `onboarding@resend.dev`, which Resend only delivers to the account owner until a sending domain is verified. |
+| `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile secret. The CAPTCHA is enforced whenever this secret exists. |
+| `FLOW_MAX_APPLICATIONS_PER_HOUR`, `FLOW_MAX_APPLICATIONS_PER_DAY` | Optional per-job ceilings (defaults 300 and 2,000). |
+
+- The public Turnstile **site key** lives in `turnstile-config.js` (safe for the browser). The candidate page requests a token at the moment of submission, because tokens expire after five minutes and work once. An empty site key disables the widget.
+- **Rollout order matters:** publish the site key before setting `TURNSTILE_SECRET_KEY`, otherwise the live form is rejected until the page catches up.
+- Turnstile allows `soyfelps.github.io` and `localhost`. Cloudflare publishes dummy site and secret keys for automated tests; the real widget needs a human click when it decides a browser looks automated.
+- The page never reveals whether an e-mail address has applied before, so the form cannot be used to find out who applied where.
+
 ## Deployment
 
 The static site is hosted on GitHub Pages from the repository root. Supabase project-specific configuration is in `supabase/config.toml`; database changes are timestamped migrations. Do not assume a migration or function in Git has reached production: check the project's deployed migration/function state before making operational claims or applying changes. Add database changes as forward migrations; do not rewrite migrations already applied to production.
@@ -45,4 +63,4 @@ For more detail, see [AI collaborator context](docs/ai-context/README.md), espec
 
 ## Current limitations
 
-Pathway does not currently send recruiter notifications or candidate receipt emails, scan uploaded resumes for malware, or provide bulk applicant export. The in-app privacy notice is not a substitute for a reviewed legal privacy policy.
+Pathway does not currently send recruiter notifications, scan uploaded resumes for malware, or provide bulk applicant export. Candidate confirmation e-mails only reach real candidates once a sending domain is verified in Resend; until then Resend delivers only to the account owner. The in-app privacy notice is not a substitute for a reviewed legal privacy policy.
