@@ -327,11 +327,17 @@ async function submitApplicant(req: Request, form: FormData) {
     return fail(req, 429, "This job is receiving a very high volume of applications right now. Please try again in a little while.");
   }
 
-  // The confirmation e-mail goes out only for the first application from an address to this job. Candidates may still apply again.
-  // The answer is never shown to the visitor, so the form cannot be used to find out who applied where.
-  const { count: previousFromAddress, error: previousError } = await admin.from("applicants")
-    .select("id", { count: "exact", head: true }).eq("flow_id", active.flow.id).eq("candidate_email", normalized.email);
-  const firstForAddress = !previousError && (previousFromAddress ?? 0) === 0;
+  // Candidates may apply to the same job more than once; the hiring team sees a single card with every application on it.
+  // The latest earlier application tells us two things: whether this is the first one (only the first gets a confirmation
+  // e-mail) and which stage the candidate is in. A repeat application inherits that stage, Failed included, so it never
+  // jumps back to New or out of a rejection. The visitor is never told any of this, so the form cannot be used to find
+  // out who applied where.
+  const { data: previousApplications, error: previousError } = await admin.from("applicants")
+    .select("status").eq("flow_id", active.flow.id).eq("candidate_email", normalized.email)
+    .order("submitted_at", { ascending: false }).limit(1);
+  const firstForAddress = !previousError && (previousApplications?.length ?? 0) === 0;
+  const inheritedStatus = previousApplications?.[0]?.status;
+  const initialStatus = typeof inheritedStatus === "string" && inheritedStatus ? inheritedStatus : normalized.outcomeStatus;
 
   const resumePath = `${active.flow.workspace_id}/${active.flow.id}/${submissionKey}.${MIME_EXTENSIONS[normalized.contentType]}`;
   const file = normalized.resume;
@@ -345,7 +351,7 @@ async function submitApplicant(req: Request, form: FormData) {
     workspace_id: active.flow.workspace_id, flow_id: active.flow.id, published_flow_id: active.publication.id,
     candidate_name: normalized.name, candidate_email: normalized.email, candidate_info: normalized.candidateInfo,
     responses: normalized.answers, resume_path: resumePath, resume_filename: normalized.filename,
-    resume_content_type: normalized.contentType, status: normalized.outcomeStatus,
+    resume_content_type: normalized.contentType, status: initialStatus,
     privacy_notice_version: NOTICE_VERSION, privacy_acknowledged_at: new Date().toISOString(),
   });
   if (insertError) {

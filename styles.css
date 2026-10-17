@@ -335,3 +335,11 @@
 @media(max-width:760px){.kanban-board.failed-board{grid-template-columns:120px repeat(var(--other-stages,3),minmax(245px,80vw))}.kanban-board.failed-board.failed-open{grid-template-columns:minmax(245px,80vw) repeat(var(--other-stages,3),minmax(245px,80vw))}}
 .save-failed{color:var(--red)}
 .captcha-box{display:flex;justify-content:center;margin-top:18px}.captcha-box:empty{display:none}
+.applicant-card-tags{display:flex;align-items:center;gap:6px;min-width:0}
+.repeat-chip{display:inline-flex;align-items:center;padding:2px 7px;border-radius:6px;background:var(--tint);color:var(--green-text);font-size:10px;font-weight:650;white-space:nowrap}
+.kanban-summary-extra{color:var(--soft)}
+.applicant-tabs{display:flex;gap:4px;flex:0 0 auto;padding:0 clamp(16px,3vw,38px);border-bottom:1px solid var(--border-subtle);overflow-x:auto}
+.applicant-tab{flex:0 0 auto;padding:10px 13px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--text-subtle);font:650 12px var(--sans);cursor:pointer}
+.applicant-tab:hover{color:var(--green)}
+.applicant-tab[aria-selected="true"]{color:var(--text-heading);border-bottom-color:var(--green)}
+.applicant-stage-note{display:block;margin-top:5px;color:var(--text-subtle);font-size:10px;font-weight:400}

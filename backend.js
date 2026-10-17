@@ -594,12 +594,15 @@
   async function countNewApplicants(workspaceId) {
     await requireSession();
     if (typeof workspaceId !== 'string' || !/^[0-9a-f-]{36}$/i.test(workspaceId)) throw new Error('A valid workspace is required to count applicants.');
-    const { count, error } = await client.from('applicants')
-      .select('id', { count: 'exact', head: true })
+    // Counts candidates, not applications: repeat applications from one address to one job are a single candidate.
+    // Only the job and address columns are read, never applicant details.
+    const { data, error } = await client.from('applicants')
+      .select('flow_id,candidate_email')
       .eq('workspace_id', workspaceId)
-      .eq('status', 'new');
+      .eq('status', 'new')
+      .limit(1000);
     if (error) throw error;
-    return count || 0;
+    return new Set((data || []).map(row => `${row.flow_id}|${String(row.candidate_email || '').trim().toLowerCase()}`)).size;
   }
 
   async function listApplicantFlowLabels() {
@@ -620,6 +623,18 @@
     const { data, error } = await client.from('applicants').update({ status }).eq('id', applicantId).select('id,status,updated_at').single();
     if (error) throw error;
     return data;
+  }
+
+  // Moves every application of one candidate to the same stage in a single request.
+  async function updateApplicantStatuses(applicantIds, status) {
+    if (!APPLICANT_STATUSES.has(status)) throw new Error('Choose a valid applicant stage.');
+    if (!Array.isArray(applicantIds) || !applicantIds.length || applicantIds.length > 200 || applicantIds.some(id => typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id))) {
+      throw new Error('The applicant could not be updated.');
+    }
+    await requireSession();
+    const { data, error } = await client.from('applicants').update({ status }).in('id', applicantIds).select('id,status,updated_at');
+    if (error) throw error;
+    return data || [];
   }
 
   async function deleteFailedApplicants(flowId = '') {
@@ -746,6 +761,7 @@
     countNewApplicants,
     listApplicantFlowLabels,
     updateApplicantStatus,
+    updateApplicantStatuses,
     deleteFailedApplicants,
     getApplicantResumeUrl,
     submitApplication,

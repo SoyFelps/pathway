@@ -106,7 +106,7 @@ test('per-job ceilings are high by default, configurable, and answer 429', () =>
 test('the confirmation e-mail is sent only for the first application from an address to a job', () => {
   const source = read('supabase/functions/applications/index.ts');
   assert.match(source, /\.eq\("flow_id", active\.flow\.id\)\.eq\("candidate_email", normalized\.email\)/);
-  assert.ok(source.includes('const firstForAddress = !previousError && (previousFromAddress ?? 0) === 0;'), 'a failed lookup never sends');
+  assert.ok(source.includes('const firstForAddress = !previousError && (previousApplications?.length ?? 0) === 0;'), 'a failed lookup never sends');
   assert.match(source, /if \(firstForAddress\) \{[\s\S]{0,400}sendApplicationConfirmation\(/);
   assert.ok(source.includes('Confirmation e-mail skipped: this address has already applied to this job.'));
   const submitBody = source.slice(source.indexOf('async function submitApplicant('), source.indexOf('async function deleteFlowForOwner('));

@@ -87,7 +87,7 @@ test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied col
   assert.match(styles, /\.applicant-stage-toggle-control input:disabled\{pointer-events:none\}/);
   assert.match(styles, /\.applicant-stage-toggle-wrap\{[^}]*justify-content:flex-end/);
   assert.doesNotMatch(styles, /\.applicant-stage-toggle-wrap\{[^}]*background:/);
-  assert.match(read('index.html'), /builder\.js\?v=captcha-sitekey-20261017/);
+  assert.match(read('index.html'), /builder\.js\?v=repeat-applicants-20261017/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -159,13 +159,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=captcha-sitekey-20261017/);
-  assert.match(read('index.html'), /pathway\.js\?v=captcha-sitekey-20261017/);
-  assert.match(read('apply.html'), /candidate\.js\?v=captcha-sitekey-20261017/);
-  assert.match(read('index.html'), /candidate\.js\?v=captcha-sitekey-20261017/);
-  assert.match(read('apply.html'), /styles\.css\?v=captcha-sitekey-20261017/);
-  assert.match(read('index.html'), /styles\.css\?v=captcha-sitekey-20261017/);
-  assert.match(read('apply.html'), /backend\.js\?v=captcha-sitekey-20261017/);
+  assert.match(read('apply.html'), /pathway\.js\?v=repeat-applicants-20261017/);
+  assert.match(read('index.html'), /pathway\.js\?v=repeat-applicants-20261017/);
+  assert.match(read('apply.html'), /candidate\.js\?v=repeat-applicants-20261017/);
+  assert.match(read('index.html'), /candidate\.js\?v=repeat-applicants-20261017/);
+  assert.match(read('apply.html'), /styles\.css\?v=repeat-applicants-20261017/);
+  assert.match(read('index.html'), /styles\.css\?v=repeat-applicants-20261017/);
+  assert.match(read('apply.html'), /backend\.js\?v=repeat-applicants-20261017/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
@@ -263,7 +263,7 @@ test('dashboard shows new applicant and published-flow counts without loading ap
   const backend = read('backend.js');
   const builder = read('builder.js');
   const css = read('styles.css');
-  assert.match(backend, /async function countNewApplicants\(workspaceId\)[\s\S]*select\('id', \{ count: 'exact', head: true \}\)[\s\S]*eq\('workspace_id', workspaceId\)[\s\S]*eq\('status', 'new'\)/);
+  assert.match(backend, /async function countNewApplicants\(workspaceId\)[\s\S]*select\('flow_id,candidate_email'\)[\s\S]*eq\('workspace_id', workspaceId\)[\s\S]*eq\('status', 'new'\)[\s\S]*new Set\(/);
   assert.match(backend, /countNewApplicants,/);
   const dashboardStart = builder.indexOf('function renderDashboard()');
   const dashboardEnd = builder.indexOf('async function renderApplicants()', dashboardStart);

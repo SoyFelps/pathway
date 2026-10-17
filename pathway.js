@@ -192,6 +192,28 @@
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(flows)); return true; }
     catch (error) { console.warn('Pathway could not save drafts in this browser.', error); return false; }
   }
+  // One candidate per job and e-mail address: repeat applications from the same address to the same job share a single card.
+  function candidateKey(applicant) {
+    return `${applicant.flow_id}|${String(applicant.candidate_email || '').trim().toLowerCase()}`;
+  }
+  function groupApplicants(list) {
+    const time = applicant => { const value = Date.parse(applicant.submitted_at); return Number.isNaN(value) ? 0 : value; };
+    const groups = new Map();
+    for (const applicant of list || []) {
+      const key = candidateKey(applicant);
+      if (!groups.has(key)) groups.set(key, { key, items: [] });
+      groups.get(key).items.push(applicant);
+    }
+    const result = [...groups.values()];
+    for (const group of result) {
+      group.items.sort((a, b) => time(b) - time(a) || String(b.id).localeCompare(String(a.id)));
+      group.latest = group.items[0];
+      group.status = group.latest.status;
+      group.count = group.items.length;
+    }
+    return result.sort((a, b) => time(b.latest) - time(a.latest) || a.key.localeCompare(b.key));
+  }
+
   function loadFlows() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
@@ -202,5 +224,5 @@
     return [example];
   }
 
-  window.PathwayCore = { STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
+  window.PathwayCore = { candidateKey, groupApplicants, STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
 })();

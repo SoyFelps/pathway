@@ -67,7 +67,7 @@
     try { localStorage.setItem(applicantFitStagePreferenceKey(stageKey), String(applicantFitStagesEnabled[stageKey])); }
     catch (_) { /* Keep the checkbox usable when browser storage is unavailable. */ }
   }
-  function applicantHasStage(stageKey) { return applicants.some(applicant => applicant.status === stageKey); }
+  function applicantHasStage(stageKey) { return C.groupApplicants(applicants).some(group => group.status === stageKey); }
   function visibleApplicantStages() {
     return applicantStages.filter(stage => !stage.optional || applicantFitStagesEnabled[stage.key] || applicantHasStage(stage.key));
   }
@@ -982,10 +982,11 @@
       });
     }
     const term = applicantSearch.trim().toLowerCase();
-    const visible = applicants.filter(applicant => {
+    const allGroups = C.groupApplicants(applicants);
+    const visible = allGroups.filter(group => !term || group.items.some(applicant => {
       const flow = flows.find(item => item.cloudId === applicant.flow_id) || applicantFlowLabels.find(item => item.cloudId === applicant.flow_id);
-      return !term || `${applicant.candidate_name} ${applicant.candidate_email} ${flow?.jobTitle || ''} ${flow?.companyName || ''}`.toLowerCase().includes(term);
-    });
+      return `${applicant.candidate_name} ${applicant.candidate_email} ${flow?.jobTitle || ''} ${flow?.companyName || ''}`.toLowerCase().includes(term);
+    }));
     const filterName = applicantFilter ? applicantFlowLabels.find(flow => flow.cloudId === applicantFilter)?.jobTitle : '';
     if (!applicants.length && !applicantFilter && !term) {
       const published = flows.filter(flow => flow.publicationStatus === 'published' && flow.activePublishedFlowId);
@@ -997,16 +998,21 @@
     const stages = visibleApplicantStages();
     const optionalStageCount = stages.filter(stage => stage.optional).length;
     const otherStageCount = stages.length - 1;
-    content.innerHTML = `<div class="kanban-summary"><strong>${visible.length}</strong> ${visible.length === 1 ? 'applicant' : 'applicants'}${filterName ? ` for <strong>${esc(filterName)}</strong>` : ' across all jobs'}${applicants.length >= 1000 ? ' · Showing the latest 1,000; filter by job to narrow the list.' : ''}</div><section class="kanban-board failed-board${failedColumnOpen ? ' failed-open' : ''}" style="--other-stages:${otherStageCount}" aria-label="Applicant pipeline">${stages.map(stage => {
-      const cards = visible.filter(applicant => applicant.status === stage.key);
-      const cardHtml = applicant => `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div></article>`;
+    const applicationTotal = visible.reduce((total, group) => total + group.count, 0);
+    content.innerHTML = `<div class="kanban-summary"><strong>${visible.length}</strong> ${visible.length === 1 ? 'applicant' : 'applicants'}${applicationTotal > visible.length ? ` <span class="kanban-summary-extra">· ${applicationTotal} applications</span>` : ''}${filterName ? ` for <strong>${esc(filterName)}</strong>` : ' across all jobs'}${applicants.length >= 1000 ? ' · Showing the latest 1,000; filter by job to narrow the list.' : ''}</div><section class="kanban-board failed-board${failedColumnOpen ? ' failed-open' : ''}" style="--other-stages:${otherStageCount}" aria-label="Applicant pipeline">${stages.map(stage => {
+      const cards = visible.filter(group => group.status === stage.key);
+      const cardHtml = group => {
+        const applicant = group.latest;
+        const repeat = group.count > 1 ? `<span class="repeat-chip" title="This candidate applied ${group.count} times">↻ ${group.count} applications</span>` : '';
+        return `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}${group.count > 1 ? `, ${group.count} applications` : ''}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span>${repeat}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div></article>`;
+      };
       if (stage.key === 'failed') {
         const head = `<div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${stage.label}</div><span class="kanban-count">${cards.length}</span></div>`;
         if (!failedColumnOpen) return `<section class="kanban-column failed-column is-collapsed" data-stage="failed" aria-label="Failed">${head}<button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="false">Open &gt;</button><div class="failed-drop">Drag here</div></section>`;
-        const hasFailed = applicants.some(applicant => applicant.status === 'failed');
+        const hasFailed = allGroups.some(group => group.status === 'failed');
         return `<section class="kanban-column failed-column is-open" data-stage="failed" aria-label="Failed">${head}<div class="failed-actions"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="true">&lt; Collapse</button>${hasFailed ? '<button class="btn btn-sm failed-clear" type="button" data-failed-clear>Clear all failed</button>' : ''}</div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
       }
-      return `<section class="kanban-column" data-stage="${stage.key}" aria-label="${stage.label}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${stage.label}</div><span class="kanban-count">${cards.length}</span></div><div class="applicant-list">${cards.length ? cards.map(applicant => `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div></article>`).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
+      return `<section class="kanban-column" data-stage="${stage.key}" aria-label="${stage.label}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${stage.label}</div><span class="kanban-count">${cards.length}</span></div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
     }).join('')}</section>`;
     content.querySelectorAll('[data-failed-toggle]').forEach(button => button.addEventListener('click', () => { failedColumnOpen = !failedColumnOpen; renderApplicantBoard(); }));
     content.querySelector('[data-failed-clear]')?.addEventListener('click', confirmClearFailedApplicants);
@@ -1032,13 +1038,14 @@
   }
 
   function confirmClearFailedApplicants() {
-    const failed = applicants.filter(applicant => applicant.status === 'failed');
+    const failed = C.groupApplicants(applicants).filter(group => group.status === 'failed');
     if (!failed.length) return;
-    const jobCount = new Set(failed.map(applicant => applicant.flow_id)).size;
+    const applicationCount = failed.reduce((total, group) => total + group.count, 0);
+    const jobCount = new Set(failed.map(group => group.latest.flow_id)).size;
     const filterName = applicantFilter ? applicantFlowLabels.find(flow => flow.cloudId === applicantFilter)?.jobTitle : '';
     const scope = filterName ? `for ${filterName}` : `across ${jobCount} ${jobCount === 1 ? 'job' : 'jobs'}`;
     const noun = failed.length === 1 ? 'failed applicant' : 'failed applicants';
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Clear failed applicants</div><h2>Permanently delete ${failed.length} ${noun}?</h2><p>This removes ${failed.length === 1 ? 'the application and its resume' : 'their applications and uploaded resumes'} ${esc(scope)}. This can't be undone.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-danger" type="button" id="confirm-clear-failed">Delete ${failed.length} ${noun}</button></div>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Clear failed applicants</div><h2>Permanently delete ${failed.length} ${noun}?</h2><p>This removes ${applicationCount > failed.length ? `all ${applicationCount} applications and their uploaded resumes` : failed.length === 1 ? 'the application and its resume' : 'their applications and uploaded resumes'} ${esc(scope)}. This can't be undone.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-danger" type="button" id="confirm-clear-failed">Delete ${failed.length} ${noun}</button></div>`);
     const button = modalRoot.querySelector('#confirm-clear-failed');
     button.addEventListener('click', async () => {
       button.disabled = true; button.textContent = 'Deleting…';
@@ -1058,44 +1065,58 @@
   }
 
   async function moveApplicant(id, status) {
-    const applicant = applicants.find(item => item.id === id);
-    if (!applicant || applicant.status === status || !applicantStages.some(stage => stage.key === status)) return;
-    const oldStatus = applicant.status;
-    applicant.status = status;
+    const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
+    if (!group || group.status === status || !applicantStages.some(stage => stage.key === status)) return;
+    // The stage belongs to the candidate: every application from the same address to the same job moves together.
+    const members = group.items;
+    const previous = members.map(member => member.status);
+    members.forEach(member => { member.status = status; });
     renderApplicantBoard();
     try {
-      const updated = await window.PathwayBackend.updateApplicantStatus(id, status);
-      applicant.status = updated.status;
-      applicant.updated_at = updated.updated_at;
+      const updated = await window.PathwayBackend.updateApplicantStatuses(members.map(member => member.id), status);
+      if (updated.length !== members.length) throw new Error('some applications could not be updated');
+      updated.forEach(row => {
+        const member = members.find(item => item.id === row.id);
+        if (member) { member.status = row.status; member.updated_at = row.updated_at; }
+      });
       renderApplicantBoard();
-      if (modalRoot.querySelector(`[data-detail-applicant="${id}"]`)) showApplicantDetails(id);
+      const open = modalRoot.querySelector('[data-detail-applicant]');
+      if (open && members.some(member => member.id === open.dataset.detailApplicant)) showApplicantDetails(open.dataset.detailApplicant, Number(open.dataset.detailTab) || 0);
       showToast(`Applicant moved to ${applicantStages.find(stage => stage.key === status).label}.`);
     } catch (error) {
-      applicant.status = oldStatus;
+      members.forEach((member, index) => { member.status = previous[index]; });
       renderApplicantBoard();
       showToast(`Could not update applicant stage: ${error.message || 'please retry'}`);
     }
   }
 
-  function showApplicantDetails(id) {
-    const applicant = applicants.find(item => item.id === id);
-    if (!applicant) return;
+  function showApplicantDetails(id, tabIndex = 0) {
+    const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
+    if (!group) return;
+    const tab = Math.min(Math.max(Number(tabIndex) || 0, 0), group.count - 1);
+    const applicant = group.items[tab];
+    const person = group.latest;
+    const tabLabel = (member, index) => `${index === 0 ? 'Latest · ' : ''}${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(member.submitted_at))}`;
+    const tabs = group.count > 1
+      ? `<div class="applicant-tabs" role="tablist" aria-label="Applications from this candidate">${group.items.map((member, index) => `<button class="applicant-tab" type="button" role="tab" aria-selected="${index === tab}" data-tab="${index}">${esc(tabLabel(member, index))}</button>`).join('')}</div>`
+      : '';
     const flow = flows.find(item => item.cloudId === applicant.flow_id) || applicantFlowLabels.find(item => item.cloudId === applicant.flow_id);
     const detailFields = Object.entries(applicant.candidate_info || {}).filter(([, value]) => value !== null && value !== '' && value !== undefined);
     const answers = Array.isArray(applicant.responses) ? applicant.responses : [];
     const isPdf = applicant.resume_content_type === 'application/pdf';
     const filename = applicant.resume_filename || 'resume';
-    const statusOptions = visibleApplicantStages().map(stage => `<option value="${stage.key}" ${applicant.status === stage.key ? 'selected' : ''}>${stage.label}</option>`).join('');
+    const statusOptions = visibleApplicantStages().map(stage => `<option value="${stage.key}" ${group.status === stage.key ? 'selected' : ''}>${stage.label}</option>`).join('');
 
-    setModal(`<div class="applicant-review-layout" data-detail-applicant="${esc(applicant.id)}">
+    setModal(`<div class="applicant-review-layout" data-detail-applicant="${esc(person.id)}" data-detail-tab="${tab}">
       <section class="applicant-review-left" aria-label="Applicant details">
         <header class="modal-head applicant-detail-head">
-          <div class="applicant-detail-title"><div class="applicant-avatar" aria-hidden="true">${esc(initials(applicant.candidate_name))}</div><div><div class="eyebrow" style="margin-bottom:5px">${esc(flow?.jobTitle || 'Application')}</div><h2>${esc(applicant.candidate_name)}</h2><div class="muted">${esc(applicant.candidate_email)}</div></div></div>
+          <div class="applicant-detail-title"><div class="applicant-avatar" aria-hidden="true">${esc(initials(person.candidate_name))}</div><div><div class="eyebrow" style="margin-bottom:5px">${esc(flow?.jobTitle || 'Application')}</div><h2>${esc(person.candidate_name)}</h2><div class="muted">${esc(person.candidate_email)}${group.count > 1 ? ` · Applied ${group.count} times` : ''}</div></div></div>
           <button class="modal-x" data-close aria-label="Close applicant details">×</button>
         </header>
+        ${tabs}
         <div class="applicant-review-content">
           <section class="applicant-detail-section applicant-detail-actions-section"><div class="applicant-detail-actions">
-            <label class="applicant-info-item"><span>Hiring stage</span><select class="applicant-status-select" id="applicant-status-select">${statusOptions}</select></label>
+            <label class="applicant-info-item"><span>Hiring stage</span><select class="applicant-status-select" id="applicant-status-select">${statusOptions}</select>${group.count > 1 ? `<small class="applicant-stage-note">Applies to all ${group.count} applications</small>` : ''}</label>
             <div class="applicant-resume-actions">${isPdf ? '<button class="btn applicant-resume-button" id="preview-applicant-resume" aria-expanded="false">▧ &nbsp;Preview resume</button>' : ''}<button class="btn applicant-resume-button" id="download-applicant-resume">↓ &nbsp;Download resume</button></div>
           </div></section>
           <section class="applicant-detail-section"><h3>Candidate details</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Full name</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>Email address</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(C.OPTIONAL_FIELDS.find(field => field.key === key)?.label || key)}</span><strong>${esc(value)}</strong></div>`).join('')}</div></section>
@@ -1113,6 +1134,7 @@
     </div>`);
 
     modalRoot.querySelector('#applicant-status-select').addEventListener('change', event => { void moveApplicant(applicant.id, event.target.value); });
+    modalRoot.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => showApplicantDetails(person.id, Number(button.dataset.tab))));
     const previewButton = modalRoot.querySelector('#preview-applicant-resume');
     const previewPanel = modalRoot.querySelector('#applicant-resume-preview');
     const previewFrame = modalRoot.querySelector('#applicant-resume-frame');
