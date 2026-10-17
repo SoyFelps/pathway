@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildConfirmationEmail } from "./email.ts";
+import { verifyTurnstileToken } from "./captcha.ts";
 
 const APP_ORIGINS = new Set([
   "https://soyfelps.github.io",
@@ -37,6 +38,17 @@ const publicKey = envJsonValue("SUPABASE_PUBLISHABLE_KEYS") || Deno.env.get("SUP
 // Candidate confirmation e-mail (Resend). Without a verified sending domain Resend only delivers to the account owner's own address.
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const EMAIL_FROM_ADDRESS = Deno.env.get("EMAIL_FROM") || "onboarding@resend.dev";
+// Cloudflare Turnstile CAPTCHA: enforced whenever the secret is set (the owner sets it in the Supabase dashboard).
+const TURNSTILE_SECRET_KEY = Deno.env.get("TURNSTILE_SECRET_KEY") || "";
+if (!TURNSTILE_SECRET_KEY) console.warn("TURNSTILE_SECRET_KEY is not set: the application form is not protected by a CAPTCHA.");
+// Safety ceilings per job across all visitors. They are deliberately high (large employers get hundreds of applications a day);
+// override them with the FLOW_MAX_APPLICATIONS_PER_HOUR / FLOW_MAX_APPLICATIONS_PER_DAY secrets if a company needs more.
+const positiveInt = (name: string, fallback: number): number => {
+  const value = Math.floor(Number(Deno.env.get(name)));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+const FLOW_MAX_PER_HOUR = positiveInt("FLOW_MAX_APPLICATIONS_PER_HOUR", 300);
+const FLOW_MAX_PER_DAY = positiveInt("FLOW_MAX_APPLICATIONS_PER_DAY", 2000);
 const admin = projectUrl && serviceKey
   ? createClient(projectUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
   : null;
@@ -263,6 +275,21 @@ async function submitApplicant(req: Request, form: FormData) {
   if (!UUID_RE.test(publishedId) || !UUID_RE.test(submissionKey)) return fail(req, 400, "This application link is invalid.");
   if (cleanName(form.get("website"), 300)) return response(req, 200, { submitted: true, accepted: true });
 
+  const ip = req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  // CAPTCHA first: it is the cheapest way to turn bots away, before any database or storage work.
+  if (TURNSTILE_SECRET_KEY) {
+    const captcha = await verifyTurnstileToken(TURNSTILE_SECRET_KEY, form.get("turnstileToken"), ip);
+    if (!captcha.ok) {
+      if (captcha.reason === "unavailable") {
+        console.error(`Security check unavailable: ${captcha.codes.join(",")}`);
+        return fail(req, 503, "The security check is temporarily unavailable. Please try again in a moment.");
+      }
+      return fail(req, 400, captcha.reason === "missing"
+        ? "Complete the security check to submit your application."
+        : "The security check failed. Please try again.");
+    }
+  }
+
   let active;
   let normalized;
   try {
@@ -276,7 +303,6 @@ async function submitApplicant(req: Request, form: FormData) {
     return fail(req, 400, error instanceof Error ? error.message : "The application could not be validated.");
   }
 
-  const ip = req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const userAgent = cleanName(req.headers.get("user-agent"), 200);
   const clientKeyHash = await sha256Hex(`${active.flow.id}|${ip}|${ip === "unknown" ? userAgent : ""}`);
   const { data: underLimit, error: limitError } = await admin.rpc("consume_applicant_submission_limit", { p_flow_id: active.flow.id, p_client_key_hash: clientKeyHash });
@@ -286,6 +312,26 @@ async function submitApplicant(req: Request, form: FormData) {
   const { data: existing, error: existingError } = await admin.from("applicants").select("id").eq("flow_id", active.flow.id).eq("submission_key", submissionKey).maybeSingle();
   if (existingError) return fail(req, 503, "Your application could not be checked. Please try again.");
   if (existing) return response(req, 200, { submitted: true, accepted: true });
+
+  // Per-job ceilings across all visitors (high on purpose). They come after the duplicate check so that
+  // retrying an application that was already saved still succeeds, and they only count saved applications.
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const [lastHour, lastDay] = await Promise.all([
+    admin.from("applicants").select("id", { count: "exact", head: true }).eq("flow_id", active.flow.id).gte("submitted_at", hourAgo),
+    admin.from("applicants").select("id", { count: "exact", head: true }).eq("flow_id", active.flow.id).gte("submitted_at", dayAgo),
+  ]);
+  if (lastHour.error || lastDay.error) return fail(req, 503, "Your application could not be checked. Please try again.");
+  if ((lastHour.count ?? 0) >= FLOW_MAX_PER_HOUR || (lastDay.count ?? 0) >= FLOW_MAX_PER_DAY) {
+    console.error(`Application ceiling reached for flow ${active.flow.id}: ${lastHour.count ?? 0} in the last hour, ${lastDay.count ?? 0} in the last 24 hours.`);
+    return fail(req, 429, "This job is receiving a very high volume of applications right now. Please try again in a little while.");
+  }
+
+  // The confirmation e-mail goes out only for the first application from an address to this job. Candidates may still apply again.
+  // The answer is never shown to the visitor, so the form cannot be used to find out who applied where.
+  const { count: previousFromAddress, error: previousError } = await admin.from("applicants")
+    .select("id", { count: "exact", head: true }).eq("flow_id", active.flow.id).eq("candidate_email", normalized.email);
+  const firstForAddress = !previousError && (previousFromAddress ?? 0) === 0;
 
   const resumePath = `${active.flow.workspace_id}/${active.flow.id}/${submissionKey}.${MIME_EXTENSIONS[normalized.contentType]}`;
   const file = normalized.resume;
@@ -308,9 +354,13 @@ async function submitApplicant(req: Request, form: FormData) {
     return fail(req, 503, "Your application could not be saved. Please try again.");
   }
   // Only a newly saved, validated application reaches this point: honeypot hits, invalid forms and duplicate submissions return earlier.
-  const confirmation = sendApplicationConfirmation(submissionKey, normalized.email, normalized.name, active.snapshot);
-  const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void } }).EdgeRuntime;
-  if (runtime?.waitUntil) runtime.waitUntil(confirmation); else await confirmation;
+  if (firstForAddress) {
+    const confirmation = sendApplicationConfirmation(submissionKey, normalized.email, normalized.name, active.snapshot);
+    const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void } }).EdgeRuntime;
+    if (runtime?.waitUntil) runtime.waitUntil(confirmation); else await confirmation;
+  } else {
+    console.log("Confirmation e-mail skipped: this address has already applied to this job.");
+  }
   return response(req, 200, { submitted: true, accepted: true });
 }
 

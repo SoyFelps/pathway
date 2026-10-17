@@ -656,6 +656,7 @@
     form.set('answers', JSON.stringify(application.answers || []));
     form.set('privacyAcknowledged', String(Boolean(application.privacyAcknowledged)));
     form.set('website', application.website || '');
+    form.set('turnstileToken', application.turnstileToken || '');
     form.set('resume', resume, resume.name);
     return await callApplications(form);
   }

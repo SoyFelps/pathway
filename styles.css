@@ -334,3 +334,4 @@
 @media(max-width:1100px){.kanban-board.failed-board{grid-template-columns:120px repeat(var(--other-stages,3),minmax(200px,1fr))}.kanban-board.failed-board.failed-open{grid-template-columns:minmax(200px,1fr) repeat(var(--other-stages,3),minmax(200px,1fr))}}
 @media(max-width:760px){.kanban-board.failed-board{grid-template-columns:120px repeat(var(--other-stages,3),minmax(245px,80vw))}.kanban-board.failed-board.failed-open{grid-template-columns:minmax(245px,80vw) repeat(var(--other-stages,3),minmax(245px,80vw))}}
 .save-failed{color:var(--red)}
+.captcha-box{display:flex;justify-content:center;margin-top:18px}.captcha-box:empty{display:none}

@@ -10,6 +10,44 @@
   const INFO_LABELS = Object.fromEntries(C.OPTIONAL_FIELDS.map(field => [field.key, field.label]));
   const STATUS_LABELS = { new: 'New', failed: 'Failed', promising: 'Promising', approved: 'Approved' };
 
+  // Cloudflare Turnstile CAPTCHA. The site key is public and lives in turnstile-config.js; without one the check is skipped.
+  // The token is valid for only five minutes and works once, so it is requested at the moment of submission, never earlier.
+  const TURNSTILE_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  let turnstileLoader = null;
+  function loadTurnstile() {
+    if (window.turnstile) return Promise.resolve(window.turnstile);
+    if (!turnstileLoader) {
+      turnstileLoader = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = TURNSTILE_SRC; script.async = true; script.defer = true;
+        script.onload = () => (window.turnstile ? resolve(window.turnstile) : reject(new Error('The security check could not load.')));
+        script.onerror = () => { turnstileLoader = null; reject(new Error('The security check could not load. Check your connection or turn off content blockers, then try again.')); };
+        document.head.appendChild(script);
+      });
+    }
+    return turnstileLoader;
+  }
+  async function requestCaptchaToken(container) {
+    const siteKey = window.PATHWAY_TURNSTILE && window.PATHWAY_TURNSTILE.siteKey;
+    if (!siteKey || !container) return '';
+    const turnstile = await loadTurnstile();
+    return await new Promise((resolve, reject) => {
+      let widgetId;
+      const finish = (settle, value) => { try { turnstile.remove(widgetId); } catch (_) { /* the widget is already gone */ } settle(value); };
+      const failure = () => new Error('We could not confirm that you are not a robot. Please try again.');
+      widgetId = turnstile.render(container, {
+        sitekey: siteKey,
+        execution: 'execute',
+        appearance: 'interaction-only',
+        callback: token => finish(resolve, token),
+        'error-callback': () => finish(reject, failure()),
+        'timeout-callback': () => finish(reject, failure()),
+        'unsupported-callback': () => finish(reject, failure())
+      });
+      turnstile.execute(container);
+    });
+  }
+
   function candidateFieldHtml(key, optional = false) {
     const meta = C.FIELD_META[key] || C.OPTIONAL_FIELDS.find(field => field.key === key);
     if (!meta) return '';
@@ -175,7 +213,7 @@
     }
 
     function renderSubmitting() {
-      root.innerHTML = `<main class="completion-screen"><section class="completion-content"><div class="completion-mark submitting-mark" aria-hidden="true">↻</div><div class="eyebrow" style="margin-bottom:13px">Sending securely</div><h1>Submitting your application…</h1><p>Your answers and resume are being saved to the private hiring workspace. Please keep this page open for a moment.</p><div class="prototype-note">Your information is sent only to ${C.esc(flow.companyName || 'the hiring team')} for review.</div></section></main>`;
+      root.innerHTML = `<main class="completion-screen"><section class="completion-content"><div class="completion-mark submitting-mark" aria-hidden="true">↻</div><div class="eyebrow" style="margin-bottom:13px">Sending securely</div><h1>Submitting your application…</h1><p>Your answers and resume are being saved to the private hiring workspace. Please keep this page open for a moment.</p><div class="captcha-box" id="captcha-box"></div><div class="prototype-note">Your information is sent only to ${C.esc(flow.companyName || 'the hiring team')} for review.</div></section></main>`;
     }
 
     function collectAnswers() {
@@ -189,8 +227,10 @@
       state.screen = 'submitting';
       render();
       try {
+        const turnstileToken = await requestCaptchaToken(root.querySelector('#captcha-box'));
         const result = await window.PathwayBackend.submitApplication({
           publishedFlowId: options.publishedFlowId,
+          turnstileToken,
           submissionKey: state.submissionKey,
           name: state.info.name,
           email: state.info.email,
