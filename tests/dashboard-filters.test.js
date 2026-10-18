@@ -45,10 +45,17 @@ test('the clear (x) button of search fields is drawn in the app red, not the bro
   assert.ok(rule.includes('mask:url("data:image/svg+xml'), 'the x shape comes from a mask, so the colour is the red token');
 });
 
-test('select fields draw their own arrow with space from the right border, using colour tokens only', () => {
+test('select fields draw their own vector arrow with space from the right border', () => {
   const css = read('styles.css');
-  const rule = css.slice(css.indexOf('select.select-input,select.applicants-filter,select.applicant-status-select{-webkit-appearance:none'));
+  const rule = css.slice(css.indexOf('select.select-input,select.applicants-filter,select.applicant-status-select{-webkit-appearance:none')).split('}')[0];
   assert.ok(rule.includes('padding-right:38px'), 'room for the arrow, and long option text never runs under it');
-  assert.ok(rule.includes('background-position:calc(100% - 20px) 50%,calc(100% - 15px) 50%'), 'the arrow sits 15-20px from the border');
-  assert.ok(rule.includes('var(--text-subtle)') && !/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(rule.split('}')[0]));
+  assert.ok(rule.includes('background-position:right 16px center') && rule.includes('background-size:12px 8px'), 'fixed size and fixed distance from the border: no fractional positions');
+  assert.ok(rule.includes('background-image:url("data:image/svg+xml,%3Csvg'), 'the arrow is a real inline SVG image (a missing data: prefix makes it disappear)');
+  assert.equal(rule.includes('gradient'), false, 'a real vector arrow, not the jagged two-gradient trick');
+});
+
+test('the arrow colour stays equal to the --text-subtle token (a data-URI image cannot read the variable)', () => {
+  const css = read('styles.css');
+  const token = css.match(/--text-subtle:(#[0-9a-fA-F]{6})/)[1].slice(1);
+  assert.ok(css.includes("stroke=%27%23" + token + "%27"), 'update the arrow stroke in the select rule when --text-subtle changes');
 });
