@@ -44,3 +44,11 @@ test('the clear (x) button of search fields is drawn in the app red, not the bro
   assert.ok(rule.includes('-webkit-appearance:none') && rule.includes('background:var(--red)'));
   assert.ok(rule.includes('mask:url("data:image/svg+xml'), 'the x shape comes from a mask, so the colour is the red token');
 });
+
+test('select fields draw their own arrow with space from the right border, using colour tokens only', () => {
+  const css = read('styles.css');
+  const rule = css.slice(css.indexOf('select.select-input,select.applicants-filter,select.applicant-status-select{-webkit-appearance:none'));
+  assert.ok(rule.includes('padding-right:38px'), 'room for the arrow, and long option text never runs under it');
+  assert.ok(rule.includes('background-position:calc(100% - 20px) 50%,calc(100% - 15px) 50%'), 'the arrow sits 15-20px from the border');
+  assert.ok(rule.includes('var(--text-subtle)') && !/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(rule.split('}')[0]));
+});
