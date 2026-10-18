@@ -367,3 +367,5 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .legal-table-wrap{overflow-x:auto;margin:10px 0 16px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}.legal table{width:100%;min-width:620px;border-collapse:collapse}.legal th,.legal td{padding:11px 14px;text-align:left;vertical-align:top;font-size:13px;line-height:1.55;color:var(--text-body);border-bottom:1px solid var(--border-subtle)}.legal thead th{background:var(--tint);color:var(--text-heading);font-weight:700}.legal tbody th{color:var(--text-heading);font-weight:700;width:20%}.legal tr:last-child th,.legal tr:last-child td{border-bottom:0}
 .legal-list{padding-left:22px}.legal-footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line)}.legal-footer p{font-size:13px}
 @media(max-width:600px){.legal-wrap{padding:28px 16px 72px}.legal h2{font-size:22px}}
+/* Sign-in screen: feature icons */
+.auth-feature span svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
