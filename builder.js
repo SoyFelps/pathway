@@ -557,6 +557,69 @@
     })();
   }
 
+  // Dashboard filters: search text, company and responsible person. They only narrow what is shown.
+  let flowFilters = { search: '', company: '', responsible: '' };
+  const WORKSPACE_FILTER = '__workspace';
+  function filteredFlows() {
+    const term = flowFilters.search.trim().toLowerCase();
+    return flows.filter(flow => {
+      if (term && !((flow.jobTitle || '') + ' ' + (flow.companyName || '')).toLowerCase().includes(term)) return false;
+      if (flowFilters.company === WORKSPACE_FILTER) { if (flow.companyId) return false; }
+      else if (flowFilters.company && flow.companyId !== flowFilters.company) return false;
+      if (flowFilters.responsible) {
+        const ids = currentResponsibleIds(flow.responsibleIds);
+        if (ids.length && !ids.includes(flowFilters.responsible)) return false; // an empty list means "All": everyone is responsible
+      }
+      return true;
+    });
+  }
+  function flowCompanyFilterOptionsHtml() {
+    const ids = [...new Set(flows.map(flow => flow.companyId).filter(Boolean))];
+    const named = ids.map(id => ({ id, name: companies.find(item => item.id === id)?.name || flows.find(flow => flow.companyId === id)?.companyName || 'Company' })).sort((a, b) => a.name.localeCompare(b.name));
+    const options = [['', 'All companies'], ...named.map(item => [item.id, item.name])];
+    if (flows.some(flow => !flow.companyId)) options.push([WORKSPACE_FILTER, workspace.name]);
+    if (!options.some(([value]) => value === flowFilters.company)) flowFilters.company = '';
+    return options.map(([value, label]) => '<option value="' + esc(value) + '"' + (flowFilters.company === value ? ' selected' : '') + '>' + esc(label) + '</option>').join('');
+  }
+  function flowResponsibleFilterOptionsHtml() {
+    if (people.length && flowFilters.responsible && !people.some(person => person.userId === flowFilters.responsible)) flowFilters.responsible = '';
+    return '<option value="">All responsibles</option>' + people.map(person => '<option value="' + esc(person.userId) + '"' + (flowFilters.responsible === person.userId ? ' selected' : '') + '>' + esc(person.email) + (person.isOwner ? ' (owner)' : '') + '</option>').join('');
+  }
+  function flowFiltersHtml() {
+    if (!flows.length) return '';
+    return '<div class="flow-filters"><input class="text-input" type="search" id="flow-search" placeholder="Search flows" aria-label="Search flows" value="' + esc(flowFilters.search) + '"><select class="select-input" id="flow-company-filter" aria-label="Filter by company">' + flowCompanyFilterOptionsHtml() + '</select><select class="select-input" id="flow-responsible-filter" aria-label="Filter by responsible">' + flowResponsibleFilterOptionsHtml() + '</select></div>';
+  }
+  function flowCardHtml(flow) {
+    return `<article class="flow-card" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="Edit ${esc(flow.jobTitle)}"><div class="flow-card-preview"><svg class="mini-svg" viewBox="0 0 400 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path class="mw" d="M117 73C142.5 73 142.5 60 168 60"/><path class="mw" d="M270 60C285 60 285 44 300 44"/><path class="mw" d="M270 60C285 60 285 94 300 94"/><rect class="mn" x="24" y="56" width="93" height="36" rx="8"/><rect class="mb" x="36" y="65" width="46" height="4" rx="2"/><rect class="ms" x="36" y="74" width="62" height="3" rx="1.5"/><circle class="mp" cx="24" cy="73" r="3.5"/><circle class="mp" cx="117" cy="73" r="3.5"/><rect class="mn" x="168" y="43" width="102" height="36" rx="8"/><rect class="mb" x="180" y="52" width="49" height="4" rx="2"/><rect class="ms" x="180" y="61" width="62" height="3" rx="1.5"/><circle class="mp" cx="168" cy="60" r="3.5"/><circle class="mp" cx="270" cy="60" r="3.5"/><rect class="mn" x="300" y="27" width="77" height="36" rx="8"/><rect class="mb" x="312" y="36" width="35" height="4" rx="2"/><rect class="ms" x="312" y="45" width="49" height="3" rx="1.5"/><circle class="mp" cx="300" cy="44" r="3.5"/><circle class="mp" cx="377" cy="44" r="3.5"/><rect class="mn" x="300" y="77" width="77" height="36" rx="8"/><rect class="mb" x="312" y="86" width="35" height="4" rx="2"/><rect class="ms" x="312" y="95" width="49" height="3" rx="1.5"/><circle class="mp" cx="300" cy="94" r="3.5"/><circle class="mp" cx="377" cy="94" r="3.5"/></svg></div><div class="flow-card-body"><div class="flow-card-top"><span class="${flow.publicationStatus === 'published' ? 'published-tag' : 'draft-tag'}"><span class="status-dot"></span>${flow.publicationStatus === 'published' ? 'Published' : 'Draft'}</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><div class="flow-card-foot"><span class="flow-count">${ICONS.node}${nodeSummary(flow)}</span><span>${ago(flow.updatedAt)}</span></div></div></article>`;
+  }
+  function flowCardsHtml() {
+    const visible = filteredFlows();
+    return visible.length ? visible.map(flowCardHtml).join('') : '<div class="flow-grid-empty"><p>No flows match these filters.</p><button class="btn btn-sm" type="button" id="flow-clear-filters">Clear filters</button></div>';
+  }
+  function bindFlowCards() {
+    root.querySelectorAll('.flow-card').forEach(card => {
+      card.addEventListener('click', event => { if (!event.target.closest('.flow-menu')) openFlow(card.dataset.flow); });
+      card.addEventListener('keydown', event => { if (event.key === 'Enter') openFlow(card.dataset.flow); });
+    });
+    root.querySelectorAll('.flow-menu').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); showFlowMenu(button.dataset.menu); }));
+    root.querySelector('#flow-clear-filters')?.addEventListener('click', () => { flowFilters = { search: '', company: '', responsible: '' }; renderDashboard(); });
+  }
+  function paintFlowGrid() {
+    const grid = root.querySelector('#flow-grid'); if (!grid) return;
+    grid.innerHTML = flowCardsHtml();
+    bindFlowCards();
+  }
+  function bindFlowFilters() {
+    root.querySelector('#flow-search')?.addEventListener('input', event => { flowFilters.search = event.target.value; paintFlowGrid(); });
+    root.querySelector('#flow-company-filter')?.addEventListener('change', event => { flowFilters.company = event.target.value; paintFlowGrid(); });
+    root.querySelector('#flow-responsible-filter')?.addEventListener('change', event => { flowFilters.responsible = event.target.value; paintFlowGrid(); });
+    if (root.querySelector('#flow-responsible-filter')) {
+      void refreshPeople().then(() => {
+        const select = root.querySelector('#flow-responsible-filter'); if (!select) return;
+        select.innerHTML = flowResponsibleFilterOptionsHtml(); paintFlowGrid();
+      });
+    }
+  }
   function renderDashboard() {
     if (!hasPermission('flows')) return renderAccessMessage('flows');
     setRoute('dashboard');
@@ -566,18 +629,14 @@
     const drafts = flows.filter(flow => flow.publicationStatus !== 'published').length;
     const published = count - drafts;
     const nodes = flows.reduce((sum, flow) => sum + flow.nodes.length, 0);
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Hiring made organized</h1><p>Build application flows, share role links and review every candidate in one place.</p></div><div class="dash-action"><button class="btn" id="workspace-details">Workspace details</button><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.applicants}</span><div><strong id="dashboard-new-applicant-count" title="${hasPermission('applicants') ? 'Loading new applicants' : 'Candidates access required'}">—</strong><span>New applicants</span></div></div><div class="stat"><span class="stat-icon">${ICONS.published}</span><div><strong>${published}</strong><span>Published flows</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${drafts} draft${drafts === 1 ? '' : 's'} · ${published} published</span></div>${flows.length ? `<section class="flow-grid">${flows.map(flow => `<article class="flow-card" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="Edit ${esc(flow.jobTitle)}"><div class="flow-card-preview"><svg class="mini-svg" viewBox="0 0 400 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path class="mw" d="M117 73C142.5 73 142.5 60 168 60"/><path class="mw" d="M270 60C285 60 285 44 300 44"/><path class="mw" d="M270 60C285 60 285 94 300 94"/><rect class="mn" x="24" y="56" width="93" height="36" rx="8"/><rect class="mb" x="36" y="65" width="46" height="4" rx="2"/><rect class="ms" x="36" y="74" width="62" height="3" rx="1.5"/><circle class="mp" cx="24" cy="73" r="3.5"/><circle class="mp" cx="117" cy="73" r="3.5"/><rect class="mn" x="168" y="43" width="102" height="36" rx="8"/><rect class="mb" x="180" y="52" width="49" height="4" rx="2"/><rect class="ms" x="180" y="61" width="62" height="3" rx="1.5"/><circle class="mp" cx="168" cy="60" r="3.5"/><circle class="mp" cx="270" cy="60" r="3.5"/><rect class="mn" x="300" y="27" width="77" height="36" rx="8"/><rect class="mb" x="312" y="36" width="35" height="4" rx="2"/><rect class="ms" x="312" y="45" width="49" height="3" rx="1.5"/><circle class="mp" cx="300" cy="44" r="3.5"/><circle class="mp" cx="377" cy="44" r="3.5"/><rect class="mn" x="300" y="77" width="77" height="36" rx="8"/><rect class="mb" x="312" y="86" width="35" height="4" rx="2"/><rect class="ms" x="312" y="95" width="49" height="3" rx="1.5"/><circle class="mp" cx="300" cy="94" r="3.5"/><circle class="mp" cx="377" cy="94" r="3.5"/></svg></div><div class="flow-card-body"><div class="flow-card-top"><span class="${flow.publicationStatus === 'published' ? 'published-tag' : 'draft-tag'}"><span class="status-dot"></span>${flow.publicationStatus === 'published' ? 'Published' : 'Draft'}</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><div class="flow-card-foot"><span class="flow-count">${ICONS.node}${nodeSummary(flow)}</span><span>${ago(flow.updatedAt)}</span></div></div></article>`).join('')}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Hiring made organized</h1><p>Build application flows, share role links and review every candidate in one place.</p></div><div class="dash-action"><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.applicants}</span><div><strong id="dashboard-new-applicant-count" title="${hasPermission('applicants') ? 'Loading new applicants' : 'Candidates access required'}">—</strong><span>New applicants</span></div></div><div class="stat"><span class="stat-icon">${ICONS.published}</span><div><strong>${published}</strong><span>Published flows</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${drafts} draft${drafts === 1 ? '' : 's'} · ${published} published</span></div>${flows.length ? `${flowFiltersHtml()}<section class="flow-grid" id="flow-grid">${flowCardsHtml()}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div></div>`;
     bindSidebar();
     bindPlanControl();
     root.querySelector('#empty-new-flow')?.addEventListener('click', showNewFlow);
     root.querySelector('#new-flow').addEventListener('click', showNewFlow);
-    root.querySelector('#workspace-details').addEventListener('click', showWorkspaceDetails);
     root.querySelector('#signout').addEventListener('click', doSignOut);
-    root.querySelectorAll('.flow-card').forEach(card => {
-      card.addEventListener('click', event => { if (!event.target.closest('.flow-menu')) openFlow(card.dataset.flow); });
-      card.addEventListener('keydown', event => { if (event.key === 'Enter') openFlow(card.dataset.flow); });
-    });
-    root.querySelectorAll('.flow-menu').forEach(button => button.addEventListener('click', event => { event.stopPropagation(); showFlowMenu(button.dataset.menu); }));
+    bindFlowCards();
+    bindFlowFilters();
     if (hasPermission('applicants')) void loadDashboardNewApplicantCount(metricsRequestId);
   }
 
@@ -1290,9 +1349,6 @@
       } finally { if (button.isConnected) { button.disabled = false; button.innerHTML = '↓ &nbsp;Download resume'; } }
     });
   }
-  function showWorkspaceDetails() {
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Private workspace</div><h2>${esc(workspace.name)}</h2><p>Signed in as ${esc(user.email)}.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="prototype-note" style="margin:0">Workspace data is isolated in Supabase. On Premium, the owner can add up to 3 teammates at no extra per-seat charge and choose their access to flows, candidates, and team management. Team invitations are shared as secure links.</div><div class="modal-actions"><button class="btn btn-primary" data-close>Got it</button></div>`);
-  }
   async function doSignOut() {
     try { await window.PathwayBackend.signOut(); flows = []; companies = []; applicants = []; workspace = null; user = null; window.PathwayAuth.renderAuth(); }
     catch (error) { showToast(`Could not sign out: ${error.message || 'please retry'}`); }
@@ -1707,6 +1763,7 @@
     flows = context.flows;
     companies = context.companies || [];
     applicants = []; applicantFilter = ''; applicantSearch = '';
+    flowFilters = { search: '', company: '', responsible: '' };
     startNotifications();
     const requestedPage = window.location.hash.replace(/^#/, '');
     const query = new URLSearchParams(window.location.search);

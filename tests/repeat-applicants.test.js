@@ -86,7 +86,7 @@ test('moving a card moves every application of that candidate in one request', (
 
 test('the detail panel shows one tab per application and one stage for the candidate', () => {
   const builder = read('builder.js');
-  const details = builder.slice(builder.indexOf('function showApplicantDetails('), builder.indexOf('function showWorkspaceDetails('));
+  const details = builder.slice(builder.indexOf('function showApplicantDetails('), builder.indexOf('async function doSignOut('));
   assert.ok(details.includes('const group = C.groupApplicants(applicants)'));
   assert.ok(details.includes('role="tablist"') && details.includes('role="tab"') && details.includes('aria-selected='));
   assert.ok(details.includes("index === 0 ? 'Latest · ' : ''"), 'the newest application is labelled and first');
