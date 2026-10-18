@@ -41,3 +41,10 @@ test('the bell shows one entry per job, refreshes every minute and clears when t
   assert.ok(backend.includes("client.rpc('get_flow_notifications', { p_workspace_id: workspaceId })"));
   assert.ok(backend.includes("client.rpc('mark_flow_notification_seen', { p_flow_id: flowId })"));
 });
+
+test('the notification shows the company profile name, or the workspace name when the job has none', () => {
+  const sql = read('supabase/migrations/20261018130000_flow_notifications_company_label.sql');
+  assert.ok(sql.includes('coalesce(wc.name, w.name) as company'));
+  assert.ok(sql.includes('left join public.workspace_companies wc on wc.id = f.company_id'));
+  assert.equal(sql.includes('f.company_name'), false, 'the stored company_name text can be stale and is not used');
+});

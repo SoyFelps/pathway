@@ -154,9 +154,9 @@ test('My Team stylesheet and static page load are versioned for immediate deploy
   const html = read('index.html');
   const css = read('styles.css');
   assert.match(html, /auth\.js\?v=password-recovery-20261001/);
-  assert.match(html, /backend\.js\?v=notifications-20261018/);
-  assert.match(html, /builder\.js\?v=notifications-20261018/);
-  assert.match(html, /styles\.css\?v=notifications-20261018/);
+  assert.match(html, /backend\.js\?v=notifications-red-20261018/);
+  assert.match(html, /builder\.js\?v=notifications-red-20261018/);
+  assert.match(html, /styles\.css\?v=notifications-red-20261018/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
