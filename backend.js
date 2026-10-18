@@ -58,6 +58,12 @@
     return callTeam({ action: 'createInvitation', email, permissions, appUrl: window.location.origin + window.location.pathname });
   }
 
+  async function listWorkspacePeople(workspaceId) {
+    await requireSession();
+    const { data, error } = await client.rpc('list_workspace_people', { p_workspace_id: workspaceId });
+    if (error) throw error;
+    return (data || []).map(person => ({ userId: person.user_id, email: person.email, isOwner: Boolean(person.is_owner) }));
+  }
   async function listTeam() { return callTeam({ action: 'listTeam' }); }
   async function acceptTeamInvitation(token) { return callTeam({ action: 'acceptInvitation', token }); }
   async function acceptPendingTeamInvitation() { return callTeam({ action: 'acceptPendingInvitation' }); }
@@ -470,17 +476,17 @@
 
   async function listFlows(workspaceId) {
     await requireSession();
-    const { data, error } = await client.from('application_flows').select('id,workspace_id,created_by,company_id,company_name,job_title,flow_data,publication_status,active_published_flow_id,published_at,created_at,updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false });
+    const { data, error } = await client.from('application_flows').select('id,workspace_id,created_by,company_id,company_name,job_title,flow_data,responsible_user_ids,publication_status,active_published_flow_id,published_at,created_at,updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false });
     if (error) throw error;
-    return (data || []).map(row => ({ ...row.flow_data, id: row.flow_data.id || row.id, cloudId: row.id, workspaceId: row.workspace_id, createdBy: row.created_by, companyId: row.company_id || null, companyProfile: row.company_id ? row.flow_data.companyProfile || null : null, companyName: row.company_name, jobTitle: row.job_title, publicationStatus: row.publication_status || 'draft', activePublishedFlowId: row.active_published_flow_id || null, publishedAt: row.published_at || null, updatedAt: row.updated_at }));
+    return (data || []).map(row => ({ ...row.flow_data, id: row.flow_data.id || row.id, cloudId: row.id, workspaceId: row.workspace_id, createdBy: row.created_by, companyId: row.company_id || null, companyProfile: row.company_id ? row.flow_data.companyProfile || null : null, companyName: row.company_name, jobTitle: row.job_title, responsibleIds: Array.isArray(row.responsible_user_ids) ? row.responsible_user_ids : [], publicationStatus: row.publication_status || 'draft', activePublishedFlowId: row.active_published_flow_id || null, publishedAt: row.published_at || null, updatedAt: row.updated_at }));
   }
 
   function saveFlow(flow, workspace) {
     const previous = saveQueues.get(flow.id) || Promise.resolve();
     const pending = previous.catch(() => {}).then(async () => {
       const session = await requireSession();
-      const { cloudId, workspaceId, createdBy, companyId, publicationStatus, activePublishedFlowId, publishedAt, ...flowData } = flow;
-      const row = { workspace_id: workspace.id, created_by: cloudId ? (createdBy || session.user.id) : session.user.id, company_id: companyId || null, company_name: flow.companyName, job_title: flow.jobTitle, flow_data: flowData };
+      const { cloudId, workspaceId, createdBy, companyId, publicationStatus, activePublishedFlowId, publishedAt, responsibleIds, ...flowData } = flow;
+      const row = { workspace_id: workspace.id, created_by: cloudId ? (createdBy || session.user.id) : session.user.id, company_id: companyId || null, company_name: flow.companyName, job_title: flow.jobTitle, responsible_user_ids: Array.isArray(responsibleIds) ? responsibleIds : [], flow_data: flowData };
       let result;
       if (cloudId) result = await client.from('application_flows').update(row).eq('id', cloudId).eq('workspace_id', workspace.id).select('id,updated_at').single();
       else result = await client.from('application_flows').insert(row).select('id,updated_at').single();
@@ -512,7 +518,7 @@
     if (!subscription.active) throw new Error('An active subscription is required to publish job flows.');
     await saveFlow(flow, workspace);
     const session = await requireSession();
-    const { cloudId, workspaceId, createdBy, companyId, publicationStatus, activePublishedFlowId, publishedAt, ...flowData } = flow;
+    const { cloudId, workspaceId, createdBy, companyId, publicationStatus, activePublishedFlowId, publishedAt, responsibleIds, ...flowData } = flow;
     const { data, error } = await client.from('published_flows').insert({
       workspace_id: workspace.id,
       flow_id: flow.cloudId,
@@ -728,6 +734,7 @@
     previewTeamInvitation,
     createTeamInvitation,
     listTeam,
+    listWorkspacePeople,
     acceptTeamInvitation,
     acceptPendingTeamInvitation,
     updateTeamMemberPermissions,

@@ -135,6 +135,50 @@
   }
   function initials(name) { return (name || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
   function companySnapshot(company) { return company ? { id: company.id, name: company.name, description: company.description || '', logoPath: company.logoPath || null, logoUrl: company.logoUrl || '' } : null; }
+  let people = [];
+  let peopleLoadedAt = 0;
+  async function refreshPeople(force = false) {
+    if (!workspace || (!force && Date.now() - peopleLoadedAt < 30000)) return;
+    try { people = await window.PathwayBackend.listWorkspacePeople(workspace.id); peopleLoadedAt = Date.now(); }
+    catch (error) { /* the field simply offers "All" when the team list cannot be loaded */ }
+  }
+  function currentResponsibleIds(ids) {
+    const known = new Set(people.map(person => person.userId));
+    return (ids || []).filter(id => known.has(id));
+  }
+  function mountResponsibleField(host, labelId, getIds, setIds) {
+    host.classList.add('multi-select');
+    host.innerHTML = '<button type="button" class="select-input multi-select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="' + labelId + '"></button><div class="multi-select-menu" role="listbox" aria-multiselectable="true" hidden></div>';
+    const trigger = host.querySelector('.multi-select-trigger'), menu = host.querySelector('.multi-select-menu');
+    const summary = () => {
+      const names = currentResponsibleIds(getIds()).map(id => people.find(person => person.userId === id)?.email).filter(Boolean);
+      if (!names.length) return 'All';
+      return names.length > 2 ? names[0] + ', ' + names[1] + ' +' + (names.length - 2) : names.join(', ');
+    };
+    const paintTrigger = () => { trigger.innerHTML = '<span class="multi-select-value">' + esc(summary()) + '</span><span class="multi-select-caret" aria-hidden="true">▾</span>'; };
+    const paintMenu = () => {
+      const ids = currentResponsibleIds(getIds());
+      menu.innerHTML = '<label class="multi-select-option"><input type="checkbox" class="check" data-all-people ' + (ids.length ? '' : 'checked') + '><span>All</span></label>'
+        + people.map(person => '<label class="multi-select-option"><input type="checkbox" class="check" value="' + esc(person.userId) + '" ' + (ids.includes(person.userId) ? 'checked' : '') + '><span>' + esc(person.email) + '</span>' + (person.isOwner ? '<small>Owner</small>' : '') + '</label>').join('');
+    };
+    const setOpen = open => { menu.hidden = !open; trigger.setAttribute('aria-expanded', String(open)); if (open) paintMenu(); };
+    trigger.addEventListener('click', () => setOpen(menu.hidden));
+    menu.addEventListener('change', event => {
+      const input = event.target;
+      let ids = currentResponsibleIds(getIds());
+      if (input.hasAttribute('data-all-people')) ids = [];
+      else ids = input.checked ? [...ids, input.value] : ids.filter(id => id !== input.value);
+      setIds(ids); paintMenu(); paintTrigger();
+    });
+    const closeOnOutside = event => {
+      if (!host.isConnected) { document.removeEventListener('pointerdown', closeOnOutside, true); return; }
+      if (!host.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutside, true);
+    host.addEventListener('keydown', event => { if (event.key === 'Escape' && !menu.hidden) { event.stopPropagation(); setOpen(false); trigger.focus(); } });
+    paintTrigger();
+    void refreshPeople().then(() => { if (host.isConnected) { paintTrigger(); if (!menu.hidden) paintMenu(); } });
+  }
   function companyOptionsHtml(selectedId = '') {
     return `<option value="" ${selectedId ? '' : 'selected'}>Use workspace name (${esc(workspace.name)})</option>${companies.map(company => `<option value="${esc(company.id)}" ${company.id === selectedId ? 'selected' : ''}>${esc(company.name)}</option>`).join('')}`;
   }
@@ -1189,12 +1233,15 @@
 
   function showNewFlow() {
     root.querySelector('.app-shell')?.classList.add('is-creating-flow');
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Start with the role</div><h2>Create a new application flow</h2><p>Give candidates a clear picture of the opportunity before they apply.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-flow-form">${companies.length ? `<div class="field-group"><label for="new-company-id">Company</label><select class="select-input" id="new-company-id" name="companyId">${companyOptionsHtml()}</select></div>` : `<p class="field-help">This job will use your workspace name: ${esc(workspace.name)}. Add a company profile from My Companies to choose another.</p>`}<div class="field-group"><label for="new-title">Job title</label><input class="text-input" id="new-title" name="jobTitle" placeholder="e.g. Senior Product Designer" required></div><div class="field-group"><label for="new-description">Job description</label><textarea class="text-area" id="new-description" name="jobDescription" placeholder="A short, welcoming overview of the role and the team…" required></textarea></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit">Create flow</button></div></form>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Start with the role</div><h2>Create a new application flow</h2><p>Give candidates a clear picture of the opportunity before they apply.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-flow-form">${companies.length ? `<div class="field-group"><label for="new-company-id">Company</label><select class="select-input" id="new-company-id" name="companyId">${companyOptionsHtml()}</select></div>` : `<p class="field-help">This job will use your workspace name: ${esc(workspace.name)}. Add a company profile from My Companies to choose another.</p>`}<div class="field-group"><label for="new-title">Job title</label><input class="text-input" id="new-title" name="jobTitle" placeholder="e.g. Senior Product Designer" required></div><div class="field-group"><label for="new-description">Job description</label><textarea class="text-area" id="new-description" name="jobDescription" placeholder="A short, welcoming overview of the role and the team…" required></textarea></div><div class="field-group"><span class="form-label" id="new-responsible-label">Responsible</span><div id="new-responsible"></div></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit">Create flow</button></div></form>`);
+    let newResponsible = [];
+    mountResponsibleField(modalRoot.querySelector('#new-responsible'), 'new-responsible-label', () => newResponsible, ids => { newResponsible = ids; });
     modalRoot.querySelector('#new-flow-form').addEventListener('submit', event => {
       event.preventDefault(); const data = new FormData(event.currentTarget);
       const company = companies.find(item => item.id === data.get('companyId')) || null;
       const flow = C.createFlow(company?.name || workspace.name, data.get('jobTitle').trim(), data.get('jobDescription').trim());
       flow.companyId = company?.id || null; flow.companyProfile = companySnapshot(company);
+      flow.responsibleIds = currentResponsibleIds(newResponsible);
       flows.unshift(flow); closeModal(); openFlow(flow.id); save();
     });
   }
@@ -1396,13 +1443,15 @@
     const selected = flow.nodes.find(node => node.id === selectedId) || flow.nodes[0];
     const [title] = typeInfo(selected);
     const roleSettings = selected.type === 'candidateInfo'
-      ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div><button class="icon-btn" id="edit-role" aria-label="Edit role details">✎</button></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><label for="role-description">Job description</label><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><hr class="inspector-divider">`
+      ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div><button class="icon-btn" id="edit-role" aria-label="Edit role details">✎</button></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><label for="role-description">Job description</label><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">Responsible</span><div id="role-responsible"></div></div><hr class="inspector-divider">`
       : '';
     panel.innerHTML = `${roleSettings}<div class="inspector-title"><div><div class="inspector-kicker">Selected step</div><h2>${esc(title)}</h2></div>${selected.type === 'candidateInfo' ? '<span class="node-badge">Fixed start</span>' : ''}</div><div id="node-editor"></div>`;
     const syncRole = (key, value) => { flow[key] = value; const crumb = document.querySelector('.crumb-title'); if (crumb && key === 'jobTitle') crumb.textContent = value || 'Untitled role'; save(); };
     panel.querySelector('#role-company-profile')?.addEventListener('change', event => { const company = companies.find(item => item.id === event.target.value) || null; flow.companyId = company?.id || null; flow.companyProfile = companySnapshot(company); flow.companyName = company?.name || workspace.name; save(); });
     panel.querySelector('#role-title')?.addEventListener('input', event => syncRole('jobTitle', event.target.value));
     panel.querySelector('#role-description')?.addEventListener('input', event => syncRole('jobDescription', event.target.value));
+    const responsibleHost = panel.querySelector('#role-responsible');
+    if (responsibleHost) mountResponsibleField(responsibleHost, 'role-responsible-label', () => flow.responsibleIds || [], ids => { flow.responsibleIds = ids; save(); });
     panel.querySelector('#edit-role')?.addEventListener('click', () => { panel.querySelector('#role-title')?.focus(); });
     const editor = panel.querySelector('#node-editor');
     if (selected.type === 'candidateInfo') {
