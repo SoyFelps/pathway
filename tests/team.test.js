@@ -154,9 +154,9 @@ test('My Team stylesheet and static page load are versioned for immediate deploy
   const html = read('index.html');
   const css = read('styles.css');
   assert.match(html, /auth\.js\?v=password-recovery-20261001/);
-  assert.match(html, /backend\.js\?v=notifications-red-20261018/);
-  assert.match(html, /builder\.js\?v=notifications-red-20261018/);
-  assert.match(html, /styles\.css\?v=notifications-red-20261018/);
+  assert.match(html, /backend\.js\?v=team-view-20261018/);
+  assert.match(html, /builder\.js\?v=team-view-20261018/);
+  assert.match(html, /styles\.css\?v=team-view-20261018/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
@@ -168,7 +168,7 @@ test('My Team renders loading cards before its list request resolves and ignores
   assert.match(builder, /role="status">Loading your team/);
   assert.match(builder, /team-skeleton-seat/);
   assert.match(builder, /team-skeleton-field/);
-  assert.match(builder, /const requestId = \+\+teamRenderRequestId;\s*renderMyTeamLoading\(\);\s*try \{\s*const data = await window\.PathwayBackend\.listTeam\(\)/);
+  assert.match(builder, /const requestId = \+\+teamRenderRequestId;\s*renderMyTeamLoading\(\);\s*try \{\s*let data = await window\.PathwayBackend\.listTeam\(\)/);
   assert.match(builder, /requestId !== teamRenderRequestId/);
   assert.match(edge, /Promise\.all\(\[\s*admin\.from\("workspace_members"\)[\s\S]*admin\.from\("workspace_invitations"\)[\s\S]*admin\.auth\.admin\.getUserById/);
   assert.doesNotMatch(edge, /await admin\.from\("workspace_invitations"\)\.update\(\{ status: "expired" \}\)/);

@@ -75,6 +75,12 @@
     const { error } = await client.rpc('mark_flow_notification_seen', { p_flow_id: flowId });
     if (error) throw error;
   }
+  async function listTeamOverview(workspaceId) {
+    await requireSession();
+    const { data, error } = await client.rpc('list_team_overview', { p_workspace_id: workspaceId });
+    if (error) throw error;
+    return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, memberSince: row.member_since }));
+  }
   async function listTeam() { return callTeam({ action: 'listTeam' }); }
   async function acceptTeamInvitation(token) { return callTeam({ action: 'acceptInvitation', token }); }
   async function acceptPendingTeamInvitation() { return callTeam({ action: 'acceptPendingInvitation' }); }
@@ -745,6 +751,7 @@
     previewTeamInvitation,
     createTeamInvitation,
     listTeam,
+    listTeamOverview,
     listWorkspacePeople,
     listFlowNotifications,
     markFlowNotificationSeen,
