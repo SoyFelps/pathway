@@ -135,6 +135,68 @@
   }
   function initials(name) { return (name || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
   function companySnapshot(company) { return company ? { id: company.id, name: company.name, description: company.description || '', logoPath: company.logoPath || null, logoUrl: company.logoUrl || '' } : null; }
+  // In-app notifications: one entry per job with new candidates; it disappears when this person opens that job's board.
+  let notifications = [];
+  let notifLoadedAt = 0;
+  let notifTimer = null;
+  let notifObserver = null;
+  const NOTIF_REFRESH_MS = 60000;
+  const BELL_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+  async function refreshNotifications(force = false) {
+    if (!workspace || !hasPermission('applicants')) { notifications = []; paintNotifications(); return; }
+    if (!force && Date.now() - notifLoadedAt < 15000) return;
+    try {
+      notifications = await window.PathwayBackend.listFlowNotifications(workspace.id);
+      notifLoadedAt = Date.now();
+    } catch (error) { return; /* keep what we had; the next check tries again */ }
+    // Already looking at that job's board: show the new candidates there instead of lighting the bell.
+    if (applicantFilter && root.querySelector('.applicants-page') && !modalRoot.innerHTML && notifications.some(item => item.flowId === applicantFilter)) { void renderApplicants(); return; }
+    paintNotifications();
+  }
+  function paintNotifications() {
+    const host = root.querySelector('#notif'); if (!host) return;
+    const badge = host.querySelector('.notif-badge'), menu = host.querySelector('.notif-menu'), button = host.querySelector('#notif-bell');
+    badge.textContent = notifications.length > 9 ? '9+' : String(notifications.length);
+    badge.hidden = !notifications.length;
+    button.setAttribute('aria-label', notifications.length ? 'Notifications, ' + notifications.length + ' with new applications' : 'Notifications');
+    menu.innerHTML = notifications.length
+      ? notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">There are new applications for <strong>' + esc(item.jobTitle || 'Untitled role') + '</strong></span><span class="notif-sub">' + item.newCount + (item.newCount === 1 ? ' new candidate' : ' new candidates') + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
+      : '<div class="notif-empty">You are all caught up.</div>';
+  }
+  function mountNotificationBell() {
+    const actions = root.querySelector('.top-actions');
+    if (!actions || actions.querySelector('#notif') || !workspace || !hasPermission('applicants')) return;
+    actions.insertAdjacentHTML('afterbegin', '<div class="notif" id="notif"><button type="button" class="notif-btn" id="notif-bell" aria-haspopup="true" aria-expanded="false" aria-label="Notifications">' + BELL_ICON + '<span class="notif-badge" hidden></span></button><div class="notif-menu" role="menu" hidden></div></div>');
+    const host = actions.querySelector('#notif'), button = host.querySelector('#notif-bell'), menu = host.querySelector('.notif-menu');
+    const setOpen = open => { menu.hidden = !open; button.setAttribute('aria-expanded', String(open)); };
+    button.addEventListener('click', () => { setOpen(menu.hidden); if (!menu.hidden) void refreshNotifications(true); });
+    menu.addEventListener('click', event => {
+      const item = event.target.closest('[data-notif-flow]'); if (!item) return;
+      setOpen(false); applicantFilter = item.dataset.notifFlow; applicantSearch = ''; void renderApplicants();
+    });
+    host.addEventListener('keydown', event => { if (event.key === 'Escape' && !menu.hidden) { setOpen(false); button.focus(); } });
+    const closeOnOutside = event => {
+      if (!host.isConnected) { document.removeEventListener('pointerdown', closeOnOutside, true); return; }
+      if (!host.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutside, true);
+    paintNotifications();
+    void refreshNotifications();
+  }
+  // Called when the board of one job has loaded: that is "opening" its notification.
+  function markFlowSeen(flowId) {
+    if (!flowId) return;
+    if (notifications.some(item => item.flowId === flowId)) { notifications = notifications.filter(item => item.flowId !== flowId); paintNotifications(); }
+    window.PathwayBackend.markFlowNotificationSeen(flowId).catch(() => {});
+  }
+  function startNotifications() {
+    if (!notifObserver) { notifObserver = new MutationObserver(() => mountNotificationBell()); notifObserver.observe(root, { childList: true }); }
+    if (!notifTimer) {
+      notifTimer = setInterval(() => { if (document.visibilityState === 'visible') void refreshNotifications(true); }, NOTIF_REFRESH_MS);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void refreshNotifications(); });
+    }
+    notifications = []; notifLoadedAt = 0; mountNotificationBell();
+  }
   let people = [];
   let peopleLoadedAt = 0;
   async function refreshPeople(force = false) {
@@ -561,6 +623,7 @@
       applicants = await window.PathwayBackend.listApplicants(workspace.id, applicantFilter);
       if (!root.querySelector('.applicants-page')) return;
       renderApplicantBoard();
+      markFlowSeen(applicantFilter);
     } catch (error) {
       const content = root.querySelector('#applicants-content');
       if (content) content.innerHTML = `<div class="auth-error show" role="alert">${esc(`Could not load applicants: ${error.message || 'check your connection and try again'}`)}</div>`;
@@ -1640,6 +1703,7 @@
     flows = context.flows;
     companies = context.companies || [];
     applicants = []; applicantFilter = ''; applicantSearch = '';
+    startNotifications();
     const requestedPage = window.location.hash.replace(/^#/, '');
     const query = new URLSearchParams(window.location.search);
     const checkoutComplete = query.get('checkout') === 'complete';

@@ -64,6 +64,17 @@
     if (error) throw error;
     return (data || []).map(person => ({ userId: person.user_id, email: person.email, isOwner: Boolean(person.is_owner) }));
   }
+  async function listFlowNotifications(workspaceId) {
+    await requireSession();
+    const { data, error } = await client.rpc('get_flow_notifications', { p_workspace_id: workspaceId });
+    if (error) throw error;
+    return (data || []).map(row => ({ flowId: row.flow_id, jobTitle: row.job_title, companyName: row.company_name, newCount: row.new_count, latestAt: row.latest_at }));
+  }
+  async function markFlowNotificationSeen(flowId) {
+    await requireSession();
+    const { error } = await client.rpc('mark_flow_notification_seen', { p_flow_id: flowId });
+    if (error) throw error;
+  }
   async function listTeam() { return callTeam({ action: 'listTeam' }); }
   async function acceptTeamInvitation(token) { return callTeam({ action: 'acceptInvitation', token }); }
   async function acceptPendingTeamInvitation() { return callTeam({ action: 'acceptPendingInvitation' }); }
@@ -735,6 +746,8 @@
     createTeamInvitation,
     listTeam,
     listWorkspacePeople,
+    listFlowNotifications,
+    markFlowNotificationSeen,
     acceptTeamInvitation,
     acceptPendingTeamInvitation,
     updateTeamMemberPermissions,
