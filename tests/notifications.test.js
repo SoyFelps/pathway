@@ -36,7 +36,7 @@ test('the bell shows one entry per job, refreshes every minute and clears when t
   assert.ok(builder.includes('There are new applications for <strong>'));
   assert.ok(builder.includes("document.visibilityState === 'visible'"), 'no checks while the tab is hidden');
   assert.ok(builder.includes('notifObserver.observe(root, { childList: true })'), 'the bell is added to every page header');
-  assert.match(builder, /renderApplicantBoard\(\);\s*markFlowSeen\(applicantFilter\);/, 'opening a job board clears its notification');
+  assert.match(builder, /renderApplicantBoard\(\);\s*if \(applicantFilter\) markFlowSeen\(applicantFilter\);/, 'opening a job board clears its notification');
   assert.ok(builder.includes("setOpen(false); applicantFilter = item.dataset.notifFlow; applicantSearch = ''; void renderApplicants();"), 'the notification opens that job\'s board');
   assert.ok(backend.includes("client.rpc('get_flow_notifications', { p_workspace_id: workspaceId })"));
   assert.ok(backend.includes("client.rpc('mark_flow_notification_seen', { p_flow_id: flowId })"));
@@ -47,4 +47,14 @@ test('the notification shows the company profile name, or the workspace name whe
   assert.ok(sql.includes('coalesce(wc.name, w.name) as company'));
   assert.ok(sql.includes('left join public.workspace_companies wc on wc.id = f.company_id'));
   assert.equal(sql.includes('f.company_name'), false, 'the stored company_name text can be stale and is not used');
+});
+
+test('opening "All jobs" clears the notifications of the jobs it just showed, but never from a partial list or a search', () => {
+  const builder = read('builder.js');
+  assert.ok(builder.includes('const APPLICANT_LIST_LIMIT = 1000;'));
+  assert.ok(read('backend.js').includes('.limit(1000);'), 'the limit in the code matches the one the backend really uses');
+  assert.ok(builder.includes("else if (!applicantSearch.trim() && applicants.length < APPLICANT_LIST_LIMIT) markAllFlowsSeen();"), 'no search text, and the list was not cut off');
+  const helper = builder.slice(builder.indexOf('function markAllFlowsSeen('), builder.indexOf('function startNotifications('));
+  assert.ok(helper.includes('notifications.map(item => item.flowId)') && helper.includes('markFlowNotificationSeen(flowId)'), 'each job is marked seen on the server');
+  assert.ok(builder.includes('const showingAllJobs = !applicantFilter && notifications.length && !applicantSearch.trim() && applicants.length < APPLICANT_LIST_LIMIT;'), 'a new candidate refreshes the open "All jobs" board instead of lighting the bell');
 });

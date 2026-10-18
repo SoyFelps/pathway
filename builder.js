@@ -150,7 +150,10 @@
       notifLoadedAt = Date.now();
     } catch (error) { return; /* keep what we had; the next check tries again */ }
     // Already looking at that job's board: show the new candidates there instead of lighting the bell.
-    if (applicantFilter && root.querySelector('.applicants-page') && !modalRoot.innerHTML && notifications.some(item => item.flowId === applicantFilter)) { void renderApplicants(); return; }
+    const onBoard = root.querySelector('.applicants-page') && !modalRoot.innerHTML;
+    const showingThatJob = applicantFilter && notifications.some(item => item.flowId === applicantFilter);
+    const showingAllJobs = !applicantFilter && notifications.length && !applicantSearch.trim() && applicants.length < APPLICANT_LIST_LIMIT;
+    if (onBoard && (showingThatJob || showingAllJobs)) { void renderApplicants(); return; }
     paintNotifications();
   }
   function paintNotifications() {
@@ -188,6 +191,15 @@
     if (!flowId) return;
     if (notifications.some(item => item.flowId === flowId)) { notifications = notifications.filter(item => item.flowId !== flowId); paintNotifications(); }
     window.PathwayBackend.markFlowNotificationSeen(flowId).catch(() => {});
+  }
+  // "All jobs" shows every candidate of the workspace (the backend returns at most this many, newest first).
+  // Only when the whole list was shown can every job's notification be cleared safely.
+  const APPLICANT_LIST_LIMIT = 1000;
+  function markAllFlowsSeen() {
+    const flowIds = notifications.map(item => item.flowId);
+    if (!flowIds.length) return;
+    notifications = []; paintNotifications();
+    flowIds.forEach(flowId => window.PathwayBackend.markFlowNotificationSeen(flowId).catch(() => {}));
   }
   function startNotifications() {
     if (!notifObserver) { notifObserver = new MutationObserver(() => mountNotificationBell()); notifObserver.observe(root, { childList: true }); }
@@ -682,7 +694,8 @@
       applicants = await window.PathwayBackend.listApplicants(workspace.id, applicantFilter);
       if (!root.querySelector('.applicants-page')) return;
       renderApplicantBoard();
-      markFlowSeen(applicantFilter);
+      if (applicantFilter) markFlowSeen(applicantFilter);
+      else if (!applicantSearch.trim() && applicants.length < APPLICANT_LIST_LIMIT) markAllFlowsSeen();
     } catch (error) {
       const content = root.querySelector('#applicants-content');
       if (content) content.innerHTML = `<div class="auth-error show" role="alert">${esc(`Could not load applicants: ${error.message || 'check your connection and try again'}`)}</div>`;
