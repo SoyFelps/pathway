@@ -931,20 +931,19 @@
     const ORDER = ['exportedAt', 'note', 'userId', 'email', 'firstName', 'lastName', 'name', 'workspaceName', 'title', 'company', 'job', 'status', 'text', 'writtenAt', 'canManageFlows', 'canReviewCandidates', 'canManageTeam', 'memberSince', 'planStatus', 'planCurrentPeriodEnd', 'planCancelAtPeriodEnd', 'createdAt', 'updatedAt', 'emailConfirmedAt', 'lastSignInAt'];
     const rank = field => { const i = ORDER.indexOf(field); return i < 0 ? ORDER.length : i; };
     const add = (section, record, object) => Object.entries(object || {}).sort((x, y) => rank(x[0]) - rank(y[0])).forEach(([field, value]) => rows.push([section, record, field, value]));
-    add('export', '', { exportedAt: data?.exportedAt, note: 'Everything Pathway holds about your account. Candidate details belong to the employer and are not included.' });
+    add('export', '', { exportedAt: data?.exportedAt, note: 'Your account, profile, workspace and plan details and the jobs you created. Candidate details and the team\'s internal comments belong to the employer and are not included. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.' });
     add('account', '', data?.account);
     add('profile', '', data?.profile);
     if (data?.ownedWorkspace) add('ownedWorkspace', '', data.ownedWorkspace);
     if (data?.membership) add('membership', '', data.membership);
     (data?.jobsCreated || []).forEach((job, index) => add('jobsCreated', String(index + 1), job));
-    (data?.commentsWritten || []).forEach((comment, index) => add('commentsWritten', String(index + 1), comment));
     return rowsToCsv(rows);
   }
   // "Export data" for one candidate: everything Pathway holds about them for this job, as the same flat CSV.
-  function candidateDataToCsv({ person, items, jobTitle, stage, comments, exportedAt }) {
+  function candidateDataToCsv({ person, items, jobTitle, stage, exportedAt }) {
     const rows = [['section', 'record', 'field', 'value']];
     const add = (section, record, object) => Object.entries(object || {}).forEach(([field, value]) => { if (value !== null && value !== undefined && value !== '') rows.push([section, record, field, value]); });
-    add('export', '', { exportedAt, note: 'Everything Pathway holds about this candidate for this job. The resume file is not inside this CSV: download it from the candidate panel.' });
+    add('export', '', { exportedAt, note: 'The application data Pathway holds about this candidate for this job. The team\'s internal comments are not included. The resume file is not inside this CSV: download it from the candidate panel. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.' });
     add('candidate', '', { name: person.candidate_name, email: person.candidate_email, job: jobTitle, currentStage: stage, applications: items.length });
     [...items].reverse().forEach((item, index) => {
       const record = String(index + 1);
@@ -952,7 +951,6 @@
       add('details', record, item.candidate_info);
       (item.responses || []).forEach(response => add('answer', record + '.' + (response.order ?? ''), { question: response.question, answer: Array.isArray(response.answer) ? response.answer.join('; ') : response.answer }));
     });
-    (comments || []).forEach((comment, index) => add('teamComment', String(index + 1), { writtenAt: comment.createdAt, author: comment.authorName, text: comment.body }));
     return rowsToCsv(rows);
   }
   function downloadTextFile(filename, text) {
@@ -1594,8 +1592,7 @@
         if (button.disabled) return;
         button.disabled = true; button.textContent = 'Preparing…';
         try {
-          const comments = await window.PathwayBackend.listApplicantComments(flowId, email);
-          const csv = candidateDataToCsv({ person, items: group.items, jobTitle, stage: group.status, comments, exportedAt: new Date().toISOString() });
+          const csv = candidateDataToCsv({ person, items: group.items, jobTitle, stage: group.status, exportedAt: new Date().toISOString() });
           downloadTextFile('pathway-candidate-data-' + new Date().toISOString().slice(0, 10) + '.csv', csv);
           showToast('Candidate data downloaded.');
         } catch (error) {

@@ -466,7 +466,7 @@ async function deleteFailedApplicants(req: Request, body: Record<string, unknown
 
   let deleted = 0;
   for (let batch = 0; batch < 100; batch++) {
-    let query = admin.from("applicants").select("id,resume_path").eq("workspace_id", workspaceId).eq("status", "failed").limit(100);
+    let query = admin.from("applicants").select("id,resume_path,flow_id,candidate_email").eq("workspace_id", workspaceId).eq("status", "failed").limit(100);
     if (flowId) query = query.eq("flow_id", flowId);
     const { data: rows, error: listError } = await query;
     if (listError) return fail(req, 503, "The failed applicants could not be listed; nothing more was deleted.");
@@ -481,6 +481,26 @@ async function deleteFailedApplicants(req: Request, body: Record<string, unknown
     const { error: deleteError } = await deleteQuery;
     if (deleteError) return fail(req, 503, "Resumes were removed, but some applicant records could not be deleted. Try again.");
     deleted += rows.length;
+    // The team's comments about these candidates go too, unless the candidate still has another application in that job.
+    const emailsByFlow = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const flowKey = String(row.flow_id);
+      if (!emailsByFlow.has(flowKey)) emailsByFlow.set(flowKey, new Set());
+      emailsByFlow.get(flowKey)!.add(String(row.candidate_email));
+    }
+    for (const [candidateFlowId, emailSet] of emailsByFlow) {
+      const emails = [...emailSet];
+      const { data: remaining, error: remainingError } = await admin.from("applicants").select("candidate_email")
+        .eq("workspace_id", workspaceId).eq("flow_id", candidateFlowId).in("candidate_email", emails);
+      if (remainingError) return fail(req, 503, "Candidates were deleted, but their team comments could not be checked. Try again.");
+      const stillThere = new Set((remaining || []).map((row) => String(row.candidate_email)));
+      const goneEmails = emails.filter((email) => !stillThere.has(email));
+      if (goneEmails.length) {
+        const { error: commentError } = await admin.from("applicant_comments").delete()
+          .eq("workspace_id", workspaceId).eq("flow_id", candidateFlowId).in("candidate_email", goneEmails);
+        if (commentError) return fail(req, 503, "Candidates were deleted, but some team comments could not be removed. Try again.");
+      }
+    }
     if (rows.length < 100) break;
   }
   return response(req, 200, { deleted, resumesRemoved: true });
