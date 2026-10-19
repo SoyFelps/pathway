@@ -60,7 +60,7 @@ test('names replace e-mails in the team pickers, filters and applicant panel', (
   assert.ok(builder.includes('function personName(person)') && builder.includes('function personLabel(person'));
   assert.ok(builder.includes('esc(personName(person) || person.email)') && builder.includes('class="multi-select-email"'), 'the picker shows the name with the e-mail below');
   assert.ok(builder.includes('esc(personLabel(person)) + (person.isOwner'), 'the dashboard filter lists names');
-  assert.ok(builder.includes('function paintResponsibleTip(') && builder.includes('applicant-tooltip-list'), 'the tooltip lists name and e-mail');
+  assert.equal(builder.includes('applicant-tooltip-list'), false, 'the tooltip stays short, however many people are responsible');
   assert.ok(builder.includes('clash ? name'), 'equal names are told apart by the e-mail');
 });
 
@@ -78,4 +78,17 @@ test('Settings lets people change their own name', () => {
   assert.ok(builder.includes('window.PathwayBackend.updateMyProfile(first, last)'));
   assert.ok(builder.includes('myProfile = context.profile || null;'));
   assert.ok(builder.includes("status.textContent = 'Enter your first and last name.'"));
+});
+
+test('changing the people responsible does not count as an unpublished change', () => {
+  const builder = read('builder.js');
+  assert.ok(builder.includes('const save = ({ internal = false } = {}) =>'));
+  assert.ok(builder.includes("if (!internal && flow.publicationStatus === 'published' && flow.activePublishedFlowId) locallyUnpublishedFlows.add(flow);"));
+  assert.ok(builder.includes('if (!internal) flow.updatedAt = new Date().toISOString();'));
+  assert.ok(builder.includes('flow.responsibleIds = ids; save({ internal: true });'));
+  const migration = read('supabase/migrations/20261019150000_responsible_changes_keep_updated_at.sql');
+  assert.ok(migration.includes("(to_jsonb(new) - 'responsible_user_ids' - 'updated_at') = (to_jsonb(old) - 'responsible_user_ids' - 'updated_at')"));
+  assert.ok(migration.includes('new.updated_at := old.updated_at;') && migration.includes('new.updated_at := now();'));
+  assert.ok(migration.includes('before update on public.application_flows') && migration.includes('execute function public.set_flow_updated_at()'));
+  assert.equal(/to anon/.test(migration), false);
 });

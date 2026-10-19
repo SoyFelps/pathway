@@ -95,12 +95,13 @@
     if (button.disabled) button.textContent = 'Publishing…';
     button.addEventListener('click', publishFlowChanges);
   }
-  const save = () => {
+  // internal: true for changes candidates never see (the people responsible), which do not count as unpublished changes.
+  const save = ({ internal = false } = {}) => {
     const flow = currentFlow();
     if (!flow || !workspace) return;
     flowEditRevisions.set(flow, (flowEditRevisions.get(flow) || 0) + 1);
-    if (flow.publicationStatus === 'published' && flow.activePublishedFlowId) locallyUnpublishedFlows.add(flow);
-    flow.updatedAt = new Date().toISOString();
+    if (!internal && flow.publicationStatus === 'published' && flow.activePublishedFlowId) locallyUnpublishedFlows.add(flow);
+    if (!internal) flow.updatedAt = new Date().toISOString();
     updatePublicationNotice();
     const indicator = document.querySelector('.save-indicator');
     if (indicator) indicator.innerHTML = '<span class="status-dot"></span> Saving…';
@@ -1368,11 +1369,6 @@
     if (!result || result.everyone) return 'All team members';
     return (result.people || []).map(person => personLabel(person, result.people) + (person.isOwner ? ' (owner)' : '')).join(', ') || 'All team members';
   }
-  function paintResponsibleTip(tipNode, result) {
-    if (!tipNode || !result || result.everyone || !(result.people || []).length) return;
-    tipNode.innerHTML = 'These are the people responsible for this job. To change them, edit the job details.<ul class="applicant-tooltip-list">'
-      + result.people.map(person => '<li>' + (personName(person) ? '<strong>' + esc(personName(person)) + '</strong> — ' : '') + esc(person.email) + '</li>').join('') + '</ul>';
-  }
   function showApplicantDetails(id, tabIndex = 0) {
     const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
     if (!group) return;
@@ -1419,12 +1415,10 @@
     </div>`);
 
     const responsibleNode = modalRoot.querySelector('#applicant-responsible');
-    const responsibleTip = modalRoot.querySelector('#applicant-responsible-tip');
-    if (responsibleNode) bindInfoTooltip(responsibleNode, responsibleTip);
-    if (responsibleNode && flowResponsiblesCache.has(applicant.flow_id)) paintResponsibleTip(responsibleTip, flowResponsiblesCache.get(applicant.flow_id));
+    if (responsibleNode) bindInfoTooltip(responsibleNode, modalRoot.querySelector('#applicant-responsible-tip'));
     if (responsibleNode && !flowResponsiblesCache.has(applicant.flow_id)) {
       window.PathwayBackend.getFlowResponsibles(applicant.flow_id)
-        .then(result => { flowResponsiblesCache.set(applicant.flow_id, result); if (responsibleNode.isConnected) { responsibleNode.textContent = flowResponsiblesText(result); paintResponsibleTip(responsibleTip, result); } })
+        .then(result => { flowResponsiblesCache.set(applicant.flow_id, result); if (responsibleNode.isConnected) responsibleNode.textContent = flowResponsiblesText(result); })
         .catch(() => { responsibleNode.closest('.applicant-responsible-item')?.remove(); });
     }
     modalRoot.querySelector('#applicant-status-select').addEventListener('change', event => { void moveApplicant(applicant.id, event.target.value); });
@@ -1711,7 +1705,7 @@
     panel.querySelector('#role-title')?.addEventListener('input', event => syncRole('jobTitle', event.target.value));
     panel.querySelector('#role-description')?.addEventListener('input', event => syncRole('jobDescription', event.target.value));
     const responsibleHost = panel.querySelector('#role-responsible');
-    if (responsibleHost) mountResponsibleField(responsibleHost, 'role-responsible-label', () => flow.responsibleIds || [], ids => { flow.responsibleIds = ids; save(); });
+    if (responsibleHost) mountResponsibleField(responsibleHost, 'role-responsible-label', () => flow.responsibleIds || [], ids => { flow.responsibleIds = ids; save({ internal: true }); });
     panel.querySelector('#edit-role')?.addEventListener('click', () => { panel.querySelector('#role-title')?.focus(); });
     const editor = panel.querySelector('#node-editor');
     if (selected.type === 'candidateInfo') {

@@ -32,7 +32,7 @@ test('the create-flow modal and the first step both offer the multi-select', () 
   const modal = builder.slice(builder.indexOf('function showNewFlow('), builder.indexOf('function showFlowMenu('));
   assert.ok(modal.indexOf('id="new-description"') < modal.indexOf('id="new-responsible"'), 'the field sits below the job description');
   assert.ok(modal.includes('flow.responsibleIds = currentResponsibleIds(newResponsible);'));
-  assert.ok(builder.includes("ids => { flow.responsibleIds = ids; save(); }"), 'editing the first step saves the flow');
+  assert.ok(builder.includes("ids => { flow.responsibleIds = ids; save({ internal: true }); }"), 'editing the first step saves the flow');
   assert.ok(builder.includes("if (input.hasAttribute('data-all-people')) ids = [];"), 'choosing All clears the individual choices');
   assert.ok(builder.includes("if (!names.length) return 'All';"), 'an empty selection reads as All');
 });
