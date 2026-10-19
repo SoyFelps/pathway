@@ -58,3 +58,40 @@ test('the CSV lists each section\'s fields in a natural order', () => {
   assert.ok(lines.indexOf('profile,,firstName,Ana') < lines.indexOf('profile,,lastName,Souza'));
   assert.ok(lines.indexOf('account,,userId,u') < lines.indexOf('account,,email,e') && lines.indexOf('account,,email,e') < lines.indexOf('account,,lastSignInAt,l'));
 });
+
+const { candidateDataToCsv } = new Function(builder.slice(start, builder.indexOf('function downloadTextFile(')) + '\nreturn { candidateDataToCsv };')();
+
+test('"Export data" on a candidate builds one CSV with everything held about them', () => {
+  const person = { candidate_name: 'Ana Souza', candidate_email: 'ana@x.com' };
+  const items = [
+    { submitted_at: '2026-10-19T12:00:00Z', status: 'failed', auto_fail_reason: 'Answered "No" to "Right to work?"', resume_filename: 'cv.pdf', privacy_notice_version: 'v1', privacy_acknowledged_at: '2026-10-19T12:00:01Z', candidate_info: { phone: '555' }, responses: [{ order: 1, question: 'Tools?', answer: ['Figma', 'Sketch'] }, { order: 2, question: 'Years', answer: '5' }] },
+    { submitted_at: '2026-10-18T09:00:00Z', status: 'new', resume_filename: 'old.pdf', candidate_info: {}, responses: [] }
+  ];
+  const csv = candidateDataToCsv({ person, items, jobTitle: 'Designer', stage: 'failed', comments: [{ createdAt: '2026-10-19T13:00:00Z', authorName: 'Felipe', body: '=SUM(1)' }], exportedAt: '2026-10-19T14:00:00Z' });
+  const lines = csv.replace('﻿', '').split('\r\n');
+  assert.equal(lines[0], 'section,record,field,value');
+  assert.ok(lines.includes('candidate,,name,Ana Souza') && lines.includes('candidate,,email,ana@x.com') && lines.includes('candidate,,job,Designer') && lines.includes('candidate,,applications,2'));
+  assert.ok(lines.indexOf('application,1,resumeFile,old.pdf') < lines.indexOf('application,2,resumeFile,cv.pdf'), 'oldest application first');
+  assert.ok(lines.includes('application,2,whyMovedToFailed,"Answered ""No"" to ""Right to work?"""'), 'the automatic-screening reason is included');
+  assert.ok(lines.includes('details,2,phone,555'));
+  assert.ok(lines.includes('answer,2.1,answer,Figma; Sketch') && lines.includes('answer,2.2,question,Years'));
+  assert.ok(lines.includes("teamComment,1,text,'=SUM(1)"), 'comments are included and formulas neutralised');
+  assert.equal(lines.some(line => /^application,1,whyMovedToFailed/.test(line)), false, 'empty values are left out');
+});
+
+test('the candidate panel offers Export data next to Delete candidate', () => {
+  const ui = builder.slice(builder.indexOf('function mountCandidateDeletion('), builder.indexOf('function showApplicantDetails('));
+  assert.ok(ui.includes('id="export-candidate">Export data</button>') && ui.includes('id="delete-candidate">Delete candidate</button>'));
+  assert.ok(ui.includes('window.PathwayBackend.listApplicantComments(flowId, email)') && ui.includes('candidateDataToCsv({ person, items: group.items'));
+  assert.ok(ui.includes("'pathway-candidate-data-'"), 'the file name has no personal data');
+});
+
+test('the legal page explains the self-service data rights tools', () => {
+  const html = read('legal.html');
+  assert.ok(html.includes('<strong>download a copy of their data</strong>') && html.includes('never includes passwords'));
+  assert.ok(html.includes('<strong>export everything held about a candidate</strong>') && html.includes('<strong>delete a candidate</strong>'));
+  assert.ok(html.includes('The employer can export or permanently delete your application data from within Pathway.'));
+  assert.ok(html.includes('Candidates’ requests.') && html.includes('“Export data” button') && html.includes('“Delete candidate” button'));
+  assert.ok(html.includes('(“Download my data”)') && html.includes('(“Export data”)'));
+  assert.ok(html.includes('Version 2026-10-19-v4'));
+});

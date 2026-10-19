@@ -24,7 +24,7 @@ test('the candidate panel has a Delete candidate button at the bottom that asks 
   assert.ok(backend.includes("callApplications({ action: 'deleteCandidate', flowId, email: String(email || '').trim().toLowerCase() }, session.access_token)"));
   assert.ok(backend.includes('deleteCandidate,'));
   assert.ok(builder.indexOf('id="applicant-comments-heading"') < builder.indexOf('id="applicant-delete-row"') && builder.indexOf('id="applicant-delete-row"') < builder.indexOf('class="applicant-mobile-bar"'), 'below the comments, at the end of the panel');
-  assert.ok(builder.includes('mountCandidateDeletion(modalRoot, applicant.flow_id, person, group.count);'));
+  assert.ok(builder.includes("mountCandidateDeletion(modalRoot, applicant.flow_id, person, group, flow?.jobTitle || '');"));
   const ui = builder.slice(builder.indexOf('function mountCandidateDeletion('), builder.indexOf('function showApplicantDetails('));
   assert.ok(ui.includes("Delete ' + esc(person.candidate_name) + ' permanently?") && ui.includes('This cannot be undone.') && ui.includes('Yes, delete'));
   assert.ok(ui.includes('window.PathwayBackend.deleteCandidate(flowId, email)'));

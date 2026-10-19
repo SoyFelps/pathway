@@ -924,6 +924,7 @@
     if (/^[=+\-@\t\r]/.test(text)) text = "'" + text;
     return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
   }
+  function rowsToCsv(rows) { return '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n'; }
   function myDataToCsv(data) {
     const rows = [['section', 'record', 'field', 'value']];
     // The database returns keys sorted by length; this puts the fields in a natural reading order.
@@ -937,7 +938,22 @@
     if (data?.membership) add('membership', '', data.membership);
     (data?.jobsCreated || []).forEach((job, index) => add('jobsCreated', String(index + 1), job));
     (data?.commentsWritten || []).forEach((comment, index) => add('commentsWritten', String(index + 1), comment));
-    return '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+    return rowsToCsv(rows);
+  }
+  // "Export data" for one candidate: everything Pathway holds about them for this job, as the same flat CSV.
+  function candidateDataToCsv({ person, items, jobTitle, stage, comments, exportedAt }) {
+    const rows = [['section', 'record', 'field', 'value']];
+    const add = (section, record, object) => Object.entries(object || {}).forEach(([field, value]) => { if (value !== null && value !== undefined && value !== '') rows.push([section, record, field, value]); });
+    add('export', '', { exportedAt, note: 'Everything Pathway holds about this candidate for this job. The resume file is not inside this CSV: download it from the candidate panel.' });
+    add('candidate', '', { name: person.candidate_name, email: person.candidate_email, job: jobTitle, currentStage: stage, applications: items.length });
+    [...items].reverse().forEach((item, index) => {
+      const record = String(index + 1);
+      add('application', record, { submittedAt: item.submitted_at, stage: item.status, whyMovedToFailed: item.auto_fail_reason, resumeFile: item.resume_filename, privacyNoticeVersion: item.privacy_notice_version, privacyAcknowledgedAt: item.privacy_acknowledged_at });
+      add('details', record, item.candidate_info);
+      (item.responses || []).forEach(response => add('answer', record + '.' + (response.order ?? ''), { question: response.question, answer: Array.isArray(response.answer) ? response.answer.join('; ') : response.answer }));
+    });
+    (comments || []).forEach((comment, index) => add('teamComment', String(index + 1), { writtenAt: comment.createdAt, author: comment.authorName, text: comment.body }));
+    return rowsToCsv(rows);
   }
   function downloadTextFile(filename, text) {
     const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
@@ -1564,15 +1580,32 @@
     form.addEventListener('submit', event => { event.preventDefault(); void send(); });
     input.addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void send(); } });
   }
-  // Delete one candidate for good (all their applications to this job, resume files and team comments). Needs a second click.
-  function mountCandidateDeletion(host, flowId, person, applicationCount) {
+  // The candidate's data tools: export everything about them (CSV), or delete them for good (needs a second click).
+  function mountCandidateDeletion(host, flowId, person, group, jobTitle) {
     const row = host.querySelector('#applicant-delete-row');
     if (!row) return;
+    const applicationCount = group.count;
     const email = String(person.candidate_email || '').trim().toLowerCase();
-    const showButton = () => { row.innerHTML = '<button type="button" class="applicant-delete-link" id="delete-candidate">Delete candidate</button>'; row.querySelector('#delete-candidate').addEventListener('click', showConfirm); };
+    const showButtons = () => {
+      row.innerHTML = '<div class="applicant-row-actions"><button type="button" class="applicant-export-link" id="export-candidate">Export data</button><button type="button" class="applicant-delete-link" id="delete-candidate">Delete candidate</button></div>';
+      row.querySelector('#delete-candidate').addEventListener('click', showConfirm);
+      row.querySelector('#export-candidate').addEventListener('click', async event => {
+        const button = event.currentTarget;
+        if (button.disabled) return;
+        button.disabled = true; button.textContent = 'Preparing…';
+        try {
+          const comments = await window.PathwayBackend.listApplicantComments(flowId, email);
+          const csv = candidateDataToCsv({ person, items: group.items, jobTitle, stage: group.status, comments, exportedAt: new Date().toISOString() });
+          downloadTextFile('pathway-candidate-data-' + new Date().toISOString().slice(0, 10) + '.csv', csv);
+          showToast('Candidate data downloaded.');
+        } catch (error) {
+          showToast('Could not prepare the candidate data. Please try again.');
+        } finally { button.disabled = false; button.textContent = 'Export data'; }
+      });
+    };
     const showConfirm = () => {
       row.innerHTML = '<div class="applicant-delete-confirm" role="alertdialog" aria-label="Delete this candidate"><p><strong>Delete ' + esc(person.candidate_name) + ' permanently?</strong> This removes ' + (applicationCount > 1 ? 'all ' + applicationCount + ' of their applications' : 'their application') + ', the resume file and the team comments about them. This cannot be undone.</p><div class="applicant-delete-actions"><button type="button" class="btn btn-sm btn-danger" id="confirm-delete-candidate">Yes, delete</button><button type="button" class="btn btn-sm" id="cancel-delete-candidate">Cancel</button><span class="applicant-delete-status" id="delete-candidate-status" role="status" aria-live="polite"></span></div></div>';
-      row.querySelector('#cancel-delete-candidate').addEventListener('click', showButton);
+      row.querySelector('#cancel-delete-candidate').addEventListener('click', showButtons);
       row.querySelector('#confirm-delete-candidate').addEventListener('click', async event => {
         const button = event.currentTarget, status = row.querySelector('#delete-candidate-status');
         button.disabled = true; row.querySelector('#cancel-delete-candidate').disabled = true; status.textContent = 'Deleting…';
@@ -1587,7 +1620,7 @@
         }
       });
     };
-    row.querySelector('#delete-candidate').addEventListener('click', showConfirm);
+    showButtons();
   }
   function showApplicantDetails(id, tabIndex = 0) {
     const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
@@ -1624,7 +1657,7 @@
           <section class="applicant-detail-section"><h3>Application answers · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || 'Application question')}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : '<div class="board-empty">No written answers were submitted for this flow.</div>'}</section>
           <section class="applicant-detail-section"><h3>Application record</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Submitted</span><strong>${esc(new Date(applicant.submitted_at).toLocaleString())}</strong></div><div class="applicant-info-item"><span>Privacy notice</span><strong>${esc(applicant.privacy_notice_version || 'Recorded')}</strong></div><div class="applicant-info-item applicant-responsible-item"><span>Responsible</span><button type="button" class="applicant-responsible-trigger" id="applicant-responsible" aria-describedby="applicant-responsible-tip">${esc(flowResponsiblesCache.has(applicant.flow_id) ? flowResponsiblesText(flowResponsiblesCache.get(applicant.flow_id)) : 'Loading…')}</button><div class="applicant-tooltip" id="applicant-responsible-tip" role="tooltip" hidden>These are the people responsible for this job. To change them, edit the job details.</div></div></div></section>
           <section class="applicant-detail-section applicant-comments" aria-labelledby="applicant-comments-heading"><h3 id="applicant-comments-heading">Team comments</h3><div class="comment-list" id="applicant-comment-list" aria-live="polite"><p class="comment-empty">Loading comments…</p></div><form class="comment-form" id="applicant-comment-form" novalidate><label class="visually-hidden" for="applicant-comment-input">Add a comment</label><textarea class="text-area" id="applicant-comment-input" maxlength="2000" rows="3" placeholder="Write a comment for your team… Type @ to mention someone."></textarea><div class="mention-menu" id="applicant-mention-menu" role="listbox" aria-label="Mention a teammate" hidden></div><div class="comment-form-actions"><span class="comment-status" id="applicant-comment-status" role="status" aria-live="polite"></span><button class="btn btn-primary btn-sm" type="submit" id="applicant-comment-submit">Add comment</button></div></form></section>
-          <section class="applicant-delete-row" id="applicant-delete-row"><button type="button" class="applicant-delete-link" id="delete-candidate">Delete candidate</button></section>
+          <section class="applicant-delete-row" id="applicant-delete-row"></section>
         </div>
         <div class="applicant-mobile-bar">${isPdf ? '<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;Preview resume</button>' : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;Download resume</button></div>
       </section>
@@ -1639,7 +1672,7 @@
     </div>`);
 
     mountApplicantComments(modalRoot, applicant.flow_id, person.candidate_email);
-    mountCandidateDeletion(modalRoot, applicant.flow_id, person, group.count);
+    mountCandidateDeletion(modalRoot, applicant.flow_id, person, group, flow?.jobTitle || '');
     const responsibleNode = modalRoot.querySelector('#applicant-responsible');
     if (responsibleNode) bindInfoTooltip(responsibleNode, modalRoot.querySelector('#applicant-responsible-tip'));
     if (responsibleNode && !flowResponsiblesCache.has(applicant.flow_id)) {
