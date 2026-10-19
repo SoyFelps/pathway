@@ -22,7 +22,7 @@ test('Application record shows who is responsible for the job, read only', () =>
   assert.equal(/<(input|select)/.test(record), false, 'view only: nothing to edit');
   assert.ok(d.includes("window.PathwayBackend.getFlowResponsibles(applicant.flow_id)"));
   assert.ok(d.includes("return 'All team members'") || d.includes("'All team members'"), 'a job set to All reads "All team members"');
-  assert.ok(d.includes("person.email + (person.isOwner ? ' (owner)' : '')"));
+  assert.ok(d.includes("personLabel(person, result.people) + (person.isOwner ? ' (owner)' : '')"));
   assert.ok(d.includes(".catch(() => { responsibleNode.closest('.applicant-responsible-item')?.remove(); });"), 'if it cannot be loaded the line disappears instead of showing an error');
   assert.ok(read('builder.js').includes('flowResponsiblesCache.clear();'), 'Refresh reloads it');
 });
@@ -44,7 +44,7 @@ test('the responsible people explain themselves: tooltip on hover, or for 5 seco
   assert.ok(tip.includes("trigger.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse') hide(); });"), 'the mouse leaving closes it');
   assert.ok(tip.includes("tip.hidden = false; clearTimeout(hideTimer); hideTimer = setTimeout(hide, 5000);"), 'a click or tap shows it and closes it after 5 seconds');
   assert.ok(tip.includes("event.key === 'Escape'") && tip.includes("addEventListener('blur', hide)"), 'Escape and leaving the field also close it');
-  assert.ok(d.includes("bindInfoTooltip(responsibleNode, modalRoot.querySelector('#applicant-responsible-tip'))"));
+  assert.ok(d.includes('bindInfoTooltip(responsibleNode, responsibleTip)') && d.includes("modalRoot.querySelector('#applicant-responsible-tip')"));
   const css = read('styles.css');
   assert.ok(css.includes('.applicant-tooltip[hidden]{display:none}') && css.includes('background:var(--forest);color:var(--surface)'), 'drawn with colour tokens');
   assert.ok(d.includes('role="tooltip"') && d.includes('aria-describedby="applicant-responsible-tip"'), 'announced to screen readers');

@@ -21,7 +21,7 @@ test('legal.html holds the Terms of Use, Privacy Policy, Data Processing Terms a
   const html = read('legal.html');
   for (const id of ['terms', 'privacy', 'processing', 'subprocessors']) assert.ok(html.includes(`<article id="${id}"`), `section ${id}`);
   assert.ok(html.includes('<title>Terms of Use and Privacy Policy · Pathway</title>'));
-  assert.ok(html.includes('Version 2026-10-18-v1'));
+  assert.ok(html.includes('Version 2026-10-19-v1'));
 });
 
 test('the legal text covers the points that protect the company and the data subjects', () => {

@@ -62,7 +62,7 @@
     await requireSession();
     const { data, error } = await client.rpc('list_workspace_people', { p_workspace_id: workspaceId });
     if (error) throw error;
-    return (data || []).map(person => ({ userId: person.user_id, email: person.email, isOwner: Boolean(person.is_owner) }));
+    return (data || []).map(person => ({ userId: person.user_id, email: person.email, isOwner: Boolean(person.is_owner), firstName: person.first_name || '', lastName: person.last_name || '' }));
   }
   async function listFlowNotifications(workspaceId) {
     await requireSession();
@@ -79,13 +79,35 @@
     await requireSession();
     const { data, error } = await client.rpc('list_team_overview', { p_workspace_id: workspaceId });
     if (error) throw error;
-    return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, memberSince: row.member_since }));
+    return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, memberSince: row.member_since, firstName: row.first_name || '', lastName: row.last_name || '' }));
+  }
+  async function getMyProfile() {
+    await requireSession();
+    const { data: authData } = await client.auth.getSession();
+    const userId = authData?.session?.user?.id;
+    if (!userId) return null;
+    const { data, error } = await client.from('profiles').select('first_name,last_name').eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    return data ? { firstName: data.first_name, lastName: data.last_name } : null;
+  }
+  async function updateMyProfile(firstName, lastName) {
+    await requireSession();
+    const first = String(firstName || '').replace(/\s+/g, ' ').trim();
+    const last = String(lastName || '').replace(/\s+/g, ' ').trim();
+    if (!first || !last) throw new Error('Enter your first and last name.');
+    if (first.length > 60 || last.length > 60) throw new Error('Each name can have at most 60 characters.');
+    const { data: authData } = await client.auth.getSession();
+    const userId = authData?.session?.user?.id;
+    const { data, error } = await client.from('profiles').update({ first_name: first, last_name: last }).eq('user_id', userId).select('first_name,last_name').maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('Could not save your name. Please refresh and try again.');
+    return { firstName: data.first_name, lastName: data.last_name };
   }
   async function getFlowResponsibles(flowId) {
     await requireSession();
     const { data, error } = await client.rpc('get_flow_responsibles', { p_flow_id: flowId });
     if (error) throw error;
-    return { everyone: Boolean(data?.everyone), people: Array.isArray(data?.people) ? data.people.map(person => ({ email: String(person.email || ''), isOwner: Boolean(person.isOwner) })) : [] };
+    return { everyone: Boolean(data?.everyone), people: Array.isArray(data?.people) ? data.people.map(person => ({ email: String(person.email || ''), isOwner: Boolean(person.isOwner), firstName: String(person.firstName || ''), lastName: String(person.lastName || '') })) : [] };
   }
   async function listTeam() { return callTeam({ action: 'listTeam' }); }
   async function acceptTeamInvitation(token) { return callTeam({ action: 'acceptInvitation', token }); }
@@ -476,13 +498,14 @@
     if (authError) throw authError;
     if (!authData.session) return { session: null, workspace: null, flows: [], companies: [], teamMember: null, canCreateWorkspace: false };
     const user = authData.session.user;
+    const profile = await getMyProfile().catch(() => null);
     const { data: ownedWorkspace, error: ownerError } = await client.from('workspaces').select('id,name,created_at').eq('owner_id', user.id).maybeSingle();
     if (ownerError) throw new Error(`Could not load your workspace: ${ownerError.message}`);
     if (ownedWorkspace) {
       const subscription = await getSubscriptionState(ownedWorkspace.id);
       const flows = await listFlows(ownedWorkspace.id);
       const companies = await listCompanies(ownedWorkspace.id);
-      return { session: authData.session, user, workspace: ownedWorkspace, subscription, flows, companies, isOwner: true, teamMember: null, canCreateWorkspace: false };
+      return { session: authData.session, user, profile, workspace: ownedWorkspace, subscription, flows, companies, isOwner: true, teamMember: null, canCreateWorkspace: false };
     }
     const team = await callTeam({ action: 'context' });
     if (team.workspace) {
@@ -490,11 +513,11 @@
       const member = team.member || {};
       const flows = team.premiumActive && member.can_flows ? await listFlows(team.workspace.id) : [];
       const companies = team.premiumActive && member.can_flows ? await listCompanies(team.workspace.id) : [];
-      return { session: authData.session, user, workspace: team.workspace, subscription, flows, companies, isOwner: false, teamMember: member, canCreateWorkspace: false };
+      return { session: authData.session, user, profile, workspace: team.workspace, subscription, flows, companies, isOwner: false, teamMember: member, canCreateWorkspace: false };
     }
     const { data: canCreateWorkspace, error: setupError } = await client.rpc('current_user_can_create_workspace');
     if (setupError) throw new Error(`Could not verify workspace setup: ${setupError.message}`);
-    return { session: authData.session, user, workspace: null, subscription: null, flows: [], companies: [], isOwner: false, teamMember: null, canCreateWorkspace: Boolean(canCreateWorkspace) };
+    return { session: authData.session, user, profile, workspace: null, subscription: null, flows: [], companies: [], isOwner: false, teamMember: null, canCreateWorkspace: Boolean(canCreateWorkspace) };
   }
 
   async function listFlows(workspaceId) {
@@ -766,6 +789,8 @@
     createTeamInvitation,
     listTeam,
     getFlowResponsibles,
+    getMyProfile,
+    updateMyProfile,
     listTeamOverview,
     listWorkspacePeople,
     listFlowNotifications,
@@ -815,11 +840,11 @@
     signOutLocal,
     consumePasswordRecovery,
     signIn: (email, password) => client.auth.signInWithPassword({ email, password }),
-    signUp: (email, password, workspaceName, inviteToken = '') => client.auth.signUp({
+    signUp: (email, password, workspaceName, inviteToken = '', firstName = '', lastName = '') => client.auth.signUp({
       email,
       password,
       options: {
-        data: inviteToken ? { pathway_team_invite_pending: true } : { workspace_name: workspaceName },
+        data: inviteToken ? { pathway_team_invite_pending: true, first_name: firstName, last_name: lastName } : { workspace_name: workspaceName, first_name: firstName, last_name: lastName },
         emailRedirectTo: window.location.origin + window.location.pathname
       }
     })

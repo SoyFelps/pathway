@@ -17,7 +17,7 @@ test('every person in the workspace can read the team, but the function only rea
 test('people without the Team permission see the whole team read-only, with no management controls', () => {
   const builder = read('builder.js');
   const markup = builder.slice(builder.indexOf('function renderMyTeamMarkup('), builder.indexOf('function renderMyTeamLoadingMarkup('));
-  assert.ok(builder.includes("if (!data.canManage && !isOwner && teamMember) {") && builder.includes('window.PathwayBackend.listTeamOverview(workspace.id)'));
+  assert.ok(builder.includes("if (!data.canManage && !isOwner && teamMember && teamDirectory.length) data = { ...data, readOnlyTeam: teamDirectory };") && builder.includes('window.PathwayBackend.listTeamOverview(workspace.id)'));
   const readOnlyCard = markup.slice(markup.indexOf('data.readOnlyTeam ? data.readOnlyTeam.filter'), markup.indexOf(': teamMember ?'));
   assert.ok(readOnlyCard.includes('describe(person)'), 'permissions are shown as text');
   assert.equal(/data-remove-member|data-permission|<input|<button/.test(readOnlyCard), false, 'no remove button, no checkboxes');

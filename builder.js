@@ -209,6 +209,18 @@
     }
     notifications = []; notifLoadedAt = 0; mountNotificationBell();
   }
+  let myProfile = null;
+  let teamDirectory = [];
+  function personName(person) {
+    return [person?.firstName, person?.lastName].map(part => String(part || '').trim()).filter(Boolean).join(' ');
+  }
+  // The name shown for a teammate; when two people share the same name the e-mail is added so they can be told apart.
+  function personLabel(person, list = people) {
+    const name = personName(person);
+    if (!name) return person.email;
+    const clash = list.some(other => other !== person && other.userId !== person.userId && personName(other).toLowerCase() === name.toLowerCase());
+    return clash ? name + ' (' + person.email + ')' : name;
+  }
   let people = [];
   let peopleLoadedAt = 0;
   async function refreshPeople(force = false) {
@@ -225,7 +237,7 @@
     host.innerHTML = '<button type="button" class="select-input multi-select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="' + labelId + '"></button><div class="multi-select-menu" role="listbox" aria-multiselectable="true" hidden></div>';
     const trigger = host.querySelector('.multi-select-trigger'), menu = host.querySelector('.multi-select-menu');
     const summary = () => {
-      const names = currentResponsibleIds(getIds()).map(id => people.find(person => person.userId === id)?.email).filter(Boolean);
+      const names = currentResponsibleIds(getIds()).map(id => people.find(person => person.userId === id)).filter(Boolean).map(person => personLabel(person));
       if (!names.length) return 'All';
       return names.length > 2 ? names[0] + ', ' + names[1] + ' +' + (names.length - 2) : names.join(', ');
     };
@@ -233,7 +245,7 @@
     const paintMenu = () => {
       const ids = currentResponsibleIds(getIds());
       menu.innerHTML = '<label class="multi-select-option"><input type="checkbox" class="check" data-all-people ' + (ids.length ? '' : 'checked') + '><span>All</span></label>'
-        + people.map(person => '<label class="multi-select-option"><input type="checkbox" class="check" value="' + esc(person.userId) + '" ' + (ids.includes(person.userId) ? 'checked' : '') + '><span>' + esc(person.email) + '</span>' + (person.isOwner ? '<small>Owner</small>' : '') + '</label>').join('');
+        + people.map(person => '<label class="multi-select-option"><input type="checkbox" class="check" value="' + esc(person.userId) + '" ' + (ids.includes(person.userId) ? 'checked' : '') + '><span class="multi-select-person"><span class="multi-select-name">' + esc(personName(person) || person.email) + '</span>' + (personName(person) ? '<small class="multi-select-email">' + esc(person.email) + '</small>' : '') + '</span>' + (person.isOwner ? '<small>Owner</small>' : '') + '</label>').join('');
     };
     const setOpen = open => { menu.hidden = !open; trigger.setAttribute('aria-expanded', String(open)); if (open) paintMenu(); };
     trigger.addEventListener('click', () => setOpen(menu.hidden));
@@ -595,7 +607,7 @@
   }
   function flowResponsibleFilterOptionsHtml() {
     if (people.length && flowFilters.responsible && !people.some(person => person.userId === flowFilters.responsible)) flowFilters.responsible = '';
-    return '<option value="">All responsibles</option>' + people.map(person => '<option value="' + esc(person.userId) + '"' + (flowFilters.responsible === person.userId ? ' selected' : '') + '>' + esc(person.email) + (person.isOwner ? ' (owner)' : '') + '</option>').join('');
+    return '<option value="">All responsibles</option>' + people.map(person => '<option value="' + esc(person.userId) + '"' + (flowFilters.responsible === person.userId ? ' selected' : '') + '>' + esc(personLabel(person)) + (person.isOwner ? ' (owner)' : '') + '</option>').join('');
   }
   function flowFiltersHtml() {
     if (!flows.length) return '';
@@ -731,13 +743,19 @@
     return `<div class="team-permission-grid"><label><input type="checkbox" data-permission="flows" ${permissions.can_flows !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Flows</span></label><label><input type="checkbox" data-permission="applicants" ${permissions.can_applicants !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Candidates</span></label><label><input type="checkbox" data-permission="team" ${permissions.can_manage_team !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Team</span></label></div>`;
   }
 
+  // Name on top and e-mail below it (the e-mail always stays visible in My Team). Without a known name only the e-mail shows.
+  function teamPersonLines(userId, email) {
+    const known = teamDirectory.find(person => person.userId === userId) || (userId === user.id ? myProfile : null);
+    const name = personName(known);
+    return name ? '<strong>' + esc(name) + '</strong><span class="team-person-email">' + esc(email) + '</span>' : '<strong>' + esc(email) + '</strong>';
+  }
   function renderMyTeamMarkup(data) {
     const manager = Boolean(data.canManage);
     const describe = p => [p.can_flows && 'Flows', p.can_applicants && 'Candidates', p.can_manage_team && 'Team'].filter(Boolean).join(' · ') || 'No access';
-    const members = manager ? (data.members || []).map(member => `<article class="team-person" data-member-id="${esc(member.user_id)}"><div class="team-person-heading"><div><strong>${esc(member.member_email)}</strong><span>Member since ${esc(new Date(member.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div><button class="btn btn-danger btn-sm" data-remove-member="${esc(member.user_id)}">Remove</button></div>${teamPermissionControls(member)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : data.readOnlyTeam ? data.readOnlyTeam.filter(person => !person.isOwner).map(person => `<article class="team-person${person.userId === user.id ? ' team-self' : ''}"><div class="team-person-heading"><div><strong>${esc(person.email)}</strong><span>${person.userId === user.id ? 'You · ' : ''}Member since ${esc(new Date(person.memberSince).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div></div><div class="team-permission-summary">${esc(describe(person))}</div></article>`).join('') : teamMember ? `<article class="team-person team-self"><div class="team-person-heading"><div><strong>${esc(teamMember.email || user.email)}</strong><span>You · ${data.premiumActive ? 'Team member' : 'Workspace access paused'}</span></div></div><div class="team-permission-summary">${esc(describe(teamMember))}</div></article>` : '';
+    const members = manager ? (data.members || []).map(member => `<article class="team-person" data-member-id="${esc(member.user_id)}"><div class="team-person-heading"><div>${teamPersonLines(member.user_id, member.member_email)}<span>Member since ${esc(new Date(member.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div><button class="btn btn-danger btn-sm" data-remove-member="${esc(member.user_id)}">Remove</button></div>${teamPermissionControls(member)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : data.readOnlyTeam ? data.readOnlyTeam.filter(person => !person.isOwner).map(person => `<article class="team-person${person.userId === user.id ? ' team-self' : ''}"><div class="team-person-heading"><div>${teamPersonLines(person.userId, person.email)}<span>${person.userId === user.id ? 'You · ' : ''}Member since ${esc(new Date(person.memberSince).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div></div><div class="team-permission-summary">${esc(describe(person))}</div></article>`).join('') : teamMember ? `<article class="team-person team-self"><div class="team-person-heading"><div>${teamPersonLines(user.id, teamMember.email || user.email)}<span>You · ${data.premiumActive ? 'Team member' : 'Workspace access paused'}</span></div></div><div class="team-permission-summary">${esc(describe(teamMember))}</div></article>` : '';
     const pending = manager ? (data.invitations || []).map(invite => `<article class="team-invite-item" data-invitation-id="${esc(invite.id)}"><div class="team-person-heading"><div><strong>${esc(invite.invited_email)}</strong><span>Expires ${esc(new Date(invite.expires_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${data.premiumActive ? `<button class="btn btn-sm" data-copy-invitation-link="${esc(invite.id)}">Copy invitation link</button>` : ''}<button class="btn btn-sm" data-revoke-invitation="${esc(invite.id)}">Revoke</button></div></div>${teamPermissionControls(invite)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : '';
     const paused = !subscription?.active;
-    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>${manager ? `Manage access to ${esc(workspace.name)}. Premium includes up to 3 additional members at no extra seat charge.` : `See who has access to ${esc(workspace.name)}.`}</p></div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>Team access is paused</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>View only</strong><p>You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All three are enabled by default.</small></div><div class="team-permission-grid"><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label></div><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${(data.isOwner || data.readOnlyTeam) ? `<article class="team-person team-owner"><div class="team-person-heading"><div><strong>${esc(data.owner?.email || data.readOnlyTeam?.find(person => person.isOwner)?.email || user.email)}</strong><span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
+    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>${manager ? `Manage access to ${esc(workspace.name)}. Premium includes up to 3 additional members at no extra seat charge.` : `See who has access to ${esc(workspace.name)}.`}</p></div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>Team access is paused</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>View only</strong><p>You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All three are enabled by default.</small></div><div class="team-permission-grid"><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label></div><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${(data.isOwner || data.readOnlyTeam) ? `<article class="team-person team-owner"><div class="team-person-heading"><div>${teamPersonLines(teamDirectory.find(person => person.isOwner)?.userId || (isOwner ? user.id : ''), data.owner?.email || data.readOnlyTeam?.find(person => person.isOwner)?.email || user.email)}<span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
   }
 
   function renderMyTeamLoadingMarkup() {
@@ -759,10 +777,10 @@
     renderMyTeamLoading();
     try {
       let data = await window.PathwayBackend.listTeam();
-      if (!data.canManage && !isOwner && teamMember) {
-        try { data = { ...data, readOnlyTeam: await window.PathwayBackend.listTeamOverview(workspace.id) }; }
-        catch (error) { /* fall back to showing only the person's own membership */ }
-      }
+      teamDirectory = [];
+      try { teamDirectory = await window.PathwayBackend.listTeamOverview(workspace.id); }
+      catch (error) { /* names are optional: fall back to e-mail addresses only */ }
+      if (!data.canManage && !isOwner && teamMember && teamDirectory.length) data = { ...data, readOnlyTeam: teamDirectory };
       if (requestId !== teamRenderRequestId || !root.querySelector('[data-route="my-team"].active')) return;
       root.innerHTML = renderMyTeamMarkup(data);
       bindSidebar(); bindPlanControl();
@@ -881,11 +899,27 @@
   function renderSettings() {
     currentId = null; selectedId = null;
     setRoute('settings');
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email || '')}">${esc(user.email || '—')}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">Your account and workspace</div><h1>Settings</h1><p>View your account details and manage workspace access.</p></div></div><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">Account and workspace</h2><p>These details are read-only.</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>Email address</span><strong>${esc(user.email || '—')}</strong><small>Your sign-in email.</small></div><div class="settings-info-item"><span>Workspace</span><strong>${esc(workspace.name)}</strong><small>The workspace you currently belong to.</small></div></div></section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>Sign out</h2><p>End your current Pathway session on this device.</p></div><button class="btn" id="settings-signout" type="button">Sign out</button></div></section><section class="settings-card settings-danger-card"><div class="settings-card-heading"><div><h2>Workspace access</h2><p>${isOwner ? 'Permanently remove this workspace and its data.' : 'Leave this workspace without deleting your Pathway account.'}</p></div></div>${isOwner ? '<button class="btn btn-danger" id="settings-delete-workspace" type="button">Delete workspace</button>' : teamMember ? '<button class="btn btn-danger" id="settings-leave-workspace" type="button">Leave workspace</button>' : ''}</section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>Delete account</h2><p>${isOwner ? 'This also deletes your workspace and all its data, and immediately cancels any subscription.' : 'Your workspace, flows, candidates and subscription will remain for the owner and team.'}</p></div><button class="btn btn-danger" id="settings-delete-account" type="button">Delete account</button></div></section></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email || '')}">${esc(user.email || '—')}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">Your account and workspace</div><h1>Settings</h1><p>View your account details and manage workspace access.</p></div></div><section class="settings-card" aria-labelledby="settings-profile-heading"><div class="settings-card-heading"><div><h2 id="settings-profile-heading">Your name</h2><p>Teammates see this name instead of your e-mail address.</p></div></div><form id="settings-profile-form" class="settings-profile-form" novalidate><div class="field-row"><div class="field-group"><label for="settings-first-name">First name</label><input class="text-input" id="settings-first-name" name="firstName" maxlength="60" autocomplete="given-name" required value="${esc(myProfile?.firstName || '')}"></div><div class="field-group"><label for="settings-last-name">Last name</label><input class="text-input" id="settings-last-name" name="lastName" maxlength="60" autocomplete="family-name" required value="${esc(myProfile?.lastName || '')}"></div></div><div class="settings-profile-actions"><button class="btn btn-primary" type="submit" id="settings-profile-save">Save name</button><span class="settings-profile-status" id="settings-profile-status" role="status" aria-live="polite"></span></div></form></section><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">Account and workspace</h2><p>These details are read-only.</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>Email address</span><strong>${esc(user.email || '—')}</strong><small>Your sign-in email.</small></div><div class="settings-info-item"><span>Workspace</span><strong>${esc(workspace.name)}</strong><small>The workspace you currently belong to.</small></div></div></section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>Sign out</h2><p>End your current Pathway session on this device.</p></div><button class="btn" id="settings-signout" type="button">Sign out</button></div></section><section class="settings-card settings-danger-card"><div class="settings-card-heading"><div><h2>Workspace access</h2><p>${isOwner ? 'Permanently remove this workspace and its data.' : 'Leave this workspace without deleting your Pathway account.'}</p></div></div>${isOwner ? '<button class="btn btn-danger" id="settings-delete-workspace" type="button">Delete workspace</button>' : teamMember ? '<button class="btn btn-danger" id="settings-leave-workspace" type="button">Leave workspace</button>' : ''}</section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>Delete account</h2><p>${isOwner ? 'This also deletes your workspace and all its data, and immediately cancels any subscription.' : 'Your workspace, flows, candidates and subscription will remain for the owner and team.'}</p></div><button class="btn btn-danger" id="settings-delete-account" type="button">Delete account</button></div></section></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
     root.querySelector('#signout')?.addEventListener('click', doSignOut);
     root.querySelector('#settings-signout')?.addEventListener('click', doSignOut);
+    root.querySelector('#settings-profile-form')?.addEventListener('submit', async event => {
+      event.preventDefault();
+      const status = root.querySelector('#settings-profile-status'), button = root.querySelector('#settings-profile-save');
+      const first = root.querySelector('#settings-first-name').value, last = root.querySelector('#settings-last-name').value;
+      status.className = 'settings-profile-status'; status.textContent = '';
+      if (!first.trim() || !last.trim()) { status.className = 'settings-profile-status is-error'; status.textContent = 'Enter your first and last name.'; return; }
+      button.disabled = true;
+      try {
+        myProfile = await window.PathwayBackend.updateMyProfile(first, last);
+        peopleLoadedAt = 0; flowResponsiblesCache.clear();
+        root.querySelector('#settings-first-name').value = myProfile.firstName; root.querySelector('#settings-last-name').value = myProfile.lastName;
+        status.className = 'settings-profile-status is-ok'; status.textContent = 'Saved.';
+      } catch (error) {
+        status.className = 'settings-profile-status is-error'; status.textContent = error.message || 'Could not save your name. Please try again.';
+      } finally { button.disabled = false; }
+    });
     root.querySelector('#settings-leave-workspace')?.addEventListener('click', showLeaveTeamConfirmation);
     root.querySelector('#settings-delete-workspace')?.addEventListener('click', showDeleteWorkspaceConfirmation);
     root.querySelector('#settings-delete-account')?.addEventListener('click', () => window.PathwayAuth.showAccountDeletionConfirmation({ isOwner, workspaceName: workspace.name, email: user.email }));
@@ -1332,7 +1366,12 @@
   const flowResponsiblesCache = new Map();
   function flowResponsiblesText(result) {
     if (!result || result.everyone) return 'All team members';
-    return (result.people || []).map(person => person.email + (person.isOwner ? ' (owner)' : '')).join(', ') || 'All team members';
+    return (result.people || []).map(person => personLabel(person, result.people) + (person.isOwner ? ' (owner)' : '')).join(', ') || 'All team members';
+  }
+  function paintResponsibleTip(tipNode, result) {
+    if (!tipNode || !result || result.everyone || !(result.people || []).length) return;
+    tipNode.innerHTML = 'These are the people responsible for this job. To change them, edit the job details.<ul class="applicant-tooltip-list">'
+      + result.people.map(person => '<li>' + (personName(person) ? '<strong>' + esc(personName(person)) + '</strong> — ' : '') + esc(person.email) + '</li>').join('') + '</ul>';
   }
   function showApplicantDetails(id, tabIndex = 0) {
     const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
@@ -1380,10 +1419,12 @@
     </div>`);
 
     const responsibleNode = modalRoot.querySelector('#applicant-responsible');
-    if (responsibleNode) bindInfoTooltip(responsibleNode, modalRoot.querySelector('#applicant-responsible-tip'));
+    const responsibleTip = modalRoot.querySelector('#applicant-responsible-tip');
+    if (responsibleNode) bindInfoTooltip(responsibleNode, responsibleTip);
+    if (responsibleNode && flowResponsiblesCache.has(applicant.flow_id)) paintResponsibleTip(responsibleTip, flowResponsiblesCache.get(applicant.flow_id));
     if (responsibleNode && !flowResponsiblesCache.has(applicant.flow_id)) {
       window.PathwayBackend.getFlowResponsibles(applicant.flow_id)
-        .then(result => { flowResponsiblesCache.set(applicant.flow_id, result); if (responsibleNode.isConnected) responsibleNode.textContent = flowResponsiblesText(result); })
+        .then(result => { flowResponsiblesCache.set(applicant.flow_id, result); if (responsibleNode.isConnected) { responsibleNode.textContent = flowResponsiblesText(result); paintResponsibleTip(responsibleTip, result); } })
         .catch(() => { responsibleNode.closest('.applicant-responsible-item')?.remove(); });
     }
     modalRoot.querySelector('#applicant-status-select').addEventListener('change', event => { void moveApplicant(applicant.id, event.target.value); });
@@ -1853,6 +1894,7 @@
   window.PathwayAuth.start(context => {
     workspace = context.workspace;
     user = context.user;
+    myProfile = context.profile || null;
     isOwner = Boolean(context.isOwner);
     teamMember = context.teamMember || null;
     subscription = context.subscription || { status: 'free', active: false, currentPeriodEnd: null, cancelAtPeriodEnd: false };

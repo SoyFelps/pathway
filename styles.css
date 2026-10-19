@@ -406,3 +406,10 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 /* Resume preview drawn by pdf.js (phones) */
 .applicant-pdf-pages{flex:1;min-height:0;overflow:auto;display:grid;gap:12px;justify-items:center;align-content:start;padding:12px;background:var(--tint);color:var(--text-subtle);font-size:13px;line-height:1.6;text-align:center}.applicant-pdf-pages[hidden]{display:none}.applicant-pdf-page{max-width:100%;background:var(--surface);box-shadow:0 4px 14px var(--shadow-md)}
 .applicant-resume-preview iframe[hidden]{display:none!important}
+/* Sign-up: first and last name side by side */
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field-row .field-group{min-width:0}
+.multi-select-person{display:flex;flex-direction:column;min-width:0;flex:1}.multi-select-name{overflow:hidden;text-overflow:ellipsis}.multi-select-email{display:block;color:var(--text-subtle);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.team-person-heading .team-person-email{color:var(--text-subtle);overflow-wrap:anywhere}
+.applicant-tooltip-list{margin:8px 0 0;padding:0 0 0 16px}.applicant-tooltip-list li{margin:2px 0;overflow-wrap:anywhere}
+.settings-profile-form{margin-top:4px}.settings-profile-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.settings-profile-status{font-size:12px;color:var(--text-subtle)}.settings-profile-status.is-ok{color:var(--green)}.settings-profile-status.is-error{color:var(--red)}
+.multi-select-option .multi-select-email{margin-left:0;font-size:11px;color:var(--text-subtle)}.multi-select-option .multi-select-person{overflow:visible}
