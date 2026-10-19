@@ -105,3 +105,9 @@ test('the header shows the person\'s name, with the e-mail as tooltip, on every 
   assert.equal(/<span class="auth-user"[^>]*>\$\{esc\(user\.email/.test(builder), false, 'no header prints the e-mail directly');
   assert.ok(builder.includes("root.querySelector('.topbar .auth-user')"), 'saving the name updates the header at once');
 });
+
+test('the My Team notice for workspaces without Premium says "No team access"', () => {
+  const builder = read('builder.js');
+  assert.ok(builder.includes('<strong>No team access</strong>'));
+  assert.equal(builder.includes('Team access is paused'), false);
+});
