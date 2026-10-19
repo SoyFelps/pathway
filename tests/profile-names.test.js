@@ -111,3 +111,12 @@ test('the My Team notice for workspaces without Premium says "No team access"', 
   assert.ok(builder.includes('<strong>No team access</strong>'));
   assert.equal(builder.includes('Team access is paused'), false);
 });
+
+test('Settings ends with a line linking the Terms of Use and the Privacy Policy', () => {
+  const builder = read('builder.js');
+  const settings = builder.slice(builder.indexOf('function renderSettings()'), builder.indexOf('window.PathwayAuth.start('));
+  assert.ok(settings.includes('Legal questions? Check our <a href="legal.html#terms" target="_blank" rel="noopener">Terms of Use</a> and <a href="legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a>.'));
+  assert.ok(settings.indexOf('settings-delete-account') < settings.indexOf('settings-legal-note'), 'it comes after the last card');
+  const legal = read('legal.html');
+  assert.ok(legal.includes('id="terms"') && legal.includes('id="privacy"'), 'the anchors exist on the legal page');
+});
