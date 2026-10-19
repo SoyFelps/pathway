@@ -669,7 +669,7 @@
   async function listApplicants(workspaceId, flowId = '') {
     await requireSession();
     let query = client.from('applicants')
-      .select('id,workspace_id,flow_id,published_flow_id,candidate_name,candidate_email,candidate_info,responses,resume_path,resume_filename,resume_content_type,status,submitted_at,updated_at,privacy_notice_version,privacy_acknowledged_at')
+      .select('id,workspace_id,flow_id,published_flow_id,candidate_name,candidate_email,candidate_info,responses,resume_path,resume_filename,resume_content_type,status,submitted_at,updated_at,privacy_notice_version,privacy_acknowledged_at,auto_fail_reason')
       .eq('workspace_id', workspaceId)
       .order('submitted_at', { ascending: false })
       .limit(1000);

@@ -87,7 +87,7 @@ test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied col
   assert.match(styles, /\.applicant-stage-toggle-control input:disabled\{pointer-events:none\}/);
   assert.match(styles, /\.applicant-stage-toggle-wrap\{[^}]*justify-content:flex-end/);
   assert.doesNotMatch(styles, /\.applicant-stage-toggle-wrap\{[^}]*background:/);
-  assert.match(read('index.html'), /builder\.js\?v=settings-legal-20261019/);
+  assert.match(read('index.html'), /builder\.js\?v=autofail-reason-20261019/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -104,7 +104,8 @@ test('public application endpoint validates the active snapshot, branch answers,
     assert.ok(edge.includes(text), `missing intake protection: ${text}`);
   }
   assert.match(edge, /const NOTICE_VERSION = "2026-10-01-v1"/);
-  assert.match(edge, /outcomeStatus:\s*current\.subtype === "disqualified" \? "failed" : "new"/);
+  assert.match(edge, /current\.subtype === "disqualified"\) autoFailReasons\.push/);
+  assert.match(edge, /outcomeStatus:\s*autoFailReasons\.length \? "failed" : "new"/);
   assert.match(edge, /published_flow_id:\s*active\.publication\.id/);
   assert.match(read('supabase/migrations/20260926185250_enforce_active_publication_on_applicant_insert.sql'), /applicants_require_active_publication/);
 });
@@ -159,13 +160,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=settings-legal-20261019/);
-  assert.match(read('index.html'), /pathway\.js\?v=settings-legal-20261019/);
-  assert.match(read('apply.html'), /candidate\.js\?v=settings-legal-20261019/);
-  assert.match(read('index.html'), /candidate\.js\?v=settings-legal-20261019/);
-  assert.match(read('apply.html'), /styles\.css\?v=settings-legal-20261019/);
-  assert.match(read('index.html'), /styles\.css\?v=settings-legal-20261019/);
-  assert.match(read('apply.html'), /backend\.js\?v=settings-legal-20261019/);
+  assert.match(read('apply.html'), /pathway\.js\?v=autofail-reason-20261019/);
+  assert.match(read('index.html'), /pathway\.js\?v=autofail-reason-20261019/);
+  assert.match(read('apply.html'), /candidate\.js\?v=autofail-reason-20261019/);
+  assert.match(read('index.html'), /candidate\.js\?v=autofail-reason-20261019/);
+  assert.match(read('apply.html'), /styles\.css\?v=autofail-reason-20261019/);
+  assert.match(read('index.html'), /styles\.css\?v=autofail-reason-20261019/);
+  assert.match(read('apply.html'), /backend\.js\?v=autofail-reason-20261019/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 

@@ -99,6 +99,19 @@
     normalized.nodes = Array.isArray(normalized.nodes) ? normalized.nodes : [];
     normalized.edges = Array.isArray(normalized.edges) ? normalized.edges : [];
     normalized.nodes.forEach(node => { if (node.type === 'shortText') node.numericOnly = Boolean(node.numericOnly); });
+    // Auto-fail rules (the employer's private screening): only well-formed ones are kept.
+    normalized.nodes.forEach(node => {
+      if (node.type === 'singleChoice' || node.type === 'multiChoice') {
+        const options = Array.isArray(node.options) ? node.options.map(String) : [];
+        const flagged = Array.isArray(node.autoFailOptions) ? [...new Set(node.autoFailOptions.map(String).filter(option => options.includes(option)))] : [];
+        if (flagged.length) node.autoFailOptions = flagged; else delete node.autoFailOptions;
+        delete node.autoFailBelow;
+      } else if (node.type === 'shortText') {
+        const below = Number(node.autoFailBelow);
+        if (node.numericOnly && node.autoFailBelow !== null && node.autoFailBelow !== '' && Number.isInteger(below) && below >= 0 && below <= 1e9) node.autoFailBelow = below; else delete node.autoFailBelow;
+        delete node.autoFailOptions;
+      } else { delete node.autoFailOptions; delete node.autoFailBelow; }
+    });
     const mandatory = normalized.nodes.filter(node => node.type === 'candidateInfo');
     if (mandatory.length !== 1) throw new Error('A flow must contain one candidate information step.');
     if (normalized.nodes.length < 2) throw new Error('This flow is incomplete.');

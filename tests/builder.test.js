@@ -82,7 +82,7 @@ test('short-answer nodes expose an accessible numeric-only switch', () => {
   const inspector = builder.slice(start, end);
   assert.match(inspector, /selected\.type === 'shortText'[\s\S]*?class="numeric-only-toggle"[\s\S]*?role="switch"/);
   assert.match(inspector, /numericToggle\?\.addEventListener\('change',[\s\S]*selected\.numericOnly = event\.target\.checked/);
-  assert.match(builder, /node\.numericOnly \? 'Number response' : 'Open-ended response'/);
+  assert.match(builder, /node\.numericOnly \? 'Number response'[\s\S]*?: 'Open-ended response'/);
   assert.match(styles, /\.numeric-only-switch input:checked\+\.numeric-only-track/);
   assert.match(styles, /\.answer-text\[data-numeric-only=true\]/);
 });

@@ -181,6 +181,8 @@ async function validateApplicantSubmission(snapshot: Record<string, unknown>, in
   if (!submitted || submitted.length > 100) throw new Error("Some answers could not be validated.");
   let answerIndex = 0;
   let steps = 0;
+  // The employer's private screening rules (auto-fail). They are read from the stored snapshot here, on the server; the public copy of the job never contains them.
+  const autoFailReasons: string[] = [];
 
   while (current && current.type !== "end") {
     if (++steps > 100) throw new Error("This published job flow is invalid.");
@@ -198,6 +200,16 @@ async function validateApplicantSubmission(snapshot: Record<string, unknown>, in
       if (typeof answer !== "string" || !options.includes(answer)) throw new Error("Choose one of the listed options.");
     } else if (!Array.isArray(answer) || answer.length < 1 || answer.length > options.length || answer.some((item) => typeof item !== "string" || !options.includes(item)) || new Set(answer).size !== answer.length) {
       throw new Error("Choose at least one valid option.");
+    }
+    const questionLabel = cleanName(current.label, 120);
+    const failOptions = Array.isArray(current.autoFailOptions) ? current.autoFailOptions.map(String) : [];
+    if (type === "singleChoice" && failOptions.includes(String(answer))) {
+      autoFailReasons.push(`Answered "${cleanName(answer, 80)}" to "${questionLabel}"`);
+    } else if (type === "multiChoice") {
+      const hits = (answer as string[]).filter((item) => failOptions.includes(item));
+      if (hits.length) autoFailReasons.push(`Selected ${hits.map((item) => `"${cleanName(item, 80)}"`).join(", ")} for "${questionLabel}"`);
+    } else if (type === "shortText" && current.numericOnly === true && Number.isInteger(current.autoFailBelow) && Number((answer as string).trim()) < (current.autoFailBelow as number)) {
+      autoFailReasons.push(`Answered ${(answer as string).trim().slice(0, 12)} to "${questionLabel}" (minimum ${current.autoFailBelow})`);
     }
     const outgoing = edges.filter((edge) => edge.fromNodeId === nodeId);
     const chosenEdge = type === "singleChoice"
@@ -230,9 +242,11 @@ async function validateApplicantSubmission(snapshot: Record<string, unknown>, in
   const storedAnswers = submitted.map((item, index) => ({
     nodeId: String(item.nodeId), question: cleanName(byId.get(String(item.nodeId))?.label, 500), answer: item.answer, order: index + 1,
   }));
+  if (current.subtype === "disqualified") autoFailReasons.push('Reached the "Not a match this time" result');
   return {
     name, email, candidateInfo, answers: storedAnswers,
-    outcomeStatus: current.subtype === "disqualified" ? "failed" : "new",
+    outcomeStatus: autoFailReasons.length ? "failed" : "new",
+    autoFailReason: autoFailReasons.length ? autoFailReasons.join("; ").slice(0, 600) : null,
     filename, contentType, resume,
   };
 }
@@ -352,6 +366,8 @@ async function submitApplicant(req: Request, form: FormData) {
     candidate_name: normalized.name, candidate_email: normalized.email, candidate_info: normalized.candidateInfo,
     responses: normalized.answers, resume_path: resumePath, resume_filename: normalized.filename,
     resume_content_type: normalized.contentType, status: initialStatus,
+    // Why the system moved a new candidate to Failed (a repeat application inherits the stage and keeps no reason of its own).
+    auto_fail_reason: inheritedStatus ? null : normalized.autoFailReason,
     privacy_notice_version: NOTICE_VERSION, privacy_acknowledged_at: new Date().toISOString(),
   });
   if (insertError) {
