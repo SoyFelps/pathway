@@ -1446,7 +1446,7 @@
     }));
   }
   async function doSignOut() {
-    try { await window.PathwayBackend.signOut(); flows = []; companies = []; applicants = []; workspace = null; user = null; window.PathwayAuth.renderAuth(); }
+    try { await window.PathwayBackend.signOut(); flows = []; companies = []; applicants = []; workspace = null; user = null; setRoute('login'); window.PathwayAuth.renderAuth(); }
     catch (error) { showToast(`Could not sign out: ${error.message || 'please retry'}`); }
   }
 
