@@ -486,6 +486,56 @@ async function deleteFailedApplicants(req: Request, body: Record<string, unknown
   return response(req, 200, { deleted, resumesRemoved: true });
 }
 
+// Deletes ONE candidate (every application of that e-mail to that job): applicant rows, resume files and the team's comments about them.
+// Same access rule as "Clear all failed": the workspace owner, or a member with the Applicants permission while the plan is active.
+async function deleteCandidate(req: Request, body: Record<string, unknown>) {
+  if (!admin) return fail(req, 500, "Application service is not configured.");
+  const bearer = (req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i)?.[1] || "";
+  if (!bearer) return fail(req, 401, "Sign in to manage candidates.");
+  const { data: auth, error: authError } = await admin.auth.getUser(bearer);
+  if (authError || !auth.user) return fail(req, 401, "Your session expired. Sign in again.");
+  const flowId = String(body.flowId || "");
+  const email = cleanName(body.email, 254).toLowerCase();
+  if (!UUID_RE.test(flowId) || email.length < 3) return fail(req, 400, "This candidate is invalid.");
+
+  const { data: flow, error: flowError } = await admin.from("application_flows").select("id,workspace_id").eq("id", flowId).maybeSingle();
+  if (flowError) return fail(req, 503, "The job could not be checked.");
+  if (!flow) return fail(req, 404, "This candidate could not be found.");
+  const workspaceId = flow.workspace_id as string;
+  const { data: workspace, error: workspaceError } = await admin.from("workspaces").select("id,owner_id").eq("id", workspaceId).maybeSingle();
+  if (workspaceError || !workspace) return fail(req, 403, "You do not have access to this candidate.");
+  if (workspace.owner_id !== auth.user.id) {
+    const [{ data: membership, error: memberError }, { data: plan, error: planError }] = await Promise.all([
+      admin.from("workspace_members").select("can_applicants").eq("workspace_id", workspaceId).eq("user_id", auth.user.id).maybeSingle(),
+      admin.from("workspace_subscriptions").select("status,current_period_end").eq("workspace_id", workspaceId).maybeSingle(),
+    ]);
+    const active = plan?.status === "active" && Date.parse(plan.current_period_end || "") > Date.now();
+    if (memberError || planError || !membership?.can_applicants || !active) return fail(req, 403, "You do not have Applicants access to this workspace.");
+  }
+
+  const { data: rows, error: listError } = await admin.from("applicants").select("id,resume_path")
+    .eq("workspace_id", workspaceId).eq("flow_id", flowId).eq("candidate_email", email).limit(500);
+  if (listError) return fail(req, 503, "The candidate could not be listed; nothing was deleted.");
+  const { count: commentCount, error: countError } = await admin.from("applicant_comments").select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId).eq("flow_id", flowId).eq("candidate_email", email);
+  if (countError) return fail(req, 503, "The candidate could not be checked; nothing was deleted.");
+  if (!rows?.length && !commentCount) return fail(req, 404, "This candidate could not be found.");
+
+  // Files first: if they cannot be removed nothing else is deleted, so the candidate stays complete and the action can be retried.
+  const paths = (rows || []).map((row) => String(row.resume_path || "")).filter((path) => path.startsWith(`${workspaceId}/`));
+  for (let index = 0; index < paths.length; index += 100) {
+    const { error: removeError } = await admin.storage.from(BUCKET).remove(paths.slice(index, index + 100));
+    if (removeError) return fail(req, 503, "The resume file could not be removed; nothing was deleted. Try again.");
+  }
+  if (rows?.length) {
+    const { error: deleteError } = await admin.from("applicants").delete().eq("workspace_id", workspaceId).in("id", rows.map((row) => row.id));
+    if (deleteError) return fail(req, 503, "The resume was removed, but the candidate record could not be deleted. Try again.");
+  }
+  const { error: commentError } = await admin.from("applicant_comments").delete().eq("workspace_id", workspaceId).eq("flow_id", flowId).eq("candidate_email", email);
+  if (commentError) return fail(req, 503, "The candidate was deleted, but the team comments could not be removed. Try again.");
+  return response(req, 200, { deleted: rows?.length ?? 0, commentsDeleted: commentCount ?? 0, resumesRemoved: true });
+}
+
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("origin") || "";
   if (req.method === "OPTIONS") return response(req, 204, {});
@@ -542,5 +592,6 @@ Deno.serve(async (req: Request) => {
   }
   if (body.action === "deleteFlow") return await deleteFlowForOwner(req, body);
   if (body.action === "deleteFailedApplicants") return await deleteFailedApplicants(req, body);
+  if (body.action === "deleteCandidate") return await deleteCandidate(req, body);
   return fail(req, 400, "Unknown application action.");
 });

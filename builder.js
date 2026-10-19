@@ -917,14 +917,56 @@
     });
   }
 
+  // "Download my data": one flat CSV (section, record, field, value) that opens in any spreadsheet.
+  function csvCell(value) {
+    let text = value === null || value === undefined ? '' : String(value);
+    // A cell that starts like a formula could run in a spreadsheet; a leading apostrophe keeps it plain text.
+    if (/^[=+\-@\t\r]/.test(text)) text = "'" + text;
+    return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+  }
+  function myDataToCsv(data) {
+    const rows = [['section', 'record', 'field', 'value']];
+    // The database returns keys sorted by length; this puts the fields in a natural reading order.
+    const ORDER = ['exportedAt', 'note', 'userId', 'email', 'firstName', 'lastName', 'name', 'workspaceName', 'title', 'company', 'job', 'status', 'text', 'writtenAt', 'canManageFlows', 'canReviewCandidates', 'canManageTeam', 'memberSince', 'planStatus', 'planCurrentPeriodEnd', 'planCancelAtPeriodEnd', 'createdAt', 'updatedAt', 'emailConfirmedAt', 'lastSignInAt'];
+    const rank = field => { const i = ORDER.indexOf(field); return i < 0 ? ORDER.length : i; };
+    const add = (section, record, object) => Object.entries(object || {}).sort((x, y) => rank(x[0]) - rank(y[0])).forEach(([field, value]) => rows.push([section, record, field, value]));
+    add('export', '', { exportedAt: data?.exportedAt, note: 'Everything Pathway holds about your account. Candidate details belong to the employer and are not included.' });
+    add('account', '', data?.account);
+    add('profile', '', data?.profile);
+    if (data?.ownedWorkspace) add('ownedWorkspace', '', data.ownedWorkspace);
+    if (data?.membership) add('membership', '', data.membership);
+    (data?.jobsCreated || []).forEach((job, index) => add('jobsCreated', String(index + 1), job));
+    (data?.commentsWritten || []).forEach((comment, index) => add('commentsWritten', String(index + 1), comment));
+    return '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  }
+  function downloadTextFile(filename, text) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = filename; link.hidden = true;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
   function renderSettings() {
     currentId = null; selectedId = null;
     setRoute('settings');
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">Your account and workspace</div><h1>Settings</h1><p>View your account details and manage workspace access.</p></div></div><section class="settings-card" aria-labelledby="settings-profile-heading"><div class="settings-card-heading"><div><h2 id="settings-profile-heading">Name</h2></div><button class="btn" id="settings-profile-edit" type="button">Edit</button></div><div id="settings-profile-body"></div></section><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">Account and workspace</h2><p>These details are read-only.</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>Email address</span><strong>${esc(user.email || '—')}</strong><small>Your sign-in email.</small></div><div class="settings-info-item"><span>Workspace</span><strong>${esc(workspace.name)}</strong><small>The workspace you currently belong to.</small></div></div></section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>Sign out</h2><p>End your current Pathway session on this device.</p></div><button class="btn" id="settings-signout" type="button">Sign out</button></div></section><section class="settings-card settings-danger-card"><div class="settings-card-heading"><div><h2>Workspace access</h2><p>${isOwner ? 'Permanently remove this workspace and its data.' : 'Leave this workspace without deleting your Pathway account.'}</p></div></div>${isOwner ? '<button class="btn btn-danger" id="settings-delete-workspace" type="button">Delete workspace</button>' : teamMember ? '<button class="btn btn-danger" id="settings-leave-workspace" type="button">Leave workspace</button>' : ''}</section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>Delete account</h2><p>${isOwner ? 'This also deletes your workspace and all its data, and immediately cancels any subscription.' : 'Your workspace, flows, candidates and subscription will remain for the owner and team.'}</p></div><button class="btn btn-danger" id="settings-delete-account" type="button">Delete account</button></div></section><p class="settings-legal-note">Legal questions? Check our <a href="legal.html#terms" target="_blank" rel="noopener">Terms of Use</a> and <a href="legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">Your account and workspace</div><h1>Settings</h1><p>View your account details and manage workspace access.</p></div></div><section class="settings-card" aria-labelledby="settings-profile-heading"><div class="settings-card-heading"><div><h2 id="settings-profile-heading">Name</h2></div><button class="btn" id="settings-profile-edit" type="button">Edit</button></div><div id="settings-profile-body"></div></section><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">Account and workspace</h2><p>These details are read-only.</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>Email address</span><strong>${esc(user.email || '—')}</strong><small>Your sign-in email.</small></div><div class="settings-info-item"><span>Workspace</span><strong>${esc(workspace.name)}</strong><small>The workspace you currently belong to.</small></div></div></section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>Sign out</h2><p>End your current Pathway session on this device.</p></div><button class="btn" id="settings-signout" type="button">Sign out</button></div></section><section class="settings-card settings-danger-card"><div class="settings-card-heading"><div><h2>Workspace access</h2><p>${isOwner ? 'Permanently remove this workspace and its data.' : 'Leave this workspace without deleting your Pathway account.'}</p></div></div>${isOwner ? '<button class="btn btn-danger" id="settings-delete-workspace" type="button">Delete workspace</button>' : teamMember ? '<button class="btn btn-danger" id="settings-leave-workspace" type="button">Leave workspace</button>' : ''}</section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>Delete account</h2><p>${isOwner ? 'This also deletes your workspace and all its data, and immediately cancels any subscription.' : 'Your workspace, flows, candidates and subscription will remain for the owner and team.'}</p></div><button class="btn btn-danger" id="settings-delete-account" type="button">Delete account</button></div></section><div class="settings-footer-row"><p class="settings-legal-note">Legal questions? Check our <a href="legal.html#terms" target="_blank" rel="noopener">Terms of Use</a> and <a href="legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p><button type="button" class="settings-link-button" id="settings-download-data">Download my data</button></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
     root.querySelector('#signout')?.addEventListener('click', doSignOut);
     root.querySelector('#settings-signout')?.addEventListener('click', doSignOut);
+    root.querySelector('#settings-download-data')?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      if (button.disabled) return;
+      const label = button.textContent;
+      button.disabled = true; button.textContent = 'Preparing…';
+      try {
+        const data = await window.PathwayBackend.exportMyData();
+        downloadTextFile('pathway-my-data-' + new Date().toISOString().slice(0, 10) + '.csv', myDataToCsv(data));
+        showToast('Your data was downloaded.');
+      } catch (error) {
+        showToast('Could not prepare your data. Please try again.');
+      } finally { button.disabled = false; button.textContent = label; }
+    });
     const profileBody = root.querySelector('#settings-profile-body'), profileEdit = root.querySelector('#settings-profile-edit');
     const showProfileView = (message = '') => {
       profileEdit.hidden = false;
@@ -1522,6 +1564,31 @@
     form.addEventListener('submit', event => { event.preventDefault(); void send(); });
     input.addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void send(); } });
   }
+  // Delete one candidate for good (all their applications to this job, resume files and team comments). Needs a second click.
+  function mountCandidateDeletion(host, flowId, person, applicationCount) {
+    const row = host.querySelector('#applicant-delete-row');
+    if (!row) return;
+    const email = String(person.candidate_email || '').trim().toLowerCase();
+    const showButton = () => { row.innerHTML = '<button type="button" class="applicant-delete-link" id="delete-candidate">Delete candidate</button>'; row.querySelector('#delete-candidate').addEventListener('click', showConfirm); };
+    const showConfirm = () => {
+      row.innerHTML = '<div class="applicant-delete-confirm" role="alertdialog" aria-label="Delete this candidate"><p><strong>Delete ' + esc(person.candidate_name) + ' permanently?</strong> This removes ' + (applicationCount > 1 ? 'all ' + applicationCount + ' of their applications' : 'their application') + ', the resume file and the team comments about them. This cannot be undone.</p><div class="applicant-delete-actions"><button type="button" class="btn btn-sm btn-danger" id="confirm-delete-candidate">Yes, delete</button><button type="button" class="btn btn-sm" id="cancel-delete-candidate">Cancel</button><span class="applicant-delete-status" id="delete-candidate-status" role="status" aria-live="polite"></span></div></div>';
+      row.querySelector('#cancel-delete-candidate').addEventListener('click', showButton);
+      row.querySelector('#confirm-delete-candidate').addEventListener('click', async event => {
+        const button = event.currentTarget, status = row.querySelector('#delete-candidate-status');
+        button.disabled = true; row.querySelector('#cancel-delete-candidate').disabled = true; status.textContent = 'Deleting…';
+        try {
+          await window.PathwayBackend.deleteCandidate(flowId, email);
+          applicants = applicants.filter(item => !(item.flow_id === flowId && String(item.candidate_email || '').trim().toLowerCase() === email));
+          applicantCommentsCache.delete(flowId + '|' + email);
+          closeModal(); renderApplicantBoard(); showToast('Candidate deleted.');
+        } catch (error) {
+          status.textContent = error.message || 'Could not delete the candidate. Please try again.';
+          button.disabled = false; row.querySelector('#cancel-delete-candidate').disabled = false;
+        }
+      });
+    };
+    row.querySelector('#delete-candidate').addEventListener('click', showConfirm);
+  }
   function showApplicantDetails(id, tabIndex = 0) {
     const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
     if (!group) return;
@@ -1556,7 +1623,9 @@
           <section class="applicant-detail-section"><h3>Candidate details</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Full name</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>Email address</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(C.OPTIONAL_FIELDS.find(field => field.key === key)?.label || key)}</span><strong>${esc(value)}</strong></div>`).join('')}</div></section>
           <section class="applicant-detail-section"><h3>Application answers · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || 'Application question')}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : '<div class="board-empty">No written answers were submitted for this flow.</div>'}</section>
           <section class="applicant-detail-section"><h3>Application record</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Submitted</span><strong>${esc(new Date(applicant.submitted_at).toLocaleString())}</strong></div><div class="applicant-info-item"><span>Privacy notice</span><strong>${esc(applicant.privacy_notice_version || 'Recorded')}</strong></div><div class="applicant-info-item applicant-responsible-item"><span>Responsible</span><button type="button" class="applicant-responsible-trigger" id="applicant-responsible" aria-describedby="applicant-responsible-tip">${esc(flowResponsiblesCache.has(applicant.flow_id) ? flowResponsiblesText(flowResponsiblesCache.get(applicant.flow_id)) : 'Loading…')}</button><div class="applicant-tooltip" id="applicant-responsible-tip" role="tooltip" hidden>These are the people responsible for this job. To change them, edit the job details.</div></div></div></section>
-          <section class="applicant-detail-section applicant-comments" aria-labelledby="applicant-comments-heading"><h3 id="applicant-comments-heading">Team comments</h3><div class="comment-list" id="applicant-comment-list" aria-live="polite"><p class="comment-empty">Loading comments…</p></div><form class="comment-form" id="applicant-comment-form" novalidate><label class="visually-hidden" for="applicant-comment-input">Add a comment</label><textarea class="text-area" id="applicant-comment-input" maxlength="2000" rows="3" placeholder="Write a comment for your team… Type @ to mention someone."></textarea><div class="mention-menu" id="applicant-mention-menu" role="listbox" aria-label="Mention a teammate" hidden></div><div class="comment-form-actions"><span class="comment-status" id="applicant-comment-status" role="status" aria-live="polite"></span><button class="btn btn-primary btn-sm" type="submit" id="applicant-comment-submit">Add comment</button></div></form></section>        </div>
+          <section class="applicant-detail-section applicant-comments" aria-labelledby="applicant-comments-heading"><h3 id="applicant-comments-heading">Team comments</h3><div class="comment-list" id="applicant-comment-list" aria-live="polite"><p class="comment-empty">Loading comments…</p></div><form class="comment-form" id="applicant-comment-form" novalidate><label class="visually-hidden" for="applicant-comment-input">Add a comment</label><textarea class="text-area" id="applicant-comment-input" maxlength="2000" rows="3" placeholder="Write a comment for your team… Type @ to mention someone."></textarea><div class="mention-menu" id="applicant-mention-menu" role="listbox" aria-label="Mention a teammate" hidden></div><div class="comment-form-actions"><span class="comment-status" id="applicant-comment-status" role="status" aria-live="polite"></span><button class="btn btn-primary btn-sm" type="submit" id="applicant-comment-submit">Add comment</button></div></form></section>
+          <section class="applicant-delete-row" id="applicant-delete-row"><button type="button" class="applicant-delete-link" id="delete-candidate">Delete candidate</button></section>
+        </div>
         <div class="applicant-mobile-bar">${isPdf ? '<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;Preview resume</button>' : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;Download resume</button></div>
       </section>
       <aside class="applicant-review-right" aria-label="Resume preview">
@@ -1570,6 +1639,7 @@
     </div>`);
 
     mountApplicantComments(modalRoot, applicant.flow_id, person.candidate_email);
+    mountCandidateDeletion(modalRoot, applicant.flow_id, person, group.count);
     const responsibleNode = modalRoot.querySelector('#applicant-responsible');
     if (responsibleNode) bindInfoTooltip(responsibleNode, modalRoot.querySelector('#applicant-responsible-tip'));
     if (responsibleNode && !flowResponsiblesCache.has(applicant.flow_id)) {

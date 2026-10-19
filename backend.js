@@ -117,6 +117,13 @@
     const { error } = await client.rpc('delete_applicant_comment', { p_comment_id: commentId });
     if (error) throw error;
   }
+  // Everything Pathway holds about the signed-in person (read by one checked database function).
+  async function exportMyData() {
+    await requireSession();
+    const { data, error } = await client.rpc('export_my_data');
+    if (error) throw error;
+    return data;
+  }
   async function getMyProfile() {
     await requireSession();
     const { data: authData } = await client.auth.getSession();
@@ -734,6 +741,13 @@
     return result;
   }
 
+  // Deletes one candidate (all of their applications to that job), their resume files and the team's comments about them.
+  async function deleteCandidate(flowId, email) {
+    const session = await requireSession();
+    const result = await callApplications({ action: 'deleteCandidate', flowId, email: String(email || '').trim().toLowerCase() }, session.access_token);
+    if (typeof result.deleted !== 'number') throw new Error('The candidate could not be deleted.');
+    return result;
+  }
   // The file itself (not a link), for browsers that cannot show a PDF inside a page. Same access rules as the link.
   async function downloadApplicantResume(path) {
     await requireSession();
@@ -826,6 +840,7 @@
     listTeam,
     getFlowResponsibles,
     getMyProfile,
+    exportMyData,
     listApplicantComments,
     addApplicantComment,
     deleteApplicantComment,
@@ -871,6 +886,7 @@
     updateApplicantStatus,
     updateApplicantStatuses,
     deleteFailedApplicants,
+    deleteCandidate,
     getApplicantResumeUrl,
     downloadApplicantResume,
     submitApplication,
