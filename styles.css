@@ -387,3 +387,17 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .mk-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.mk-col{display:grid;align-content:start;gap:7px;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}.mk-col h4{margin:0 0 2px;font:700 10.5px var(--display);color:var(--text-subtle)}.mk-card{display:grid;gap:5px;padding:8px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-page)}.mk-card i{display:block;height:5px;border-radius:3px;background:var(--mint-strong)}.mk-card i+i{width:60%;background:var(--tint)}
 @media(max-width:820px){.how-row{grid-template-columns:1fr}.how-row:nth-child(even) .how-copy{order:0}}
 .plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;max-width:820px}.plan-card{display:flex;flex-direction:column;background:var(--bg-page);border:1px solid var(--line);border-radius:16px;padding:26px 24px}.plan-card-premium{background:var(--surface);border:2px solid var(--green)}.plan-card h3{font:700 18px var(--display);margin:0 0 6px;color:var(--text-heading)}.plan-price{font:700 32px/1.1 var(--display);color:var(--text-heading)}.plan-price span{font:500 14px var(--sans);color:var(--text-subtle)}.plan-tagline{margin:8px 0 16px;font-size:14px;color:var(--muted)}.plan-features{list-style:none;margin:0 0 22px;padding:0;display:grid;gap:10px}.plan-features li{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;line-height:1.5;color:var(--text-body)}.plan-features svg{flex:0 0 16px;width:16px;height:16px;margin-top:2px;fill:none;stroke:var(--green);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}.plan-features .plan-missing{color:var(--soft)}.plan-features .plan-missing svg{stroke:var(--soft)}.plan-cta{margin-top:auto;align-self:flex-start}.plan-note{margin:auto 0 0;font-size:12.5px;line-height:1.55;color:var(--text-subtle)}
+/* Resume preview header: Download resume next to Close preview */
+.applicant-resume-preview-head>.applicant-resume-preview-actions{flex:0 0 auto;flex-direction:row;align-items:center;gap:8px}
+@media(max-width:760px){.applicant-resume-preview-head>.applicant-resume-preview-actions{gap:6px}.applicant-resume-preview-head strong{max-width:30vw}}
+/* Applicant panel on phones: information only, bottom menu, preview takes the whole screen */
+.applicant-mobile-bar{display:none}
+@media(max-width:760px){
+  .applicant-review-layout{grid-template-rows:minmax(0,1fr)}
+  .applicant-review-left{border-bottom:0}
+  .applicant-review-right{display:none}
+  .applicant-review-layout.is-previewing .applicant-review-left{display:none}
+  .applicant-review-layout.is-previewing .applicant-review-right{display:flex}
+  .applicant-mobile-bar{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px;padding:10px 16px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface)}
+  .applicant-mobile-bar .btn{width:100%;justify-content:center}
+}

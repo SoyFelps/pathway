@@ -129,9 +129,9 @@
     } catch (_) { /* Navigation still works without URL persistence. */ }
   }
   function cssToken(name, fallback) { return getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim() || fallback; }
-  function showToast(message) {
+  function showToast(message, duration = 2400) {
     toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), duration);
   }
   function initials(name) { return (name || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
   function companySnapshot(company) { return company ? { id: company.id, name: company.name, description: company.description || '', logoPath: company.logoPath || null, logoUrl: company.logoUrl || '' } : null; }
@@ -1255,9 +1255,10 @@
     const previous = members.map(member => member.status);
     members.forEach(member => { member.status = status; });
     renderApplicantBoard();
+    let boardOutOfDate = false;
     try {
       const updated = await window.PathwayBackend.updateApplicantStatuses(members.map(member => member.id), status);
-      if (updated.length !== members.length) throw new Error('some applications could not be updated');
+      if (updated.length !== members.length) { boardOutOfDate = true; throw new Error('some applications could not be updated'); }
       updated.forEach(row => {
         const member = members.find(item => item.id === row.id);
         if (member) { member.status = row.status; member.updated_at = row.updated_at; }
@@ -1269,7 +1270,9 @@
     } catch (error) {
       members.forEach((member, index) => { member.status = previous[index]; });
       renderApplicantBoard();
-      showToast(`Could not update applicant stage: ${error.message || 'please retry'}`);
+      // The board is not refreshed for the person: they press Refresh when they are ready.
+      if (boardOutOfDate) showToast('This candidate was removed or changed by someone else, so the stage was not updated. Press Refresh to update the board.', 7000);
+      else showToast(`Could not update applicant stage: ${error.message || 'please retry'}`);
     }
   }
 
@@ -1300,17 +1303,17 @@
         <div class="applicant-review-content">
           <section class="applicant-detail-section applicant-detail-actions-section"><div class="applicant-detail-actions">
             <label class="applicant-info-item"><span>Hiring stage</span><select class="applicant-status-select" id="applicant-status-select">${statusOptions}</select>${group.count > 1 ? `<small class="applicant-stage-note">Applies to all ${group.count} applications</small>` : ''}</label>
-            <div class="applicant-resume-actions">${isPdf ? '<button class="btn applicant-resume-button" id="preview-applicant-resume" aria-expanded="false">▧ &nbsp;Preview resume</button>' : ''}<button class="btn applicant-resume-button" id="download-applicant-resume">↓ &nbsp;Download resume</button></div>
           </div></section>
           <section class="applicant-detail-section"><h3>Candidate details</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Full name</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>Email address</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(C.OPTIONAL_FIELDS.find(field => field.key === key)?.label || key)}</span><strong>${esc(value)}</strong></div>`).join('')}</div></section>
           <section class="applicant-detail-section"><h3>Application answers · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || 'Application question')}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : '<div class="board-empty">No written answers were submitted for this flow.</div>'}</section>
-          <section class="applicant-detail-section"><h3>Application record</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Submitted</span><strong>${esc(new Date(applicant.submitted_at).toLocaleString())}</strong></div><div class="applicant-info-item"><span>Privacy notice</span><strong>${esc(applicant.privacy_notice_version || 'Recorded')}</strong></div></div><p class="applicant-privacy-note">This applicant record is visible only to this workspace. Resume links are private and expire after two minutes.</p></section>
+          <section class="applicant-detail-section"><h3>Application record</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Submitted</span><strong>${esc(new Date(applicant.submitted_at).toLocaleString())}</strong></div><div class="applicant-info-item"><span>Privacy notice</span><strong>${esc(applicant.privacy_notice_version || 'Recorded')}</strong></div></div></section>
         </div>
+        <div class="applicant-mobile-bar">${isPdf ? '<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;Preview resume</button>' : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;Download resume</button></div>
       </section>
       <aside class="applicant-review-right" aria-label="Resume preview">
-        <div class="applicant-preview-empty" id="applicant-preview-empty"><span class="applicant-preview-icon">▧</span><h3>${isPdf ? 'Resume preview' : 'Preview unavailable'}</h3><p>${isPdf ? 'Loading the private PDF preview beside the application details…' : 'This file type cannot be previewed in the browser. Download the resume to open it.'}</p></div>
+        <div class="applicant-preview-empty" id="applicant-preview-empty"><span class="applicant-preview-icon">▧</span><h3>${isPdf ? 'Resume preview' : 'Preview unavailable'}</h3>${isPdf ? '<button class="btn applicant-resume-button" id="preview-applicant-resume" type="button">▧ &nbsp;Preview resume</button>' : '<p>This file type cannot be previewed in the browser. Download the resume to open it.</p><button class="btn applicant-resume-button js-download-resume" type="button">↓ &nbsp;Download resume</button>'}</div>
         <section class="applicant-resume-preview is-hidden" id="applicant-resume-preview" aria-label="PDF resume preview">
-          <div class="applicant-resume-preview-head"><div><span class="eyebrow">Private document</span><strong title="${esc(filename)}">${esc(filename)}</strong></div><button class="btn btn-sm" id="close-applicant-resume-preview">Close preview</button></div>
+          <div class="applicant-resume-preview-head"><div><span class="eyebrow">Private document</span><strong title="${esc(filename)}">${esc(filename)}</strong></div><div class="applicant-resume-preview-actions"><button class="btn btn-sm js-download-resume" type="button">↓ &nbsp;Download resume</button><button class="btn btn-sm" id="close-applicant-resume-preview" type="button">Close preview</button></div></div>
           <iframe id="applicant-resume-frame" title="PDF preview of ${esc(filename)}" loading="lazy" referrerpolicy="no-referrer"></iframe>
         </section>
       </aside>
@@ -1322,32 +1325,32 @@
     const previewPanel = modalRoot.querySelector('#applicant-resume-preview');
     const previewFrame = modalRoot.querySelector('#applicant-resume-frame');
     const previewPlaceholder = modalRoot.querySelector('#applicant-preview-empty');
+    const reviewLayout = modalRoot.querySelector('.applicant-review-layout');
+    const mobilePreviewButton = modalRoot.querySelector('#mobile-preview-resume');
+    const phoneLayout = window.matchMedia('(max-width: 760px)').matches;
     const closePreview = () => {
       previewPanel.classList.add('is-hidden');
       previewPlaceholder.classList.remove('is-hidden');
-      previewButton?.setAttribute('aria-expanded', 'false');
+      reviewLayout.classList.remove('is-previewing');
       previewFrame.removeAttribute('src');
-      if (previewButton) previewButton.innerHTML = '▧ &nbsp;Preview resume';
     };
-    const loadPreview = async () => {
-      if (!previewButton || !previewPanel.classList.contains('is-hidden')) return;
-      previewButton.disabled = true; previewButton.textContent = 'Preparing preview…';
+    const loadPreview = async (trigger = previewButton) => {
+      if (!trigger || !previewPanel.classList.contains('is-hidden')) return;
+      trigger.disabled = true; trigger.textContent = 'Preparing preview…';
       try {
         const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path);
         previewFrame.src = url;
         previewPlaceholder.classList.add('is-hidden');
         previewPanel.classList.remove('is-hidden');
-        previewButton.setAttribute('aria-expanded', 'true');
+        reviewLayout.classList.add('is-previewing');
       } catch (error) { showToast(`Could not preview resume: ${error.message || 'please retry'}`); }
-      finally { if (previewButton.isConnected) { previewButton.disabled = false; previewButton.innerHTML = previewPanel.classList.contains('is-hidden') ? '▧ &nbsp;Preview resume' : '▧ &nbsp;Hide preview'; } }
+      finally { if (trigger.isConnected) { trigger.disabled = false; trigger.innerHTML = '▧ &nbsp;Preview resume'; } }
     };
-    previewButton?.addEventListener('click', () => {
-      if (!previewPanel.classList.contains('is-hidden')) closePreview();
-      else void loadPreview();
-    });
-    if (previewButton) void loadPreview();
+    previewButton?.addEventListener('click', () => { void loadPreview(previewButton); });
+    mobilePreviewButton?.addEventListener('click', () => { void loadPreview(mobilePreviewButton); });
+    if (previewButton && !phoneLayout) void loadPreview(previewButton);
     modalRoot.querySelector('#close-applicant-resume-preview')?.addEventListener('click', closePreview);
-    modalRoot.querySelector('#download-applicant-resume').addEventListener('click', async event => {
+    modalRoot.querySelectorAll('.js-download-resume').forEach(downloadButton => downloadButton.addEventListener('click', async event => {
       const button = event.currentTarget;
       const tab = window.open('about:blank', '_blank');
       if (tab) tab.opener = null;
@@ -1360,7 +1363,7 @@
         if (tab) tab.close();
         showToast(`Could not download resume: ${error.message || 'please retry'}`);
       } finally { if (button.isConnected) { button.disabled = false; button.innerHTML = '↓ &nbsp;Download resume'; } }
-    });
+    }));
   }
   async function doSignOut() {
     try { await window.PathwayBackend.signOut(); flows = []; companies = []; applicants = []; workspace = null; user = null; window.PathwayAuth.renderAuth(); }

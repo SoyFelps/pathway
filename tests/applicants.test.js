@@ -87,7 +87,7 @@ test('Team Fit and Skill Fit have independent opt-in checkboxes and occupied col
   assert.match(styles, /\.applicant-stage-toggle-control input:disabled\{pointer-events:none\}/);
   assert.match(styles, /\.applicant-stage-toggle-wrap\{[^}]*justify-content:flex-end/);
   assert.doesNotMatch(styles, /\.applicant-stage-toggle-wrap\{[^}]*background:/);
-  assert.match(read('index.html'), /builder\.js\?v=notifications-all-jobs-20261018/);
+  assert.match(read('index.html'), /builder\.js\?v=stale-board-20261019/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -159,13 +159,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=notifications-all-jobs-20261018/);
-  assert.match(read('index.html'), /pathway\.js\?v=notifications-all-jobs-20261018/);
-  assert.match(read('apply.html'), /candidate\.js\?v=notifications-all-jobs-20261018/);
-  assert.match(read('index.html'), /candidate\.js\?v=notifications-all-jobs-20261018/);
-  assert.match(read('apply.html'), /styles\.css\?v=notifications-all-jobs-20261018/);
-  assert.match(read('index.html'), /styles\.css\?v=notifications-all-jobs-20261018/);
-  assert.match(read('apply.html'), /backend\.js\?v=notifications-all-jobs-20261018/);
+  assert.match(read('apply.html'), /pathway\.js\?v=stale-board-20261019/);
+  assert.match(read('index.html'), /pathway\.js\?v=stale-board-20261019/);
+  assert.match(read('apply.html'), /candidate\.js\?v=stale-board-20261019/);
+  assert.match(read('index.html'), /candidate\.js\?v=stale-board-20261019/);
+  assert.match(read('apply.html'), /styles\.css\?v=stale-board-20261019/);
+  assert.match(read('index.html'), /styles\.css\?v=stale-board-20261019/);
+  assert.match(read('apply.html'), /backend\.js\?v=stale-board-20261019/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
@@ -227,7 +227,7 @@ test('Edge Function preflight uses a bodyless 204 response and allowlists the pu
 
 test('resume download reserves a browser tab during the click gesture and falls back to a short-lived secure link', () => {
   const builder = read('builder.js');
-  const handlerStart = builder.indexOf("modalRoot.querySelector('#download-applicant-resume').addEventListener('click'");
+  const handlerStart = builder.indexOf("modalRoot.querySelectorAll('.js-download-resume').forEach(downloadButton => downloadButton.addEventListener('click'");
   const handler = builder.slice(handlerStart, handlerStart + 1200);
   assert.ok(handler.indexOf("window.open('about:blank'") < handler.indexOf('await window.PathwayBackend.getApplicantResumeUrl'));
   assert.match(handler, /tab\.location\.replace\(url\)/);
@@ -246,8 +246,8 @@ test('PDF preview uses an inline signed URL while download remains a separate fo
   assert.match(builder, /previewFrame\.removeAttribute\('src'\)/);
   assert.match(builder, /getApplicantResumeUrl\(applicant\.resume_path, true, filename\)/);
   assert.match(builder, /Preview resume/);
-  assert.match(builder, /if \(previewButton\) void loadPreview\(\)/);
-  assert.match(builder, /'▧ &nbsp;Hide preview'/);
+  assert.match(builder, /if \(previewButton && !phoneLayout\) void loadPreview\(previewButton\)/);
+  assert.doesNotMatch(builder, /Hide preview/, 'there is no hide/show toggle any more: the button only exists while the preview is closed');
   assert.match(read('styles.css'), /\.applicant-review-layout\{display:grid;grid-template-columns:minmax\(390px/);
   assert.match(read('styles.css'), /\.applicant-review-right \.applicant-resume-preview iframe\{flex:1/);
   assert.match(read('styles.css'), /@media\(max-width:760px\)\{\s*\.applicant-review-layout\{grid-template-columns:minmax\(0,1fr\)/);
