@@ -675,6 +675,14 @@
     return result;
   }
 
+  // The file itself (not a link), for browsers that cannot show a PDF inside a page. Same access rules as the link.
+  async function downloadApplicantResume(path) {
+    await requireSession();
+    if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('..')) throw new Error('This resume link is not valid.');
+    const { data, error } = await client.storage.from('applicant-resumes').download(path);
+    if (error) throw error;
+    return data;
+  }
   async function getApplicantResumeUrl(path, download = false, filename = '') {
     await requireSession();
     if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('..')) throw new Error('This resume link is not valid.');
@@ -798,6 +806,7 @@
     updateApplicantStatuses,
     deleteFailedApplicants,
     getApplicantResumeUrl,
+    downloadApplicantResume,
     submitApplication,
     updateWorkspaceName,
     signOut,

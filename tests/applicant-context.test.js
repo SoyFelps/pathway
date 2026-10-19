@@ -57,3 +57,17 @@ test('the PDF preview asks the browser viewer to start without the page-thumbnai
   assert.equal(/getApplicantResumeUrl\([^)]*true[^)]*\)[^;]*PDF_VIEWER_PARAMS/.test(builder), false, 'the download link is left untouched');
   assert.equal(builder.split('PDF_VIEWER_PARAMS').length - 1, 2, 'one definition and one use');
 });
+
+test('phones and other browsers without an inline PDF viewer get the pages drawn by the self-hosted pdf.js', () => {
+  const builder = read('builder.js');
+  const backend = read('backend.js');
+  assert.ok(builder.includes("return window.matchMedia('(max-width: 760px), (pointer: coarse)').matches || navigator.pdfViewerEnabled === false;"), 'phones, touch screens and browsers that report no PDF viewer');
+  assert.ok(builder.includes("script.src = 'vendor/pdfjs/pdf.min.js?v=' + PDFJS_VERSION;"), 'loaded from this site, only when needed');
+  assert.equal(/https?:\/\/[^'"\s]*pdf(\.worker)?(\.min)?\.js/.test(builder), false, 'no third-party script address');
+  assert.ok(builder.includes('await window.PathwayBackend.downloadApplicantResume(applicant.resume_path)'));
+  assert.ok(builder.includes("catch (drawError) { pdfPages.textContent = 'This resume could not be displayed here. Use Download resume to open it.'; }"), 'a failure points to Download resume');
+  assert.ok(backend.includes("client.storage.from('applicant-resumes').download(path)") && backend.includes("path.startsWith('/') || path.includes('..')"), 'same path checks as the signed link');
+  assert.ok(read('styles.css').includes('.applicant-resume-preview iframe[hidden]{display:none!important}'), 'the hidden iframe takes no space');
+  for (const file of ['vendor/pdfjs/pdf.min.js', 'vendor/pdfjs/pdf.worker.min.js', 'vendor/pdfjs/LICENSE', 'vendor/pdfjs/README.md']) assert.ok(fs.existsSync(path.join(__dirname, '..', file)), file + ' is in the repository');
+  assert.ok(read('vendor/pdfjs/LICENSE').includes('Apache License'), 'licence kept');
+});

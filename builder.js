@@ -1277,6 +1277,45 @@
     }
   }
 
+  // Phones (for example Chrome on Android) cannot show a PDF inside a page. There the pages are drawn by pdf.js, which is
+  // hosted in this repository (vendor/pdfjs) and loaded only when needed.
+  const PDFJS_VERSION = '3.11.174';
+  let pdfJsLoading = null;
+  function loadPdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (!pdfJsLoading) {
+      pdfJsLoading = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'vendor/pdfjs/pdf.min.js?v=' + PDFJS_VERSION;
+        script.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdfjs/pdf.worker.min.js?v=' + PDFJS_VERSION; resolve(window.pdfjsLib); };
+        script.onerror = () => { pdfJsLoading = null; reject(new Error('The PDF viewer could not be loaded.')); };
+        document.head.appendChild(script);
+      });
+    }
+    return pdfJsLoading;
+  }
+  function needsDrawnPdf() {
+    return window.matchMedia('(max-width: 760px), (pointer: coarse)').matches || navigator.pdfViewerEnabled === false;
+  }
+  async function drawPdfPages(container, blob) {
+    const pdfjs = await loadPdfJs();
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+    const width = Math.max(container.clientWidth - 24, 200);
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    container.textContent = '';
+    for (let number = 1; number <= Math.min(doc.numPages, 30); number++) {
+      if (!container.isConnected || container.hidden) return;
+      const page = await doc.getPage(number);
+      const base = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: (width / base.width) * ratio });
+      const canvas = document.createElement('canvas');
+      canvas.className = 'applicant-pdf-page';
+      canvas.width = Math.floor(viewport.width); canvas.height = Math.floor(viewport.height);
+      canvas.style.width = width + 'px'; canvas.style.height = Math.floor(viewport.height / ratio) + 'px';
+      container.appendChild(canvas);
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    }
+  }
   // Open parameters for the browser's own PDF viewer: start without the page-thumbnails column, so it looks the same in every browser. Browsers that do not know them ignore them; the part after # never reaches the server.
   const PDF_VIEWER_PARAMS = '#navpanes=0&pagemode=none';
   // Small explanation next to a value: shown while the mouse is over it, or for 5 seconds after a click / tap; Escape or leaving closes it.
@@ -1335,6 +1374,7 @@
         <section class="applicant-resume-preview is-hidden" id="applicant-resume-preview" aria-label="PDF resume preview">
           <div class="applicant-resume-preview-head"><div><span class="eyebrow">Private document</span><strong title="${esc(filename)}">${esc(filename)}</strong></div><div class="applicant-resume-preview-actions"><button class="btn btn-sm js-download-resume" type="button">↓ &nbsp;Download resume</button><button class="btn btn-sm" id="close-applicant-resume-preview" type="button">Close preview</button></div></div>
           <iframe id="applicant-resume-frame" title="PDF preview of ${esc(filename)}" loading="lazy" referrerpolicy="no-referrer"></iframe>
+          <div class="applicant-pdf-pages" id="applicant-pdf-pages" role="document" aria-label="PDF preview of ${esc(filename)}" hidden></div>
         </section>
       </aside>
     </div>`);
@@ -1351,6 +1391,7 @@
     const previewButton = modalRoot.querySelector('#preview-applicant-resume');
     const previewPanel = modalRoot.querySelector('#applicant-resume-preview');
     const previewFrame = modalRoot.querySelector('#applicant-resume-frame');
+    const pdfPages = modalRoot.querySelector('#applicant-pdf-pages');
     const previewPlaceholder = modalRoot.querySelector('#applicant-preview-empty');
     const reviewLayout = modalRoot.querySelector('.applicant-review-layout');
     const mobilePreviewButton = modalRoot.querySelector('#mobile-preview-resume');
@@ -1360,16 +1401,28 @@
       previewPlaceholder.classList.remove('is-hidden');
       reviewLayout.classList.remove('is-previewing');
       previewFrame.removeAttribute('src');
+      pdfPages.hidden = true; pdfPages.textContent = '';
     };
     const loadPreview = async (trigger = previewButton) => {
       if (!trigger || !previewPanel.classList.contains('is-hidden')) return;
       trigger.disabled = true; trigger.textContent = 'Preparing preview…';
       try {
-        const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path);
-        previewFrame.src = url.split('#')[0] + PDF_VIEWER_PARAMS;
-        previewPlaceholder.classList.add('is-hidden');
-        previewPanel.classList.remove('is-hidden');
-        reviewLayout.classList.add('is-previewing');
+        if (needsDrawnPdf()) {
+          const blob = await window.PathwayBackend.downloadApplicantResume(applicant.resume_path);
+          previewFrame.hidden = true; pdfPages.hidden = false; pdfPages.textContent = 'Loading the resume…';
+          previewPlaceholder.classList.add('is-hidden');
+          previewPanel.classList.remove('is-hidden');
+          reviewLayout.classList.add('is-previewing');
+          try { await drawPdfPages(pdfPages, blob); }
+          catch (drawError) { pdfPages.textContent = 'This resume could not be displayed here. Use Download resume to open it.'; }
+        } else {
+          const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path);
+          previewFrame.hidden = false; pdfPages.hidden = true;
+          previewFrame.src = url.split('#')[0] + PDF_VIEWER_PARAMS;
+          previewPlaceholder.classList.add('is-hidden');
+          previewPanel.classList.remove('is-hidden');
+          reviewLayout.classList.add('is-previewing');
+        }
       } catch (error) { showToast(`Could not preview resume: ${error.message || 'please retry'}`); }
       finally { if (trigger.isConnected) { trigger.disabled = false; trigger.innerHTML = '▧ &nbsp;Preview resume'; } }
     };
