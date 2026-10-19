@@ -138,18 +138,21 @@
   function companySnapshot(company) { return company ? { id: company.id, name: company.name, description: company.description || '', logoPath: company.logoPath || null, logoUrl: company.logoUrl || '' } : null; }
   // In-app notifications: one entry per job with new candidates; it disappears when this person opens that job's board.
   let notifications = [];
+  let mentionNotifs = [];
+  let pendingCandidateOpen = null;
   let notifLoadedAt = 0;
   let notifTimer = null;
   let notifObserver = null;
   const NOTIF_REFRESH_MS = 60000;
   const BELL_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
   async function refreshNotifications(force = false) {
-    if (!workspace || !hasPermission('applicants')) { notifications = []; paintNotifications(); return; }
+    if (!workspace || !hasPermission('applicants')) { notifications = []; mentionNotifs = []; paintNotifications(); return; }
     if (!force && Date.now() - notifLoadedAt < 15000) return;
     try {
       notifications = await window.PathwayBackend.listFlowNotifications(workspace.id);
       notifLoadedAt = Date.now();
     } catch (error) { return; /* keep what we had; the next check tries again */ }
+    try { mentionNotifs = await window.PathwayBackend.listCommentMentions(workspace.id); } catch (error) { /* keep what we had */ }
     // Already looking at that job's board: show the new candidates there instead of lighting the bell.
     const onBoard = root.querySelector('.applicants-page') && !modalRoot.innerHTML;
     const showingThatJob = applicantFilter && notifications.some(item => item.flowId === applicantFilter);
@@ -160,11 +163,13 @@
   function paintNotifications() {
     const host = root.querySelector('#notif'); if (!host) return;
     const badge = host.querySelector('.notif-badge'), menu = host.querySelector('.notif-menu'), button = host.querySelector('#notif-bell');
-    badge.textContent = notifications.length > 9 ? '9+' : String(notifications.length);
-    badge.hidden = !notifications.length;
-    button.setAttribute('aria-label', notifications.length ? 'Notifications, ' + notifications.length + ' with new applications' : 'Notifications');
-    menu.innerHTML = notifications.length
-      ? notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">There are new applications for <strong>' + esc(item.jobTitle || 'Untitled role') + '</strong></span><span class="notif-sub">' + item.newCount + (item.newCount === 1 ? ' new candidate' : ' new candidates') + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
+    const total = notifications.length + mentionNotifs.length;
+    badge.textContent = total > 9 ? '9+' : String(total);
+    badge.hidden = !total;
+    button.setAttribute('aria-label', total ? 'Notifications, ' + total + ' unread' : 'Notifications');
+    const mentionItems = mentionNotifs.map(item => '<button type="button" class="notif-item" data-notif-mention-flow="' + esc(item.flowId) + '" data-notif-mention-email="' + esc(item.candidateEmail) + '"><span class="notif-text"><strong>' + esc(item.authorName) + '</strong> mentioned you in a comment</span><span class="notif-sub">' + esc(item.candidateName) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
+    menu.innerHTML = total
+      ? mentionItems + notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">There are new applications for <strong>' + esc(item.jobTitle || 'Untitled role') + '</strong></span><span class="notif-sub">' + item.newCount + (item.newCount === 1 ? ' new candidate' : ' new candidates') + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
       : '<div class="notif-empty">You are all caught up.</div>';
   }
   function mountNotificationBell() {
@@ -175,6 +180,11 @@
     const setOpen = open => { menu.hidden = !open; button.setAttribute('aria-expanded', String(open)); };
     button.addEventListener('click', () => { setOpen(menu.hidden); if (!menu.hidden) void refreshNotifications(true); });
     menu.addEventListener('click', event => {
+      const mention = event.target.closest('[data-notif-mention-flow]');
+      if (mention) {
+        setOpen(false); pendingCandidateOpen = { flowId: mention.dataset.notifMentionFlow, email: String(mention.dataset.notifMentionEmail || '').trim().toLowerCase() };
+        applicantFilter = pendingCandidateOpen.flowId; applicantSearch = ''; void renderApplicants(); return;
+      }
       const item = event.target.closest('[data-notif-flow]'); if (!item) return;
       setOpen(false); applicantFilter = item.dataset.notifFlow; applicantSearch = ''; void renderApplicants();
     });
@@ -713,6 +723,11 @@
       applicants = await window.PathwayBackend.listApplicants(workspace.id, applicantFilter);
       if (!root.querySelector('.applicants-page')) return;
       renderApplicantBoard();
+      if (pendingCandidateOpen) {
+        const target = pendingCandidateOpen; pendingCandidateOpen = null;
+        const match = applicants.find(item => item.flow_id === target.flowId && String(item.candidate_email || '').trim().toLowerCase() === target.email);
+        if (match) showApplicantDetails(match.id);
+      }
       if (applicantFilter) markFlowSeen(applicantFilter);
       else if (!applicantSearch.trim() && applicants.length < APPLICANT_LIST_LIMIT) markAllFlowsSeen();
     } catch (error) {
@@ -1388,6 +1403,125 @@
     if (!result || result.everyone) return 'All team members';
     return (result.people || []).map(person => personLabel(person, result.people) + (person.isOwner ? ' (owner)' : '')).join(', ') || 'All team members';
   }
+  // Internal comments on a candidate: who wrote them and when is stored with each one. Add-only.
+  const applicantCommentsCache = new Map();
+  const commentTimeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const canDeleteComment = comment => Boolean(isOwner || (comment.authorId && user && comment.authorId === user.id));
+  function commentBodyHtml(comment) {
+    let html = esc(comment.body);
+    // Longer names first, so "@Ana Souza" wins over "@Ana".
+    [...(comment.mentions || [])].filter(item => item.name).sort((a, b) => b.name.length - a.name.length).forEach(item => {
+      html = html.split('@' + esc(item.name)).join('<span class="comment-mention">@' + esc(item.name) + '</span>');
+    });
+    return html;
+  }
+  function commentHtml(comment) {
+    return '<article class="comment" data-comment-id="' + esc(comment.id) + '"><p class="comment-meta">' + esc(comment.authorName) + ' · <time datetime="' + esc(comment.createdAt) + '">' + esc(commentTimeFormat.format(new Date(comment.createdAt))) + '</time>' + (canDeleteComment(comment) ? ' · <button type="button" class="comment-delete" data-delete-comment="' + esc(comment.id) + '">Delete</button>' : '') + '</p><p class="comment-body">' + commentBodyHtml(comment) + '</p></article>';
+  }
+  function mountApplicantComments(host, flowId, email) {
+    const list = host.querySelector('#applicant-comment-list'), form = host.querySelector('#applicant-comment-form');
+    const input = host.querySelector('#applicant-comment-input'), status = host.querySelector('#applicant-comment-status'), submit = host.querySelector('#applicant-comment-submit');
+    const heading = host.querySelector('#applicant-comments-heading');
+    if (!list || !form) return;
+    // Opening a candidate counts as reading the mentions of this person on it.
+    const mentionKey = String(email || '').trim().toLowerCase();
+    if (mentionNotifs.some(item => item.flowId === flowId && item.candidateEmail === mentionKey)) { mentionNotifs = mentionNotifs.filter(item => !(item.flowId === flowId && item.candidateEmail === mentionKey)); paintNotifications(); }
+    window.PathwayBackend.markCommentMentionsSeen(flowId, email).catch(() => {});
+    // @mentions: typing "@" opens a list of teammates who can open applicants; the chosen name is written after the "@".
+    const mentionMenu = host.querySelector('#applicant-mention-menu');
+    const chosen = new Map();
+    let mentionPeople = [], mentionMatches = [], mentionActive = 0, mentionStart = -1;
+    window.PathwayBackend.listTeamOverview(workspace.id)
+      .then(rows => { mentionPeople = rows.filter(row => (row.isOwner || row.can_applicants) && row.userId !== user.id).map(row => ({ userId: row.userId, name: personName(row) || row.email, email: row.email })); })
+      .catch(() => { /* without the team list the "@" menu simply stays closed */ });
+    const closeMentionMenu = () => { mentionMenu.hidden = true; mentionMatches = []; mentionStart = -1; };
+    const paintMentionMenu = () => {
+      mentionMenu.innerHTML = mentionMatches.map((person, index) => '<button type="button" role="option" class="mention-option' + (index === mentionActive ? ' is-active' : '') + '" aria-selected="' + (index === mentionActive) + '" data-mention-index="' + index + '"><span>' + esc(person.name) + '</span>' + (person.name !== person.email ? '<small>' + esc(person.email) + '</small>' : '') + '</button>').join('');
+      mentionMenu.hidden = !mentionMatches.length;
+    };
+    const updateMentionMenu = () => {
+      const before = input.value.slice(0, input.selectionStart);
+      const found = /(^|\s)@([^\s@]*)$/.exec(before);
+      if (!found) { closeMentionMenu(); return; }
+      const query = found[2].toLowerCase();
+      mentionStart = before.length - found[2].length - 1;
+      mentionMatches = mentionPeople.filter(person => !query || person.name.toLowerCase().includes(query) || person.email.toLowerCase().includes(query)).slice(0, 6);
+      mentionActive = 0;
+      paintMentionMenu();
+    };
+    const pickMention = index => {
+      const person = mentionMatches[index];
+      if (!person || mentionStart < 0) return;
+      const after = input.value.slice(input.selectionStart);
+      const text = input.value.slice(0, mentionStart) + '@' + person.name + ' ';
+      input.value = text + after;
+      input.setSelectionRange(text.length, text.length);
+      chosen.set(person.userId, person.name);
+      closeMentionMenu();
+      input.focus();
+    };
+    input.addEventListener('input', updateMentionMenu);
+    input.addEventListener('click', updateMentionMenu);
+    input.addEventListener('blur', () => setTimeout(closeMentionMenu, 150));
+    mentionMenu.addEventListener('pointerdown', event => event.preventDefault());
+    mentionMenu.addEventListener('click', event => { const option = event.target.closest('[data-mention-index]'); if (option) pickMention(Number(option.dataset.mentionIndex)); });
+    input.addEventListener('keydown', event => {
+      if (mentionMenu.hidden || !mentionMatches.length) return;
+      if (event.key === 'ArrowDown') { event.preventDefault(); mentionActive = (mentionActive + 1) % mentionMatches.length; paintMentionMenu(); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); mentionActive = (mentionActive - 1 + mentionMatches.length) % mentionMatches.length; paintMentionMenu(); }
+      else if (event.key === 'Enter' || event.key === 'Tab') { event.preventDefault(); event.stopImmediatePropagation(); pickMention(mentionActive); }
+      else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeMentionMenu(); }
+    }, true);
+    const key = flowId + '|' + String(email || '').trim().toLowerCase();
+    const paint = comments => {
+      heading.textContent = comments.length ? 'Team comments · ' + comments.length : 'Team comments';
+      list.innerHTML = comments.length ? comments.map(commentHtml).join('') : '<p class="comment-empty">No comments yet.</p>';
+    };
+    if (applicantCommentsCache.has(key)) paint(applicantCommentsCache.get(key));
+    window.PathwayBackend.listApplicantComments(flowId, email)
+      .then(comments => { applicantCommentsCache.set(key, comments); if (list.isConnected) paint(comments); })
+      .catch(() => { if (list.isConnected && !applicantCommentsCache.has(key)) list.innerHTML = '<p class="comment-empty is-error">Comments could not be loaded. Refresh the page and try again.</p>'; });
+    const send = async () => {
+      status.className = 'comment-status'; status.textContent = '';
+      if (!input.value.trim()) { status.className = 'comment-status is-error'; status.textContent = 'Write a comment first.'; return; }
+      submit.disabled = true;
+      try {
+        const mentionedIds = [...chosen].filter(([, name]) => input.value.includes('@' + name)).map(([id]) => id);
+        const comment = await window.PathwayBackend.addApplicantComment(flowId, email, input.value, mentionedIds);
+        chosen.clear();
+        const comments = [...(applicantCommentsCache.get(key) || []), comment];
+        applicantCommentsCache.set(key, comments);
+        input.value = '';
+        if (list.isConnected) { paint(comments); list.lastElementChild?.scrollIntoView({ block: 'nearest' }); }
+      } catch (error) {
+        status.className = 'comment-status is-error'; status.textContent = error.message || 'Could not add the comment. Please try again.';
+      } finally { submit.disabled = false; }
+    };
+    // Deleting asks for a second click right on the comment (the candidate panel is already a dialog).
+    list.addEventListener('click', async event => {
+      const askButton = event.target.closest('[data-delete-comment]');
+      const confirmButton = event.target.closest('[data-confirm-delete-comment]');
+      const cancelButton = event.target.closest('[data-cancel-delete-comment]');
+      if (askButton) {
+        askButton.outerHTML = '<span class="comment-delete-confirm">Delete? <button type="button" class="comment-delete is-danger" data-confirm-delete-comment="' + esc(askButton.dataset.deleteComment) + '">Yes</button> <button type="button" class="comment-delete" data-cancel-delete-comment>Cancel</button></span>';
+      } else if (cancelButton) {
+        paint(applicantCommentsCache.get(key) || []);
+      } else if (confirmButton) {
+        confirmButton.disabled = true;
+        try {
+          await window.PathwayBackend.deleteApplicantComment(confirmButton.dataset.confirmDeleteComment);
+          const comments = (applicantCommentsCache.get(key) || []).filter(item => item.id !== confirmButton.dataset.confirmDeleteComment);
+          applicantCommentsCache.set(key, comments);
+          if (list.isConnected) paint(comments);
+        } catch (error) {
+          confirmButton.disabled = false;
+          status.className = 'comment-status is-error'; status.textContent = 'Could not delete the comment. Refresh the page and try again.';
+        }
+      }
+    });
+    form.addEventListener('submit', event => { event.preventDefault(); void send(); });
+    input.addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void send(); } });
+  }
   function showApplicantDetails(id, tabIndex = 0) {
     const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
     if (!group) return;
@@ -1420,7 +1554,7 @@
           <section class="applicant-detail-section"><h3>Candidate details</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Full name</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>Email address</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(C.OPTIONAL_FIELDS.find(field => field.key === key)?.label || key)}</span><strong>${esc(value)}</strong></div>`).join('')}</div></section>
           <section class="applicant-detail-section"><h3>Application answers · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || 'Application question')}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : '<div class="board-empty">No written answers were submitted for this flow.</div>'}</section>
           <section class="applicant-detail-section"><h3>Application record</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Submitted</span><strong>${esc(new Date(applicant.submitted_at).toLocaleString())}</strong></div><div class="applicant-info-item"><span>Privacy notice</span><strong>${esc(applicant.privacy_notice_version || 'Recorded')}</strong></div><div class="applicant-info-item applicant-responsible-item"><span>Responsible</span><button type="button" class="applicant-responsible-trigger" id="applicant-responsible" aria-describedby="applicant-responsible-tip">${esc(flowResponsiblesCache.has(applicant.flow_id) ? flowResponsiblesText(flowResponsiblesCache.get(applicant.flow_id)) : 'Loading…')}</button><div class="applicant-tooltip" id="applicant-responsible-tip" role="tooltip" hidden>These are the people responsible for this job. To change them, edit the job details.</div></div></div></section>
-        </div>
+          <section class="applicant-detail-section applicant-comments" aria-labelledby="applicant-comments-heading"><h3 id="applicant-comments-heading">Team comments</h3><div class="comment-list" id="applicant-comment-list" aria-live="polite"><p class="comment-empty">Loading comments…</p></div><form class="comment-form" id="applicant-comment-form" novalidate><label class="visually-hidden" for="applicant-comment-input">Add a comment</label><textarea class="text-area" id="applicant-comment-input" maxlength="2000" rows="3" placeholder="Write a comment for your team… Type @ to mention someone."></textarea><div class="mention-menu" id="applicant-mention-menu" role="listbox" aria-label="Mention a teammate" hidden></div><div class="comment-form-actions"><span class="comment-status" id="applicant-comment-status" role="status" aria-live="polite"></span><button class="btn btn-primary btn-sm" type="submit" id="applicant-comment-submit">Add comment</button></div></form></section>        </div>
         <div class="applicant-mobile-bar">${isPdf ? '<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;Preview resume</button>' : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;Download resume</button></div>
       </section>
       <aside class="applicant-review-right" aria-label="Resume preview">
@@ -1433,6 +1567,7 @@
       </aside>
     </div>`);
 
+    mountApplicantComments(modalRoot, applicant.flow_id, person.candidate_email);
     const responsibleNode = modalRoot.querySelector('#applicant-responsible');
     if (responsibleNode) bindInfoTooltip(responsibleNode, modalRoot.querySelector('#applicant-responsible-tip'));
     if (responsibleNode && !flowResponsiblesCache.has(applicant.flow_id)) {

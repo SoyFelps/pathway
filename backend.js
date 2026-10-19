@@ -81,6 +81,42 @@
     if (error) throw error;
     return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, memberSince: row.member_since, firstName: row.first_name || '', lastName: row.last_name || '' }));
   }
+  // Internal team comments: one list per candidate (same job + same e-mail address, so repeat applications share it).
+  const mapComment = row => ({ id: row.id, authorId: row.author_id || null, authorName: row.author_name, body: row.body, createdAt: row.created_at, mentions: Array.isArray(row.mentions) ? row.mentions.map(item => ({ userId: item.userId, name: String(item.name || '') })) : [] });
+  async function listApplicantComments(flowId, email) {
+    await requireSession();
+    const { data, error } = await client.from('applicant_comments').select('id,author_id,author_name,body,created_at,mentions')
+      .eq('flow_id', flowId).eq('candidate_email', String(email || '').trim().toLowerCase()).order('created_at', { ascending: true }).limit(500);
+    if (error) throw error;
+    return (data || []).map(mapComment);
+  }
+  async function addApplicantComment(flowId, email, body, mentionedUserIds = []) {
+    await requireSession();
+    const text = String(body || '').trim();
+    if (!text) throw new Error('Write a comment first.');
+    if (text.length > 2000) throw new Error('A comment can have at most 2000 characters.');
+    const { data, error } = await client.rpc('add_applicant_comment', { p_flow_id: flowId, p_candidate_email: email, p_body: text, p_mentions: mentionedUserIds });
+    if (error) throw error;
+    return mapComment(data);
+  }
+  // In-app notifications for @mentions: unseen mentions of the signed-in person, and "seen" when they open that candidate.
+  async function listCommentMentions(workspaceId) {
+    await requireSession();
+    const { data, error } = await client.rpc('get_comment_mentions', { p_workspace_id: workspaceId });
+    if (error) throw error;
+    return (data || []).map(row => ({ commentId: row.comment_id, flowId: row.flow_id, candidateEmail: row.candidate_email, candidateName: row.candidate_name, jobTitle: row.job_title, authorName: row.author_name, createdAt: row.created_at }));
+  }
+  async function markCommentMentionsSeen(flowId, email) {
+    await requireSession();
+    const { error } = await client.rpc('mark_comment_mentions_seen', { p_flow_id: flowId, p_candidate_email: email });
+    if (error) throw error;
+  }
+  // Only the author or the workspace owner may delete; the database enforces it.
+  async function deleteApplicantComment(commentId) {
+    await requireSession();
+    const { error } = await client.rpc('delete_applicant_comment', { p_comment_id: commentId });
+    if (error) throw error;
+  }
   async function getMyProfile() {
     await requireSession();
     const { data: authData } = await client.auth.getSession();
@@ -790,6 +826,11 @@
     listTeam,
     getFlowResponsibles,
     getMyProfile,
+    listApplicantComments,
+    addApplicantComment,
+    deleteApplicantComment,
+    listCommentMentions,
+    markCommentMentionsSeen,
     updateMyProfile,
     listTeamOverview,
     listWorkspacePeople,
