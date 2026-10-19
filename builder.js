@@ -674,6 +674,7 @@
     applicantFitStagesEnabled = loadApplicantFitStagesPreference();
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
+    flowResponsiblesCache.clear();
     root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email)}">${esc(user.email)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><select id="applicant-flow-filter" class="applicants-filter" aria-label="Filter applicants by job"><option value="">All jobs</option>${applicantFlowLabels.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join('')}</select><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button></div></div><div class="applicant-stage-toggle-wrap" id="applicant-stage-toggle-wrap"></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
     bindSidebar();
     bindPlanControl();
@@ -1276,6 +1277,24 @@
     }
   }
 
+  // Open parameters for the browser's own PDF viewer: start without the page-thumbnails column, so it looks the same in every browser. Browsers that do not know them ignore them; the part after # never reaches the server.
+  const PDF_VIEWER_PARAMS = '#navpanes=0&pagemode=none';
+  // Small explanation next to a value: shown while the mouse is over it, or for 5 seconds after a click / tap; Escape or leaving closes it.
+  function bindInfoTooltip(trigger, tip) {
+    let hideTimer = null;
+    const hide = () => { clearTimeout(hideTimer); tip.hidden = true; };
+    trigger.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') tip.hidden = false; });
+    trigger.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse') hide(); });
+    trigger.addEventListener('click', () => { tip.hidden = false; clearTimeout(hideTimer); hideTimer = setTimeout(hide, 5000); });
+    trigger.addEventListener('keydown', event => { if (event.key === 'Escape') hide(); });
+    trigger.addEventListener('blur', hide);
+  }
+  // Who is responsible for each job, as shown (read only) in the applicant panel.
+  const flowResponsiblesCache = new Map();
+  function flowResponsiblesText(result) {
+    if (!result || result.everyone) return 'All team members';
+    return (result.people || []).map(person => person.email + (person.isOwner ? ' (owner)' : '')).join(', ') || 'All team members';
+  }
   function showApplicantDetails(id, tabIndex = 0) {
     const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
     if (!group) return;
@@ -1287,6 +1306,7 @@
       ? `<div class="applicant-tabs" role="tablist" aria-label="Applications from this candidate">${group.items.map((member, index) => `<button class="applicant-tab" type="button" role="tab" aria-selected="${index === tab}" data-tab="${index}">${esc(tabLabel(member, index))}</button>`).join('')}</div>`
       : '';
     const flow = flows.find(item => item.cloudId === applicant.flow_id) || applicantFlowLabels.find(item => item.cloudId === applicant.flow_id);
+    const applicantSubtitle = [flow?.companyName ? `applying for ${flow.companyName}` : '', group.count > 1 ? `Applied ${group.count} times` : ''].filter(Boolean).join(' · ');
     const detailFields = Object.entries(applicant.candidate_info || {}).filter(([, value]) => value !== null && value !== '' && value !== undefined);
     const answers = Array.isArray(applicant.responses) ? applicant.responses : [];
     const isPdf = applicant.resume_content_type === 'application/pdf';
@@ -1296,7 +1316,7 @@
     setModal(`<div class="applicant-review-layout" data-detail-applicant="${esc(person.id)}" data-detail-tab="${tab}">
       <section class="applicant-review-left" aria-label="Applicant details">
         <header class="modal-head applicant-detail-head">
-          <div class="applicant-detail-title"><div class="applicant-avatar" aria-hidden="true">${esc(initials(person.candidate_name))}</div><div><div class="eyebrow" style="margin-bottom:5px">${esc(flow?.jobTitle || 'Application')}</div><h2>${esc(person.candidate_name)}</h2><div class="muted">${esc(person.candidate_email)}${group.count > 1 ? ` · Applied ${group.count} times` : ''}</div></div></div>
+          <div class="applicant-detail-title"><div class="applicant-avatar" aria-hidden="true">${esc(initials(person.candidate_name))}</div><div><div class="eyebrow" style="margin-bottom:5px">${esc(flow?.jobTitle || 'Application')}</div><h2>${esc(person.candidate_name)}</h2>${applicantSubtitle ? `<div class="muted">${esc(applicantSubtitle)}</div>` : ''}</div></div>
           <button class="modal-x" data-close aria-label="Close applicant details">×</button>
         </header>
         ${tabs}
@@ -1306,7 +1326,7 @@
           </div></section>
           <section class="applicant-detail-section"><h3>Candidate details</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Full name</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>Email address</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(C.OPTIONAL_FIELDS.find(field => field.key === key)?.label || key)}</span><strong>${esc(value)}</strong></div>`).join('')}</div></section>
           <section class="applicant-detail-section"><h3>Application answers · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || 'Application question')}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : '<div class="board-empty">No written answers were submitted for this flow.</div>'}</section>
-          <section class="applicant-detail-section"><h3>Application record</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Submitted</span><strong>${esc(new Date(applicant.submitted_at).toLocaleString())}</strong></div><div class="applicant-info-item"><span>Privacy notice</span><strong>${esc(applicant.privacy_notice_version || 'Recorded')}</strong></div></div></section>
+          <section class="applicant-detail-section"><h3>Application record</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Submitted</span><strong>${esc(new Date(applicant.submitted_at).toLocaleString())}</strong></div><div class="applicant-info-item"><span>Privacy notice</span><strong>${esc(applicant.privacy_notice_version || 'Recorded')}</strong></div><div class="applicant-info-item applicant-responsible-item"><span>Responsible</span><button type="button" class="applicant-responsible-trigger" id="applicant-responsible" aria-describedby="applicant-responsible-tip">${esc(flowResponsiblesCache.has(applicant.flow_id) ? flowResponsiblesText(flowResponsiblesCache.get(applicant.flow_id)) : 'Loading…')}</button><div class="applicant-tooltip" id="applicant-responsible-tip" role="tooltip" hidden>These are the people responsible for this job. To change them, edit the job details.</div></div></div></section>
         </div>
         <div class="applicant-mobile-bar">${isPdf ? '<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;Preview resume</button>' : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;Download resume</button></div>
       </section>
@@ -1319,6 +1339,13 @@
       </aside>
     </div>`);
 
+    const responsibleNode = modalRoot.querySelector('#applicant-responsible');
+    if (responsibleNode) bindInfoTooltip(responsibleNode, modalRoot.querySelector('#applicant-responsible-tip'));
+    if (responsibleNode && !flowResponsiblesCache.has(applicant.flow_id)) {
+      window.PathwayBackend.getFlowResponsibles(applicant.flow_id)
+        .then(result => { flowResponsiblesCache.set(applicant.flow_id, result); if (responsibleNode.isConnected) responsibleNode.textContent = flowResponsiblesText(result); })
+        .catch(() => { responsibleNode.closest('.applicant-responsible-item')?.remove(); });
+    }
     modalRoot.querySelector('#applicant-status-select').addEventListener('change', event => { void moveApplicant(applicant.id, event.target.value); });
     modalRoot.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => showApplicantDetails(person.id, Number(button.dataset.tab))));
     const previewButton = modalRoot.querySelector('#preview-applicant-resume');
@@ -1339,7 +1366,7 @@
       trigger.disabled = true; trigger.textContent = 'Preparing preview…';
       try {
         const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path);
-        previewFrame.src = url;
+        previewFrame.src = url.split('#')[0] + PDF_VIEWER_PARAMS;
         previewPlaceholder.classList.add('is-hidden');
         previewPanel.classList.remove('is-hidden');
         reviewLayout.classList.add('is-previewing');

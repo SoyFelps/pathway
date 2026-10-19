@@ -81,6 +81,12 @@
     if (error) throw error;
     return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, memberSince: row.member_since }));
   }
+  async function getFlowResponsibles(flowId) {
+    await requireSession();
+    const { data, error } = await client.rpc('get_flow_responsibles', { p_flow_id: flowId });
+    if (error) throw error;
+    return { everyone: Boolean(data?.everyone), people: Array.isArray(data?.people) ? data.people.map(person => ({ email: String(person.email || ''), isOwner: Boolean(person.isOwner) })) : [] };
+  }
   async function listTeam() { return callTeam({ action: 'listTeam' }); }
   async function acceptTeamInvitation(token) { return callTeam({ action: 'acceptInvitation', token }); }
   async function acceptPendingTeamInvitation() { return callTeam({ action: 'acceptPendingInvitation' }); }
@@ -751,6 +757,7 @@
     previewTeamInvitation,
     createTeamInvitation,
     listTeam,
+    getFlowResponsibles,
     listTeamOverview,
     listWorkspacePeople,
     listFlowNotifications,
