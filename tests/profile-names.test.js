@@ -96,3 +96,12 @@ test('changing the people responsible does not count as an unpublished change', 
   assert.ok(migration.includes('before update on public.application_flows') && migration.includes('execute function public.set_flow_updated_at()'));
   assert.equal(/to anon/.test(migration), false);
 });
+
+test('the header shows the person\'s name, with the e-mail as tooltip, on every screen', () => {
+  const builder = read('builder.js');
+  assert.ok(builder.includes('function headerUserHtml()'));
+  assert.ok(builder.includes("esc(name || user.email || '—')") && builder.includes("title=\"' + esc(user.email || '')"));
+  assert.equal((builder.match(/\$\{headerUserHtml\(\)\}/g) || []).length, 9, 'all nine headers use it');
+  assert.equal(/<span class="auth-user"[^>]*>\$\{esc\(user\.email/.test(builder), false, 'no header prints the e-mail directly');
+  assert.ok(builder.includes("root.querySelector('.topbar .auth-user')"), 'saving the name updates the header at once');
+});
