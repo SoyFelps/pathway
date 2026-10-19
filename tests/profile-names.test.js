@@ -120,3 +120,11 @@ test('Settings ends with a line linking the Terms of Use and the Privacy Policy'
   const legal = read('legal.html');
   assert.ok(legal.includes('id="terms"') && legal.includes('id="privacy"'), 'the anchors exist on the legal page');
 });
+
+test('a responsible-only change also ignores the browser timestamp stored inside the flow JSON', () => {
+  const sql = read('supabase/migrations/20261019200000_flow_updated_at_ignores_client_timestamp.sql');
+  assert.ok(sql.includes("#- '{flow_data,updatedAt}'"), 'flow_data.updatedAt is left out of the comparison');
+  assert.ok(sql.includes("- 'responsible_user_ids' - 'updated_at'"));
+  assert.ok(sql.includes('new.updated_at := old.updated_at;') && sql.includes('new.updated_at := now();'));
+  assert.equal(/\bgrant\b|\brevoke\b/i.test(sql.replace(/^--.*$/gm, '')), false, 'create or replace keeps the existing grants');
+});
