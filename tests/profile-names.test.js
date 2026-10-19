@@ -72,12 +72,16 @@ test('My Team always shows the e-mail, with the name above it when there is one'
   assert.ok(builder.includes("teamDirectory = await window.PathwayBackend.listTeamOverview(workspace.id)"));
 });
 
-test('Settings lets people change their own name', () => {
+test('Settings shows the name read-only and opens the fields only after Edit', () => {
   const builder = read('builder.js');
-  assert.ok(builder.includes('id="settings-profile-form"') && builder.includes('id="settings-first-name"') && builder.includes('id="settings-last-name"'));
-  assert.ok(builder.includes('window.PathwayBackend.updateMyProfile(first, last)'));
+  assert.ok(builder.includes('id="settings-profile-edit"') && builder.includes('id="settings-profile-body"'));
+  const view = builder.slice(builder.indexOf('const showProfileView ='), builder.indexOf('const showProfileForm ='));
+  assert.equal(/<input|<form/.test(view), false, 'the view mode has no fields');
+  const form = builder.slice(builder.indexOf('const showProfileForm ='), builder.indexOf("profileEdit.addEventListener('click', showProfileForm)"));
+  assert.ok(form.includes('id="settings-first-name"') && form.includes('id="settings-last-name"') && form.includes('id="settings-profile-cancel"'));
+  assert.ok(form.includes('window.PathwayBackend.updateMyProfile(first, last)'));
+  assert.ok(form.includes("status.textContent = 'Enter your first and last name.'"));
   assert.ok(builder.includes('myProfile = context.profile || null;'));
-  assert.ok(builder.includes("status.textContent = 'Enter your first and last name.'"));
 });
 
 test('changing the people responsible does not count as an unpublished change', () => {

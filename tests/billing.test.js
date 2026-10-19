@@ -154,9 +154,9 @@ test('payment history is authenticated, paginated, and restricted to verified Pa
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=responsible-internal-20261019/);
-  assert.match(html, /builder\.js\?v=responsible-internal-20261019/);
-  assert.match(html, /styles\.css\?v=responsible-internal-20261019/);
+  assert.match(html, /backend\.js\?v=settings-name-simple-20261019/);
+  assert.match(html, /builder\.js\?v=settings-name-simple-20261019/);
+  assert.match(html, /styles\.css\?v=settings-name-simple-20261019/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);

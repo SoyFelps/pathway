@@ -900,27 +900,40 @@
   function renderSettings() {
     currentId = null; selectedId = null;
     setRoute('settings');
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email || '')}">${esc(user.email || '—')}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">Your account and workspace</div><h1>Settings</h1><p>View your account details and manage workspace access.</p></div></div><section class="settings-card" aria-labelledby="settings-profile-heading"><div class="settings-card-heading"><div><h2 id="settings-profile-heading">Your name</h2><p>Teammates see this name instead of your e-mail address.</p></div></div><form id="settings-profile-form" class="settings-profile-form" novalidate><div class="field-row"><div class="field-group"><label for="settings-first-name">First name</label><input class="text-input" id="settings-first-name" name="firstName" maxlength="60" autocomplete="given-name" required value="${esc(myProfile?.firstName || '')}"></div><div class="field-group"><label for="settings-last-name">Last name</label><input class="text-input" id="settings-last-name" name="lastName" maxlength="60" autocomplete="family-name" required value="${esc(myProfile?.lastName || '')}"></div></div><div class="settings-profile-actions"><button class="btn btn-primary" type="submit" id="settings-profile-save">Save name</button><span class="settings-profile-status" id="settings-profile-status" role="status" aria-live="polite"></span></div></form></section><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">Account and workspace</h2><p>These details are read-only.</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>Email address</span><strong>${esc(user.email || '—')}</strong><small>Your sign-in email.</small></div><div class="settings-info-item"><span>Workspace</span><strong>${esc(workspace.name)}</strong><small>The workspace you currently belong to.</small></div></div></section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>Sign out</h2><p>End your current Pathway session on this device.</p></div><button class="btn" id="settings-signout" type="button">Sign out</button></div></section><section class="settings-card settings-danger-card"><div class="settings-card-heading"><div><h2>Workspace access</h2><p>${isOwner ? 'Permanently remove this workspace and its data.' : 'Leave this workspace without deleting your Pathway account.'}</p></div></div>${isOwner ? '<button class="btn btn-danger" id="settings-delete-workspace" type="button">Delete workspace</button>' : teamMember ? '<button class="btn btn-danger" id="settings-leave-workspace" type="button">Leave workspace</button>' : ''}</section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>Delete account</h2><p>${isOwner ? 'This also deletes your workspace and all its data, and immediately cancels any subscription.' : 'Your workspace, flows, candidates and subscription will remain for the owner and team.'}</p></div><button class="btn btn-danger" id="settings-delete-account" type="button">Delete account</button></div></section></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span><span class="auth-user" title="${esc(user.email || '')}">${esc(user.email || '—')}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">Your account and workspace</div><h1>Settings</h1><p>View your account details and manage workspace access.</p></div></div><section class="settings-card" aria-labelledby="settings-profile-heading"><div class="settings-card-heading"><div><h2 id="settings-profile-heading">Name</h2></div><button class="btn" id="settings-profile-edit" type="button">Edit</button></div><div id="settings-profile-body"></div></section><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">Account and workspace</h2><p>These details are read-only.</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>Email address</span><strong>${esc(user.email || '—')}</strong><small>Your sign-in email.</small></div><div class="settings-info-item"><span>Workspace</span><strong>${esc(workspace.name)}</strong><small>The workspace you currently belong to.</small></div></div></section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>Sign out</h2><p>End your current Pathway session on this device.</p></div><button class="btn" id="settings-signout" type="button">Sign out</button></div></section><section class="settings-card settings-danger-card"><div class="settings-card-heading"><div><h2>Workspace access</h2><p>${isOwner ? 'Permanently remove this workspace and its data.' : 'Leave this workspace without deleting your Pathway account.'}</p></div></div>${isOwner ? '<button class="btn btn-danger" id="settings-delete-workspace" type="button">Delete workspace</button>' : teamMember ? '<button class="btn btn-danger" id="settings-leave-workspace" type="button">Leave workspace</button>' : ''}</section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>Delete account</h2><p>${isOwner ? 'This also deletes your workspace and all its data, and immediately cancels any subscription.' : 'Your workspace, flows, candidates and subscription will remain for the owner and team.'}</p></div><button class="btn btn-danger" id="settings-delete-account" type="button">Delete account</button></div></section></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
     root.querySelector('#signout')?.addEventListener('click', doSignOut);
     root.querySelector('#settings-signout')?.addEventListener('click', doSignOut);
-    root.querySelector('#settings-profile-form')?.addEventListener('submit', async event => {
-      event.preventDefault();
-      const status = root.querySelector('#settings-profile-status'), button = root.querySelector('#settings-profile-save');
-      const first = root.querySelector('#settings-first-name').value, last = root.querySelector('#settings-last-name').value;
-      status.className = 'settings-profile-status'; status.textContent = '';
-      if (!first.trim() || !last.trim()) { status.className = 'settings-profile-status is-error'; status.textContent = 'Enter your first and last name.'; return; }
-      button.disabled = true;
-      try {
-        myProfile = await window.PathwayBackend.updateMyProfile(first, last);
-        peopleLoadedAt = 0; flowResponsiblesCache.clear();
-        root.querySelector('#settings-first-name').value = myProfile.firstName; root.querySelector('#settings-last-name').value = myProfile.lastName;
-        status.className = 'settings-profile-status is-ok'; status.textContent = 'Saved.';
-      } catch (error) {
-        status.className = 'settings-profile-status is-error'; status.textContent = error.message || 'Could not save your name. Please try again.';
-      } finally { button.disabled = false; }
-    });
+    const profileBody = root.querySelector('#settings-profile-body'), profileEdit = root.querySelector('#settings-profile-edit');
+    const showProfileView = (message = '') => {
+      profileEdit.hidden = false;
+      profileBody.innerHTML = '<p class="settings-profile-name">' + esc(personName(myProfile) || '—') + '</p>' + (message ? '<p class="settings-profile-status is-ok" role="status">' + esc(message) + '</p>' : '');
+    };
+    const showProfileForm = () => {
+      profileEdit.hidden = true;
+      profileBody.innerHTML = '<form id="settings-profile-form" class="settings-profile-form" novalidate><div class="field-row"><div class="field-group"><label for="settings-first-name">First name</label><input class="text-input" id="settings-first-name" name="firstName" maxlength="60" autocomplete="given-name" required value="' + esc(myProfile?.firstName || '') + '"></div><div class="field-group"><label for="settings-last-name">Last name</label><input class="text-input" id="settings-last-name" name="lastName" maxlength="60" autocomplete="family-name" required value="' + esc(myProfile?.lastName || '') + '"></div></div><div class="settings-profile-actions"><button class="btn btn-primary" type="submit" id="settings-profile-save">Save name</button><button class="btn" type="button" id="settings-profile-cancel">Cancel</button><span class="settings-profile-status" id="settings-profile-status" role="status" aria-live="polite"></span></div></form>';
+      root.querySelector('#settings-first-name').focus();
+      root.querySelector('#settings-profile-cancel').addEventListener('click', () => showProfileView());
+      root.querySelector('#settings-profile-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const status = root.querySelector('#settings-profile-status'), button = root.querySelector('#settings-profile-save');
+        const first = root.querySelector('#settings-first-name').value, last = root.querySelector('#settings-last-name').value;
+        status.className = 'settings-profile-status'; status.textContent = '';
+        if (!first.trim() || !last.trim()) { status.className = 'settings-profile-status is-error'; status.textContent = 'Enter your first and last name.'; return; }
+        button.disabled = true;
+        try {
+          myProfile = await window.PathwayBackend.updateMyProfile(first, last);
+          peopleLoadedAt = 0; flowResponsiblesCache.clear();
+          showProfileView('Name saved.');
+        } catch (error) {
+          status.className = 'settings-profile-status is-error'; status.textContent = error.message || 'Could not save your name. Please try again.';
+          button.disabled = false;
+        }
+      });
+    };
+    profileEdit.addEventListener('click', showProfileForm);
+    showProfileView();
     root.querySelector('#settings-leave-workspace')?.addEventListener('click', showLeaveTeamConfirmation);
     root.querySelector('#settings-delete-workspace')?.addEventListener('click', showDeleteWorkspaceConfirmation);
     root.querySelector('#settings-delete-account')?.addEventListener('click', () => window.PathwayAuth.showAccountDeletionConfirmation({ isOwner, workspaceName: workspace.name, email: user.email }));
