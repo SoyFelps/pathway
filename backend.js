@@ -716,13 +716,22 @@
 
   // The numbers on the Reports page. One checked database function (permission "Reports") returns aggregated figures only.
   // Dates are UTC days as 'YYYY-MM-DD'; leave from/to empty for "everything so far".
-  async function getWorkspaceReport(workspaceId, { from = null, to = null, flowId = null } = {}) {
+  async function getWorkspaceReport(workspaceId, { from = null, to = null, flowId = null, company = '' } = {}) {
     await requireSession();
     const day = value => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
-    const { data, error } = await client.rpc('get_workspace_report', { p_workspace_id: workspaceId, p_from: day(from), p_to: day(to), p_flow_id: flowId || null });
+    const { data, error } = await client.rpc('get_workspace_report', { p_workspace_id: workspaceId, p_from: day(from), p_to: day(to), p_flow_id: flowId || null, p_company: company || null });
     if (error) throw error;
     if (!data || typeof data !== 'object' || !Array.isArray(data.daily) || !data.totals) throw new Error('The report could not be read. Please try again.');
     return data;
+  }
+  // The jobs of the report, one page at a time (search, sorting and counting happen in the database, so there is no cap).
+  async function getReportJobs(workspaceId, { from = null, to = null, company = '', search = '', sort = 'candidates', limit = 10, offset = 0 } = {}) {
+    await requireSession();
+    const day = value => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
+    const { data, error } = await client.rpc('get_report_jobs', { p_workspace_id: workspaceId, p_from: day(from), p_to: day(to), p_company: company || null, p_search: String(search || '').slice(0, 100), p_sort: sort, p_limit: limit, p_offset: offset });
+    if (error) throw error;
+    if (!data || typeof data !== 'object' || !Array.isArray(data.jobs) || !Number.isFinite(Number(data.total))) throw new Error('The list of jobs could not be read. Please try again.');
+    return { total: Number(data.total), jobs: data.jobs };
   }
 
   // Board setup shared by the whole workspace: custom columns, their order and which columns are on.
@@ -820,13 +829,14 @@
     return result.data.signedUrl;
   }
 
-  // Anonymous counter of a job page: "view" when it opens, "start" at the first keystroke in the form. Never blocks the page.
-  function trackJobEvent(publishedFlowId, event) {
+  // Anonymous counter of a job page: "view" when it opens, "start" at the first keystroke in the form, and "step" (with the
+  // step's id) when the first page ("details") or a question is reached. Never blocks the page.
+  function trackJobEvent(publishedFlowId, event, nodeId) {
     try {
       void fetch(APPLICATIONS_FUNCTION, {
         method: 'POST', keepalive: true,
         headers: { apikey: config.publishableKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'trackEvent', publishedFlowId, event })
+        body: JSON.stringify({ action: 'trackEvent', publishedFlowId, event, ...(nodeId ? { nodeId: String(nodeId) } : {}) })
       }).catch(() => {});
     } catch (_) { /* counting is best effort */ }
   }
@@ -913,6 +923,7 @@
     updateMyProfile,
     listTeamOverview,
     getWorkspaceReport,
+    getReportJobs,
     getBoardConfig,
     createCustomStage,
     renameCustomStage,

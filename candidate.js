@@ -85,12 +85,20 @@
     const state = { screen: 'landing', current: null, history: [], answers: {}, info: {}, resumeFile: null, questionCount: 0, submitting: false, submissionKey: crypto.randomUUID() };
     const start = C.startAfterInfo(flow);
     state.current = start;
-    // Anonymous counters for the hiring team: one "view" when the page opens, one "start" at the first keystroke.
+    // Anonymous counters for the hiring team: one "view" when the page opens, one "start" at the first keystroke, and one
+    // "step" the first time each part of the form is reached (the first page, then every question), so they can see where people stop.
+    const reachedSteps = new Set();
+    let trackStep = () => {};
     if (live && window.PathwayBackend.trackJobEvent) {
       const track = event => window.PathwayBackend.trackJobEvent(options.publishedFlowId, event);
       track('view');
       let started = false;
       root.addEventListener('input', () => { if (!started) { started = true; track('start'); } });
+      trackStep = nodeId => {
+        if (reachedSteps.has(nodeId)) return;
+        reachedSteps.add(nodeId);
+        window.PathwayBackend.trackJobEvent(options.publishedFlowId, 'step', nodeId);
+      };
     }
 
     function render() {
@@ -136,6 +144,7 @@
         if (live) state.info.privacyAcknowledged = true; // Consent is recorded when the candidate submits under the notice.
         state.info.website = String(data.get('website') || '');
         if (!state.resumeFile) { resumeInput.required = true; resumeInput.reportValidity(); return; }
+        trackStep('details');
         if (state.current && state.current.type === 'end') { complete(state.current.subtype || 'submitted'); return; }
         state.screen = 'interstitial';
         render();
@@ -168,6 +177,7 @@
       } else {
         renderInvalid(root, 'This application contains a question type that cannot be displayed.'); return;
       }
+      trackStep(node.id);
       const progress = Math.min(92, Math.max(10, state.questionCount * 17 + 18));
       root.innerHTML = `<main class="question-screen"><header class="question-top"><a class="brand" href="./" aria-label="Pathway home"><span class="brand-mark">↗</span>pathway</a><span class="candidate-header-note">${C.esc(flow.companyName || 'Your application')}</span></header><section class="question-main"><div class="question-progress"><span>Question ${state.questionCount + 1}</span><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div></div><form id="question-form"><h1 class="question-heading">${C.esc(node.label || 'A question for you')}</h1>${input}<div class="question-actions"><button type="button" class="btn btn-quiet btn-sm" id="question-back">← Back</button><button type="submit" class="btn btn-primary">Continue <span aria-hidden="true">→</span></button></div></form><p class="question-footnote">${live ? 'Your answers are saved securely when you submit the completed application.' : 'Preview mode · Your answers are not saved.'}</p></section></main>`;
       const form = root.querySelector('#question-form');

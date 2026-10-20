@@ -565,3 +565,32 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .rpt-table th.rpt-job-name{display:flex;grid-column:1 / -1;margin-bottom:6px}
 .rpt-table td::before{content:attr(data-label);display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);margin-bottom:1px}
 }
+/* Reports: job chooser with search, paged jobs list, auto-fail groups. */
+.rpt-picker{position:relative}
+.rpt-picker-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:170px;max-width:240px;cursor:pointer;text-align:left;font-weight:500}
+.rpt-picker-btn>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rpt-picker-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;width:min(320px,86vw);padding:8px;border:1px solid var(--line);border-radius:11px;background:var(--surface);box-shadow:0 12px 32px var(--shadow-md)}
+.rpt-picker-search{width:100%;height:36px;border:1px solid var(--line);border-radius:8px;padding:0 11px;font:500 12px var(--sans);color:var(--text-strong);background:var(--surface);outline:none}
+.rpt-picker-search:focus{border-color:var(--green-focus);box-shadow:0 0 0 3px var(--ring-soft)}
+.rpt-picker-list{list-style:none;margin:8px 0 0;padding:0;max-height:270px;overflow-y:auto}
+.rpt-picker-option{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;border:0;background:transparent;padding:9px 10px;border-radius:7px;font:600 13px var(--sans);color:var(--ink);text-align:left;cursor:pointer}
+.rpt-picker-option small{font-weight:400;font-size:11px;color:var(--soft)}
+.rpt-picker-option:hover,.rpt-picker-option:focus-visible{background:var(--bg-page);outline:none}
+.rpt-picker-option.is-selected{background:var(--tint);color:var(--green)}
+.rpt-picker-note{padding:8px 10px;font-size:11px;color:var(--text-subtle)}
+.rpt-jobs-tools{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+.rpt-more{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px}
+.rpt-more .rpt-note{margin:0}
+.rpt-af-group{margin-top:20px}
+.rpt-af-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:7px;border-bottom:1px solid var(--border-subtle);font-size:13px;color:var(--ink)}
+.rpt-af-head span{font-size:11px;color:var(--soft);white-space:nowrap}
+.rpt-af-group .rpt-reasons{margin-top:12px}
+@media(max-width:760px){
+.reports-tools{position:relative}
+.rpt-picker{position:static;flex:1;min-width:0}
+.rpt-picker-btn{width:100%;max-width:none}
+.rpt-picker-menu{left:0;right:0;width:auto}
+.reports-tools #report-company{flex:1;min-width:0}
+.rpt-jobs-tools .applicants-search{flex:1;min-width:0;width:auto}
+.rpt-jobs-tools .applicants-filter{flex:1;min-width:0}
+}

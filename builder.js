@@ -773,9 +773,16 @@
   const REPORT_RANGES = [{ key: '7', label: '7 days', days: 7 }, { key: '30', label: '30 days', days: 30 }, { key: '90', label: '90 days', days: 90 }, { key: 'all', label: 'All time', days: 0 }];
   let reportRange = '30';
   let reportFlow = '';
+  let reportCompany = '';
   let reportData = null;
+  let reportRangeResolved = null;
   let reportRequestId = 0;
   let reportBoardTried = false;
+  let reportJobs = { rows: [], total: 0, loading: false, error: '' };
+  let reportJobsSearch = '';
+  let reportJobsSort = 'candidates';
+  let reportJobsRequestId = 0;
+  let reportJobsSearchTimer = null;
   const reportNumber = value => Number(value || 0).toLocaleString('en-US');
   const reportDayLabel = (day, withYear = false) => new Date(day + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' });
   const reportPercent = (part, whole) => (whole > 0 ? Math.min(100, Math.round((part / whole) * 100)) : null);
@@ -840,27 +847,81 @@
     if (!total) return '<p class="rpt-empty">No candidates applied in this period.</p>';
     return '<ul class="rpt-stages">' + list.map(item => '<li class="rpt-stage"><span class="stage-dot ' + esc(reportStageColor(item.status)) + '"></span><span class="rpt-stage-name">' + esc(reportStageLabel(item.status)) + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (Number(item.n) / total * 100) + '%"></span></span><strong>' + reportNumber(item.n) + '</strong></li>').join('') + '</ul>';
   }
+  function reportCompanyLabel(data) {
+    if (!reportCompany) return '';
+    if (reportCompany === 'none') return workspace.name;
+    return (data.companies || []).find(item => item.id === reportCompany)?.name || 'Company';
+  }
+  // What the numbers on screen are about: one job, one company, or everything.
+  function reportScopeLabel(data) {
+    if (data.selectedJob) return data.selectedJob.title || 'Untitled role';
+    return reportCompany ? reportCompanyLabel(data) : 'All jobs';
+  }
   function reportAutoFailHtml(data) {
     const failed = Number(data.totals.autoFailed || 0);
     const candidates = Number(data.totals.candidates || 0);
     if (!candidates) return '<p class="rpt-empty">No candidates applied in this period.</p>';
     if (!failed) return '<p class="rpt-empty">No candidates were moved to Failed automatically in this period.</p>';
-    const top = Math.max(1, ...data.autoFailReasons.map(item => Number(item.n || 0)));
-    return '<p class="rpt-lead-number"><strong>' + reportNumber(failed) + '</strong> of ' + reportNumber(candidates) + ' candidates (' + reportPercentText(failed, candidates) + ') were screened out by your auto-fail rules.</p><ul class="rpt-reasons">' + data.autoFailReasons.map(item => '<li><span class="rpt-reason-text">' + esc(item.reason) + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (Number(item.n) / top * 100) + '%"></span></span><strong>' + reportNumber(item.n) + '</strong></li>').join('') + '</ul>';
+    const lead = '<p class="rpt-lead-number"><strong>' + reportNumber(failed) + '</strong> of ' + reportNumber(candidates) + ' candidates (' + reportPercentText(failed, candidates) + ') were screened out by your auto-fail rules.</p>';
+    // The rules belong to one job's form, so the questions are listed only when a single job is chosen.
+    if (!data.selectedJob) return lead + '<p class="rpt-note">Every job has its own form and its own rules. The Auto-fail column in the table below shows the rate of each job; choose a job to see which questions screened people out.</p>';
+    return lead + (data.autoFailGroups || []).map(group => {
+      const top = Math.max(1, ...group.reasons.map(item => Number(item.n || 0)));
+      return '<div class="rpt-af-group"><div class="rpt-af-head"><strong>' + esc(group.question) + '</strong><span>' + reportNumber(group.n) + (Number(group.n) === 1 ? ' candidate' : ' candidates') + '</span></div><ul class="rpt-reasons">' + group.reasons.map(item => '<li><span class="rpt-reason-text">' + esc(item.reason) + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (Number(item.n) / top * 100) + '%"></span></span><strong>' + reportNumber(item.n) + '</strong></li>').join('') + '</ul></div>';
+    }).join('');
   }
-  function reportJobsHtml(jobs) {
+  const REPORT_JOB_SORTS = [['candidates', 'Most candidates'], ['visits', 'Most visits'], ['completion', 'Best completion rate'], ['autofail', 'Highest auto-fail rate']];
+  const REPORT_JOBS_PAGE = 10;
+  function reportJobRowsHtml(jobs) {
     const rows = jobs.map(job => {
       const rate = reportPercentText(Number(job.funnelApplications || 0), Number(job.starts || 0));
-      return '<tr data-report-job="' + esc(job.id) + '" tabindex="0" role="button" aria-label="Show only ' + esc(job.title || 'Untitled role') + '"><th scope="row" class="rpt-job-name"><span class="' + (job.status === 'published' ? 'published-tag' : 'draft-tag') + '"><span class="status-dot"></span>' + (job.status === 'published' ? 'Published' : 'Draft') + '</span><strong>' + esc(job.title || 'Untitled role') + '</strong><small>' + esc(job.company || '') + '</small></th><td data-label="Visits">' + reportNumber(job.views) + '</td><td data-label="Started">' + reportNumber(job.starts) + '</td><td data-label="New candidates">' + reportNumber(job.candidates) + '</td><td data-label="Completion">' + rate + '</td></tr>';
+      const autoFail = Number(job.candidates || 0) ? reportNumber(job.autoFailed) + ' (' + reportPercentText(Number(job.autoFailed || 0), Number(job.candidates || 0)) + ')' : '—';
+      return '<tr data-report-job="' + esc(job.id) + '" tabindex="0" role="button" aria-label="Show only ' + esc(job.title || 'Untitled role') + '"><th scope="row" class="rpt-job-name"><span class="' + (job.status === 'published' ? 'published-tag' : 'draft-tag') + '"><span class="status-dot"></span>' + (job.status === 'published' ? 'Published' : 'Draft') + '</span><strong>' + esc(job.title || 'Untitled role') + '</strong><small>' + esc(job.company || '') + '</small></th><td data-label="Visits">' + reportNumber(job.views) + '</td><td data-label="Started">' + reportNumber(job.starts) + '</td><td data-label="New candidates">' + reportNumber(job.candidates) + '</td><td data-label="Completion">' + rate + '</td><td data-label="Auto-fail">' + autoFail + '</td></tr>';
     }).join('');
-    return '<div class="rpt-table-wrap"><table class="rpt-table"><thead><tr><th scope="col">Job</th><th scope="col">Visits</th><th scope="col">Started</th><th scope="col">New candidates</th><th scope="col">Completion</th></tr></thead><tbody>' + rows + '</tbody></table></div><p class="rpt-note">Select a job to see only its numbers.</p>';
+    return '<div class="rpt-table-wrap"><table class="rpt-table"><thead><tr><th scope="col">Job</th><th scope="col">Visits</th><th scope="col">Started</th><th scope="col">New candidates</th><th scope="col">Completion</th><th scope="col">Auto-fail</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
-  function reportToCsv(data, jobLabel) {
+  function reportJobsBodyHtml() {
+    const { rows, total, loading, error } = reportJobs;
+    if (error) return '<div class="auth-error show" role="alert">' + esc('Could not load the jobs: ' + error) + '</div><button class="btn btn-sm" id="rpt-jobs-retry" type="button" style="margin-top:10px">Try again</button>';
+    if (!rows.length && loading) return '<div class="loading-card" style="margin-top:16px"><span class="brand-mark">↗</span><span>Loading the jobs…</span></div>';
+    if (!rows.length) return '<p class="rpt-empty">' + (reportJobsSearch.trim() ? 'No jobs match “' + esc(reportJobsSearch.trim()) + '”.' : 'There are no jobs to show.') + '</p>';
+    const remaining = total - rows.length;
+    return reportJobRowsHtml(rows) + '<div class="rpt-more"><span class="rpt-note">Showing ' + reportNumber(rows.length) + ' of ' + reportNumber(total) + (total === 1 ? ' job' : ' jobs') + '. Select a job to see only its numbers.</span>' + (remaining > 0 ? '<button class="btn btn-sm" id="rpt-jobs-more" type="button"' + (loading ? ' disabled' : '') + '>' + (loading ? 'Loading…' : 'Show ' + Math.min(REPORT_JOBS_PAGE, remaining) + ' more') + '</button>' : '') + '</div>';
+  }
+  function paintReportJobs() {
+    const body = root.querySelector('#rpt-jobs-body');
+    if (!body) return;
+    body.innerHTML = reportJobsBodyHtml();
+    body.querySelector('#rpt-jobs-more')?.addEventListener('click', () => { void loadReportJobs(true); });
+    body.querySelector('#rpt-jobs-retry')?.addEventListener('click', () => { void loadReportJobs(false); });
+    body.querySelectorAll('[data-report-job]').forEach(row => {
+      const open = () => { reportFlow = row.dataset.reportJob; void loadReport(); };
+      row.addEventListener('click', open);
+      row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } });
+    });
+  }
+  // The jobs table is fetched ten at a time; searching, sorting and counting are done by the database, so there is no cap.
+  async function loadReportJobs(append = false) {
+    const requestId = ++reportJobsRequestId;
+    if (!append) reportJobs = { rows: [], total: 0, loading: true, error: '' }; else reportJobs = { ...reportJobs, loading: true, error: '' };
+    paintReportJobs();
+    try {
+      const range = reportRangeResolved || {};
+      const page = await window.PathwayBackend.getReportJobs(workspace.id, { from: range.from, to: range.to, company: reportCompany, search: reportJobsSearch, sort: reportJobsSort, limit: REPORT_JOBS_PAGE, offset: append ? reportJobs.rows.length : 0 });
+      if (requestId !== reportJobsRequestId || !root.querySelector('#rpt-jobs-body')) return;
+      reportJobs = { rows: append ? [...reportJobs.rows, ...page.jobs] : page.jobs, total: page.total, loading: false, error: '' };
+    } catch (error) {
+      if (requestId !== reportJobsRequestId || !root.querySelector('#rpt-jobs-body')) return;
+      reportJobs = { ...reportJobs, loading: false, error: error.message || 'check your connection and try again' };
+    }
+    paintReportJobs();
+  }
+  function reportToCsv(data, scopeLabel, jobRows) {
     const rows = [];
     const block = (title, header, lines) => { if (rows.length) rows.push([]); rows.push([title]); rows.push(header); lines.forEach(line => rows.push(line)); };
     const t = data.totals;
     block('Pathway report', ['field', 'value'], [
-      ['period from', data.range.from], ['period to', data.range.to], ['job', jobLabel], ['exported at', new Date().toISOString()],
+      ['period from', data.range.from], ['period to', data.range.to], ['scope', scopeLabel], ['exported at', new Date().toISOString()],
       ['note', 'Days are UTC days. Visits and form starts are anonymous page counters and can be inflated by anyone who knows the job link. A candidate is one person per job and e-mail address; a repeat application is not counted as a new candidate.']
     ]);
     block('Summary', ['metric', 'value'], [
@@ -870,51 +931,63 @@
     ]);
     block('Per day', ['day', 'visits', 'form starts', 'new candidates', 'repeat applications'], data.daily.map(d => [d.day, d.views, d.starts, d.candidates, Math.max(0, Number(d.applications || 0) - Number(d.candidates || 0))]));
     block('Where candidates are now', ['stage', 'candidates'], data.stages.map(s => [reportStageLabel(s.status), s.n]));
-    block('Auto-fail reasons', ['reason', 'candidates'], data.autoFailReasons.map(r => [r.reason, r.n]));
-    if (!reportFlow) block('Jobs', ['job', 'company', 'status', 'visits', 'form starts', 'new candidates', 'applications', 'completion rate'], data.jobs.map(j => [j.title, j.company, j.status, j.views, j.starts, j.candidates, j.applications, reportPercentText(Number(j.funnelApplications || 0), Number(j.starts || 0))]));
+    if (data.selectedJob) block('Auto-fail reasons', ['question', 'reason', 'candidates'], (data.autoFailGroups || []).flatMap(group => group.reasons.map(item => [group.question, item.reason, item.n])));
+    else block('Jobs', ['job', 'company', 'status', 'visits', 'form starts', 'new candidates', 'applications', 'completion rate', 'moved to Failed automatically'], jobRows.map(j => [j.title, j.company, j.status, j.views, j.starts, j.candidates, j.applications, reportPercentText(Number(j.funnelApplications || 0), Number(j.starts || 0)), j.autoFailed]));
     return rowsToCsv(rows);
   }
   function paintReport() {
     const content = root.querySelector('#reports-content');
     const data = reportData;
     if (!content || !data) return;
-    const select = root.querySelector('#report-flow');
-    if (select) {
-      select.innerHTML = '<option value="">All jobs</option>' + data.jobs.map(job => '<option value="' + esc(job.id) + '"' + (reportFlow === job.id ? ' selected' : '') + '>' + esc(job.title || 'Untitled role') + '</option>').join('');
-      select.value = data.jobs.some(job => job.id === reportFlow) ? reportFlow : '';
+    const label = root.querySelector('#report-picker-label');
+    if (label) label.textContent = data.selectedJob ? (data.selectedJob.title || 'Untitled role') : 'All jobs';
+    const companySelect = root.querySelector('#report-company');
+    if (companySelect) {
+      const companies = data.companies || [];
+      companySelect.hidden = !companies.length;
+      if (companies.length) {
+        companySelect.innerHTML = '<option value="">All companies</option>' + (data.hasJobsWithoutCompany ? '<option value="none">' + esc(workspace.name) + '</option>' : '') + companies.map(item => '<option value="' + esc(item.id) + '">' + esc(item.name) + '</option>').join('');
+        companySelect.value = reportCompany;
+        companySelect.disabled = Boolean(reportFlow);
+        companySelect.title = reportFlow ? 'Choose “All jobs” to filter by company' : '';
+      }
     }
-    root.querySelector('#report-export')?.removeAttribute('disabled');
+    const exportButton = root.querySelector('#report-export');
+    exportButton?.removeAttribute('disabled');
     content.setAttribute('aria-busy', 'false');
-    if (!data.jobs.length) {
+    if (!Number(data.jobCount)) {
       content.innerHTML = '<section class="applicants-empty"><span class="applicant-empty-icon" aria-hidden="true">' + ICONS.reports + '</span><h2>No data yet</h2><p>Reports fill in as soon as you publish a job and people start to visit and apply.</p>' + (hasPermission('flows') ? '<button class="btn btn-primary" id="reports-go-dashboard">Go to dashboard</button>' : '') + '</section>';
       content.querySelector('#reports-go-dashboard')?.addEventListener('click', renderDashboard);
-      root.querySelector('#report-export')?.setAttribute('disabled', '');
+      exportButton?.setAttribute('disabled', '');
       return;
     }
     const t = data.totals;
-    const jobName = reportFlow ? (data.jobs.find(job => job.id === reportFlow)?.title || 'Selected job') : 'All jobs';
     const repeats = Math.max(0, Number(t.applications || 0) - Number(t.candidates || 0));
     const rate = reportPercentText(Number(t.funnelApplications || 0), Number(t.starts || 0));
     const sameDay = data.range.from === data.range.to;
     const card = (label, value, caption) => '<div class="rpt-stat"><span class="rpt-stat-label">' + esc(label) + '</span><strong class="rpt-stat-value">' + value + '</strong><span class="rpt-stat-caption">' + caption + '</span></div>';
-    content.innerHTML = '<p class="rpt-summary"><strong>' + esc(jobName) + '</strong> · ' + esc(sameDay ? reportDayLabel(data.range.from, true) : reportDayLabel(data.range.from) + ' – ' + reportDayLabel(data.range.to, true)) + '</p>'
+    content.innerHTML = '<p class="rpt-summary"><strong>' + esc(reportScopeLabel(data)) + '</strong> · ' + esc(sameDay ? reportDayLabel(data.range.from, true) : reportDayLabel(data.range.from) + ' – ' + reportDayLabel(data.range.to, true)) + '</p>'
       + '<section class="rpt-stats" aria-label="Summary">'
       + card('Page visits', reportNumber(t.views), 'Times the job page was opened')
       + card('Started applying', reportNumber(t.starts), 'People who began the form')
-      + card('New candidates', reportNumber(t.candidates), repeats ? '+ ' + reportNumber(repeats) + (repeats === 1 ? ' repeat application' : ' repeat applications') : 'First application of each person', false)
+      + card('New candidates', reportNumber(t.candidates), repeats ? '+ ' + reportNumber(repeats) + (repeats === 1 ? ' repeat application' : ' repeat applications') : 'First application of each person')
       + card('Completion rate', rate, 'Of those who started, how many sent the application')
       + '</section>'
       + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Applications over time</h2><p>New candidates per ' + (data.daily.length > 100 ? 'week' : 'day') + '.</p></div></div>' + reportChartHtml(data.daily) + '</section>'
       + '<div class="rpt-grid"><section class="rpt-card"><div class="rpt-card-head"><div><h2>Application funnel</h2><p>How many visitors become applicants.</p></div></div>' + reportFunnelHtml(t) + '</section>'
       + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Where candidates are now</h2><p>Current stage of the people who applied in this period.</p></div></div>' + reportStagesHtml(data.stages) + '</section></div>'
       + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Automatic screening</h2><p>Candidates moved to Failed by your auto-fail rules.</p></div></div>' + reportAutoFailHtml(data) + '</section>'
-      + (reportFlow ? '' : '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Jobs</h2><p>Compare your jobs in this period.</p></div></div>' + reportJobsHtml(data.jobs) + '</section>')
+      + (data.selectedJob ? '' : '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Jobs</h2><p>Compare your jobs in this period.</p></div></div><div class="rpt-jobs-tools"><input type="search" id="rpt-jobs-search" class="applicants-search" placeholder="Search jobs" aria-label="Search jobs" maxlength="100" value="' + esc(reportJobsSearch) + '"><select id="rpt-jobs-sort" class="applicants-filter" aria-label="Sort jobs">' + REPORT_JOB_SORTS.map(([value, text]) => '<option value="' + value + '"' + (reportJobsSort === value ? ' selected' : '') + '>' + text + '</option>').join('') + '</select></div><div id="rpt-jobs-body" aria-live="polite"></div></section>')
       + '<p class="rpt-foot">Visits and form starts are anonymous page counters and can be inflated by anyone who knows the job link. Candidates are counted once per job and e-mail address. Days are UTC days.</p>';
-    content.querySelectorAll('[data-report-job]').forEach(row => {
-      const open = () => { reportFlow = row.dataset.reportJob; void loadReport(); };
-      row.addEventListener('click', open);
-      row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } });
-    });
+    if (!data.selectedJob) {
+      content.querySelector('#rpt-jobs-search')?.addEventListener('input', event => {
+        clearTimeout(reportJobsSearchTimer);
+        const value = event.target.value;
+        reportJobsSearchTimer = setTimeout(() => { reportJobsSearch = value; void loadReportJobs(false); }, 300);
+      });
+      content.querySelector('#rpt-jobs-sort')?.addEventListener('change', event => { reportJobsSort = event.target.value; void loadReportJobs(false); });
+      void loadReportJobs(false);
+    }
   }
   async function loadReport() {
     const content = root.querySelector('#reports-content');
@@ -924,9 +997,10 @@
     content.innerHTML = '<div class="loading-card"><span class="brand-mark">↗</span><span>Loading the report…</span></div>';
     try {
       const { from, to } = reportDates();
-      const data = await window.PathwayBackend.getWorkspaceReport(workspace.id, { from, to, flowId: reportFlow });
+      const data = await window.PathwayBackend.getWorkspaceReport(workspace.id, { from, to, flowId: reportFlow, company: reportCompany });
       if (requestId !== reportRequestId || !root.querySelector('.reports-page')) return;
       reportData = data;
+      reportRangeResolved = data.range;
       paintReport();
     } catch (error) {
       if (requestId !== reportRequestId || !root.querySelector('.reports-page')) return;
@@ -936,12 +1010,74 @@
       content.querySelector('#report-retry')?.addEventListener('click', () => { void loadReport(); });
     }
   }
+  // The job chooser in the header: a short list with a search box, so it still works with hundreds of jobs.
+  function mountReportPicker() {
+    const host = root.querySelector('#report-picker');
+    if (!host) return;
+    const button = host.querySelector('#report-picker-btn'), menu = host.querySelector('.rpt-picker-menu'), search = host.querySelector('.rpt-picker-search'), list = host.querySelector('.rpt-picker-list');
+    let timer = null, requestId = 0;
+    const close = () => { menu.hidden = true; button.setAttribute('aria-expanded', 'false'); };
+    const paint = (jobs, total, loading) => {
+      list.innerHTML = '<li><button type="button" class="rpt-picker-option' + (!reportFlow ? ' is-selected' : '') + '" data-pick="">All jobs</button></li>'
+        + (loading ? '<li class="rpt-picker-note">Searching…</li>' : jobs.map(job => '<li><button type="button" class="rpt-picker-option' + (job.id === reportFlow ? ' is-selected' : '') + '" data-pick="' + esc(job.id) + '"><span>' + esc(job.title || 'Untitled role') + '</span>' + (job.company ? '<small>' + esc(job.company) + '</small>' : '') + '</button></li>').join('')
+          + (total > jobs.length ? '<li class="rpt-picker-note">Showing ' + jobs.length + ' of ' + reportNumber(total) + ' jobs. Type to search.</li>' : (!jobs.length ? '<li class="rpt-picker-note">No jobs match.</li>' : '')));
+    };
+    const load = async () => {
+      const id = ++requestId;
+      paint([], 0, true);
+      try {
+        const range = reportRangeResolved || {};
+        const page = await window.PathwayBackend.getReportJobs(workspace.id, { from: range.from, to: range.to, company: reportCompany, search: search.value, sort: 'candidates', limit: 8, offset: 0 });
+        if (id === requestId) paint(page.jobs, page.total, false);
+      } catch (error) { if (id === requestId) list.innerHTML = '<li class="rpt-picker-note">Could not load the jobs.</li>'; }
+    };
+    button.addEventListener('click', () => {
+      if (!menu.hidden) { close(); return; }
+      menu.hidden = false; button.setAttribute('aria-expanded', 'true'); search.value = '';
+      void load(); search.focus();
+    });
+    search.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { void load(); }, 250); });
+    list.addEventListener('click', event => {
+      const option = event.target.closest('[data-pick]');
+      if (!option) return;
+      reportFlow = option.dataset.pick;
+      close();
+      void loadReport();
+    });
+    host.addEventListener('keydown', event => { if (event.key === 'Escape' && !menu.hidden) { event.stopPropagation(); close(); button.focus(); } });
+    const closeOnOutside = event => {
+      if (!host.isConnected) { document.removeEventListener('pointerdown', closeOnOutside, true); return; }
+      if (!host.contains(event.target)) close();
+    };
+    document.addEventListener('pointerdown', closeOnOutside, true);
+  }
+  async function exportReportCsv(button) {
+    if (!reportData) return;
+    const data = reportData;
+    const original = button.textContent;
+    button.disabled = true; button.textContent = 'Preparing…';
+    try {
+      const jobRows = [];
+      if (!data.selectedJob) {
+        // Every job, 50 at a time (not only the ten shown on screen).
+        for (let offset = 0; offset < 2000; offset += 50) {
+          const page = await window.PathwayBackend.getReportJobs(workspace.id, { from: data.range.from, to: data.range.to, company: reportCompany, search: '', sort: 'candidates', limit: 50, offset });
+          jobRows.push(...page.jobs);
+          if (!page.jobs.length || offset + 50 >= page.total) break;
+        }
+      }
+      downloadTextFile('pathway-report-' + new Date().toISOString().slice(0, 10) + '.csv', reportToCsv(data, reportScopeLabel(data), jobRows));
+      showToast('Report downloaded.');
+    } catch (error) {
+      showToast('Could not prepare the report. Please try again.');
+    } finally { button.disabled = false; button.textContent = original; }
+  }
   async function renderReports() {
     if (!hasPermission('view_reports')) return renderAccessMessage('view_reports');
     setRoute('reports');
     currentId = null; selectedId = null;
-    reportData = null;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('reports')}<main class="reports-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Reports</h1><p>See how your jobs are doing: who visits, who applies and where candidates end up.</p></div><div class="reports-tools"><div class="rpt-seg-control" role="group" aria-label="Period">${REPORT_RANGES.map(item => `<button type="button" class="rpt-seg-btn${item.key === reportRange ? ' is-active' : ''}" data-report-range="${item.key}" aria-pressed="${item.key === reportRange}">${item.label}</button>`).join('')}</div><select id="report-flow" class="applicants-filter" aria-label="Filter by job"><option value="">All jobs</option></select><button class="btn btn-sm" id="report-export" type="button" disabled>↓ Export CSV</button></div></div><div id="reports-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
+    reportData = null; reportRangeResolved = null;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('reports')}<main class="reports-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Reports</h1><p>See how your jobs are doing: who visits, who applies and where candidates end up.</p></div><div class="reports-tools"><div class="rpt-seg-control" role="group" aria-label="Period">${REPORT_RANGES.map(item => `<button type="button" class="rpt-seg-btn${item.key === reportRange ? ' is-active' : ''}" data-report-range="${item.key}" aria-pressed="${item.key === reportRange}">${item.label}</button>`).join('')}</div><select id="report-company" class="applicants-filter" aria-label="Filter by company" hidden><option value="">All companies</option></select><div class="rpt-picker" id="report-picker"><button type="button" class="applicants-filter rpt-picker-btn" id="report-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Filter by job"><span id="report-picker-label">All jobs</span><span aria-hidden="true">▾</span></button><div class="rpt-picker-menu" hidden><input type="search" class="rpt-picker-search" placeholder="Search jobs" aria-label="Search jobs" maxlength="100"><ul class="rpt-picker-list" role="listbox"></ul></div></div><button class="btn btn-sm" id="report-export" type="button" disabled>↓ Export CSV</button></div></div><div id="reports-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
     root.querySelector('#signout')?.addEventListener('click', doSignOut);
@@ -951,13 +1087,9 @@
       root.querySelectorAll('[data-report-range]').forEach(item => { const on = item.dataset.reportRange === reportRange; item.classList.toggle('is-active', on); item.setAttribute('aria-pressed', String(on)); });
       void loadReport();
     }));
-    root.querySelector('#report-flow')?.addEventListener('change', event => { reportFlow = event.target.value; void loadReport(); });
-    root.querySelector('#report-export')?.addEventListener('click', () => {
-      if (!reportData) return;
-      const jobLabel = reportFlow ? (reportData.jobs.find(job => job.id === reportFlow)?.title || 'Selected job') : 'All jobs';
-      downloadTextFile('pathway-report-' + new Date().toISOString().slice(0, 10) + '.csv', reportToCsv(reportData, jobLabel));
-      showToast('Report downloaded.');
-    });
+    root.querySelector('#report-company')?.addEventListener('change', event => { reportCompany = event.target.value; reportFlow = ''; void loadReport(); });
+    mountReportPicker();
+    root.querySelector('#report-export')?.addEventListener('click', event => { void exportReportCsv(event.currentTarget); });
     // Custom column names live in the board setup, which people with the Candidates permission can read; without it a generic name is shown.
     if (!reportBoardTried && !boardConfig.customStages.length) {
       reportBoardTried = true;

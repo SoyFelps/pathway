@@ -375,7 +375,7 @@ async function submitApplicant(req: Request, form: FormData) {
     candidate_name: normalized.name, candidate_email: normalized.email, candidate_info: normalized.candidateInfo,
     responses: normalized.answers, resume_path: resumePath, resume_filename: normalized.filename,
     resume_content_type: normalized.contentType, status: initialStatus,
-    // Why the system moved a new candidate to Failed (a repeat application inherits the stage and keeps no reason of its own).
+    // Why the system moved a new candidate to Failed by the system, for the hiring team (a repeat application inherits the stage and keeps no reason of its own).
     auto_fail_reason: inheritedStatus ? null : normalized.autoFailReason,
     privacy_notice_version: NOTICE_VERSION, privacy_acknowledged_at: new Date().toISOString(),
   });
@@ -596,13 +596,20 @@ Deno.serve(async (req: Request) => {
   } catch {
     return fail(req, 400, "The application request is invalid.");
   }
-  // Anonymous page counters (view / start of the form). No IP, no cookie, no person is stored; always answers ok.
+  // Anonymous page counters (view / start of the form / a step reached). No IP, no cookie, no person is stored; always answers ok.
+  // A "step" is the first page ("details") or one question of the published form; the database refuses any other step.
   if (body.action === "trackEvent") {
     const publishedId = cleanName(body.publishedFlowId, 100);
     const event = String(body.event ?? "");
     if (UUID_RE.test(publishedId) && (event === "view" || event === "start")) {
       const { error } = await admin.rpc("record_job_event", { p_published_flow_id: publishedId, p_event: event });
       if (error) console.error("Job event could not be counted:", error.message);
+    } else if (UUID_RE.test(publishedId) && event === "step") {
+      const nodeId = cleanName(body.nodeId, 80);
+      if (nodeId) {
+        const { error } = await admin.rpc("record_job_step", { p_published_flow_id: publishedId, p_node_id: nodeId });
+        if (error) console.error("Job step could not be counted:", error.message);
+      }
     }
     return response(req, 200, { ok: true });
   }
