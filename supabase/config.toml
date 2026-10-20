@@ -7,5 +7,14 @@ verify_jwt = false
 # the public token for preview and requires a verified Bearer session for every other action.
 verify_jwt = false
 
+[functions.billing]
+# Only the signed-in workspace owner manages billing; the function also checks ownership.
+verify_jwt = true
+
+[functions.billing-webhook]
+# The caller is Stripe, not a Pathway user, so there is no user JWT. The function verifies the Stripe signature itself.
+# Never turn this on: Stripe would get 401 and subscription sync would silently stop.
+verify_jwt = false
+
 [functions.delete-account]
 verify_jwt = true
