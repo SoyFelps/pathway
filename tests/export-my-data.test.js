@@ -95,7 +95,7 @@ test('the legal page explains the self-service data rights tools', () => {
   assert.ok(html.includes('The employer can export or permanently delete your application data from within Pathway.'));
   assert.ok(html.includes('Candidates’ requests.') && html.includes('“Export data” button') && html.includes('“Delete candidate” button'));
   assert.ok(html.includes('(“Download my data”)') && html.includes('(“Export data”)'));
-  assert.ok(html.includes('Version 2026-10-19-v7'));
+  assert.ok(html.includes('Version 2026-10-20-v8'));
 });
 
 test('internal comments stay inside Pathway: not in the database export, and the legal page says so', () => {

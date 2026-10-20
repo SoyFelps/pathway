@@ -85,6 +85,13 @@
     const state = { screen: 'landing', current: null, history: [], answers: {}, info: {}, resumeFile: null, questionCount: 0, submitting: false, submissionKey: crypto.randomUUID() };
     const start = C.startAfterInfo(flow);
     state.current = start;
+    // Anonymous counters for the hiring team: one "view" when the page opens, one "start" at the first keystroke.
+    if (live && window.PathwayBackend.trackJobEvent) {
+      const track = event => window.PathwayBackend.trackJobEvent(options.publishedFlowId, event);
+      track('view');
+      let started = false;
+      root.addEventListener('input', () => { if (!started) { started = true; track('start'); } });
+    }
 
     function render() {
       if (state.screen === 'landing') renderLanding();

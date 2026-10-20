@@ -596,6 +596,16 @@ Deno.serve(async (req: Request) => {
   } catch {
     return fail(req, 400, "The application request is invalid.");
   }
+  // Anonymous page counters (view / start of the form). No IP, no cookie, no person is stored; always answers ok.
+  if (body.action === "trackEvent") {
+    const publishedId = cleanName(body.publishedFlowId, 100);
+    const event = String(body.event ?? "");
+    if (UUID_RE.test(publishedId) && (event === "view" || event === "start")) {
+      const { error } = await admin.rpc("record_job_event", { p_published_flow_id: publishedId, p_event: event });
+      if (error) console.error("Job event could not be counted:", error.message);
+    }
+    return response(req, 200, { ok: true });
+  }
   if (body.action === "listApplicantFlowLabels") {
     const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
     if (!bearer) return fail(req, 401, "Sign in to review applicants.");

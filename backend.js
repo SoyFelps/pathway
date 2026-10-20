@@ -809,6 +809,17 @@
     return result.data.signedUrl;
   }
 
+  // Anonymous counter of a job page: "view" when it opens, "start" at the first keystroke in the form. Never blocks the page.
+  function trackJobEvent(publishedFlowId, event) {
+    try {
+      void fetch(APPLICATIONS_FUNCTION, {
+        method: 'POST', keepalive: true,
+        headers: { apikey: config.publishableKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'trackEvent', publishedFlowId, event })
+      }).catch(() => {});
+    } catch (_) { /* counting is best effort */ }
+  }
+
   async function submitApplication(application) {
     const resume = application && application.resume;
     if (!(resume instanceof File) || !resume.size) throw new Error('Select a PDF, DOC, or DOCX resume before continuing.');
@@ -937,6 +948,7 @@
     getApplicantResumeUrl,
     downloadApplicantResume,
     submitApplication,
+    trackJobEvent,
     updateWorkspaceName,
     signOut,
     sendPasswordReset,
