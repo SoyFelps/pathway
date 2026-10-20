@@ -120,6 +120,15 @@ async function loadActiveFlow(publishedId: string) {
   if (!flow || flow.publication_status !== "published" || flow.active_published_flow_id !== publication.id) {
     throw new Error("This job is no longer accepting applications.");
   }
+  // A damaged job (it fails the minimum structure) must not keep collecting candidate data: turn it off right here.
+  const { data: intact, error: intactError } = await admin.rpc("application_flow_is_intact", { p_flow_id: flow.id });
+  if (intactError) {
+    console.error("Job integrity check unavailable:", intactError.message);
+  } else if (intact === false) {
+    const { error: unpublishError } = await admin.rpc("unpublish_damaged_flow", { p_flow_id: flow.id });
+    if (unpublishError) console.error("Damaged job could not be unpublished:", unpublishError.message);
+    throw new Error("This job is no longer accepting applications.");
+  }
   const { data: subscription, error: subscriptionError } = await admin.from("workspace_subscriptions")
     .select("status,current_period_end").eq("workspace_id", flow.workspace_id).maybeSingle();
   if (subscriptionError) throw subscriptionError;

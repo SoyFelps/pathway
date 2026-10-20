@@ -37,6 +37,28 @@
     return base;
   }
 
+  // Minimum structure a job needs for the editor and the public page (the database enforces the same rule).
+  // A job that fails it is shown as "incomplete" and locked instead of breaking the dashboard.
+  const FLOW_NODE_TYPES = ['candidateInfo', 'shortText', 'singleChoice', 'multiChoice', 'end'];
+  function flowIsUsable(flow) {
+    if (!flow || typeof flow !== 'object') return false;
+    const { nodes, edges } = flow;
+    if (!Array.isArray(nodes) || !Array.isArray(edges) || nodes.length < 2 || nodes.length > 200 || edges.length > 400) return false;
+    const ids = new Set();
+    let info = 0;
+    let end = 0;
+    for (const node of nodes) {
+      if (!node || typeof node !== 'object' || typeof node.id !== 'string' || typeof node.type !== 'string') return false;
+      if (!FLOW_NODE_TYPES.includes(node.type) || ids.has(node.id)) return false;
+      ids.add(node.id);
+      if (node.type === 'candidateInfo') info += 1;
+      if (node.type === 'end') end += 1;
+      if ((node.type === 'singleChoice' || node.type === 'multiChoice') && !Array.isArray(node.options)) return false;
+    }
+    if (info !== 1 || end < 1) return false;
+    return edges.every(edge => edge && typeof edge === 'object' && typeof edge.fromNodeId === 'string' && typeof edge.toNodeId === 'string' && ids.has(edge.fromNodeId) && ids.has(edge.toNodeId));
+  }
+
   function createFlow(companyName, jobTitle, jobDescription) {
     const candidate = createNode('candidateInfo', 72, 250);
     const end = createNode('end', 1140, 270);
@@ -237,5 +259,5 @@
     return [example];
   }
 
-  window.PathwayCore = { candidateKey, groupApplicants, STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
+  window.PathwayCore = { candidateKey, groupApplicants, STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, flowIsUsable, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
 })();

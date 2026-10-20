@@ -298,6 +298,7 @@
     return `<option value="" ${selectedId ? '' : 'selected'}>Use workspace name (${esc(workspace.name)})</option>${companies.map(company => `<option value="${esc(company.id)}" ${company.id === selectedId ? 'selected' : ''}>${esc(company.name)}</option>`).join('')}`;
   }
   function nodeSummary(flow) { return `${flow.nodes.length} steps · ${flow.edges.length} connections`; }
+  const flowIsDamaged = flow => !C.flowIsUsable(flow);
   function ago(value) {
     if (!value) return 'Just created';
     const mins = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
@@ -642,7 +643,11 @@
     if (!flows.length) return '';
     return '<div class="flow-filters"><input class="text-input" type="search" id="flow-search" placeholder="Search flows" aria-label="Search flows" value="' + esc(flowFilters.search) + '"><select class="select-input" id="flow-company-filter" aria-label="Filter by company">' + flowCompanyFilterOptionsHtml() + '</select><select class="select-input" id="flow-responsible-filter" aria-label="Filter by responsible">' + flowResponsibleFilterOptionsHtml() + '</select></div>';
   }
+  function damagedFlowCardHtml(flow) {
+    return `<article class="flow-card is-damaged" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="${esc(flow.jobTitle || 'Untitled role')} has incomplete data and is locked"><div class="flow-card-body"><div class="flow-card-top"><span class="damaged-tag"><span class="status-dot"></span>Incomplete</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><p class="flow-damaged-note">This job has incomplete data and is locked. It is not accepting applications. Contact support.</p><div class="flow-card-foot"><span>${ago(flow.updatedAt)}</span></div></div></article>`;
+  }
   function flowCardHtml(flow) {
+    if (flowIsDamaged(flow)) return damagedFlowCardHtml(flow);
     return `<article class="flow-card" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="Edit ${esc(flow.jobTitle)}"><div class="flow-card-preview"><svg class="mini-svg" viewBox="0 0 400 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path class="mw" d="M117 73C142.5 73 142.5 60 168 60"/><path class="mw" d="M270 60C285 60 285 44 300 44"/><path class="mw" d="M270 60C285 60 285 94 300 94"/><rect class="mn" x="24" y="56" width="93" height="36" rx="8"/><rect class="mb" x="36" y="65" width="46" height="4" rx="2"/><rect class="ms" x="36" y="74" width="62" height="3" rx="1.5"/><circle class="mp" cx="24" cy="73" r="3.5"/><circle class="mp" cx="117" cy="73" r="3.5"/><rect class="mn" x="168" y="43" width="102" height="36" rx="8"/><rect class="mb" x="180" y="52" width="49" height="4" rx="2"/><rect class="ms" x="180" y="61" width="62" height="3" rx="1.5"/><circle class="mp" cx="168" cy="60" r="3.5"/><circle class="mp" cx="270" cy="60" r="3.5"/><rect class="mn" x="300" y="27" width="77" height="36" rx="8"/><rect class="mb" x="312" y="36" width="35" height="4" rx="2"/><rect class="ms" x="312" y="45" width="49" height="3" rx="1.5"/><circle class="mp" cx="300" cy="44" r="3.5"/><circle class="mp" cx="377" cy="44" r="3.5"/><rect class="mn" x="300" y="77" width="77" height="36" rx="8"/><rect class="mb" x="312" y="86" width="35" height="4" rx="2"/><rect class="ms" x="312" y="95" width="49" height="3" rx="1.5"/><circle class="mp" cx="300" cy="94" r="3.5"/><circle class="mp" cx="377" cy="94" r="3.5"/></svg></div><div class="flow-card-body"><div class="flow-card-top"><span class="${flow.publicationStatus === 'published' ? 'published-tag' : 'draft-tag'}"><span class="status-dot"></span>${flow.publicationStatus === 'published' ? 'Published' : 'Draft'}</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><div class="flow-card-foot"><span class="flow-count">${ICONS.node}${nodeSummary(flow)}</span><span>${ago(flow.updatedAt)}</span></div></div></article>`;
   }
   function flowCardsHtml() {
@@ -681,7 +686,7 @@
     const count = flows.length;
     const drafts = flows.filter(flow => flow.publicationStatus !== 'published').length;
     const published = count - drafts;
-    const nodes = flows.reduce((sum, flow) => sum + flow.nodes.length, 0);
+    const nodes = flows.reduce((sum, flow) => sum + (flowIsDamaged(flow) ? 0 : flow.nodes.length), 0);
     root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Hiring made organized</h1><p>Build application flows, share role links and review every candidate in one place.</p></div><div class="dash-action"><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.applicants}</span><div><strong id="dashboard-new-applicant-count" title="${hasPermission('applicants') ? 'Loading new applicants' : 'Candidates access required'}">—</strong><span>New applicants</span></div></div><div class="stat"><span class="stat-icon">${ICONS.published}</span><div><strong>${published}</strong><span>Published flows</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${drafts} draft${drafts === 1 ? '' : 's'} · ${published} published</span></div>${flows.length ? `${flowFiltersHtml()}<section class="flow-grid" id="flow-grid">${flowCardsHtml()}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div></div>`;
     bindSidebar();
     bindPlanControl();
@@ -691,6 +696,14 @@
     bindFlowCards();
     bindFlowFilters();
     if (hasPermission('applicants')) void loadDashboardNewApplicantCount(metricsRequestId);
+    // A damaged job must not keep collecting candidate data: turn its public link off as soon as it is seen here
+    // (the server also does it when a candidate tries to apply).
+    flows.filter(flow => flowIsDamaged(flow) && flow.publicationStatus === 'published').forEach(flow => {
+      void window.PathwayBackend.unpublishFlow(flow, workspace).then(() => {
+        if (root.querySelector('#flow-grid')) renderDashboard();
+        showToast(`"${flow.jobTitle || 'Untitled role'}" was unpublished because its data is incomplete.`, 6000);
+      }).catch(() => { /* the server turns it off on the next application attempt */ });
+    });
   }
 
   async function loadDashboardNewApplicantCount(requestId) {
@@ -1908,9 +1921,11 @@
   function showFlowMenu(id) {
     const flow = flows.find(item => item.id === id); if (!flow) return;
     const isPublished = flow.publicationStatus === 'published' && Boolean(flow.activePublishedFlowId);
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${isPublished ? 'Published flow' : 'Draft flow'}</div><h2>${esc(flow.jobTitle)}</h2><p>${esc(flow.companyName)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="danger-confirm"><strong>Permanent deletion.</strong> Removing this job also deletes every application and private resume submitted to it. This cannot be undone.</div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">Delete flow</button><div style="display:flex;gap:8px;flex-wrap:wrap">${isPublished ? '<button class="btn" id="copy-flow-url">Copy job link</button>' : ''}<button class="btn ${isPublished || !subscription?.active ? '' : 'btn-primary'}" id="toggle-flow-status">${isPublished ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'}</button></div></div>`);
+    const damaged = flowIsDamaged(flow);
+    if (damaged) setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Incomplete job</div><h2>${esc(flow.jobTitle || 'Untitled role')}</h2><p>${esc(flow.companyName || '')}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="danger-confirm"><strong>This job has incomplete data and is locked.</strong> It cannot be opened or edited, and its public link is turned off so no new applications arrive. Contact support, or delete it. Deleting also removes every application and private resume submitted to it. This cannot be undone.</div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">Delete flow</button><button class="btn" data-close>Close</button></div>`);
+    else setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${isPublished ? 'Published flow' : 'Draft flow'}</div><h2>${esc(flow.jobTitle)}</h2><p>${esc(flow.companyName)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="danger-confirm"><strong>Permanent deletion.</strong> Removing this job also deletes every application and private resume submitted to it. This cannot be undone.</div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">Delete flow</button><div style="display:flex;gap:8px;flex-wrap:wrap">${isPublished ? '<button class="btn" id="copy-flow-url">Copy job link</button>' : ''}<button class="btn ${isPublished || !subscription?.active ? '' : 'btn-primary'}" id="toggle-flow-status">${isPublished ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'}</button></div></div>`);
     modalRoot.querySelector('#copy-flow-url')?.addEventListener('click', () => copyFlowUrl(flow, true));
-    modalRoot.querySelector('#toggle-flow-status').addEventListener('click', async event => {
+    modalRoot.querySelector('#toggle-flow-status')?.addEventListener('click', async event => {
       const button = event.currentTarget;
       button.disabled = true; button.textContent = isPublished ? 'Unpublishing…' : 'Opening editor…';
       if (!isPublished) {
@@ -1940,6 +1955,8 @@
 
   function openFlow(id) {
     if (!hasPermission('flows')) return renderAccessMessage('flows');
+    const flow = flows.find(item => item.id === id);
+    if (flow && flowIsDamaged(flow)) return showFlowMenu(id);
     currentId = id; selectedId = currentFlow().nodes.find(node => node.type === 'candidateInfo').id; renderEditor();
   }
 
