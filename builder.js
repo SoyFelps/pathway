@@ -931,7 +931,7 @@
     const ORDER = ['exportedAt', 'note', 'userId', 'email', 'firstName', 'lastName', 'name', 'workspaceName', 'title', 'company', 'job', 'status', 'text', 'writtenAt', 'canManageFlows', 'canReviewCandidates', 'canManageTeam', 'memberSince', 'planStatus', 'planCurrentPeriodEnd', 'planCancelAtPeriodEnd', 'createdAt', 'updatedAt', 'emailConfirmedAt', 'lastSignInAt'];
     const rank = field => { const i = ORDER.indexOf(field); return i < 0 ? ORDER.length : i; };
     const add = (section, record, object) => Object.entries(object || {}).sort((x, y) => rank(x[0]) - rank(y[0])).forEach(([field, value]) => rows.push([section, record, field, value]));
-    add('export', '', { exportedAt: data?.exportedAt, note: 'Your account, profile, workspace and plan details and the jobs you created. Candidate details and the team\'s internal comments belong to the employer and are not included. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.' });
+    add('export', '', { exportedAt: data?.exportedAt, note: 'Your account, profile, workspace and plan details and the jobs you created. Candidate details belong to the employer and are not included. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.' });
     add('account', '', data?.account);
     add('profile', '', data?.profile);
     if (data?.ownedWorkspace) add('ownedWorkspace', '', data.ownedWorkspace);
@@ -943,7 +943,7 @@
   function candidateDataToCsv({ person, items, jobTitle, stage, exportedAt }) {
     const rows = [['section', 'record', 'field', 'value']];
     const add = (section, record, object) => Object.entries(object || {}).forEach(([field, value]) => { if (value !== null && value !== undefined && value !== '') rows.push([section, record, field, value]); });
-    add('export', '', { exportedAt, note: 'The application data Pathway holds about this candidate for this job. The team\'s internal comments are not included. The resume file is not inside this CSV: download it from the candidate panel. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.' });
+    add('export', '', { exportedAt, note: 'The application data Pathway holds about this candidate for this job. The resume file is not inside this CSV: download it from the candidate panel. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.' });
     add('candidate', '', { name: person.candidate_name, email: person.candidate_email, job: jobTitle, currentStage: stage, applications: items.length });
     [...items].reverse().forEach((item, index) => {
       const record = String(index + 1);

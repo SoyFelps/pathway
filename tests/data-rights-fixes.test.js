@@ -15,10 +15,15 @@ test('"Download my data" only includes workspace content the person can still re
   assert.equal(/to anon|to authenticated/.test(sql.replace(/^--.*$/gm, '')), false, 'the new trigger functions are not callable from the app');
 });
 
-test('deleting an account anonymizes the name on their comments and removes them from the mention lists', () => {
-  assert.ok(sql.includes("if old.author_id is not null and new.author_id is null then\n    new.author_name := 'Former team member';"));
-  assert.ok(sql.includes('before update of author_id on public.applicant_comments'));
-  assert.ok(sql.includes("where m ->> 'userId' <> old.user_id::text") && sql.includes('after delete on public.profiles'));
+test('a person who leaves keeps their name on their comments and in the mentions of them', () => {
+  const keep = read('supabase/migrations/20261019240000_keep_comment_author_names.sql');
+  assert.ok(keep.includes('drop trigger if exists applicant_comments_anonymize_author on public.applicant_comments;') && keep.includes('drop function if exists public.anonymize_comment_author();'));
+  assert.ok(keep.includes('drop trigger if exists profiles_scrub_mentions on public.profiles;') && keep.includes('drop function if exists public.scrub_deleted_user_mentions();'));
+  assert.equal(/create (or replace )?(trigger|function)/i.test(keep.replace(/^--.*$/gm, '')), false, 'nothing new is created: names are simply left alone');
+  const html = read('legal.html');
+  assert.ok(html.includes('the internal comments they wrote stay in the workspace under their name, and so do @mentions of them in other comments'));
+  assert.ok(html.includes('A former team member can ask the employer to anonymize those comments.'));
+  assert.equal(html.includes('Former team member'), false, 'no more "Former team member" wording');
 });
 
 test('"Clear all failed" also removes the team comments about the deleted candidates', () => {
@@ -33,5 +38,4 @@ test('"Clear all failed" also removes the team comments about the deleted candid
 test('the CSV files explain the apostrophe added to values that start with + - = @', () => {
   const builder = read('builder.js');
   assert.equal((builder.match(/A leading apostrophe on a value \(for example a phone number starting with \+\)/g) || []).length, 2, 'both exports carry the note');
-  assert.ok(read('legal.html').includes('replaced by “Former team member”'));
 });
