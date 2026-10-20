@@ -153,10 +153,10 @@ test('My Team shows up to three included seats, defaults permissions on, and sup
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=locked-jobs-b-20261020/);
-  assert.match(html, /backend\.js\?v=locked-jobs-b-20261020/);
-  assert.match(html, /builder\.js\?v=locked-jobs-b-20261020/);
-  assert.match(html, /styles\.css\?v=locked-jobs-b-20261020/);
+  assert.match(html, /auth\.js\?v=mobile-menu-20261020/);
+  assert.match(html, /backend\.js\?v=mobile-menu-20261020/);
+  assert.match(html, /builder\.js\?v=mobile-menu-20261020/);
+  assert.match(html, /styles\.css\?v=mobile-menu-20261020/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
@@ -199,5 +199,13 @@ test('My Companies appears immediately below My Team in the sidebar', () => {
 test('workspace sidebar stays visible on desktop and sticks below the topbar on mobile', () => {
   const css = read('styles.css');
   assert.match(css, /@media\(min-width:761px\)\{\.workspace-body\{align-items:flex-start\}\.app-sidebar\{position:sticky;top:70px;align-self:flex-start;height:calc\(100vh - 70px\);max-height:calc\(100vh - 70px\);overflow-y:auto/);
-  assert.match(css, /@media\(max-width:760px\)\{\.app-sidebar\{position:sticky;top:70px;z-index:25\}\}/);
+  assert.match(css, /@media\(max-width:760px\)\{\.app-sidebar\{position:sticky;top:62px;z-index:25\}\}/);
+});
+
+test('on phones the menu sticks right under the 62px topbar, with no gap above it', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  const topbar = css.match(/@media\(max-width:760px\)\{\.topbar\{height:(\d+)px/);
+  const sidebar = css.match(/@media\(max-width:760px\)\{\.app-sidebar\{position:sticky;top:(\d+)px/);
+  assert.ok(topbar && sidebar);
+  assert.equal(sidebar[1], topbar[1], 'the sticky offset of the menu equals the phone topbar height');
 });
