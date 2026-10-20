@@ -101,7 +101,7 @@ test('the header shows the person\'s name, with the e-mail as tooltip, on every 
   const builder = read('builder.js');
   assert.ok(builder.includes('function headerUserHtml()'));
   assert.ok(builder.includes("esc(name || user.email || '—')") && builder.includes("title=\"' + esc(user.email || '')"));
-  assert.equal((builder.match(/\$\{headerUserHtml\(\)\}/g) || []).length, 9, 'all nine headers use it');
+  assert.equal((builder.match(/\$\{headerUserHtml\(\)\}/g) || []).length, 10, 'all ten headers use it');
   assert.equal(/<span class="auth-user"[^>]*>\$\{esc\(user\.email/.test(builder), false, 'no header prints the e-mail directly');
   assert.ok(builder.includes("root.querySelector('.topbar .auth-user')"), 'saving the name updates the header at once');
 });

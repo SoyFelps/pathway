@@ -81,7 +81,7 @@
     await requireSession();
     const { data, error } = await client.rpc('list_team_overview', { p_workspace_id: workspaceId });
     if (error) throw error;
-    return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, can_customize_stages: row.can_customize_stages, memberSince: row.member_since, firstName: row.first_name || '', lastName: row.last_name || '' }));
+    return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, can_customize_stages: row.can_customize_stages, can_view_reports: row.can_view_reports, memberSince: row.member_since, firstName: row.first_name || '', lastName: row.last_name || '' }));
   }
   // Internal team comments: one list per candidate (same job + same e-mail address, so repeat applications share it).
   const mapComment = row => ({ id: row.id, authorId: row.author_id || null, authorName: row.author_name, body: row.body, createdAt: row.created_at, mentions: Array.isArray(row.mentions) ? row.mentions.map(item => ({ userId: item.userId, name: String(item.name || '') })) : [] });
@@ -714,6 +714,17 @@
     });
   }
 
+  // The numbers on the Reports page. One checked database function (permission "Reports") returns aggregated figures only.
+  // Dates are UTC days as 'YYYY-MM-DD'; leave from/to empty for "everything so far".
+  async function getWorkspaceReport(workspaceId, { from = null, to = null, flowId = null } = {}) {
+    await requireSession();
+    const day = value => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
+    const { data, error } = await client.rpc('get_workspace_report', { p_workspace_id: workspaceId, p_from: day(from), p_to: day(to), p_flow_id: flowId || null });
+    if (error) throw error;
+    if (!data || typeof data !== 'object' || !Array.isArray(data.daily) || !data.totals) throw new Error('The report could not be read. Please try again.');
+    return data;
+  }
+
   // Board setup shared by the whole workspace: custom columns, their order and which columns are on.
   async function getBoardConfig(workspaceId) {
     await requireSession();
@@ -901,6 +912,7 @@
     markCommentMentionsSeen,
     updateMyProfile,
     listTeamOverview,
+    getWorkspaceReport,
     getBoardConfig,
     createCustomStage,
     renameCustomStage,
