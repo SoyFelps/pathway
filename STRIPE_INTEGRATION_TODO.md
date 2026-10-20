@@ -1,6 +1,6 @@
 # Stripe integration setup
 
-Pathway's **test-mode monthly subscription** and embedded Checkout Form are implemented and deployed. Checkout will be ready for end-to-end testing after the Stripe webhook signing secret is added to Supabase and the existing API secret is verified to be the matching test key.
+Pathway's **test-mode monthly subscription** and embedded Checkout Form are implemented and deployed. Checkout and the signed webhook have been tested end to end in Stripe test mode (see "Supabase deployment and Stripe webhook" below).
 
 ## Stripe test product and price
 
@@ -16,11 +16,11 @@ The account's product/Price was verified read-only in the Stripe test account. T
 
 ## Server secrets
 
-The user says the Stripe secret key is already stored in Supabase. I have not viewed or copied its value. Before testing, make sure the Supabase project's Edge Function secret is named exactly `STRIPE_SECRET_KEY` and contains the matching **test** secret (`sk_test_…`). Never commit or paste that key into this repository or chat.
+The Stripe secret key is stored only as a Supabase secret and is never written in this repository. Make sure the Supabase project's Edge Function secret is named exactly `STRIPE_SECRET_KEY` and contains the matching **test** secret (`sk_test_…`). Never commit or paste that key into this repository or chat.
 
 `STRIPE_PRICE_ID` is a non-secret environment value. The billing function currently has the verified test Price ID as a fallback; set the same value in Supabase Edge Function secrets if you prefer not to depend on the code fallback. For live mode, replace both the publishable key and Price with corresponding live values, and set the live secret key only as a Supabase secret.
 
-`STRIPE_WEBHOOK_SECRET` (`whsec_…`) is a separate webhook signing secret. It is not the Stripe API secret. It must be added to Supabase after the webhook endpoint is created in the Stripe test Dashboard.
+`STRIPE_WEBHOOK_SECRET` (`whsec_…`) is a separate webhook signing secret. It is not the Stripe API secret. It comes from the webhook endpoint created in the Stripe Dashboard and is stored only as a Supabase secret.
 
 ## Configured Checkout parameters
 
