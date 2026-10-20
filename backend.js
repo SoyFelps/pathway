@@ -13,6 +13,8 @@
   const TEAM_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/team`;
   const DELETE_ACCOUNT_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/delete-account`;
   const APPLICANT_STATUSES = new Set(['failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired']);
+  const CUSTOM_STATUS_PATTERN = /^custom:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const isApplicantStatus = status => APPLICANT_STATUSES.has(status) || CUSTOM_STATUS_PATTERN.test(String(status));
 
   async function callApplications(body, accessToken = '') {
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
@@ -79,7 +81,7 @@
     await requireSession();
     const { data, error } = await client.rpc('list_team_overview', { p_workspace_id: workspaceId });
     if (error) throw error;
-    return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, memberSince: row.member_since, firstName: row.first_name || '', lastName: row.last_name || '' }));
+    return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, can_customize_stages: row.can_customize_stages, memberSince: row.member_since, firstName: row.first_name || '', lastName: row.last_name || '' }));
   }
   // Internal team comments: one list per candidate (same job + same e-mail address, so repeat applications share it).
   const mapComment = row => ({ id: row.id, authorId: row.author_id || null, authorName: row.author_name, body: row.body, createdAt: row.created_at, mentions: Array.isArray(row.mentions) ? row.mentions.map(item => ({ userId: item.userId, name: String(item.name || '') })) : [] });
@@ -712,8 +714,48 @@
     });
   }
 
+  // Board setup shared by the whole workspace: custom columns, their order and which columns are on.
+  async function getBoardConfig(workspaceId) {
+    await requireSession();
+    const [stages, settings] = await Promise.all([
+      client.from('workspace_custom_stages').select('id,name').eq('workspace_id', workspaceId).order('created_at', { ascending: true }),
+      client.from('workspace_board_settings').select('stage_order,stage_enabled').eq('workspace_id', workspaceId).maybeSingle()
+    ]);
+    if (stages.error) throw stages.error;
+    if (settings.error) throw settings.error;
+    return {
+      customStages: (stages.data || []).map(row => ({ id: row.id, name: row.name })),
+      order: Array.isArray(settings.data?.stage_order) ? settings.data.stage_order : [],
+      enabled: settings.data?.stage_enabled && typeof settings.data.stage_enabled === 'object' ? settings.data.stage_enabled : {}
+    };
+  }
+  async function createCustomStage(workspaceId, name) {
+    await requireSession();
+    const { data, error } = await client.rpc('create_custom_stage', { p_workspace_id: workspaceId, p_name: name });
+    if (error) throw error;
+    return data;
+  }
+  async function renameCustomStage(workspaceId, stageId, name) {
+    await requireSession();
+    const { data, error } = await client.rpc('rename_custom_stage', { p_workspace_id: workspaceId, p_stage_id: stageId, p_name: name });
+    if (error) throw error;
+    return data;
+  }
+  async function deleteCustomStage(workspaceId, stageId) {
+    await requireSession();
+    const { error } = await client.rpc('delete_custom_stage', { p_workspace_id: workspaceId, p_stage_id: stageId });
+    if (error) throw error;
+    return true;
+  }
+  async function saveBoardSettings(workspaceId, order, enabled) {
+    await requireSession();
+    const { data, error } = await client.rpc('save_board_settings', { p_workspace_id: workspaceId, p_order: order, p_enabled: enabled });
+    if (error) throw error;
+    return data;
+  }
+
   async function updateApplicantStatus(applicantId, status) {
-    if (!APPLICANT_STATUSES.has(status)) throw new Error('Choose a valid applicant stage.');
+    if (!isApplicantStatus(status)) throw new Error('Choose a valid applicant stage.');
     await requireSession();
     const { data, error } = await client.from('applicants').update({ status }).eq('id', applicantId).select('id,status,updated_at').single();
     if (error) throw error;
@@ -722,7 +764,7 @@
 
   // Moves every application of one candidate to the same stage in a single request.
   async function updateApplicantStatuses(applicantIds, status) {
-    if (!APPLICANT_STATUSES.has(status)) throw new Error('Choose a valid applicant stage.');
+    if (!isApplicantStatus(status)) throw new Error('Choose a valid applicant stage.');
     if (!Array.isArray(applicantIds) || !applicantIds.length || applicantIds.length > 200 || applicantIds.some(id => typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id))) {
       throw new Error('The applicant could not be updated.');
     }
@@ -848,6 +890,11 @@
     markCommentMentionsSeen,
     updateMyProfile,
     listTeamOverview,
+    getBoardConfig,
+    createCustomStage,
+    renameCustomStage,
+    deleteCustomStage,
+    saveBoardSettings,
     listWorkspacePeople,
     listFlowNotifications,
     markFlowNotificationSeen,

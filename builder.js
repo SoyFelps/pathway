@@ -35,8 +35,7 @@
   let applicantFilter = '';
   let failedColumnOpen = false;
   let applicantSearch = '';
-  let applicantStagesEnabled = {};
-  let applicantStageOrder = [];
+  let boardConfig = { customStages: [], order: [], enabled: {} };
   let currentCardSummaryRequest = 0;
   let paymentHistoryOpen = false;
   let paymentHistoryLoaded = false;
@@ -49,7 +48,7 @@
   let dashboardApplicantCountRequestId = 0;
   const locallyUnpublishedFlows = new WeakSet();
   const flowEditRevisions = new WeakMap();
-  const applicantStages = [
+  const standardApplicantStages = [
     { key: 'failed', label: 'Failed', color: 'stage-failed', locked: true },
     { key: 'new', label: 'New', color: 'stage-new', locked: true },
     { key: 'screening', label: 'Screening', color: 'stage-screening', defaultOn: true },
@@ -61,45 +60,29 @@
     { key: 'withdrawn', label: 'Withdrawn', color: 'stage-withdrawn' },
     { key: 'hired', label: 'Hired', color: 'stage-hired', defaultOn: true, pinnedLast: true }
   ];
+  const MAX_CUSTOM_STAGES = 5;
+  // The board setup (custom columns, their order and which columns are on) is stored per workspace and shared by the whole team.
   // Failed and New stay first and Hired stays last; the stages in between can be reordered in Customize.
-  const movableApplicantStageKeys = applicantStages.filter(stage => !stage.locked && !stage.pinnedLast).map(stage => stage.key);
-  function applicantStageOrderPreferenceKey() { return `pathway:applicant-stage-order:${workspace?.id || 'default'}`; }
-  function loadApplicantStageOrderPreference() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(applicantStageOrderPreferenceKey()) || 'null');
-      if (Array.isArray(saved)) {
-        const known = saved.filter((key, index) => movableApplicantStageKeys.includes(key) && saved.indexOf(key) === index);
-        return [...known, ...movableApplicantStageKeys.filter(key => !known.includes(key))];
-      }
-    } catch (_) { /* Fall back to the standard order. */ }
-    return [...movableApplicantStageKeys];
-  }
-  function saveApplicantStageOrderPreference() {
-    try { localStorage.setItem(applicantStageOrderPreferenceKey(), JSON.stringify(applicantStageOrder)); }
-    catch (_) { /* Keep the modal usable when browser storage is unavailable. */ }
-  }
+  const customStageDefinitions = () => boardConfig.customStages.map(stage => ({ key: `custom:${stage.id}`, label: stage.name, color: 'stage-custom', custom: true, customId: stage.id }));
+  const allApplicantStages = () => [...standardApplicantStages, ...customStageDefinitions()];
+  const applicantStageLabel = key => allApplicantStages().find(stage => stage.key === key)?.label || String(key || '');
+  function movableApplicantStageKeys() { return allApplicantStages().filter(stage => !stage.locked && !stage.pinnedLast).map(stage => stage.key); }
   function orderedApplicantStages() {
-    const byKey = Object.fromEntries(applicantStages.map(stage => [stage.key, stage]));
-    const order = applicantStageOrder.length ? applicantStageOrder : movableApplicantStageKeys;
-    return [...applicantStages.filter(stage => stage.locked), ...order.map(key => byKey[key]), ...applicantStages.filter(stage => stage.pinnedLast)];
+    const all = allApplicantStages();
+    const byKey = new Map(all.map(stage => [stage.key, stage]));
+    const movable = movableApplicantStageKeys();
+    const saved = boardConfig.order.filter((key, index, list) => movable.includes(key) && list.indexOf(key) === index);
+    const order = [...saved, ...movable.filter(key => !saved.includes(key))];
+    return [...all.filter(stage => stage.locked), ...order.map(key => byKey.get(key)), ...all.filter(stage => stage.pinnedLast)];
   }
-  function applicantStagePreferenceKey() { return `pathway:applicant-stages:${workspace?.id || 'default'}`; }
-  function defaultApplicantStagesEnabled() { return Object.fromEntries(applicantStages.map(stage => [stage.key, Boolean(stage.locked || stage.defaultOn)])); }
-  function loadApplicantStagesPreference() {
-    const enabled = defaultApplicantStagesEnabled();
-    try {
-      const saved = JSON.parse(localStorage.getItem(applicantStagePreferenceKey()) || 'null');
-      if (saved && typeof saved === 'object') applicantStages.forEach(stage => { if (!stage.locked && typeof saved[stage.key] === 'boolean') enabled[stage.key] = saved[stage.key]; });
-    } catch (_) { /* Fall back to the default columns when browser storage is unavailable. */ }
-    return enabled;
-  }
-  function saveApplicantStagesPreference() {
-    try { localStorage.setItem(applicantStagePreferenceKey(), JSON.stringify(applicantStagesEnabled)); }
-    catch (_) { /* Keep the modal usable when browser storage is unavailable. */ }
+  function applicantStageEnabled(stage) {
+    if (stage.locked) return true;
+    const saved = boardConfig.enabled[stage.key];
+    return typeof saved === 'boolean' ? saved : Boolean(stage.defaultOn || stage.custom);
   }
   function applicantHasStage(stageKey) { return C.groupApplicants(applicants).some(group => group.status === stageKey); }
   function visibleApplicantStages() {
-    return orderedApplicantStages().filter(stage => stage.locked || applicantStagesEnabled[stage.key] || applicantHasStage(stage.key));
+    return orderedApplicantStages().filter(stage => applicantStageEnabled(stage) || applicantHasStage(stage.key));
   }
 
   const currentFlow = () => flows.find(flow => flow.id === currentId);
@@ -729,12 +712,10 @@
   async function renderApplicants() {
     if (!hasPermission('applicants')) return renderAccessMessage('applicants');
     setRoute('applicants');
-    applicantStagesEnabled = loadApplicantStagesPreference();
-    applicantStageOrder = loadApplicantStageOrderPreference();
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
     flowResponsiblesCache.clear();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><select id="applicant-flow-filter" class="applicants-filter" aria-label="Filter applicants by job"><option value="">All jobs</option>${applicantFlowLabels.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join('')}</select><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button></div></div><div class="applicant-stage-toggle-wrap" id="applicant-stage-toggle-wrap"><button class="btn btn-sm" type="button" id="customize-stages">Customize</button></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><select id="applicant-flow-filter" class="applicants-filter" aria-label="Filter applicants by job"><option value="">All jobs</option>${applicantFlowLabels.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join('')}</select><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button></div></div><div class="applicant-stage-toggle-wrap" id="applicant-stage-toggle-wrap">${hasPermission('customize_stages') ? '<button class="btn btn-sm" type="button" id="customize-stages">Customize</button>' : ''}</div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
     bindSidebar();
     bindPlanControl();
     root.querySelector('#signout').addEventListener('click', doSignOut);
@@ -751,7 +732,12 @@
         const filter = root.querySelector('#applicant-flow-filter');
         if (filter) filter.insertAdjacentHTML('beforeend', applicantFlowLabels.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join(''));
       }
-      applicants = await window.PathwayBackend.listApplicants(workspace.id, applicantFilter);
+      const [loadedApplicants, loadedBoardConfig] = await Promise.all([
+        window.PathwayBackend.listApplicants(workspace.id, applicantFilter),
+        window.PathwayBackend.getBoardConfig(workspace.id).catch(() => null)
+      ]);
+      applicants = loadedApplicants;
+      if (loadedBoardConfig) boardConfig = loadedBoardConfig;
       if (!root.querySelector('.applicants-page')) return;
       renderApplicantBoard();
       if (pendingCandidateOpen) {
@@ -792,7 +778,7 @@
   }
 
   function teamPermissionControls(permissions = {}, disabled = false) {
-    return `<div class="team-permission-grid"><label><input type="checkbox" data-permission="flows" ${permissions.can_flows !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Flows</span></label><label><input type="checkbox" data-permission="applicants" ${permissions.can_applicants !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Candidates</span></label><label><input type="checkbox" data-permission="team" ${permissions.can_manage_team !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Team</span></label></div>`;
+    return `<div class="team-permission-grid"><label><input type="checkbox" data-permission="flows" ${permissions.can_flows !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Flows</span></label><label><input type="checkbox" data-permission="applicants" ${permissions.can_applicants !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Candidates</span></label><label><input type="checkbox" data-permission="team" ${permissions.can_manage_team !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Team</span></label><label><input type="checkbox" data-permission="stages" ${permissions.can_customize_stages !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Customize stages</span></label></div>`;
   }
 
   // Name on top and e-mail below it (the e-mail always stays visible in My Team). Without a known name only the e-mail shows.
@@ -803,11 +789,11 @@
   }
   function renderMyTeamMarkup(data) {
     const manager = Boolean(data.canManage);
-    const describe = p => [p.can_flows && 'Flows', p.can_applicants && 'Candidates', p.can_manage_team && 'Team'].filter(Boolean).join(' · ') || 'No access';
+    const describe = p => [p.can_flows && 'Flows', p.can_applicants && 'Candidates', p.can_manage_team && 'Team', p.can_customize_stages && 'Customize stages'].filter(Boolean).join(' · ') || 'No access';
     const members = manager ? (data.members || []).map(member => `<article class="team-person" data-member-id="${esc(member.user_id)}"><div class="team-person-heading"><div>${teamPersonLines(member.user_id, member.member_email)}<span>Member since ${esc(new Date(member.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div><button class="btn btn-danger btn-sm" data-remove-member="${esc(member.user_id)}">Remove</button></div>${teamPermissionControls(member)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : data.readOnlyTeam ? data.readOnlyTeam.filter(person => !person.isOwner).map(person => `<article class="team-person${person.userId === user.id ? ' team-self' : ''}"><div class="team-person-heading"><div>${teamPersonLines(person.userId, person.email)}<span>${person.userId === user.id ? 'You · ' : ''}Member since ${esc(new Date(person.memberSince).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div></div><div class="team-permission-summary">${esc(describe(person))}</div></article>`).join('') : teamMember ? `<article class="team-person team-self"><div class="team-person-heading"><div>${teamPersonLines(user.id, teamMember.email || user.email)}<span>You · ${data.premiumActive ? 'Team member' : 'Workspace access paused'}</span></div></div><div class="team-permission-summary">${esc(describe(teamMember))}</div></article>` : '';
     const pending = manager ? (data.invitations || []).map(invite => `<article class="team-invite-item" data-invitation-id="${esc(invite.id)}"><div class="team-person-heading"><div><strong>${esc(invite.invited_email)}</strong><span>Expires ${esc(new Date(invite.expires_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${data.premiumActive ? `<button class="btn btn-sm" data-copy-invitation-link="${esc(invite.id)}">Copy invitation link</button>` : ''}<button class="btn btn-sm" data-revoke-invitation="${esc(invite.id)}">Revoke</button></div></div>${teamPermissionControls(invite)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : '';
     const paused = !subscription?.active;
-    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>${manager ? `Manage access to ${esc(workspace.name)}. Premium includes up to 3 additional members at no extra seat charge.` : `See who has access to ${esc(workspace.name)}.`}</p></div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>No team access</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>View only</strong><p>You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All three are enabled by default.</small></div><div class="team-permission-grid"><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label></div><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${(data.isOwner || data.readOnlyTeam) ? `<article class="team-person team-owner"><div class="team-person-heading"><div>${teamPersonLines(teamDirectory.find(person => person.isOwner)?.userId || (isOwner ? user.id : ''), data.owner?.email || data.readOnlyTeam?.find(person => person.isOwner)?.email || user.email)}<span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
+    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>${manager ? `Manage access to ${esc(workspace.name)}. Premium includes up to 3 additional members at no extra seat charge.` : `See who has access to ${esc(workspace.name)}.`}</p></div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>No team access</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>View only</strong><p>You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All are enabled by default.</small></div><div class="team-permission-grid"><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label><label><input type="checkbox" data-invite-permission="stages" checked><span>Customize stages</span></label></div><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${(data.isOwner || data.readOnlyTeam) ? `<article class="team-person team-owner"><div class="team-person-heading"><div>${teamPersonLines(teamDirectory.find(person => person.isOwner)?.userId || (isOwner ? user.id : ''), data.owner?.email || data.readOnlyTeam?.find(person => person.isOwner)?.email || user.email)}<span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
   }
 
   function renderMyTeamLoadingMarkup() {
@@ -1291,33 +1277,58 @@
     });
   }
 
-  function openCustomizeStages() {
+  // Saves the board setup for the whole workspace. Returns an error message (and puts the previous setup back) when the server refuses.
+  async function persistBoardSettings(previous) {
+    const enabled = {};
+    allApplicantStages().forEach(stage => { if (!stage.locked) enabled[stage.key] = applicantStageEnabled(stage) || applicantHasStage(stage.key); });
+    try {
+      const saved = await window.PathwayBackend.saveBoardSettings(workspace.id, orderedApplicantStages().filter(stage => !stage.locked && !stage.pinnedLast).map(stage => stage.key), enabled);
+      boardConfig = { ...boardConfig, order: saved.order, enabled: saved.enabled };
+      return null;
+    } catch (error) {
+      boardConfig = previous;
+      return error.message || 'The change could not be saved. Try again.';
+    }
+  }
+  async function reloadBoardConfig() {
+    try { boardConfig = await window.PathwayBackend.getBoardConfig(workspace.id); } catch (_) { /* keep the board that is already on screen */ }
+  }
+
+  function openCustomizeStages(message = '', creating = false) {
+    const customCount = boardConfig.customStages.length;
     const rows = orderedApplicantStages().map(stage => {
       const occupied = applicantHasStage(stage.key);
       const locked = stage.locked || occupied;
       const reason = stage.locked ? 'This column is always on.' : (occupied ? 'This column contains applicants. Move them to another stage before disabling it.' : '');
-      const movable = movableApplicantStageKeys.includes(stage.key);
-      const handle = movable ? `<button class="stage-drag" type="button" data-drag-handle aria-label="Reorder ${stage.label}. Use the up and down arrow keys." title="Drag to reorder">${'⠿'}</button>` : '<span class="stage-drag is-fixed" aria-hidden="true"></span>';
-      return `<label class="stage-option${locked ? ' is-locked' : ''}${movable ? ' is-movable' : ''}" data-stage-row="${stage.key}" ${movable ? 'draggable="true"' : ''} ${reason ? `title="${reason}"` : ''}><span class="stage-option-name">${handle}<span class="stage-dot ${stage.color}"></span>${stage.label}</span><input type="checkbox" data-stage-key="${stage.key}" ${stage.locked || applicantStagesEnabled[stage.key] || occupied ? 'checked' : ''} ${locked ? 'disabled' : ''}></label>`;
+      const movable = !stage.locked && !stage.pinnedLast;
+      const handle = movable ? `<button class="stage-drag" type="button" data-drag-handle aria-label="Reorder ${esc(stage.label)}. Use the up and down arrow keys." title="Drag to reorder">${'⠿'}</button>` : '<span class="stage-drag is-fixed" aria-hidden="true"></span>';
+      const tools = stage.custom ? `<span class="stage-tools"><button class="stage-tool" type="button" data-rename-stage="${esc(stage.customId)}" aria-label="Rename ${esc(stage.label)}" title="Rename">✎</button><button class="stage-tool" type="button" data-delete-stage="${esc(stage.customId)}" aria-label="Delete ${esc(stage.label)}" title="${occupied ? 'Move its applicants before deleting this column.' : 'Delete column'}" ${occupied ? 'disabled' : ''}>${'🗑'}</button></span>` : '';
+      return `<label class="stage-option${locked ? ' is-locked' : ''}${movable ? ' is-movable' : ''}" data-stage-row="${esc(stage.key)}" ${movable ? 'draggable="true"' : ''} ${reason ? `title="${reason}"` : ''}><span class="stage-option-name">${handle}<span class="stage-dot ${stage.color}"></span><span class="stage-name">${esc(stage.label)}</span></span>${tools}<input type="checkbox" data-stage-key="${esc(stage.key)}" ${applicantStageEnabled(stage) || occupied ? 'checked' : ''} ${locked ? 'disabled' : ''}></label>`;
     }).join('');
-    const isDefaultOrder = applicantStageOrder.every((key, index) => key === movableApplicantStageKeys[index]);
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Applicant board</div><h2>Customize stages</h2><p>Choose which columns appear and drag the handles to reorder them. Failed and New stay first and Hired stays last.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="stage-options">${rows}</div><div class="modal-actions stage-modal-actions"><button class="stage-reset" type="button" id="reset-stage-order" ${isDefaultOrder ? 'disabled' : ''}>Reset to default order</button><button class="btn btn-primary" data-close>Done</button></div>`);
+    const currentOrder = orderedApplicantStages().filter(stage => !stage.locked && !stage.pinnedLast).map(stage => stage.key);
+    const isDefaultOrder = currentOrder.every((key, index) => key === movableApplicantStageKeys()[index]);
+    const atLimit = customCount >= MAX_CUSTOM_STAGES;
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Applicant board</div><h2>Customize stages</h2><p>Choose which columns appear and drag the handles to reorder them.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="stage-options">${rows}</div>${atLimit ? '' : creating ? '<form class="stage-create" id="stage-create-form" autocomplete="off"><input class="text-input" id="stage-create-name" maxlength="30" placeholder="New column name" aria-label="New column name"><button class="btn btn-sm btn-primary" type="submit">Create</button><button class="btn btn-sm" type="button" id="stage-create-close">Close</button></form>' : '<div class="stage-create-row"><button class="stage-new-link" type="button" id="stage-new-open">+ New Column</button><span class="stage-create-hint">' + customCount + ' of ' + MAX_CUSTOM_STAGES + ' custom columns</span></div>'}${atLimit || creating ? `<div class="stage-create-hint">${customCount} of ${MAX_CUSTOM_STAGES} custom columns${atLimit ? ' · limit reached' : ''}</div>` : ''}<div class="stage-error" id="stage-error" role="alert">${esc(message)}</div><div class="modal-actions stage-modal-actions"><button class="stage-reset" type="button" id="reset-stage-order" ${isDefaultOrder ? 'disabled' : ''}>Reset to default order</button><button class="btn btn-primary" data-close>Done</button></div>`);
+    const showError = text => { const box = modalRoot.querySelector('#stage-error'); if (box) box.textContent = text || ''; };
+    const applyChange = async change => {
+      const previous = boardConfig;
+      boardConfig = change(previous);
+      renderApplicantBoard();
+      const failure = await persistBoardSettings(previous);
+      if (failure) renderApplicantBoard();
+      openCustomizeStages(failure || '');
+    };
     modalRoot.querySelectorAll('.stage-option input').forEach(toggle => toggle.addEventListener('change', event => {
       const stageKey = event.target.dataset.stageKey;
       if (!event.target.checked && applicantHasStage(stageKey)) { event.target.checked = true; return; }
-      applicantStagesEnabled[stageKey] = event.target.checked;
-      saveApplicantStagesPreference();
-      renderApplicantBoard();
+      const checked = event.target.checked;
+      void applyChange(previous => ({ ...previous, enabled: { ...previous.enabled, [stageKey]: checked } }));
     }));
     const moveStage = (key, targetKey, after) => {
       if (key === targetKey) return;
-      const next = applicantStageOrder.filter(item => item !== key);
-      const index = next.indexOf(targetKey);
-      next.splice(index + (after ? 1 : 0), 0, key);
-      applicantStageOrder = next;
-      saveApplicantStageOrderPreference();
-      renderApplicantBoard();
-      openCustomizeStages();
+      const next = orderedApplicantStages().filter(stage => !stage.locked && !stage.pinnedLast).map(stage => stage.key).filter(item => item !== key);
+      next.splice(next.indexOf(targetKey) + (after ? 1 : 0), 0, key);
+      void applyChange(previous => ({ ...previous, order: next }));
     };
     let dragKey = '';
     const clearDropMarks = () => modalRoot.querySelectorAll('.drop-before, .drop-after').forEach(item => item.classList.remove('drop-before', 'drop-after'));
@@ -1345,31 +1356,91 @@
       row.querySelector('[data-drag-handle]')?.addEventListener('keydown', event => {
         if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
         event.preventDefault();
-        const index = applicantStageOrder.indexOf(key);
-        const target = applicantStageOrder[index + (event.key === 'ArrowUp' ? -1 : 1)];
+        const order = orderedApplicantStages().filter(stage => !stage.locked && !stage.pinnedLast).map(stage => stage.key);
+        const target = order[order.indexOf(key) + (event.key === 'ArrowUp' ? -1 : 1)];
         if (!target) return;
         moveStage(key, target, event.key === 'ArrowDown');
-        modalRoot.querySelector(`[data-stage-row="${key}"] [data-drag-handle]`)?.focus();
       });
     });
     modalRoot.querySelector('#reset-stage-order')?.addEventListener('click', () => {
-      applicantStageOrder = [...movableApplicantStageKeys];
-      saveApplicantStageOrderPreference();
-      renderApplicantBoard();
-      openCustomizeStages();
+      void applyChange(previous => ({ ...previous, order: movableApplicantStageKeys() }));
     });
+    modalRoot.querySelector('#stage-new-open')?.addEventListener('click', () => openCustomizeStages('', true));
+    modalRoot.querySelector('#stage-create-close')?.addEventListener('click', () => openCustomizeStages());
+    modalRoot.querySelector('#stage-create-form')?.addEventListener('submit', async event => {
+      event.preventDefault();
+      const input = modalRoot.querySelector('#stage-create-name');
+      const name = input.value.trim();
+      if (!name) { showError('Name the new column first.'); input.focus(); return; }
+      event.target.querySelector('button').disabled = true;
+      try {
+        await window.PathwayBackend.createCustomStage(workspace.id, name);
+        await reloadBoardConfig();
+        renderApplicantBoard();
+        openCustomizeStages();
+      } catch (error) {
+        openCustomizeStages(error.message || 'The column could not be created.', true);
+        const again = modalRoot.querySelector('#stage-create-name');
+        if (again) again.value = name;
+      }
+    });
+    modalRoot.querySelectorAll('[data-rename-stage]').forEach(button => button.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const stageId = button.dataset.renameStage;
+      const row = button.closest('.stage-option');
+      const label = row.querySelector('.stage-name');
+      const current = boardConfig.customStages.find(stage => stage.id === stageId)?.name || '';
+      label.innerHTML = '<input class="text-input stage-rename-input" maxlength="30" aria-label="Column name">';
+      row.querySelector('.stage-tools').innerHTML = '<button class="btn btn-sm btn-primary" type="button" data-save-rename>Save</button><button class="btn btn-sm" type="button" data-cancel-rename>Cancel</button>';
+      row.classList.add('is-renaming');
+      row.removeAttribute('draggable');
+      const input = label.querySelector('input');
+      input.value = current;
+      input.focus();
+      input.select();
+      // The new name is shown on the board behind the window while it is typed; nothing is saved until Save.
+      const boardTitle = () => root.querySelector(`.kanban-column[data-stage="custom:${stageId}"] .kanban-column-title`);
+      input.addEventListener('input', () => { const title = boardTitle(); if (title?.lastChild) title.lastChild.textContent = input.value.trim() || current; });
+      const stop = () => { input.disabled = true; row.querySelectorAll('button').forEach(item => { item.disabled = true; }); };
+      const cancel = () => { stop(); renderApplicantBoard(); openCustomizeStages(); };
+      const save = async () => {
+        const name = input.value.trim();
+        if (!name) { renderApplicantBoard(); openCustomizeStages('Name the column first.'); return; }
+        if (name === current) { cancel(); return; }
+        stop();
+        try {
+          await window.PathwayBackend.renameCustomStage(workspace.id, stageId, name);
+          await reloadBoardConfig();
+          renderApplicantBoard();
+          openCustomizeStages();
+        } catch (error) {
+          renderApplicantBoard();
+          openCustomizeStages(error.message || 'The column could not be renamed.');
+        }
+      };
+      row.querySelector('[data-save-rename]').addEventListener('click', clickEvent => { clickEvent.preventDefault(); clickEvent.stopPropagation(); void save(); });
+      row.querySelector('[data-cancel-rename]').addEventListener('click', clickEvent => { clickEvent.preventDefault(); clickEvent.stopPropagation(); cancel(); });
+      input.addEventListener('keydown', keyEvent => { if (keyEvent.key === 'Enter') { keyEvent.preventDefault(); void save(); } else if (keyEvent.key === 'Escape') { keyEvent.preventDefault(); keyEvent.stopPropagation(); cancel(); } });
+      input.addEventListener('click', clickEvent => clickEvent.preventDefault());
+    }));
+    modalRoot.querySelectorAll('[data-delete-stage]').forEach(button => button.addEventListener('click', async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        await window.PathwayBackend.deleteCustomStage(workspace.id, button.dataset.deleteStage);
+        await reloadBoardConfig();
+        renderApplicantBoard();
+        openCustomizeStages();
+      } catch (error) { openCustomizeStages(error.message || 'The column could not be deleted.'); }
+    }));
+    if (creating) modalRoot.querySelector('#stage-create-name')?.focus();
   }
 
   function renderApplicantBoard() {
     const content = root.querySelector('#applicants-content');
     if (!content) return;
-    for (const stage of applicantStages) {
-      if (!stage.locked && applicantHasStage(stage.key) && !applicantStagesEnabled[stage.key]) {
-        applicantStagesEnabled[stage.key] = true;
-        saveApplicantStagesPreference();
-      }
-    }
-    root.querySelector('#customize-stages')?.addEventListener('click', openCustomizeStages);
+    root.querySelector('#customize-stages')?.addEventListener('click', () => openCustomizeStages());
     const term = applicantSearch.trim().toLowerCase();
     const allGroups = C.groupApplicants(applicants);
     const visible = allGroups.filter(group => !term || group.items.some(applicant => {
@@ -1395,12 +1466,12 @@
         return `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}${group.count > 1 ? `, ${group.count} applications` : ''}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span>${repeat}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div></article>`;
       };
       if (stage.key === 'failed') {
-        const head = `<div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${stage.label}</div><span class="kanban-count">${cards.length}</span></div>`;
+        const head = `<div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div>`;
         if (!failedColumnOpen) return `<section class="kanban-column failed-column is-collapsed" data-stage="failed" aria-label="Failed">${head}<button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="false">Open &gt;</button><div class="failed-drop">Drag here</div></section>`;
         const hasFailed = allGroups.some(group => group.status === 'failed');
         return `<section class="kanban-column failed-column is-open" data-stage="failed" aria-label="Failed">${head}<div class="failed-actions"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="true">&lt; Collapse</button>${hasFailed ? '<button class="btn btn-sm failed-clear" type="button" data-failed-clear>Clear all failed</button>' : ''}</div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
       }
-      return `<section class="kanban-column" data-stage="${stage.key}" aria-label="${stage.label}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${stage.label}</div><span class="kanban-count">${cards.length}</span></div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
+      return `<section class="kanban-column" data-stage="${esc(stage.key)}" aria-label="${esc(stage.label)}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
     }).join('')}</section>`;
     content.querySelectorAll('[data-failed-toggle]').forEach(button => button.addEventListener('click', () => { failedColumnOpen = !failedColumnOpen; renderApplicantBoard(); }));
     content.querySelector('[data-failed-clear]')?.addEventListener('click', confirmClearFailedApplicants);
@@ -1454,7 +1525,7 @@
 
   async function moveApplicant(id, status) {
     const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
-    if (!group || group.status === status || !applicantStages.some(stage => stage.key === status)) return;
+    if (!group || group.status === status || !allApplicantStages().some(stage => stage.key === status)) return;
     // The stage belongs to the candidate: every application from the same address to the same job moves together.
     const members = group.items;
     const previous = members.map(member => member.status);
@@ -1471,7 +1542,7 @@
       renderApplicantBoard();
       const open = modalRoot.querySelector('[data-detail-applicant]');
       if (open && members.some(member => member.id === open.dataset.detailApplicant)) showApplicantDetails(open.dataset.detailApplicant, Number(open.dataset.detailTab) || 0);
-      showToast(`Applicant moved to ${applicantStages.find(stage => stage.key === status).label}.`);
+      showToast(`Applicant moved to ${applicantStageLabel(status)}.`);
     } catch (error) {
       members.forEach((member, index) => { member.status = previous[index]; });
       renderApplicantBoard();
@@ -1671,7 +1742,7 @@
         if (button.disabled) return;
         button.disabled = true; button.textContent = 'Preparing…';
         try {
-          const csv = candidateDataToCsv({ person, items: group.items, jobTitle, stage: group.status, exportedAt: new Date().toISOString() });
+          const csv = candidateDataToCsv({ person, items: group.items.map(item => ({ ...item, status: applicantStageLabel(item.status) })), jobTitle, stage: applicantStageLabel(group.status), exportedAt: new Date().toISOString() });
           downloadTextFile('pathway-candidate-data-' + new Date().toISOString().slice(0, 10) + '.csv', csv);
           showToast('Candidate data downloaded.');
         } catch (error) {
@@ -1716,7 +1787,7 @@
     const filename = applicant.resume_filename || 'resume';
     // Why the system moved this candidate to Failed (only while the candidate is still in Failed).
     const autoFailReason = group.status === 'failed' ? (group.items.find(item => item.auto_fail_reason) || {}).auto_fail_reason || '' : '';
-    const statusOptions = visibleApplicantStages().map(stage => `<option value="${stage.key}" ${group.status === stage.key ? 'selected' : ''}>${stage.label}</option>`).join('');
+    const statusOptions = visibleApplicantStages().map(stage => `<option value="${esc(stage.key)}" ${group.status === stage.key ? 'selected' : ''}>${esc(stage.label)}</option>`).join('');
 
     setModal(`<div class="applicant-review-layout" data-detail-applicant="${esc(person.id)}" data-detail-tab="${tab}">
       <section class="applicant-review-left" aria-label="Applicant details">

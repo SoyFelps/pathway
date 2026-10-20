@@ -44,7 +44,7 @@ test('workspace UI includes search, flow filter, standard and fit Kanban stages,
 
 test('stages have one fixed order: Failed, New, Screening, Team Fit, Skill Fit, Interview, Promising, Offer, Withdrawn, Hired', () => {
   const builder = read('builder.js');
-  const stages = builder.match(/const applicantStages = \[([\s\S]*?)\n  \];/)?.[1];
+  const stages = builder.match(/const standardApplicantStages = \[([\s\S]*?)\n  \];/)?.[1];
   assert.ok(stages, 'applicant stage list exists');
   const order = ['failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'].map(key => stages.indexOf(`key: '${key}'`));
   assert.ok(order.every(index => index >= 0));
@@ -74,9 +74,8 @@ test('a Customize button opens a modal that turns stages on and off; Failed, New
   assert.equal(builder.includes('applicant-fit-stage-'), false, 'the old Team Fit / Skill Fit checkboxes are gone');
   assert.match(builder, /\{ key: 'failed', label: 'Failed', color: 'stage-failed', locked: true \}/);
   assert.match(builder, /\{ key: 'new', label: 'New', color: 'stage-new', locked: true \}/);
-  assert.match(builder, /applicantStagesEnabled = loadApplicantStagesPreference\(\)/);
-  assert.match(builder, /stage\.locked \|\| applicantStagesEnabled\[stage\.key\] \|\| applicantHasStage\(stage\.key\)/);
-  assert.match(builder, /function openCustomizeStages\(\)/);
+  assert.match(builder, /applicantStageEnabled\(stage\) \|\| applicantHasStage\(stage\.key\)/);
+  assert.match(builder, /function openCustomizeStages\(/);
   assert.match(builder, /const locked = stage\.locked \|\| occupied;/);
   assert.match(builder, /This column contains applicants\. Move them to another stage before disabling it\./);
   assert.match(builder, /if \(!event\.target\.checked && applicantHasStage\(stageKey\)\)/);
@@ -84,7 +83,7 @@ test('a Customize button opens a modal that turns stages on and off; Failed, New
   assert.match(migration, /check \(status in \('failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'\)\)/);
   assert.match(migration, /public\.workspace_user_has_permission\(workspace_id, 'applicants'\)/);
   assert.match(read('styles.css'), /\.stage-option\.is-locked\{cursor:not-allowed\}/);
-  assert.match(read('index.html'), /builder\.js\?v=text-reset-20261020/);
+  assert.match(read('index.html'), /builder\.js\?v=custom-stages-j-20261020/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -157,13 +156,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=text-reset-20261020/);
-  assert.match(read('index.html'), /pathway\.js\?v=text-reset-20261020/);
-  assert.match(read('apply.html'), /candidate\.js\?v=text-reset-20261020/);
-  assert.match(read('index.html'), /candidate\.js\?v=text-reset-20261020/);
-  assert.match(read('apply.html'), /styles\.css\?v=text-reset-20261020/);
-  assert.match(read('index.html'), /styles\.css\?v=text-reset-20261020/);
-  assert.match(read('apply.html'), /backend\.js\?v=text-reset-20261020/);
+  assert.match(read('apply.html'), /pathway\.js\?v=custom-stages-j-20261020/);
+  assert.match(read('index.html'), /pathway\.js\?v=custom-stages-j-20261020/);
+  assert.match(read('apply.html'), /candidate\.js\?v=custom-stages-j-20261020/);
+  assert.match(read('index.html'), /candidate\.js\?v=custom-stages-j-20261020/);
+  assert.match(read('apply.html'), /styles\.css\?v=custom-stages-j-20261020/);
+  assert.match(read('index.html'), /styles\.css\?v=custom-stages-j-20261020/);
+  assert.match(read('apply.html'), /backend\.js\?v=custom-stages-j-20261020/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
