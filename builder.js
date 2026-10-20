@@ -35,7 +35,8 @@
   let applicantFilter = '';
   let failedColumnOpen = false;
   let applicantSearch = '';
-  let applicantFitStagesEnabled = { team_fit: false, skill_fit: false };
+  let applicantStagesEnabled = {};
+  let applicantStageOrder = [];
   let currentCardSummaryRequest = 0;
   let paymentHistoryOpen = false;
   let paymentHistoryLoaded = false;
@@ -49,27 +50,56 @@
   const locallyUnpublishedFlows = new WeakSet();
   const flowEditRevisions = new WeakMap();
   const applicantStages = [
-    { key: 'failed', label: 'Failed', color: 'stage-failed' },
-    { key: 'new', label: 'New', color: 'stage-new' },
-    { key: 'team_fit', label: 'Team Fit', color: 'stage-team-fit', optional: true },
-    { key: 'skill_fit', label: 'Skill Fit', color: 'stage-skill-fit', optional: true },
-    { key: 'promising', label: 'Promising', color: 'stage-promising' },
-    { key: 'approved', label: 'Approved', color: 'stage-approved' }
+    { key: 'failed', label: 'Failed', color: 'stage-failed', locked: true },
+    { key: 'new', label: 'New', color: 'stage-new', locked: true },
+    { key: 'screening', label: 'Screening', color: 'stage-screening', defaultOn: true },
+    { key: 'team_fit', label: 'Team Fit', color: 'stage-team-fit' },
+    { key: 'skill_fit', label: 'Skill Fit', color: 'stage-skill-fit' },
+    { key: 'interview', label: 'Interview', color: 'stage-interview', defaultOn: true },
+    { key: 'promising', label: 'Promising', color: 'stage-promising', defaultOn: true },
+    { key: 'offer', label: 'Offer', color: 'stage-offer', defaultOn: true },
+    { key: 'withdrawn', label: 'Withdrawn', color: 'stage-withdrawn' },
+    { key: 'hired', label: 'Hired', color: 'stage-hired', defaultOn: true, pinnedLast: true }
   ];
-  const optionalApplicantStageKeys = new Set(['team_fit', 'skill_fit']);
-  function applicantFitStagePreferenceKey(stageKey) { return `pathway:applicant-fit-stage:${workspace?.id || 'default'}:${stageKey}`; }
-  function loadApplicantFitStagesPreference() {
+  // Failed and New stay first and Hired stays last; the stages in between can be reordered in Customize.
+  const movableApplicantStageKeys = applicantStages.filter(stage => !stage.locked && !stage.pinnedLast).map(stage => stage.key);
+  function applicantStageOrderPreferenceKey() { return `pathway:applicant-stage-order:${workspace?.id || 'default'}`; }
+  function loadApplicantStageOrderPreference() {
     try {
-      return Object.fromEntries([...optionalApplicantStageKeys].map(stageKey => [stageKey, localStorage.getItem(applicantFitStagePreferenceKey(stageKey)) === 'true']));
-    } catch (_) { return { team_fit: false, skill_fit: false }; }
+      const saved = JSON.parse(localStorage.getItem(applicantStageOrderPreferenceKey()) || 'null');
+      if (Array.isArray(saved)) {
+        const known = saved.filter((key, index) => movableApplicantStageKeys.includes(key) && saved.indexOf(key) === index);
+        return [...known, ...movableApplicantStageKeys.filter(key => !known.includes(key))];
+      }
+    } catch (_) { /* Fall back to the standard order. */ }
+    return [...movableApplicantStageKeys];
   }
-  function saveApplicantFitStagePreference(stageKey) {
-    try { localStorage.setItem(applicantFitStagePreferenceKey(stageKey), String(applicantFitStagesEnabled[stageKey])); }
-    catch (_) { /* Keep the checkbox usable when browser storage is unavailable. */ }
+  function saveApplicantStageOrderPreference() {
+    try { localStorage.setItem(applicantStageOrderPreferenceKey(), JSON.stringify(applicantStageOrder)); }
+    catch (_) { /* Keep the modal usable when browser storage is unavailable. */ }
+  }
+  function orderedApplicantStages() {
+    const byKey = Object.fromEntries(applicantStages.map(stage => [stage.key, stage]));
+    const order = applicantStageOrder.length ? applicantStageOrder : movableApplicantStageKeys;
+    return [...applicantStages.filter(stage => stage.locked), ...order.map(key => byKey[key]), ...applicantStages.filter(stage => stage.pinnedLast)];
+  }
+  function applicantStagePreferenceKey() { return `pathway:applicant-stages:${workspace?.id || 'default'}`; }
+  function defaultApplicantStagesEnabled() { return Object.fromEntries(applicantStages.map(stage => [stage.key, Boolean(stage.locked || stage.defaultOn)])); }
+  function loadApplicantStagesPreference() {
+    const enabled = defaultApplicantStagesEnabled();
+    try {
+      const saved = JSON.parse(localStorage.getItem(applicantStagePreferenceKey()) || 'null');
+      if (saved && typeof saved === 'object') applicantStages.forEach(stage => { if (!stage.locked && typeof saved[stage.key] === 'boolean') enabled[stage.key] = saved[stage.key]; });
+    } catch (_) { /* Fall back to the default columns when browser storage is unavailable. */ }
+    return enabled;
+  }
+  function saveApplicantStagesPreference() {
+    try { localStorage.setItem(applicantStagePreferenceKey(), JSON.stringify(applicantStagesEnabled)); }
+    catch (_) { /* Keep the modal usable when browser storage is unavailable. */ }
   }
   function applicantHasStage(stageKey) { return C.groupApplicants(applicants).some(group => group.status === stageKey); }
   function visibleApplicantStages() {
-    return applicantStages.filter(stage => !stage.optional || applicantFitStagesEnabled[stage.key] || applicantHasStage(stage.key));
+    return orderedApplicantStages().filter(stage => stage.locked || applicantStagesEnabled[stage.key] || applicantHasStage(stage.key));
   }
 
   const currentFlow = () => flows.find(flow => flow.id === currentId);
@@ -699,11 +729,12 @@
   async function renderApplicants() {
     if (!hasPermission('applicants')) return renderAccessMessage('applicants');
     setRoute('applicants');
-    applicantFitStagesEnabled = loadApplicantFitStagesPreference();
+    applicantStagesEnabled = loadApplicantStagesPreference();
+    applicantStageOrder = loadApplicantStageOrderPreference();
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
     flowResponsiblesCache.clear();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><select id="applicant-flow-filter" class="applicants-filter" aria-label="Filter applicants by job"><option value="">All jobs</option>${applicantFlowLabels.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join('')}</select><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button></div></div><div class="applicant-stage-toggle-wrap" id="applicant-stage-toggle-wrap"></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><select id="applicant-flow-filter" class="applicants-filter" aria-label="Filter applicants by job"><option value="">All jobs</option>${applicantFlowLabels.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join('')}</select><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button></div></div><div class="applicant-stage-toggle-wrap" id="applicant-stage-toggle-wrap"><button class="btn btn-sm" type="button" id="customize-stages">Customize</button></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
     bindSidebar();
     bindPlanControl();
     root.querySelector('#signout').addEventListener('click', doSignOut);
@@ -1260,36 +1291,85 @@
     });
   }
 
+  function openCustomizeStages() {
+    const rows = orderedApplicantStages().map(stage => {
+      const occupied = applicantHasStage(stage.key);
+      const locked = stage.locked || occupied;
+      const reason = stage.locked ? 'This column is always on.' : (occupied ? 'This column contains applicants. Move them to another stage before disabling it.' : '');
+      const movable = movableApplicantStageKeys.includes(stage.key);
+      const handle = movable ? `<button class="stage-drag" type="button" data-drag-handle aria-label="Reorder ${stage.label}. Use the up and down arrow keys." title="Drag to reorder">${'⠿'}</button>` : '<span class="stage-drag is-fixed" aria-hidden="true"></span>';
+      return `<label class="stage-option${locked ? ' is-locked' : ''}${movable ? ' is-movable' : ''}" data-stage-row="${stage.key}" ${movable ? 'draggable="true"' : ''} ${reason ? `title="${reason}"` : ''}><span class="stage-option-name">${handle}<span class="stage-dot ${stage.color}"></span>${stage.label}</span><input type="checkbox" data-stage-key="${stage.key}" ${stage.locked || applicantStagesEnabled[stage.key] || occupied ? 'checked' : ''} ${locked ? 'disabled' : ''}></label>`;
+    }).join('');
+    const isDefaultOrder = applicantStageOrder.every((key, index) => key === movableApplicantStageKeys[index]);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Applicant board</div><h2>Customize stages</h2><p>Choose which columns appear and drag the handles to reorder them. Failed and New stay first and Hired stays last.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="stage-options">${rows}</div><div class="modal-actions stage-modal-actions"><button class="stage-reset" type="button" id="reset-stage-order" ${isDefaultOrder ? 'disabled' : ''}>Reset to default order</button><button class="btn btn-primary" data-close>Done</button></div>`);
+    modalRoot.querySelectorAll('.stage-option input').forEach(toggle => toggle.addEventListener('change', event => {
+      const stageKey = event.target.dataset.stageKey;
+      if (!event.target.checked && applicantHasStage(stageKey)) { event.target.checked = true; return; }
+      applicantStagesEnabled[stageKey] = event.target.checked;
+      saveApplicantStagesPreference();
+      renderApplicantBoard();
+    }));
+    const moveStage = (key, targetKey, after) => {
+      if (key === targetKey) return;
+      const next = applicantStageOrder.filter(item => item !== key);
+      const index = next.indexOf(targetKey);
+      next.splice(index + (after ? 1 : 0), 0, key);
+      applicantStageOrder = next;
+      saveApplicantStageOrderPreference();
+      renderApplicantBoard();
+      openCustomizeStages();
+    };
+    let dragKey = '';
+    const clearDropMarks = () => modalRoot.querySelectorAll('.drop-before, .drop-after').forEach(item => item.classList.remove('drop-before', 'drop-after'));
+    modalRoot.querySelectorAll('.stage-option.is-movable').forEach(row => {
+      const key = row.dataset.stageRow;
+      row.addEventListener('dragstart', event => { dragKey = key; row.classList.add('is-dragging'); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', key); });
+      row.addEventListener('dragend', () => { dragKey = ''; row.classList.remove('is-dragging'); clearDropMarks(); });
+      row.addEventListener('dragover', event => {
+        if (!dragKey || dragKey === key) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        const rect = row.getBoundingClientRect();
+        const after = event.clientY > rect.top + rect.height / 2;
+        clearDropMarks();
+        row.classList.add(after ? 'drop-after' : 'drop-before');
+      });
+      row.addEventListener('dragleave', event => { if (!row.contains(event.relatedTarget)) row.classList.remove('drop-before', 'drop-after'); });
+      row.addEventListener('drop', event => {
+        if (!dragKey || dragKey === key) return;
+        event.preventDefault();
+        const rect = row.getBoundingClientRect();
+        clearDropMarks();
+        moveStage(dragKey, key, event.clientY > rect.top + rect.height / 2);
+      });
+      row.querySelector('[data-drag-handle]')?.addEventListener('keydown', event => {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+        event.preventDefault();
+        const index = applicantStageOrder.indexOf(key);
+        const target = applicantStageOrder[index + (event.key === 'ArrowUp' ? -1 : 1)];
+        if (!target) return;
+        moveStage(key, target, event.key === 'ArrowDown');
+        modalRoot.querySelector(`[data-stage-row="${key}"] [data-drag-handle]`)?.focus();
+      });
+    });
+    modalRoot.querySelector('#reset-stage-order')?.addEventListener('click', () => {
+      applicantStageOrder = [...movableApplicantStageKeys];
+      saveApplicantStageOrderPreference();
+      renderApplicantBoard();
+      openCustomizeStages();
+    });
+  }
+
   function renderApplicantBoard() {
     const content = root.querySelector('#applicants-content');
     if (!content) return;
-    const optionalStages = applicantStages.filter(stage => stage.optional);
-    for (const stage of optionalStages) {
-      if (applicantHasStage(stage.key) && !applicantFitStagesEnabled[stage.key]) {
-        applicantFitStagesEnabled[stage.key] = true;
-        saveApplicantFitStagePreference(stage.key);
+    for (const stage of applicantStages) {
+      if (!stage.locked && applicantHasStage(stage.key) && !applicantStagesEnabled[stage.key]) {
+        applicantStagesEnabled[stage.key] = true;
+        saveApplicantStagesPreference();
       }
     }
-    const toggleWrap = root.querySelector('#applicant-stage-toggle-wrap');
-    if (toggleWrap) {
-      toggleWrap.innerHTML = optionalStages.map(stage => {
-        const occupied = applicantHasStage(stage.key);
-        const lockTooltip = occupied ? 'title="This column contains applicants. Move them to another stage before disabling it."' : '';
-        return `<label class="applicant-stage-toggle" for="applicant-fit-stage-${stage.key}"><span class="applicant-stage-toggle-control" ${lockTooltip}><input id="applicant-fit-stage-${stage.key}" type="checkbox" data-stage-key="${stage.key}" ${applicantFitStagesEnabled[stage.key] ? 'checked' : ''} ${occupied ? 'disabled' : ''}></span><span>${stage.label}</span></label>`;
-      }).join('');
-      toggleWrap.querySelectorAll('.applicant-stage-toggle input').forEach(toggle => {
-        toggle.addEventListener('change', event => {
-          const stageKey = event.target.dataset.stageKey;
-          if (!event.target.checked && applicantHasStage(stageKey)) {
-            event.target.checked = true;
-            return;
-          }
-          applicantFitStagesEnabled[stageKey] = event.target.checked;
-          saveApplicantFitStagePreference(stageKey);
-          renderApplicantBoard();
-        });
-      });
-    }
+    root.querySelector('#customize-stages')?.addEventListener('click', openCustomizeStages);
     const term = applicantSearch.trim().toLowerCase();
     const allGroups = C.groupApplicants(applicants);
     const visible = allGroups.filter(group => !term || group.items.some(applicant => {
@@ -1305,7 +1385,6 @@
       return;
     }
     const stages = visibleApplicantStages();
-    const optionalStageCount = stages.filter(stage => stage.optional).length;
     const otherStageCount = stages.length - 1;
     const applicationTotal = visible.reduce((total, group) => total + group.count, 0);
     content.innerHTML = `<div class="kanban-summary"><strong>${visible.length}</strong> ${visible.length === 1 ? 'applicant' : 'applicants'}${applicationTotal > visible.length ? ` <span class="kanban-summary-extra">· ${applicationTotal} applications</span>` : ''}${filterName ? ` for <strong>${esc(filterName)}</strong>` : ' across all jobs'}${applicants.length >= 1000 ? ' · Showing the latest 1,000; filter by job to narrow the list.' : ''}</div><section class="kanban-board failed-board${failedColumnOpen ? ' failed-open' : ''}" style="--other-stages:${otherStageCount}" aria-label="Applicant pipeline">${stages.map(stage => {

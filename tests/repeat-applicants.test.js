@@ -41,11 +41,11 @@ test('a candidate takes the stage of the most recent application and groups are 
   const groups = Core.groupApplicants([
     application('a1', 'joey@mail.com', '2026-10-06T10:00:00Z', 'promising'),
     application('a2', 'joey@mail.com', '2026-10-17T10:00:00Z', 'failed'),
-    application('a3', 'anne@mail.com', '2026-10-12T10:00:00Z', 'approved'),
+    application('a3', 'anne@mail.com', '2026-10-12T10:00:00Z', 'offer'),
   ]);
   assert.deepEqual(Array.from(groups, group => group.latest.id), ['a2', 'a3']);
   assert.equal(groups[0].status, 'failed');
-  assert.equal(groups[1].status, 'approved');
+  assert.equal(groups[1].status, 'offer');
 });
 
 test('grouping copes with empty input, missing e-mail and unparseable dates', () => {
