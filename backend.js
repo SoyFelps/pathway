@@ -724,6 +724,18 @@
     if (!data || typeof data !== 'object' || !Array.isArray(data.daily) || !data.totals) throw new Error('The report could not be read. Please try again.');
     return data;
   }
+  // Where candidates stop in ONE job's form: the steps of its published form with how many people reached each one.
+  async function getReportSteps(workspaceId, flowId, { from = null, to = null, versionId = null } = {}) {
+    await requireSession();
+    if (typeof flowId !== 'string' || !/^[0-9a-f-]{36}$/i.test(flowId)) throw new Error('Choose a job to see where candidates stop.');
+    const day = value => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
+    const version = typeof versionId === 'string' && /^[0-9a-f-]{36}$/i.test(versionId) ? versionId : null;
+    const { data, error } = await client.rpc('get_report_steps', { p_workspace_id: workspaceId, p_flow_id: flowId, p_from: day(from), p_to: day(to), p_version_id: version });
+    if (error) throw error;
+    if (!data || typeof data !== 'object' || typeof data.hasData !== 'boolean') throw new Error('The steps could not be read. Please try again.');
+    if (data.hasData && (!Array.isArray(data.nodes) || !Array.isArray(data.edges) || !data.transitions || !data.completions)) throw new Error('The steps could not be read. Please try again.');
+    return data;
+  }
   // The jobs of the report, one page at a time (search, sorting and counting happen in the database, so there is no cap).
   async function getReportJobs(workspaceId, { from = null, to = null, company = '', search = '', sort = 'candidates', limit = 10, offset = 0 } = {}) {
     await requireSession();
@@ -830,13 +842,13 @@
   }
 
   // Anonymous counter of a job page: "view" when it opens, "start" at the first keystroke in the form, and "step" (with the
-  // step's id) when the first page ("details") or a question is reached. Never blocks the page.
-  function trackJobEvent(publishedFlowId, event, nodeId) {
+  // step's id and the step the visit came from) when the first page ("details") or a question is reached. Never blocks the page.
+  function trackJobEvent(publishedFlowId, event, nodeId, fromNodeId) {
     try {
       void fetch(APPLICATIONS_FUNCTION, {
         method: 'POST', keepalive: true,
         headers: { apikey: config.publishableKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'trackEvent', publishedFlowId, event, ...(nodeId ? { nodeId: String(nodeId) } : {}) })
+        body: JSON.stringify({ action: 'trackEvent', publishedFlowId, event, ...(nodeId ? { nodeId: String(nodeId) } : {}), ...(fromNodeId ? { fromNodeId: String(fromNodeId) } : {}) })
       }).catch(() => {});
     } catch (_) { /* counting is best effort */ }
   }
@@ -924,6 +936,7 @@
     listTeamOverview,
     getWorkspaceReport,
     getReportJobs,
+    getReportSteps,
     getBoardConfig,
     createCustomStage,
     renameCustomStage,

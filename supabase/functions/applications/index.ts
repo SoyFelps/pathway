@@ -597,7 +597,8 @@ Deno.serve(async (req: Request) => {
     return fail(req, 400, "The application request is invalid.");
   }
   // Anonymous page counters (view / start of the form / a step reached). No IP, no cookie, no person is stored; always answers ok.
-  // A "step" is the first page ("details") or one question of the published form; the database refuses any other step.
+  // A "step" is the first page ("details") or one question of the published form, with the step the visit came from;
+  // the database refuses anything that is not a real connection of the published form.
   if (body.action === "trackEvent") {
     const publishedId = cleanName(body.publishedFlowId, 100);
     const event = String(body.event ?? "");
@@ -606,8 +607,9 @@ Deno.serve(async (req: Request) => {
       if (error) console.error("Job event could not be counted:", error.message);
     } else if (UUID_RE.test(publishedId) && event === "step") {
       const nodeId = cleanName(body.nodeId, 80);
+      const fromNodeId = cleanName(body.fromNodeId, 80);
       if (nodeId) {
-        const { error } = await admin.rpc("record_job_step", { p_published_flow_id: publishedId, p_node_id: nodeId });
+        const { error } = await admin.rpc("record_job_step", { p_published_flow_id: publishedId, p_node_id: nodeId, p_from_node_id: fromNodeId || null });
         if (error) console.error("Job step could not be counted:", error.message);
       }
     }

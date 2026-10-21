@@ -495,6 +495,10 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .rpt-card{border:1px solid var(--line);border-radius:13px;background:var(--surface);padding:20px 22px;box-shadow:0 1px 2px var(--shadow-xs)}
 .rpt-card-head h2{font:700 18px var(--display);letter-spacing:-.4px;margin:0 0 3px;color:var(--ink)}
 .rpt-card-head p{margin:0 0 4px;color:var(--muted);font-size:12px}
+.rpt-card-head:has(#rpt-steps-version-slot){display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.rpt-version{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted);max-width:100%}
+.rpt-version select{max-width:100%;min-width:0}
+@media (max-width:640px){.rpt-version{width:100%}.rpt-version select{width:100%}}
 .rpt-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .rpt-grid>.rpt-card{min-width:0}
 .rpt-note{margin:10px 0 0;color:var(--text-subtle);font-size:11px}
@@ -594,3 +598,30 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .rpt-jobs-tools .applicants-search{flex:1;min-width:0;width:auto}
 .rpt-jobs-tools .applicants-filter{flex:1;min-width:0}
 }
+/* Reports: where candidates drop off (inside a chosen job). */
+.rpt-steps-head,.rpt-step{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(70px,1fr) 52px 74px;align-items:center;gap:4px 14px}
+.rpt-steps-head{margin-top:14px;padding:0 0 6px;border-bottom:1px solid var(--border-subtle);font-size:10px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--soft)}
+.rpt-steps-head span:nth-child(3),.rpt-steps-head span:nth-child(4){text-align:right}
+.rpt-steps{list-style:none;margin:0;padding:0}
+.rpt-step{padding:7px 0;border-bottom:1px solid var(--border-subtle)}
+.rpt-step:last-child{border-bottom:0}
+.rpt-step-name{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 8px;min-width:0;font-size:13px;color:var(--ink)}
+.rpt-step-num{font-size:10px;letter-spacing:.06em;font-weight:700;color:var(--text-subtle)}
+.rpt-step-label{flex:1 1 0;min-width:55%;font-weight:600;overflow-wrap:anywhere}
+.rpt-step-name small{flex-basis:100%;font-size:11px;color:var(--soft);line-height:1.35}
+.rpt-steps .rpt-track{height:5px}
+.rpt-step-count{text-align:right;font-size:13px;font-weight:700;color:var(--ink)}
+.rpt-left{text-align:right;font-size:12px;font-weight:600;color:var(--red-text);white-space:nowrap}
+.rpt-left.is-top{color:var(--red);font-weight:700}
+.rpt-left.is-none{color:var(--text-faint);font-weight:400}
+.rpt-step-views .rpt-fill{background:var(--green-hover)}
+.rpt-step-start .rpt-fill{background:var(--green-line)}
+.rpt-step-submitted .rpt-fill{background:var(--green)}
+@media(max-width:760px){
+.rpt-steps-head,.rpt-step{grid-template-columns:minmax(0,1fr) 44px 66px;gap:5px 10px}
+.rpt-steps-head span:nth-child(2){display:none}
+.rpt-step .rpt-track{grid-column:1 / -1;grid-row:2}
+.rpt-step .rpt-step-count{grid-row:1;grid-column:2}
+.rpt-step .rpt-left{grid-row:1;grid-column:3}
+}
+.rpt-step-name{padding-left:calc(var(--lvl, 0) * 14px)}

@@ -783,6 +783,10 @@
   let reportJobsSort = 'candidates';
   let reportJobsRequestId = 0;
   let reportJobsSearchTimer = null;
+  let reportSteps = null;
+  let reportStepsRequestId = 0;
+  let reportStepsVersion = '';
+  let reportStepsVersionFlow = '';
   const reportNumber = value => Number(value || 0).toLocaleString('en-US');
   const reportDayLabel = (day, withYear = false) => new Date(day + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' });
   const reportPercent = (part, whole) => (whole > 0 ? Math.min(100, Math.round((part / whole) * 100)) : null);
@@ -916,6 +920,126 @@
     }
     paintReportJobs();
   }
+  // ---- Where candidates drop off (one job) ----------------------------------------------------------------------------
+  // The database returns the steps of the published form and how many visits reached each one; here the order of the
+  // questions is worked out (the form can branch) and, for every step, how many people got there and how many stopped.
+  const REPORT_STEP_MIN_SAMPLE = 20;
+  function reportStepsModel(raw) {
+    const nodes = new Map((raw.nodes || []).map(node => [node.id, node]));
+    const edges = raw.edges || [];
+    const done = raw.completions || {};
+    // transitions["from>to"] = visits that moved from one step to the next; "start>details" is the first page being completed.
+    const arrivals = {};
+    const departures = {};
+    Object.entries(raw.transitions || {}).forEach(([key, count]) => {
+      const cut = key.indexOf('>');
+      const from = key.slice(0, cut), to = key.slice(cut + 1);
+      arrivals[to] = (arrivals[to] || 0) + Number(count || 0);
+      departures[from] = (departures[from] || 0) + Number(count || 0);
+    });
+    const reached = id => arrivals[id] || 0;
+    const moved = id => departures[id] || 0;
+    const isQuestion = id => ['shortText', 'singleChoice', 'multiChoice'].includes(nodes.get(id)?.type);
+    const info = [...nodes.values()].find(node => node.type === 'candidateInfo');
+    const outgoing = id => edges.filter(edge => edge.from === id);
+    const incoming = id => edges.filter(edge => edge.to === id && (edge.from === info?.id || isQuestion(edge.from)));
+    // Questions in reading order: every path stays together and a question where paths meet comes after all of them
+    // (reverse post-order of a depth-first walk, visiting the connections in reverse).
+    const order = [];
+    const visited = new Set();
+    const visit = id => {
+      if (visited.has(id) || !nodes.has(id)) return;
+      visited.add(id);
+      [...outgoing(id)].reverse().forEach(edge => visit(edge.to));
+      if (isQuestion(id)) order.push(id);
+    };
+    if (info) [...outgoing(info.id)].reverse().forEach(edge => visit(edge.to));
+    order.reverse();
+    const number = new Map(order.map((id, index) => [id, index + 1]));
+    // A question that only one answer of the previous question leads to is indented under it; paths that meet again are not.
+    const level = new Map();
+    const branchOf = new Map();
+    order.forEach(id => {
+      const arriving = incoming(id);
+      const parents = [...new Set(arriving.map(edge => edge.from))];
+      if (parents.length === 1 && parents[0] !== info?.id) {
+        const parentLevel = level.get(parents[0]) || 0;
+        const branchHead = arriving.length === 1 && arriving[0].option;
+        level.set(id, branchHead ? Math.min(3, parentLevel + 1) : parentLevel);
+        if (branchHead) branchOf.set(id, 'If Q' + number.get(parents[0]) + ' = “' + arriving[0].option + '”');
+      } else level.set(id, 0);
+    });
+    const views = Number(raw.views || 0), starts = Number(raw.starts || 0);
+    const rows = [
+      { kind: 'views', label: 'Opened the job page', reached: views, left: Math.max(0, views - starts), leftHere: 'did not start the form' },
+      { kind: 'start', label: 'Started the first page', reached: starts, left: Math.max(0, starts - reached('details')), leftHere: 'left the first page' },
+      { kind: 'details', label: 'Completed the first page', reached: reached('details'), left: Math.max(0, reached('details') - moved('details') - Number(done.details || 0)), leftHere: 'stopped here' }
+    ];
+    order.forEach(id => {
+      rows.push({ kind: 'question', number: number.get(id), label: nodes.get(id).label || 'Question', hint: branchOf.get(id) || '', level: level.get(id) || 0, reached: reached(id), left: Math.max(0, reached(id) - moved(id) - Number(done[id] || 0)), leftHere: 'stopped here' });
+    });
+    Object.keys(arrivals).filter(id => id !== 'details' && !nodes.has(id) && reached(id) > 0).forEach(id => rows.push({ kind: 'removed', label: 'A step that was removed from the form', reached: reached(id), left: null, leftHere: '' }));
+    rows.push({ kind: 'submitted', label: 'Submitted an application', reached: Number(raw.submitted || 0), left: null, leftHere: '' });
+    rows.forEach(row => { row.share = row.left !== null && row.reached > 0 ? row.left / row.reached : null; });
+    // The biggest drop inside the form (visitors who never start are normal and would hide it), with enough people to mean something.
+    const candidates = rows.filter(row => ['start', 'details', 'question'].includes(row.kind) && row.reached >= REPORT_STEP_MIN_SAMPLE && row.left > 0);
+    const top = candidates.reduce((best, row) => (!best || row.share > best.share || (row.share === best.share && row.left > best.left) ? row : best), null);
+    return { rows, top };
+  }
+  function reportStepsHtml(raw) {
+    if (!raw.hasData) return '<p class="rpt-empty">' + (raw.versions && raw.versions.length > 1 ? 'No steps were counted for this version in the chosen period. Try a wider period or another version.' : 'No steps have been counted for this job yet. They are counted when candidates open its form.') + '</p>';
+    const model = reportStepsModel(raw);
+    const maxReached = Math.max(1, ...model.rows.map(row => row.reached));
+    const since = raw.since && reportData && reportData.range && raw.range.from > reportData.range.from
+      ? '<p class="rpt-note">Steps are counted from ' + esc(reportDayLabel(raw.since, true)) + ', so the numbers above cover ' + esc(reportDayLabel(raw.range.from)) + ' – ' + esc(reportDayLabel(raw.range.to, true)) + '.</p>' : '';
+    return '<div class="rpt-steps-head" aria-hidden="true"><span>Step</span><span></span><span>Reached</span><span>Stopped</span></div>'
+      + '<ol class="rpt-steps">' + model.rows.map(row => {
+        const isTop = model.top === row;
+        const name = (row.kind === 'question' ? '<span class="rpt-step-num">Q' + row.number + '</span>' : '') + '<span class="rpt-step-label">' + esc(row.label) + '</span>' + (row.hint ? '<small>' + esc(row.hint) + '</small>' : '');
+        const stopped = row.left === null ? '<span class="rpt-left"></span>' : (row.left > 0
+          ? '<span class="rpt-left' + (isTop ? ' is-top' : '') + '" title="' + esc(reportNumber(row.left) + ' ' + row.leftHere) + '">−' + reportNumber(row.left) + ' · ' + Math.round(row.share * 100) + '%</span>'
+          : '<span class="rpt-left is-none">—</span>');
+        return '<li class="rpt-step rpt-step-' + row.kind + (isTop ? ' is-top' : '') + '"><span class="rpt-step-name" style="--lvl:' + (row.level || 0) + '">' + name + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (row.reached / maxReached * 100) + '%"></span></span><strong class="rpt-step-count">' + reportNumber(row.reached) + '</strong>' + stopped + '</li>';
+      }).join('') + '</ol>' + since;
+  }
+  // The form changes over time; the picker only exists once a job has more than one version.
+  function reportVersionLabel(version) {
+    const started = reportDayLabel(String(version.startedAt).slice(0, 10), true);
+    if (version.current) return 'Version ' + version.number + ' · current (since ' + started + ')';
+    return 'Version ' + version.number + ' · ' + reportDayLabel(String(version.startedAt).slice(0, 10)) + ' – ' + reportDayLabel(String(version.endedAt).slice(0, 10), true);
+  }
+  function reportVersionPickerHtml(raw) {
+    const versions = Array.isArray(raw.versions) ? raw.versions : [];
+    if (versions.length < 2) return '';
+    const selected = raw.version ? raw.version.id : '';
+    return '<label class="rpt-version"><span>Form version</span><select id="rpt-steps-version" class="applicants-filter" aria-label="Form version">'
+      + versions.map(version => '<option value="' + esc(version.id) + '"' + (version.id === selected ? ' selected' : '') + '>' + esc(reportVersionLabel(version)) + '</option>').join('') + '</select></label>';
+  }
+  async function loadReportSteps() {
+    const body = root.querySelector('#rpt-steps-body');
+    const slot = root.querySelector('#rpt-steps-version-slot');
+    const job = reportData && reportData.selectedJob;
+    if (!body || !job) return;
+    if (reportStepsVersionFlow !== job.id) { reportStepsVersionFlow = job.id; reportStepsVersion = ''; }
+    const requestId = ++reportStepsRequestId;
+    reportSteps = null;
+    body.innerHTML = '<div class="loading-card" style="margin-top:16px"><span class="brand-mark">↗</span><span>Loading the steps…</span></div>';
+    try {
+      const range = reportRangeResolved || {};
+      const raw = await window.PathwayBackend.getReportSteps(workspace.id, job.id, { from: range.from, to: range.to, versionId: reportStepsVersion });
+      if (requestId !== reportStepsRequestId || !root.querySelector('#rpt-steps-body')) return;
+      reportSteps = raw;
+      if (slot) {
+        slot.innerHTML = reportVersionPickerHtml(raw);
+        slot.querySelector('#rpt-steps-version')?.addEventListener('change', event => { reportStepsVersion = event.target.value; void loadReportSteps(); });
+      }
+      body.innerHTML = reportStepsHtml(raw);
+    } catch (error) {
+      if (requestId !== reportStepsRequestId || !root.querySelector('#rpt-steps-body')) return;
+      body.innerHTML = '<div class="auth-error show" role="alert">' + esc('Could not load the steps: ' + (error.message || 'check your connection and try again')) + '</div><button class="btn btn-sm" id="rpt-steps-retry" type="button" style="margin-top:10px">Try again</button>';
+      body.querySelector('#rpt-steps-retry')?.addEventListener('click', () => { void loadReportSteps(); });
+    }
+  }
   function reportToCsv(data, scopeLabel, jobRows) {
     const rows = [];
     const block = (title, header, lines) => { if (rows.length) rows.push([]); rows.push([title]); rows.push(header); lines.forEach(line => rows.push(line)); };
@@ -931,8 +1055,10 @@
     ]);
     block('Per day', ['day', 'visits', 'form starts', 'new candidates', 'repeat applications'], data.daily.map(d => [d.day, d.views, d.starts, d.candidates, Math.max(0, Number(d.applications || 0) - Number(d.candidates || 0))]));
     block('Where candidates are now', ['stage', 'candidates'], data.stages.map(s => [reportStageLabel(s.status), s.n]));
-    if (data.selectedJob) block('Auto-fail reasons', ['question', 'reason', 'candidates'], (data.autoFailGroups || []).flatMap(group => group.reasons.map(item => [group.question, item.reason, item.n])));
-    else block('Jobs', ['job', 'company', 'status', 'visits', 'form starts', 'new candidates', 'applications', 'completion rate', 'moved to Failed automatically'], jobRows.map(j => [j.title, j.company, j.status, j.views, j.starts, j.candidates, j.applications, reportPercentText(Number(j.funnelApplications || 0), Number(j.starts || 0)), j.autoFailed]));
+    if (data.selectedJob) {
+      if (reportSteps && reportSteps.hasData) block('Where candidates drop off' + (reportSteps.version && reportSteps.versions.length > 1 ? ' (form version ' + reportSteps.version.number + ')' : ''), ['step', 'people who reached it', 'stopped here', 'share who stopped'], reportStepsModel(reportSteps).rows.map(row => [(row.kind === 'question' ? 'Question ' + row.number + ': ' : '') + row.label, row.reached, row.left === null ? '' : row.left, row.share === null ? '' : Math.round(row.share * 100) + '%']));
+      block('Auto-fail reasons', ['question', 'reason', 'candidates'], (data.autoFailGroups || []).flatMap(group => group.reasons.map(item => [group.question, item.reason, item.n])));
+    } else block('Jobs', ['job', 'company', 'status', 'visits', 'form starts', 'new candidates', 'applications', 'completion rate', 'moved to Failed automatically'], jobRows.map(j => [j.title, j.company, j.status, j.views, j.starts, j.candidates, j.applications, reportPercentText(Number(j.funnelApplications || 0), Number(j.starts || 0)), j.autoFailed]));
     return rowsToCsv(rows);
   }
   function paintReport() {
@@ -977,8 +1103,10 @@
       + '<div class="rpt-grid"><section class="rpt-card"><div class="rpt-card-head"><div><h2>Application funnel</h2><p>How many visitors become applicants.</p></div></div>' + reportFunnelHtml(t) + '</section>'
       + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Where candidates are now</h2><p>Current stage of the people who applied in this period.</p></div></div>' + reportStagesHtml(data.stages) + '</section></div>'
       + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Automatic screening</h2><p>Candidates moved to Failed by your auto-fail rules.</p></div></div>' + reportAutoFailHtml(data) + '</section>'
+      + (data.selectedJob ? '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Where candidates drop off</h2><p>How many people reached each step of this job’s form, and how many stopped there.</p></div><div id="rpt-steps-version-slot"></div></div><div id="rpt-steps-body"></div></section>' : '')
       + (data.selectedJob ? '' : '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Jobs</h2><p>Compare your jobs in this period.</p></div></div><div class="rpt-jobs-tools"><input type="search" id="rpt-jobs-search" class="applicants-search" placeholder="Search jobs" aria-label="Search jobs" maxlength="100" value="' + esc(reportJobsSearch) + '"><select id="rpt-jobs-sort" class="applicants-filter" aria-label="Sort jobs">' + REPORT_JOB_SORTS.map(([value, text]) => '<option value="' + value + '"' + (reportJobsSort === value ? ' selected' : '') + '>' + text + '</option>').join('') + '</select></div><div id="rpt-jobs-body" aria-live="polite"></div></section>')
       + '<p class="rpt-foot">Visits and form starts are anonymous page counters and can be inflated by anyone who knows the job link. Candidates are counted once per job and e-mail address. Days are UTC days.</p>';
+    if (data.selectedJob) void loadReportSteps();
     if (!data.selectedJob) {
       content.querySelector('#rpt-jobs-search')?.addEventListener('input', event => {
         clearTimeout(reportJobsSearchTimer);
@@ -993,6 +1121,7 @@
     const content = root.querySelector('#reports-content');
     if (!content) return;
     const requestId = ++reportRequestId;
+    reportSteps = null; reportStepsRequestId += 1;
     content.setAttribute('aria-busy', 'true');
     content.innerHTML = '<div class="loading-card"><span class="brand-mark">↗</span><span>Loading the report…</span></div>';
     try {

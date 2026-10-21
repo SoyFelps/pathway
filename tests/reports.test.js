@@ -108,9 +108,9 @@ test('report text coming from the database is escaped before it reaches the page
 test('the Reports styles exist and the changed files carry a new cache version', () => {
   const css = read('styles.css');
   ['.reports-page', '.rpt-stats', '.rpt-chart', '.rpt-table'].forEach(selector => assert.ok(css.includes(selector), selector));
-  assert.match(read('index.html'), /builder\.js\?v=reports2-20261020/);
-  assert.match(read('index.html'), /backend\.js\?v=reports2-20261020/);
-  assert.match(read('index.html'), /styles\.css\?v=reports2-20261020/);
+  assert.match(read('index.html'), /builder\.js\?v=versions-20261021/);
+  assert.match(read('index.html'), /backend\.js\?v=versions-20261021/);
+  assert.match(read('index.html'), /styles\.css\?v=versions-20261021/);
 });
 
 const scaling = read('supabase/migrations/20261020230000_report_scaling_and_step_counts.sql');
@@ -133,23 +133,6 @@ test('the step counters are anonymous, closed to the app roles and only accept s
   assert.match(fn, /p_node_id = 'details'/);
   assert.match(fn, /revoke all on function public\.record_job_step\(uuid, text\) from public, anon, authenticated/);
   assert.match(fn, /grant execute on function public\.record_job_step\(uuid, text\) to service_role/);
-});
-
-test('the intake function and the candidate page count each step once per visit, best effort', () => {
-  const edge = read('supabase/functions/applications/index.ts');
-  assert.match(edge, /event === "step"/);
-  assert.match(edge, /cleanName\(body\.nodeId, 80\)/);
-  assert.match(edge, /admin\.rpc\("record_job_step", \{ p_published_flow_id: publishedId, p_node_id: nodeId \}\)/);
-  const candidate = read('candidate.js');
-  assert.match(candidate, /const reachedSteps = new Set\(\)/);
-  assert.match(candidate, /if \(reachedSteps\.has\(nodeId\)\) return;/);
-  assert.match(candidate, /trackJobEvent\(options\.publishedFlowId, 'step', nodeId\)/);
-  assert.match(candidate, /trackStep\('details'\)/);
-  assert.match(candidate, /trackStep\(node\.id\)/);
-  assert.match(candidate, /let trackStep = \(\) => \{\};/, 'previews and failures never count or break the page');
-  const backend = read('backend.js');
-  assert.match(backend, /function trackJobEvent\(publishedFlowId, event, nodeId\)/);
-  assert.match(backend, /\.\.\.\(nodeId \? \{ nodeId: String\(nodeId\) \} : \{\}\)/);
 });
 
 test('the overview report no longer lists jobs (they were capped at 100) and has a company filter', () => {
@@ -203,4 +186,195 @@ test('the auto-fail reasons are listed only for one job, grouped by question', (
   assert.match(builder, /rpt-af-group/);
   assert.match(builder, /esc\(group\.question\)/, 'question labels are typed by employers and must be escaped');
   assert.match(builder, /esc\(item\.reason\)/);
+});
+
+const stepsSql = read('supabase/migrations/20261021100000_report_steps.sql');
+test('the steps function is checked, aggregated and tied to one job of the workspace', () => {
+  assert.match(stepsSql, /auth\.uid\(\) is null or not public\.workspace_user_has_permission\(p_workspace_id, 'reports'\)/);
+  assert.match(stepsSql, /security definer/);
+  assert.match(stepsSql, /set search_path to ''/);
+  assert.match(stepsSql, /f\.id = p_flow_id and f\.workspace_id = p_workspace_id/);
+  assert.doesNotMatch(stepsSql.replace(/--[^\n]*/g, ''), /candidate_name|candidate_email|candidate_info|resume_|'answer'/, 'no person and no answer text is read');
+  assert.match(stepsSql, /a\.responses -> \(jsonb_array_length\(a\.responses\) - 1\) ->> 'nodeId'/, 'completions come from the last question answered');
+  assert.match(stepsSql, /greatest\(coalesce\(p_from, v_since\), v_since\)/, 'the window never starts before the step counters');
+  assert.match(stepsSql, /order by \(pf\.id = v_active\) desc, pf\.created_at desc/, 'the form candidates see now, or the last published one');
+  assert.match(stepsSql, /revoke all on function public\.get_report_steps\(uuid, uuid, date, date\) from public, anon, authenticated/);
+  assert.match(stepsSql, /grant execute on function public\.get_report_steps\(uuid, uuid, date, date\) to authenticated, service_role/);
+  assert.doesNotMatch(stepsSql, /create table/i);
+  assert.match(read('backend.js'), /client\.rpc\('get_report_steps'/);
+});
+
+
+test('the intake function and the candidate page count each step once per visit and connection, best effort', () => {
+  const edge = read('supabase/functions/applications/index.ts');
+  assert.match(edge, /event === "step"/);
+  assert.match(edge, /cleanName\(body\.nodeId, 80\)/);
+  assert.match(edge, /cleanName\(body\.fromNodeId, 80\)/);
+  assert.match(edge, /admin\.rpc\("record_job_step", \{ p_published_flow_id: publishedId, p_node_id: nodeId, p_from_node_id: fromNodeId \|\| null \}\)/);
+  const candidate = read('candidate.js');
+  assert.match(candidate, /const reachedSteps = new Set\(\)/);
+  assert.match(candidate, /const key = fromNodeId \+ '>' \+ nodeId;\s*if \(reachedSteps\.has\(key\)\) return;/, 'going back and forth never counts twice');
+  assert.match(candidate, /trackJobEvent\(options\.publishedFlowId, 'step', nodeId, fromNodeId\)/);
+  assert.match(candidate, /trackStep\('details', 'start'\)/);
+  assert.match(candidate, /trackStep\(node\.id, state\.history\.length \? state\.history\[state\.history\.length - 1\]\.node\.id : 'details'\)/, 'a question says which step the visit came from');
+  assert.match(candidate, /let trackStep = \(\) => \{\};/, 'previews and failures never count or break the page');
+  const backend = read('backend.js');
+  assert.match(backend, /function trackJobEvent\(publishedFlowId, event, nodeId, fromNodeId\)/);
+  assert.match(backend, /\.\.\.\(fromNodeId \? \{ fromNodeId: String\(fromNodeId\) \} : \{\}\)/);
+});
+
+const transitionsSql = read('supabase/migrations/20261021120000_step_transitions.sql');
+test('step counters remember where the visit came from and only accept real connections of the published form', () => {
+  assert.match(transitionsSql, /add column from_node_id text not null default '' check \(char_length\(from_node_id\) <= 80\)/);
+  assert.match(transitionsSql, /add primary key \(flow_id, day, node_id, from_node_id\)/);
+  assert.match(transitionsSql, /drop function if exists public\.record_job_step\(uuid, text\)/);
+  const fn = transitionsSql.slice(transitionsSql.indexOf('create or replace function public.record_job_step'), transitionsSql.indexOf('create or replace function public.get_report_steps'));
+  assert.match(fn, /security definer/);
+  assert.match(fn, /set search_path to ''/);
+  assert.match(fn, /v_from := coalesce\(p_from_node_id, case when p_node_id = 'details' then 'start' end\)/);
+  assert.match(fn, /if v_from is null then return false; end if;/, 'a question without origin is refused');
+  assert.match(fn, /if v_from <> 'start' then return false; end if;/);
+  assert.match(fn, /i ->> 'type' = 'candidateInfo'/, 'the first questions are those the first page connects to');
+  assert.match(fn, /e ->> 'fromNodeId' = v_from and e ->> 'toNodeId' = p_node_id/, 'question to question only along a real edge');
+  assert.match(fn, /n ->> 'type' in \('shortText', 'singleChoice', 'multiChoice'\)/);
+  assert.match(fn, /revoke all on function public\.record_job_step\(uuid, text, text\) from public, anon, authenticated/);
+  assert.match(fn, /grant execute on function public\.record_job_step\(uuid, text, text\) to service_role/);
+  assert.doesNotMatch(transitionsSql, /grant select on public\.job_step_counts/);
+  const steps = transitionsSql.slice(transitionsSql.indexOf('create or replace function public.get_report_steps'));
+  assert.match(steps, /auth\.uid\(\) is null or not public\.workspace_user_has_permission\(p_workspace_id, 'reports'\)/);
+  assert.match(steps, /c\.from_node_id <> ''/, 'counters written before origins existed are ignored');
+  assert.match(steps, /v_since := greatest\(v_new, coalesce\(v_legacy \+ 1, v_new\)\)/, 'the window starts after the last day that has old-style counters');
+  assert.match(steps, /if v_since > v_to then return jsonb_build_object\('hasData', false\)/);
+  assert.match(steps, /'transitions'/);
+  assert.doesNotMatch(steps.replace(/--[^\n]*/g, ''), /candidate_name|candidate_email|candidate_info|resume_|'answer'/);
+  assert.match(steps, /grant execute on function public\.get_report_steps\(uuid, uuid, date, date\) to authenticated, service_role/);
+  assert.match(read('backend.js'), /data\.transitions/, 'the page validates the new shape');
+});
+
+const vm = require('node:vm');
+function loadStepsModel() {
+  const builder = read('builder.js');
+  const start = builder.indexOf('const REPORT_STEP_MIN_SAMPLE');
+  const end = builder.indexOf('function reportStepsHtml');
+  assert.ok(start > 0 && end > start, 'the steps model is in builder.js');
+  const context = vm.createContext({});
+  vm.runInContext(builder.slice(start, end) + '\nthis.reportStepsModel = reportStepsModel;', context);
+  return raw => JSON.parse(JSON.stringify(context.reportStepsModel(raw)));
+}
+const node = (id, type, label = id, subtype) => ({ id, type, label, subtype });
+const edge = (from, to, option = null) => ({ from, to, option });
+
+test('the drop-off block appears inside Reports only when a job is chosen, and is part of the CSV', () => {
+  const builder = read('builder.js');
+  assert.match(builder, /\(data\.selectedJob \? '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Where candidates drop off<\/h2>/);
+  assert.match(builder, /if \(data\.selectedJob\) void loadReportSteps\(\);/);
+  assert.match(builder, /id="rpt-steps-body"/);
+  assert.match(builder, /block\('Where candidates drop off'/);
+  assert.match(builder, /reportSteps = null; reportStepsRequestId \+= 1;/, 'steps of another job are never reused');
+  assert.match(builder, /esc\(row\.label\)/, 'question labels are typed by employers and must be escaped');
+  assert.match(builder, /esc\(row\.hint\)/);
+  assert.match(builder, /style="--lvl:/, 'questions of a branch are indented');
+  assert.match(builder, /rpt-step-num/);
+});
+
+test('steps of a straight form: who got to each step, who stopped there, and the biggest drop', () => {
+  const model = loadStepsModel()({
+    hasData: true, views: 400, starts: 200, submitted: 50,
+    nodes: [node('info', 'candidateInfo'), node('q1', 'singleChoice', 'Q one'), node('q2', 'shortText', 'Q two'), node('end', 'end')],
+    edges: [edge('info', 'q1'), edge('q1', 'q2', 'Yes'), edge('q1', 'q2', 'No'), edge('q2', 'end')],
+    transitions: { 'start>details': 100, 'details>q1': 90, 'q1>q2': 70 }, completions: { q2: 50 }
+  });
+  const byLabel = Object.fromEntries(model.rows.map(row => [row.label, row]));
+  assert.equal(byLabel['Opened the job page'].left, 200);
+  assert.equal(byLabel['Started the first page'].left, 100);
+  assert.equal(byLabel['Completed the first page'].left, 10);
+  assert.equal(byLabel['Q one'].left, 20, '90 reached it, 70 saw the next question');
+  assert.equal(byLabel['Q two'].left, 20, '70 reached it, 50 submitted');
+  assert.equal(byLabel['Submitted an application'].reached, 50);
+  assert.equal(model.top.label, 'Started the first page', 'visitors who never start are not the biggest drop; the first page is (50%)');
+  assert.deepEqual(model.rows.filter(row => row.kind === 'question').map(row => row.number), [1, 2]);
+  assert.equal(byLabel['Q one'].hint, '', 'both answers lead to the same question: no condition to show');
+});
+
+test('paths that branch and meet again: every drop is exact (counting only "reached" would hide the drops)', () => {
+  // Q1 (100 arrive): 57 answer Yes -> Q2, 38 answer No -> straight to Q3, 5 stop. Q2: 50 go on to Q3, 7 stop. Q3 receives 38 + 50.
+  const model = loadStepsModel()({
+    hasData: true, views: 900, starts: 400, submitted: 80,
+    nodes: [node('info', 'candidateInfo'), node('q1', 'singleChoice', 'Degree?'), node('q2', 'shortText', 'Which degree?'), node('q3', 'shortText', 'Why us?'), node('end', 'end')],
+    edges: [edge('info', 'q1'), edge('q1', 'q2', 'Yes'), edge('q1', 'q3', 'No'), edge('q2', 'q3'), edge('q3', 'end')],
+    transitions: { 'start>details': 110, 'details>q1': 100, 'q1>q2': 57, 'q1>q3': 38, 'q2>q3': 50 }, completions: { q3: 80 }
+  });
+  const row = label => model.rows.find(item => item.label === label);
+  assert.equal(row('Degree?').left, 5);
+  assert.equal(row('Which degree?').left, 7);
+  assert.equal(row('Why us?').reached, 88);
+  assert.equal(row('Why us?').left, 8, '88 arrived, 80 submitted');
+  assert.deepEqual(model.rows.filter(item => item.kind === 'question').map(item => item.label), ['Degree?', 'Which degree?', 'Why us?'], 'the question where the paths meet comes after the branch');
+  assert.equal(row('Which degree?').hint, 'If Q1 = “Yes”');
+  assert.equal(row('Which degree?').level, 1);
+  assert.equal(row('Why us?').level, 0, 'a question where paths meet is not indented');
+  assert.equal(row('Why us?').hint, '', 'two different questions lead here: no single condition');
+});
+
+test('every path stays together, and a long chain inside a branch keeps its indentation', () => {
+  // Q1: Yes -> A1 -> A2 -> M ; No -> B1 -> M ; M -> end
+  const model = loadStepsModel()({
+    hasData: true, views: 500, starts: 300, submitted: 60,
+    nodes: [node('info', 'candidateInfo'), node('q1', 'singleChoice', 'Q1'), node('a1', 'shortText', 'A1'), node('a2', 'shortText', 'A2'), node('b1', 'shortText', 'B1'), node('m', 'shortText', 'M'), node('end', 'end')],
+    edges: [edge('info', 'q1'), edge('q1', 'a1', 'Yes'), edge('q1', 'b1', 'No'), edge('a1', 'a2'), edge('a2', 'm'), edge('b1', 'm'), edge('m', 'end')],
+    transitions: { 'start>details': 200, 'details>q1': 190, 'q1>a1': 100, 'q1>b1': 80, 'a1>a2': 90, 'a2>m': 70, 'b1>m': 60 }, completions: { m: 60 }
+  });
+  const questions = model.rows.filter(item => item.kind === 'question');
+  assert.deepEqual(questions.map(item => item.label), ['Q1', 'A1', 'A2', 'B1', 'M']);
+  assert.deepEqual(questions.map(item => item.level), [0, 1, 1, 1, 0], 'A2 follows A1 inside the same branch and keeps its level');
+  assert.equal(questions.find(item => item.label === 'A1').hint, 'If Q1 = “Yes”');
+  assert.equal(questions.find(item => item.label === 'A2').hint, '', 'only the first question of a branch shows the condition');
+  assert.equal(questions.find(item => item.label === 'B1').hint, 'If Q1 = “No”');
+  assert.equal(questions.find(item => item.label === 'Q1').left, 10);
+  assert.equal(questions.find(item => item.label === 'M').reached, 130);
+});
+
+test('a choice that leads to different questions numbers them by reading order, and only choices branch', () => {
+  const model = loadStepsModel()({
+    hasData: true, views: 100, starts: 60, submitted: 20,
+    nodes: [node('info', 'candidateInfo'), node('q1', 'singleChoice', 'Pick one'), node('x', 'shortText', 'Option X'), node('y', 'shortText', 'Option Y'), node('end', 'end')],
+    edges: [edge('info', 'q1'), edge('q1', 'x', 'X'), edge('q1', 'y', 'Y'), edge('x', 'end'), edge('y', 'end')],
+    transitions: { 'start>details': 50, 'details>q1': 45, 'q1>x': 25, 'q1>y': 15 }, completions: { x: 12, y: 8 }
+  });
+  const questions = model.rows.filter(item => item.kind === 'question');
+  assert.deepEqual(questions.map(item => [item.number, item.label]), [[1, 'Pick one'], [2, 'Option X'], [3, 'Option Y']], 'parallel branches are numbered in the order of the connections');
+  assert.equal(questions[0].left, 5);
+  assert.equal(questions[1].left, 13);
+  assert.equal(questions[2].left, 7);
+});
+
+test('a small sample points at nothing, noisy counters never give negative numbers, removed steps are kept', () => {
+  const run = loadStepsModel();
+  const few = run({ hasData: true, views: 12, starts: 8, submitted: 3, nodes: [node('info', 'candidateInfo'), node('q1', 'shortText'), node('end', 'end')], edges: [edge('info', 'q1'), edge('q1', 'end')], transitions: { 'start>details': 6, 'details>q1': 5 }, completions: { q1: 3 } });
+  assert.equal(few.top, null, 'fewer than 20 people at every step: no biggest drop');
+  const noisy = run({ hasData: true, views: 100, starts: 200, submitted: 5, nodes: [node('info', 'candidateInfo'), node('q1', 'shortText'), node('end', 'end')], edges: [edge('info', 'q1'), edge('q1', 'end')], transitions: { 'start>details': 90, 'details>q1': 95, 'details>gone-step': 14 }, completions: { q1: 100 } });
+  noisy.rows.forEach(row => { if (row.left !== null) assert.ok(row.left >= 0, row.label + ' is not negative'); });
+  assert.ok(noisy.rows.some(row => row.kind === 'removed' && row.reached === 14), 'a step removed from the form keeps its count');
+  const none = run({ hasData: true, views: 0, starts: 0, submitted: 0, nodes: [], edges: [], transitions: {}, completions: {} });
+  assert.equal(none.top, null);
+});
+
+test('a form with no questions only has the first page', () => {
+  const model = loadStepsModel()({ hasData: true, views: 100, starts: 60, submitted: 40, nodes: [node('info', 'candidateInfo'), node('end', 'end')], edges: [edge('info', 'end')], transitions: { 'start>details': 45 }, completions: { details: 40 } });
+  assert.equal(model.rows.filter(row => row.kind === 'question').length, 0);
+  assert.equal(model.rows.find(row => row.kind === 'details').left, 5, '45 completed the page, 40 submitted straight away');
+});
+
+test('form versions: only the drop-off block is versioned, with a picker shown only for 2+ versions', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261021140000_form_versions.sql'), 'utf8');
+  const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const backend = fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8');
+  assert.match(sql, /create table public\.job_form_versions/);
+  assert.match(sql, /revoke all on public\.job_form_versions from public, anon, authenticated/);
+  assert.match(sql, /grant all on public\.job_form_versions to service_role/);
+  assert.match(sql, /create trigger published_flows_form_version/);
+  assert.match(sql, /p_version_id uuid default null/);
+  assert.match(backend, /p_version_id: version/);
+  assert.match(builder, /versions\.length < 2\) return ''/);
+  assert.match(builder, /id="rpt-steps-version-slot"/);
 });

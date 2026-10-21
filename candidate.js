@@ -94,10 +94,12 @@
       track('view');
       let started = false;
       root.addEventListener('input', () => { if (!started) { started = true; track('start'); } });
-      trackStep = nodeId => {
-        if (reachedSteps.has(nodeId)) return;
-        reachedSteps.add(nodeId);
-        window.PathwayBackend.trackJobEvent(options.publishedFlowId, 'step', nodeId);
+      // A step is counted once per visit and connection ("Q1 -> Q3"), so going back and forth never counts twice.
+      trackStep = (nodeId, fromNodeId) => {
+        const key = fromNodeId + '>' + nodeId;
+        if (reachedSteps.has(key)) return;
+        reachedSteps.add(key);
+        window.PathwayBackend.trackJobEvent(options.publishedFlowId, 'step', nodeId, fromNodeId);
       };
     }
 
@@ -144,7 +146,7 @@
         if (live) state.info.privacyAcknowledged = true; // Consent is recorded when the candidate submits under the notice.
         state.info.website = String(data.get('website') || '');
         if (!state.resumeFile) { resumeInput.required = true; resumeInput.reportValidity(); return; }
-        trackStep('details');
+        trackStep('details', 'start');
         if (state.current && state.current.type === 'end') { complete(state.current.subtype || 'submitted'); return; }
         state.screen = 'interstitial';
         render();
@@ -177,7 +179,7 @@
       } else {
         renderInvalid(root, 'This application contains a question type that cannot be displayed.'); return;
       }
-      trackStep(node.id);
+      trackStep(node.id, state.history.length ? state.history[state.history.length - 1].node.id : 'details');
       const progress = Math.min(92, Math.max(10, state.questionCount * 17 + 18));
       root.innerHTML = `<main class="question-screen"><header class="question-top"><a class="brand" href="./" aria-label="Pathway home"><span class="brand-mark">↗</span>pathway</a><span class="candidate-header-note">${C.esc(flow.companyName || 'Your application')}</span></header><section class="question-main"><div class="question-progress"><span>Question ${state.questionCount + 1}</span><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div></div><form id="question-form"><h1 class="question-heading">${C.esc(node.label || 'A question for you')}</h1>${input}<div class="question-actions"><button type="button" class="btn btn-quiet btn-sm" id="question-back">← Back</button><button type="submit" class="btn btn-primary">Continue <span aria-hidden="true">→</span></button></div></form><p class="question-footnote">${live ? 'Your answers are saved securely when you submit the completed application.' : 'Preview mode · Your answers are not saved.'}</p></section></main>`;
       const form = root.querySelector('#question-form');
