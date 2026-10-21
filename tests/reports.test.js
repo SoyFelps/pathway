@@ -108,9 +108,9 @@ test('report text coming from the database is escaped before it reaches the page
 test('the Reports styles exist and the changed files carry a new cache version', () => {
   const css = read('styles.css');
   ['.reports-page', '.rpt-stats', '.rpt-chart', '.rpt-table'].forEach(selector => assert.ok(css.includes(selector), selector));
-  assert.match(read('index.html'), /builder\.js\?v=versions-20261021/);
-  assert.match(read('index.html'), /backend\.js\?v=versions-20261021/);
-  assert.match(read('index.html'), /styles\.css\?v=versions-20261021/);
+  assert.match(read('index.html'), /builder\.js\?v=flat-20261021/);
+  assert.match(read('index.html'), /backend\.js\?v=flat-20261021/);
+  assert.match(read('index.html'), /styles\.css\?v=flat-20261021/);
 });
 
 const scaling = read('supabase/migrations/20261020230000_report_scaling_and_step_counts.sql');
@@ -272,8 +272,7 @@ test('the drop-off block appears inside Reports only when a job is chosen, and i
   assert.match(builder, /block\('Where candidates drop off'/);
   assert.match(builder, /reportSteps = null; reportStepsRequestId \+= 1;/, 'steps of another job are never reused');
   assert.match(builder, /esc\(row\.label\)/, 'question labels are typed by employers and must be escaped');
-  assert.match(builder, /esc\(row\.hint\)/);
-  assert.match(builder, /style="--lvl:/, 'questions of a branch are indented');
+  assert.doesNotMatch(builder, /row\.hint|--lvl/, 'no "If Qn" legend and no indentation: a plain list of questions');
   assert.match(builder, /rpt-step-num/);
 });
 
@@ -293,7 +292,6 @@ test('steps of a straight form: who got to each step, who stopped there, and the
   assert.equal(byLabel['Submitted an application'].reached, 50);
   assert.equal(model.top.label, 'Started the first page', 'visitors who never start are not the biggest drop; the first page is (50%)');
   assert.deepEqual(model.rows.filter(row => row.kind === 'question').map(row => row.number), [1, 2]);
-  assert.equal(byLabel['Q one'].hint, '', 'both answers lead to the same question: no condition to show');
 });
 
 test('paths that branch and meet again: every drop is exact (counting only "reached" would hide the drops)', () => {
@@ -310,10 +308,6 @@ test('paths that branch and meet again: every drop is exact (counting only "reac
   assert.equal(row('Why us?').reached, 88);
   assert.equal(row('Why us?').left, 8, '88 arrived, 80 submitted');
   assert.deepEqual(model.rows.filter(item => item.kind === 'question').map(item => item.label), ['Degree?', 'Which degree?', 'Why us?'], 'the question where the paths meet comes after the branch');
-  assert.equal(row('Which degree?').hint, 'If Q1 = “Yes”');
-  assert.equal(row('Which degree?').level, 1);
-  assert.equal(row('Why us?').level, 0, 'a question where paths meet is not indented');
-  assert.equal(row('Why us?').hint, '', 'two different questions lead here: no single condition');
 });
 
 test('every path stays together, and a long chain inside a branch keeps its indentation', () => {
@@ -326,10 +320,6 @@ test('every path stays together, and a long chain inside a branch keeps its inde
   });
   const questions = model.rows.filter(item => item.kind === 'question');
   assert.deepEqual(questions.map(item => item.label), ['Q1', 'A1', 'A2', 'B1', 'M']);
-  assert.deepEqual(questions.map(item => item.level), [0, 1, 1, 1, 0], 'A2 follows A1 inside the same branch and keeps its level');
-  assert.equal(questions.find(item => item.label === 'A1').hint, 'If Q1 = “Yes”');
-  assert.equal(questions.find(item => item.label === 'A2').hint, '', 'only the first question of a branch shows the condition');
-  assert.equal(questions.find(item => item.label === 'B1').hint, 'If Q1 = “No”');
   assert.equal(questions.find(item => item.label === 'Q1').left, 10);
   assert.equal(questions.find(item => item.label === 'M').reached, 130);
 });

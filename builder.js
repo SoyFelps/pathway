@@ -956,19 +956,6 @@
     if (info) [...outgoing(info.id)].reverse().forEach(edge => visit(edge.to));
     order.reverse();
     const number = new Map(order.map((id, index) => [id, index + 1]));
-    // A question that only one answer of the previous question leads to is indented under it; paths that meet again are not.
-    const level = new Map();
-    const branchOf = new Map();
-    order.forEach(id => {
-      const arriving = incoming(id);
-      const parents = [...new Set(arriving.map(edge => edge.from))];
-      if (parents.length === 1 && parents[0] !== info?.id) {
-        const parentLevel = level.get(parents[0]) || 0;
-        const branchHead = arriving.length === 1 && arriving[0].option;
-        level.set(id, branchHead ? Math.min(3, parentLevel + 1) : parentLevel);
-        if (branchHead) branchOf.set(id, 'If Q' + number.get(parents[0]) + ' = “' + arriving[0].option + '”');
-      } else level.set(id, 0);
-    });
     const views = Number(raw.views || 0), starts = Number(raw.starts || 0);
     const rows = [
       { kind: 'views', label: 'Opened the job page', reached: views, left: Math.max(0, views - starts), leftHere: 'did not start the form' },
@@ -976,7 +963,7 @@
       { kind: 'details', label: 'Completed the first page', reached: reached('details'), left: Math.max(0, reached('details') - moved('details') - Number(done.details || 0)), leftHere: 'stopped here' }
     ];
     order.forEach(id => {
-      rows.push({ kind: 'question', number: number.get(id), label: nodes.get(id).label || 'Question', hint: branchOf.get(id) || '', level: level.get(id) || 0, reached: reached(id), left: Math.max(0, reached(id) - moved(id) - Number(done[id] || 0)), leftHere: 'stopped here' });
+      rows.push({ kind: 'question', number: number.get(id), label: nodes.get(id).label || 'Question', reached: reached(id), left: Math.max(0, reached(id) - moved(id) - Number(done[id] || 0)), leftHere: 'stopped here' });
     });
     Object.keys(arrivals).filter(id => id !== 'details' && !nodes.has(id) && reached(id) > 0).forEach(id => rows.push({ kind: 'removed', label: 'A step that was removed from the form', reached: reached(id), left: null, leftHere: '' }));
     rows.push({ kind: 'submitted', label: 'Submitted an application', reached: Number(raw.submitted || 0), left: null, leftHere: '' });
@@ -995,11 +982,11 @@
     return '<div class="rpt-steps-head" aria-hidden="true"><span>Step</span><span></span><span>Reached</span><span>Stopped</span></div>'
       + '<ol class="rpt-steps">' + model.rows.map(row => {
         const isTop = model.top === row;
-        const name = (row.kind === 'question' ? '<span class="rpt-step-num">Q' + row.number + '</span>' : '') + '<span class="rpt-step-label">' + esc(row.label) + '</span>' + (row.hint ? '<small>' + esc(row.hint) + '</small>' : '');
+        const name = (row.kind === 'question' ? '<span class="rpt-step-num">Q' + row.number + '</span>' : '') + '<span class="rpt-step-label">' + esc(row.label) + '</span>';
         const stopped = row.left === null ? '<span class="rpt-left"></span>' : (row.left > 0
           ? '<span class="rpt-left' + (isTop ? ' is-top' : '') + '" title="' + esc(reportNumber(row.left) + ' ' + row.leftHere) + '">−' + reportNumber(row.left) + ' · ' + Math.round(row.share * 100) + '%</span>'
           : '<span class="rpt-left is-none">—</span>');
-        return '<li class="rpt-step rpt-step-' + row.kind + (isTop ? ' is-top' : '') + '"><span class="rpt-step-name" style="--lvl:' + (row.level || 0) + '">' + name + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (row.reached / maxReached * 100) + '%"></span></span><strong class="rpt-step-count">' + reportNumber(row.reached) + '</strong>' + stopped + '</li>';
+        return '<li class="rpt-step rpt-step-' + row.kind + (isTop ? ' is-top' : '') + '"><span class="rpt-step-name">' + name + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (row.reached / maxReached * 100) + '%"></span></span><strong class="rpt-step-count">' + reportNumber(row.reached) + '</strong>' + stopped + '</li>';
       }).join('') + '</ol>' + since;
   }
   // The form changes over time; the picker only exists once a job has more than one version.

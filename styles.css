@@ -624,4 +624,3 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .rpt-step .rpt-step-count{grid-row:1;grid-column:2}
 .rpt-step .rpt-left{grid-row:1;grid-column:3}
 }
-.rpt-step-name{padding-left:calc(var(--lvl, 0) * 14px)}
