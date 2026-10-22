@@ -4,3 +4,50 @@ export const COUNTRY_NAMES: string[] = [ "Afghanistan", "Åland Islands", "Alban
 export const PRONOUNS: string[] = ["He/him","She/her","They/them","He/they","She/they","Ze/zir","Xe/xem","It/its","Prefer not to say"];
 export const PRONOUN_OTHER = "Other";
 export const PRONOUN_OTHER_MAX = 40;
+// Voluntary self-identification answers (the "Diversity questions" page). Every question lists "Prefer not to say".
+export const DIVERSITY_KEYS: string[] = ["genderIdentity","sexualOrientation","raceEthnicity","disability","disabilityType"];
+export const DIVERSITY: Record<string, string[]> = {
+ "genderIdentity": [
+  "Woman",
+  "Man",
+  "Non-binary",
+  "Another gender identity",
+  "Prefer not to say"
+ ],
+ "sexualOrientation": [
+  "Heterosexual or straight",
+  "Gay or lesbian",
+  "Bisexual",
+  "Pansexual",
+  "Asexual",
+  "Another sexual orientation",
+  "Prefer not to say"
+ ],
+ "raceEthnicity": [
+  "Hispanic or Latino",
+  "White (not Hispanic or Latino)",
+  "Black or African American (not Hispanic or Latino)",
+  "Asian (not Hispanic or Latino)",
+  "Native Hawaiian or Other Pacific Islander (not Hispanic or Latino)",
+  "American Indian or Alaska Native (not Hispanic or Latino)",
+  "Two or more races (not Hispanic or Latino)",
+  "Another race or ethnicity",
+  "Prefer not to say"
+ ],
+ "disability": [
+  "Yes",
+  "No",
+  "Prefer not to say"
+ ],
+ "disabilityType": [
+  "Physical or mobility",
+  "Visual",
+  "Hearing",
+  "Neurodivergence (for example ADHD, autism or dyslexia)",
+  "Mental health",
+  "Chronic illness",
+  "More than one of these",
+  "Another disability or condition",
+  "Prefer not to say"
+ ]
+};

@@ -864,6 +864,7 @@
     form.set('name', application.name);
     form.set('email', application.email);
     form.set('candidateInfo', JSON.stringify(application.candidateInfo || {}));
+    if (application.diversity) form.set('diversity', JSON.stringify(application.diversity));
     form.set('answers', JSON.stringify(application.answers || []));
     form.set('privacyAcknowledged', String(Boolean(application.privacyAcknowledged)));
     form.set('website', application.website || '');

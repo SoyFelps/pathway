@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildConfirmationEmail } from "./email.ts";
 import { verifyTurnstileToken } from "./captcha.ts";
-import { COUNTRY_NAMES, PRONOUNS, PRONOUN_OTHER, PRONOUN_OTHER_MAX } from "./geo.ts";
+import { COUNTRY_NAMES, DIVERSITY, DIVERSITY_KEYS, PRONOUNS, PRONOUN_OTHER, PRONOUN_OTHER_MAX } from "./geo.ts";
 
 const APP_ORIGINS = new Set([
   "https://soyfelps.github.io",
@@ -150,6 +150,7 @@ async function validateApplicantSubmission(snapshot: Record<string, unknown>, in
   name: unknown;
   email: unknown;
   candidateInfo: unknown;
+  diversity: unknown;
   answers: unknown;
   privacyAcknowledged: unknown;
   resume: File | null;
@@ -237,12 +238,20 @@ async function validateApplicantSubmission(snapshot: Record<string, unknown>, in
   const countries = new Set(COUNTRY_NAMES);
   const rawInfo = input.candidateInfo && typeof input.candidateInfo === "object" && !Array.isArray(input.candidateInfo)
     ? input.candidateInfo as Record<string, unknown> : {};
+  const detailNames: Record<string, string> = {
+    phone: "phone number", country: "country of birth", city: "current location", linkedin: "LinkedIn profile", portfolio: "portfolio website", pronouns: "pronouns",
+  };
   const candidateInfo: Record<string, string> = {};
-  for (const [key, value] of Object.entries(rawInfo)) {
-    if (!allowedOptional.has(key) || configured[key] !== true) continue;
-    const text = cleanName(value, key === "linkedin" || key === "portfolio" ? 500 : 150);
-    if (!text) continue;
+  // Every detail the employer asked for is required (lists offer "Prefer not to say" where a person may not want to answer).
+  for (const key of allowedOptional) {
+    if (configured[key] !== true) continue;
+    const text = cleanName(rawInfo[key], key === "linkedin" || key === "portfolio" ? 500 : 150);
+    if (!text) throw new Error(`Enter your ${detailNames[key]}.`);
     if (key === "country" && !countries.has(text)) throw new Error("Choose your country of birth from the list.");
+    // A phone number starts with its country code (+55 31 99999 9999): 7 to 15 digits, nothing but digits, spaces, dashes and parentheses.
+    if (key === "phone" && (!/^\+[0-9 ()-]+$/.test(text) || text.replace(/[^0-9]/g, "").length < 7 || text.replace(/[^0-9]/g, "").length > 15)) {
+      throw new Error("Enter a valid phone number, with its country code.");
+    }
     if (key === "pronouns" && !PRONOUNS.includes(text) && text !== PRONOUN_OTHER
         && !(text.startsWith(`${PRONOUN_OTHER}: `) && text.length > PRONOUN_OTHER.length + 2 && text.length <= PRONOUN_OTHER.length + 2 + PRONOUN_OTHER_MAX)) {
       throw new Error("Choose your pronouns from the list.");
@@ -256,12 +265,27 @@ async function validateApplicantSubmission(snapshot: Record<string, unknown>, in
     candidateInfo[key] = text;
   }
 
+  // Voluntary self-identification (the second page). Sensitive: it is kept in its own table, apart from candidate_info.
+  let diversity: Record<string, string> | null = null;
+  if (configured.diversity === true) {
+    const rawDiversity = input.diversity && typeof input.diversity === "object" && !Array.isArray(input.diversity)
+      ? input.diversity as Record<string, unknown> : {};
+    const answers: Record<string, string> = {};
+    for (const key of DIVERSITY_KEYS) {
+      const value = cleanName(rawDiversity[key], 120);
+      if (key === "disabilityType" && answers.disability !== "Yes") { answers[key] = ""; continue; }
+      if (!DIVERSITY[key].includes(value)) throw new Error("Answer the voluntary questions on the second page (you can choose “Prefer not to say”).");
+      answers[key] = value;
+    }
+    diversity = answers;
+  }
+
   const storedAnswers = submitted.map((item, index) => ({
     nodeId: String(item.nodeId), question: cleanName(byId.get(String(item.nodeId))?.label, 500), answer: item.answer, order: index + 1,
   }));
   if (current.subtype === "disqualified") autoFailReasons.push('Reached the "Not a match this time" result');
   return {
-    name, email, candidateInfo, answers: storedAnswers,
+    name, email, candidateInfo, diversity, answers: storedAnswers,
     outcomeStatus: autoFailReasons.length ? "failed" : "new",
     autoFailReason: autoFailReasons.length ? autoFailReasons.join("; ").slice(0, 600) : null,
     filename, contentType, resume,
@@ -326,7 +350,7 @@ async function submitApplicant(req: Request, form: FormData) {
   try {
     active = await loadActiveFlow(publishedId);
     normalized = await validateApplicantSubmission(active.snapshot, {
-      name: form.get("name"), email: form.get("email"), candidateInfo: parseJsonField(form, "candidateInfo", {}),
+      name: form.get("name"), email: form.get("email"), candidateInfo: parseJsonField(form, "candidateInfo", {}), diversity: parseJsonField(form, "diversity", null),
       answers: parseJsonField(form, "answers", []), privacyAcknowledged: form.get("privacyAcknowledged"),
       resume: form.get("resume") instanceof File ? form.get("resume") as File : null,
     });
@@ -391,6 +415,16 @@ async function submitApplicant(req: Request, form: FormData) {
     await admin.storage.from(BUCKET).remove([resumePath]);
     if (insertError.code === "23505") return response(req, 200, { submitted: true, accepted: true });
     return fail(req, 503, "Your application could not be saved. Please try again.");
+  }
+  // The voluntary self-identification answers go to their own table (not readable by the hiring team), tied to this application.
+  if (normalized.diversity) {
+    const answers = normalized.diversity;
+    const { error: diversityError } = await admin.from("applicant_diversity").insert({
+      applicant_id: submissionKey, workspace_id: active.flow.workspace_id, flow_id: active.flow.id,
+      gender_identity: answers.genderIdentity, sexual_orientation: answers.sexualOrientation, race_ethnicity: answers.raceEthnicity,
+      disability: answers.disability, disability_type: answers.disabilityType || null,
+    });
+    if (diversityError) console.error("Diversity answers could not be saved:", diversityError.message);
   }
   // Only a newly saved, validated application reaches this point: honeypot hits, invalid forms and duplicate submissions return earlier.
   if (firstForAddress) {

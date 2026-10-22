@@ -55,7 +55,7 @@
   const UPLOAD_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16"/></svg>';
   const FILE_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7.5A1.5 1.5 0 0 0 6 4.5v15A1.5 1.5 0 0 0 7.5 21h9a1.5 1.5 0 0 0 1.5-1.5V7z"/><path d="M14 3v4h4"/><path d="M9 14l2 2 4-4"/></svg>';
   function resumeUploadHtml(meta) {
-    return `<div class="candidate-field candidate-upload"><label for="candidate-resume">${C.esc(meta.label)} <span aria-hidden="true">*</span></label><div class="upload-drop"><input id="candidate-resume" name="resume" type="file" accept="${C.esc(meta.accept)}" required class="upload-native" aria-describedby="candidate-resume-hint"><div class="upload-box" aria-hidden="true"><span class="upload-icon">${UPLOAD_ICON}</span><span class="upload-text"><strong class="upload-title">Choose a file <span class="upload-drag">or drag it here</span></strong><span class="upload-sub" id="candidate-resume-hint">PDF, DOC or DOCX · up to 10 MB</span></span></div></div></div>`;
+    return `<div class="candidate-field candidate-upload"><label for="candidate-resume">${C.esc(meta.label)}</label><div class="upload-drop"><input id="candidate-resume" name="resume" type="file" accept="${C.esc(meta.accept)}" required class="upload-native" aria-describedby="candidate-resume-hint"><div class="upload-box" aria-hidden="true"><span class="upload-icon">${UPLOAD_ICON}</span><span class="upload-text"><strong class="upload-title">Choose a file <span class="upload-drag">or drag it here</span></strong><span class="upload-sub" id="candidate-resume-hint">PDF, DOC or DOCX · up to 10 MB</span></span></div></div></div>`;
   }
   function formatFileSize(bytes) {
     return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB';
@@ -95,17 +95,21 @@
     const meta = C.FIELD_META[key] || C.OPTIONAL_FIELDS.find(field => field.key === key);
     if (!meta) return '';
     if (key === 'resume') return resumeUploadHtml(meta);
-    const required = (!optional || key === 'resume') ? 'required' : '';
+    if (meta.type === 'diversity') return ''; // the diversity questions have their own page
+    const required = 'required'; // every detail the employer asks for is required (lists offer "Prefer not to say" where a person may not want to answer)
     const type = meta.type === 'file' ? 'file' : ['country', 'city', 'pronouns'].includes(meta.type) ? 'text' : meta.type;
     const placeholder = key === 'name' ? 'e.g. Alex Morgan' : key === 'email' ? 'you@example.com' : '';
     // Searchable country / city lists and the pronouns list (see geo.js); without it they fall back to plain text.
     if (G && (meta.type === 'country' || meta.type === 'city')) {
-      return `<div class="candidate-field"><label for="candidate-${C.esc(key)}">${C.esc(meta.label)}</label><input id="candidate-${C.esc(key)}" name="${C.esc(key)}" type="text" data-geo="${meta.type}" maxlength="150" placeholder="Type or select"></div>`;
+      return `<div class="candidate-field"><label for="candidate-${C.esc(key)}">${C.esc(meta.label)}</label><input id="candidate-${C.esc(key)}" name="${C.esc(key)}" type="text" data-geo="${meta.type}" maxlength="150" placeholder="Type or select" required></div>`;
+    }
+    if (G && meta.type === 'phone') {
+      return `<div class="candidate-field candidate-phone"><label for="candidate-phone">${C.esc(meta.label)}</label><div class="phone-row"><div class="phone-country-wrap" data-geo="phone-country"></div><input id="candidate-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel-national" data-geo="phone-number" maxlength="40" required></div></div>`;
     }
     if (G && meta.type === 'pronouns') {
-      return `<div class="candidate-field"><label for="candidate-pronouns">${C.esc(meta.label)}</label><select id="candidate-pronouns" name="pronouns" data-geo="pronouns"><option value="">Select…</option>${G.PRONOUNS.concat([G.PRONOUN_OTHER]).map(option => `<option value="${C.esc(option)}">${C.esc(option)}</option>`).join('')}</select><input type="text" name="pronounsOther" data-geo="pronouns-other" class="candidate-pronouns-other" maxlength="${G.PRONOUN_OTHER_MAX}" placeholder="How should we refer to you?" aria-label="Your pronouns" hidden></div>`;
+      return `<div class="candidate-field"><label for="candidate-pronouns">${C.esc(meta.label)}</label><select id="candidate-pronouns" name="pronouns" data-geo="pronouns" required><option value="">Select…</option>${G.PRONOUNS.concat([G.PRONOUN_OTHER]).map(option => `<option value="${C.esc(option)}">${C.esc(option)}</option>`).join('')}</select><input type="text" name="pronounsOther" data-geo="pronouns-other" class="candidate-pronouns-other" maxlength="${G.PRONOUN_OTHER_MAX}" placeholder="How should we refer to you?" aria-label="Your pronouns" hidden></div>`;
     }
-    return `<div class="candidate-field"><label for="candidate-${C.esc(key)}">${C.esc(meta.label)}${required ? ' <span aria-hidden="true">*</span>' : ''}</label><input id="candidate-${C.esc(key)}" name="${C.esc(key)}" type="${C.esc(type)}" ${required} ${meta.autocomplete ? `autocomplete="${C.esc(meta.autocomplete)}"` : ''} ${meta.accept ? `accept="${C.esc(meta.accept)}"` : ''} ${placeholder ? `placeholder="${C.esc(placeholder)}"` : ''} ${key === 'resume' ? 'class="file-input"' : ''}></div>`;
+    return `<div class="candidate-field"><label for="candidate-${C.esc(key)}">${C.esc(meta.label)}</label><input id="candidate-${C.esc(key)}" name="${C.esc(key)}" type="${C.esc(type)}" ${required} ${meta.autocomplete ? `autocomplete="${C.esc(meta.autocomplete)}"` : ''} ${meta.accept ? `accept="${C.esc(meta.accept)}"` : ''} ${placeholder ? `placeholder="${C.esc(placeholder)}"` : ''} ${key === 'resume' ? 'class="file-input"' : ''}></div>`;
   }
 
   function safeCompanyLogoUrl(value) {
@@ -133,7 +137,7 @@
     catch (error) { renderInvalid(root, error.message); return { destroy() {} }; }
 
     const live = Boolean(!options.preview && options.publishedFlowId && window.PathwayBackend && window.PathwayBackend.submitApplication);
-    const state = { screen: 'landing', current: null, history: [], answers: {}, info: {}, resumeFile: null, questionCount: 0, submitting: false, submissionKey: crypto.randomUUID() };
+    const state = { screen: 'landing', current: null, history: [], answers: {}, info: {}, diversity: null, resumeFile: null, questionCount: 0, submitting: false, submissionKey: crypto.randomUUID() };
     const start = C.startAfterInfo(flow);
     state.current = start;
     // Anonymous counters for the hiring team: one "view" when the page opens, one "start" at the first keystroke, and one
@@ -155,7 +159,7 @@
     }
 
     function render() {
-      if (state.screen === 'landing') renderLanding();
+      if (state.screen === 'landing' || state.screen === 'diversity') renderLanding();
       else if (state.screen === 'interstitial') renderInterstitial();
       else if (state.screen === 'question') renderQuestion();
       else if (state.screen === 'submitting') renderSubmitting();
@@ -164,19 +168,27 @@
     }
 
     function renderLanding() {
-      const optional = C.OPTIONAL_FIELDS.filter(field => flow.candidateInfoFields && flow.candidateInfoFields[field.key]);
+      const optional = C.OPTIONAL_FIELDS.filter(field => field.type !== 'diversity' && flow.candidateInfoFields && flow.candidateInfoFields[field.key]);
+      const askDiversity = Boolean(G && flow.candidateInfoFields && flow.candidateInfoFields.diversity);
       const brandName = flow.companyProfile?.name || flow.companyName || 'Hiring team';
       const initials = brandName.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
       const logoUrl = companyLogoUrl(flow.companyProfile);
-      root.innerHTML = `<div class="candidate-app"><header class="candidate-header"><a class="brand" href="./" aria-label="Pathway home"><span class="brand-mark">↗</span>pathway</a><span class="candidate-header-note">${live ? 'Secure application' : 'Application preview'}</span></header><main class="candidate-landing"><section class="job-copy"><div class="company-lockup"><span class="company-avatar${logoUrl ? ' has-logo' : ''}">${logoUrl ? `<img src="${C.esc(logoUrl)}" alt="${C.esc(brandName)} logo">` : C.esc(initials || 'P')}</span><div><div class="company-label">${C.esc(brandName)}</div><div class="muted" style="font-size:11px;margin-top:3px">Careers</div></div></div><button type="button" class="btn btn-primary mobile-apply-cta" data-scroll-to-form>Apply for this role <span aria-hidden="true">↓</span></button><div class="job-kicker">Open position</div><h1 class="job-title">${C.esc(flow.jobTitle || 'Open position')}</h1><div class="job-description">${C.esc(flow.jobDescription || 'We’re excited to meet you. Tell us a little about yourself to get started.')}</div><div class="job-meta"><span class="meta-chip">${live ? 'Accepting applications' : 'Preview'}</span><span class="meta-chip">${C.esc(flow.companyName || 'Hiring team')}</span></div>${flow.companyProfile?.description ? `<section class="company-details"><h2>About ${C.esc(brandName)}</h2><p>${C.esc(flow.companyProfile.description)}</p></section>` : ''}<div class="job-about"><h2>How to apply</h2><p>Start with a few details, upload your resume, and answer a small number of questions tailored to this role. ${live ? 'Your application will be saved securely when you submit it.' : 'Nothing entered in this preview is saved.'}</p></div></section><section class="candidate-form-card" id="candidate-form-card"><h2>Start your application</h2><p class="form-intro">A few details to introduce yourself to ${C.esc(flow.companyName || 'the hiring team')}.</p><form id="candidate-info-form" novalidate>${candidateFieldHtml('name')}${candidateFieldHtml('email')}${candidateFieldHtml('resume')}${optional.map(field => candidateFieldHtml(field.key, true)).join('')}<div class="candidate-honeypot" aria-hidden="true"><label for="candidate-website">Leave this field empty</label><input id="candidate-website" name="website" type="text" tabindex="-1" autocomplete="off"></div><button class="btn btn-primary candidate-apply" type="submit">${live ? 'Apply for this role' : 'Preview application'} <span aria-hidden="true">→</span></button><p class="privacy-note">${live ? 'By submitting, you allow the company to use your information and answers to review your application' : 'Preview mode · Your details are not uploaded or stored.'}</p></form></section></main><footer class="candidate-footer">Powered by Pathway · A clearer way to hire</footer></div>`;
-      const form = root.querySelector('#candidate-info-form');
+      const detailsCardHtml = () => `<h2>Start your application</h2><p class="form-intro">A few details to introduce yourself to ${C.esc(flow.companyName || 'the hiring team')}.</p><form id="candidate-info-form" novalidate>${candidateFieldHtml('name')}${candidateFieldHtml('email')}${candidateFieldHtml('resume')}${optional.map(field => candidateFieldHtml(field.key, true)).join('')}<div class="candidate-honeypot" aria-hidden="true"><label for="candidate-website">Leave this field empty</label><input id="candidate-website" name="website" type="text" tabindex="-1" autocomplete="off"></div><button class="btn btn-primary candidate-apply" type="submit">${askDiversity ? 'Continue' : live ? 'Apply for this role' : 'Preview application'} <span aria-hidden="true">→</span></button><p class="privacy-note">${askDiversity ? 'Next: a short page of voluntary questions, then your application questions.' : live ? 'By submitting, you allow the company to use your information and answers to review your application' : 'Preview mode · Your details are not uploaded or stored.'}</p></form>`;
+      const diversityCardHtml = () => {
+        const D = G.DIVERSITY;
+        const select = key => `<div class="candidate-field"${key === 'disabilityType' ? ' id="diversity-type-field" hidden' : ''}><label for="diversity-${key}">${C.esc(D[key].label)}</label><select id="diversity-${key}" name="${key}" required><option value="">Select…</option>${D[key].options.map(option => `<option value="${C.esc(option)}">${C.esc(option)}</option>`).join('')}</select></div>`;
+        return `<h2>Voluntary self-identification</h2><p class="form-intro">${C.esc(flow.companyName || 'The hiring team')} invites you to answer these questions to help it understand and improve the diversity of the people who apply. Answering is voluntary: choose “Prefer not to say” if you would rather not. Your answers are kept apart from your application, are not used to evaluate you, and are only reported as combined numbers.</p><form id="candidate-diversity-form" novalidate>${G.DIVERSITY_KEYS.map(select).join('')}<button class="btn btn-primary candidate-apply" type="submit">Continue <span aria-hidden="true">→</span></button><button class="candidate-back" type="button" id="diversity-back">← Back to my details</button></form>`;
+      };
+      root.innerHTML = `<div class="candidate-app"><header class="candidate-header"><a class="brand" href="./" aria-label="Pathway home"><span class="brand-mark">↗</span>pathway</a><span class="candidate-header-note">${live ? 'Secure application' : 'Application preview'}</span></header><main class="candidate-landing"><section class="job-copy"><div class="company-lockup"><span class="company-avatar${logoUrl ? ' has-logo' : ''}">${logoUrl ? `<img src="${C.esc(logoUrl)}" alt="${C.esc(brandName)} logo">` : C.esc(initials || 'P')}</span><div><div class="company-label">${C.esc(brandName)}</div><div class="muted" style="font-size:11px;margin-top:3px">Careers</div></div></div><button type="button" class="btn btn-primary mobile-apply-cta" data-scroll-to-form>Apply for this role <span aria-hidden="true">↓</span></button><div class="job-kicker">Open position</div><h1 class="job-title">${C.esc(flow.jobTitle || 'Open position')}</h1><div class="job-description">${C.esc(flow.jobDescription || 'We’re excited to meet you. Tell us a little about yourself to get started.')}</div><div class="job-meta"><span class="meta-chip">${live ? 'Accepting applications' : 'Preview'}</span><span class="meta-chip">${C.esc(flow.companyName || 'Hiring team')}</span></div>${flow.companyProfile?.description ? `<section class="company-details"><h2>About ${C.esc(brandName)}</h2><p>${C.esc(flow.companyProfile.description)}</p></section>` : ''}<div class="job-about"><h2>How to apply</h2><p>Start with a few details, upload your resume, and answer a small number of questions tailored to this role. ${live ? 'Your application will be saved securely when you submit it.' : 'Nothing entered in this preview is saved.'}</p></div></section><section class="candidate-form-card" id="candidate-form-card">${state.screen === 'diversity' ? diversityCardHtml() : detailsCardHtml()}</section></main><footer class="candidate-footer">Powered by Pathway · A clearer way to hire</footer></div>`;
+      const form = root.querySelector('#candidate-info-form') || root.querySelector('#candidate-diversity-form');
       const applyCta = root.querySelector('[data-scroll-to-form]');
       if (applyCta) applyCta.addEventListener('click', () => {
         const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         root.querySelector('#candidate-form-card').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
       });
-      Object.entries(state.info).forEach(([key, value]) => { const input = form.elements[key]; if (input && input.type !== 'file' && input.type !== 'checkbox' && key !== 'pronouns') input.value = value; });
-      if (G) { G.enhanceForm(form); G.fillPronouns(form, state.info.pronouns); }
+      if (state.screen === 'diversity') { bindDiversityForm(); return; }
+      Object.entries(state.info).forEach(([key, value]) => { const input = form.elements[key]; if (input && input.type !== 'file' && input.type !== 'checkbox' && key !== 'pronouns' && key !== 'phone') input.value = value; });
+      if (G) { G.enhanceForm(form); G.fillPronouns(form, state.info.pronouns); G.fillPhone(form, state.info.phone); }
       const resumeInput = form.elements.resume;
       if (state.resumeFile) resumeInput.required = false;
       bindResumeUpload(form, () => state.resumeFile);
@@ -191,15 +203,37 @@
         });
         if (G && form.elements.pronouns) { state.info.pronouns = G.joinPronouns(String(data.get('pronouns') || ''), data.get('pronounsOther')); }
         delete state.info.pronounsOther;
+        if (G && form.elements.phone) state.info.phone = G.readPhone(form);
         const picked = data.get('resume');
         if (picked && picked.size) state.resumeFile = picked;
         if (live) state.info.privacyAcknowledged = true; // Consent is recorded when the candidate submits under the notice.
         state.info.website = String(data.get('website') || '');
         if (!state.resumeFile) { resumeInput.required = true; resumeInput.reportValidity(); return; }
         trackStep('details', 'start');
-        if (state.current && state.current.type === 'end') { complete(state.current.subtype || 'submitted'); return; }
-        state.screen = 'interstitial';
-        render();
+        if (askDiversity) { state.screen = 'diversity'; render(); return; }
+        afterDetails();
+      });
+    }
+
+    // After the first page (and the diversity page, when the employer asks for it) the person goes on to the questions.
+    function afterDetails() {
+      if (state.current && state.current.type === 'end') { complete(state.current.subtype || 'submitted'); return; }
+      state.screen = 'interstitial';
+      render();
+    }
+
+    function bindDiversityForm() {
+      const form = root.querySelector('#candidate-diversity-form');
+      const typeField = form.querySelector('#diversity-type-field');
+      const syncType = () => { const yes = form.elements.disability.value === 'Yes'; typeField.hidden = !yes; form.elements.disabilityType.required = yes; if (!yes) form.elements.disabilityType.value = ''; };
+      Object.entries(state.diversity || {}).forEach(([key, value]) => { if (form.elements[key]) form.elements[key].value = value; });
+      form.elements.disability.addEventListener('change', syncType); syncType();
+      root.querySelector('#diversity-back').addEventListener('click', () => { state.screen = 'landing'; render(); });
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        state.diversity = Object.fromEntries(G.DIVERSITY_KEYS.map(key => [key, String(form.elements[key].value || '')]));
+        afterDetails();
       });
     }
 
@@ -307,6 +341,7 @@
           privacyAcknowledged: Boolean(state.info.privacyAcknowledged),
           answers: collectAnswers(),
           resume: state.resumeFile,
+          diversity: state.diversity,
           website: state.info.website || ''
         });
         state.submitting = false;

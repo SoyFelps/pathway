@@ -4,12 +4,14 @@
   const ANSWERS_KEY = 'pathway:demo-submissions:v1';
   const REQUIRED_FIELDS = ['name', 'email', 'resume'];
   const OPTIONAL_FIELDS = [
-    { key: 'phone', label: 'Phone number', type: 'tel' },
+    { key: 'phone', label: 'Phone number', type: 'phone' },
     { key: 'country', label: 'Country of birth', type: 'country' },
     { key: 'city', label: 'Current location', type: 'city' },
     { key: 'linkedin', label: 'LinkedIn profile', type: 'url' },
     { key: 'portfolio', label: 'Portfolio website', type: 'url' },
-    { key: 'pronouns', label: 'Pronouns', type: 'pronouns' }
+    { key: 'pronouns', label: 'Pronouns', type: 'pronouns' },
+    // Not a field of the first page: it adds a second, voluntary page (gender identity, sexual orientation, race and ethnicity, disability).
+    { key: 'diversity', label: 'Diversity questions', type: 'diversity', hint: 'A second, voluntary page' }
   ];
   // Details that employers can no longer ask for but that older applications may still hold: kept readable in the candidate panel.
   const LEGACY_FIELD_LABELS = { address: 'Address', workAuthorization: 'Work authorization', currentCountry: 'Current country' };
