@@ -78,7 +78,7 @@ test('the board uses the shared setup: custom columns sit before Hired, order an
   const styles = read('styles.css');
   assert.match(styles, /\.stage-custom\{background:var\(--stage-default\)\}/);
   assert.match(styles, /\.stage-create\{/);
-  assert.match(read('index.html'), /builder\.js\?v=flat-20261021/);
+  assert.match(read('index.html'), /builder\.js\?v=canvas6-20261022/);
 });
 
 test('the custom-stage migration does not use unknown color or table-privilege shortcuts', () => {

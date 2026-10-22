@@ -2431,7 +2431,7 @@
     if (!workspace) return;
     let pan = null;
     const beginPan = event => {
-      if (event.button !== 0 || event.target.closest('.node, .port, .target-port, .edge-path, .canvas-toolbar, button, input, textarea, select')) return;
+      if (event.button !== 0 || event.target.closest('.node, .port, .target-port, .edge-path, .edge-hit, .canvas-toolbar, button, input, textarea, select')) return;
       event.preventDefault();
       pan = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: workspace.scrollLeft, top: workspace.scrollTop };
       workspace.classList.add('is-panning');
@@ -2486,7 +2486,7 @@
         const edge = flow.edges.find(item => item.fromNodeId === node.id); const target = edge && flow.nodes.find(item => item.id === edge.toNodeId);
         detail = `<div class="node-detail">${node.type === 'shortText' ? (node.numericOnly ? 'Number response' + (Number.isInteger(node.autoFailBelow) ? ' · auto-fail below ' + node.autoFailBelow : '') : 'Open-ended response') : `${(node.options || []).length} choices`}${target ? ` · → ${esc(target.label.slice(0, 19))}` : ' · Not connected'}</div>`;
       }
-      return `<article class="${nodeClass}" data-node="${esc(node.id)}" style="left:${Math.max(24, node.x)}px;top:${Math.max(24, node.y)}px"><span class="target-port" data-target="${esc(node.id)}" title="Drop a connection here"></span><header class="node-head" data-drag-handle="${esc(node.id)}"><span class="type-icon">${icon}</span><span class="node-type">${title}</span>${node.type === 'candidateInfo' ? '<span class="node-badge">Fixed</span>' : node.type !== 'end' ? `<button class="node-remove" data-delete="${esc(node.id)}" aria-label="Delete step">×</button>` : '<span class="node-badge">Finish</span>'}</header><div class="node-body"><div class="node-title">${esc(node.label)}</div>${detail}${node.type !== 'singleChoice' && node.type !== 'multiChoice' && node.type !== 'end' ? `<div class="node-ports"><span class="port" data-from="${esc(node.id)}" data-option="" title="Drag to connect"></span></div>` : ''}</div></article>`;
+      return `<article class="${nodeClass}" data-node="${esc(node.id)}" style="left:${Math.max(24, node.x)}px;top:${Math.max(24, node.y)}px">${node.type === 'candidateInfo' ? '' : `<span class="target-port" data-target="${esc(node.id)}" title="Drop a connection here"></span>`}<header class="node-head" data-drag-handle="${esc(node.id)}"><span class="type-icon">${icon}</span><span class="node-type">${title}</span>${node.type === 'candidateInfo' ? '<span class="node-badge">Fixed</span>' : node.type !== 'end' ? `<button class="node-remove" data-delete="${esc(node.id)}" aria-label="Delete step">×</button>` : '<span class="node-badge">Finish</span>'}</header><div class="node-body"><div class="node-title">${esc(node.label)}</div>${detail}${node.type !== 'singleChoice' && node.type !== 'multiChoice' && node.type !== 'end' ? `<div class="node-ports"><span class="port" data-from="${esc(node.id)}" data-option="" title="Drag to connect"></span></div>` : ''}</div></article>`;
     }).join('');
     layer.querySelectorAll('.node').forEach(element => {
       element.addEventListener('click', event => {
@@ -2508,18 +2508,57 @@
     const flow = currentFlow(); const stage = document.getElementById('canvas-stage'); const svg = document.getElementById('wires'); if (!flow || !stage || !svg) return;
     svg.setAttribute('width', stage.offsetWidth); svg.setAttribute('height', stage.offsetHeight); svg.innerHTML = '';
     flow.edges.forEach(edge => {
+      if (edge.id === reconnectingEdgeId) return;
       const source = stage.querySelector(`.port[data-from="${CSS.escape(edge.fromNodeId)}"][data-option="${CSS.escape(edge.optionValue || '')}"]`);
       const target = stage.querySelector(`.target-port[data-target="${CSS.escape(edge.toNodeId)}"]`);
       if (!source || !target) return;
       const a = center(source, stage); const b = center(target, stage);
       const bend = Math.max(42, (b.x - a.x) * .46); const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}`); path.setAttribute('class', 'edge-path'); path.setAttribute('data-edge', edge.id); path.setAttribute('aria-label', `${edge.optionValue ? `${edge.optionValue}: ` : ''}connection`);
-      path.addEventListener('click', () => { if (flow.nodes.find(node => node.id === edge.fromNodeId)?.type === 'candidateInfo') { showToast('The candidate-details step must always connect to the journey.'); return; } flow.edges = flow.edges.filter(item => item.id !== edge.id); save(); drawCanvas(); drawInspector(); showToast('Connection removed.'); }); svg.appendChild(path);
+      svg.appendChild(path);
+      // The visible line is thin; a wide invisible copy on top of it is what the mouse hits, so a connection is easy to point at and remove.
+      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path'); hit.setAttribute('d', path.getAttribute('d')); hit.setAttribute('class', 'edge-hit'); hit.setAttribute('data-edge', edge.id);
+      const hint = document.createElementNS('http://www.w3.org/2000/svg', 'title'); hint.textContent = 'Click to remove · drag onto another step to move it'; hit.appendChild(hint);
+      hit.addEventListener('pointerenter', () => path.classList.add('is-hover')); hit.addEventListener('pointerleave', () => path.classList.remove('is-hover'));
+      // Press on a line: a click removes it, dragging it onto another step moves its end there.
+      hit.addEventListener('pointerdown', event => startEdgeGesture(event, edge)); svg.appendChild(hit);
     });
     if (connectFrom && window.pendingPointer) {
       const source = stage.querySelector(`.port[data-from="${CSS.escape(connectFrom.id)}"][data-option="${CSS.escape(connectFrom.optionValue || '')}"]`);
-      if (source) { const a = center(source, stage); const b = { x: window.pendingPointer.x - stage.getBoundingClientRect().left + document.getElementById('workspace').scrollLeft, y: window.pendingPointer.y - stage.getBoundingClientRect().top + document.getElementById('workspace').scrollTop }; const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', `M ${a.x} ${a.y} C ${a.x + 70} ${a.y}, ${b.x - 70} ${b.y}, ${b.x} ${b.y}`); path.setAttribute('class', 'edge-path edge-dash'); svg.appendChild(path); }
+      if (source) { const a = center(source, stage); /* the box already moves when the canvas is panned: adding the pan offset again threw the dashed line off */ const stageBox = stage.getBoundingClientRect(); const b = { x: window.pendingPointer.x - stageBox.left, y: window.pendingPointer.y - stageBox.top }; const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', `M ${a.x} ${a.y} C ${a.x + 70} ${a.y}, ${b.x - 70} ${b.y}, ${b.x} ${b.y}`); path.setAttribute('class', 'edge-path edge-dash'); svg.appendChild(path); }
     }
+  }
+  let reconnectingEdgeId = null;
+  function removeEdge(flow, edge) {
+    if (flow.nodes.find(node => node.id === edge.fromNodeId)?.type === 'candidateInfo') { showToast('The candidate-details step must always connect to the journey.'); return; }
+    flow.edges = flow.edges.filter(item => item.id !== edge.id); save(); drawCanvas(); drawInspector(); showToast('Connection removed.');
+  }
+  function startEdgeGesture(event, edge) {
+    if (event.button !== 0) return;
+    event.preventDefault(); event.stopPropagation();
+    const flow = currentFlow(); const startX = event.clientX, startY = event.clientY; let moved = false;
+    const targetAt = (x, y) => document.elementFromPoint(x, y)?.closest('.node');
+    const markTarget = element => { document.querySelectorAll('.node.connect-target').forEach(node => { if (node !== element) node.classList.remove('connect-target'); }); if (element) element.classList.add('connect-target'); };
+    const onMove = move => {
+      if (!moved && Math.abs(move.clientX - startX) + Math.abs(move.clientY - startY) <= 5) return;
+      if (!moved) { moved = true; connectFrom = { id: edge.fromNodeId, optionValue: edge.optionValue ?? null }; reconnectingEdgeId = edge.id; }
+      window.pendingPointer = { x: move.clientX, y: move.clientY }; drawWires();
+      const over = targetAt(move.clientX, move.clientY); markTarget(over && over.dataset.node !== edge.fromNodeId && flow.nodes.find(node => node.id === over.dataset.node)?.type !== 'candidateInfo' ? over : null);
+    };
+    const finish = (up, cancelled) => {
+      window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onCancel);
+      markTarget(null);
+      if (!moved) { if (!cancelled) removeEdge(flow, edge); return; }
+      const targetId = cancelled ? null : targetAt(up.clientX, up.clientY)?.dataset.node;
+      const target = flow.nodes.find(node => node.id === targetId);
+      connectFrom = null; window.pendingPointer = null; reconnectingEdgeId = null;
+      if (target && target.id !== edge.fromNodeId && target.type !== 'candidateInfo' && target.id !== edge.toNodeId) {
+        edge.toNodeId = target.id; save(); drawCanvas(); drawInspector(); showToast('Connection moved.');
+      } else drawCanvas();
+    };
+    const onUp = up => finish(up, false);
+    const onCancel = () => finish(null, true);
+    window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onCancel);
   }
   function center(element, relativeTo) { const a = element.getBoundingClientRect(), b = relativeTo.getBoundingClientRect(); return { x: a.left - b.left + a.width / 2, y: a.top - b.top + a.height / 2 }; }
   function setStatus(text) { const status = document.getElementById('canvas-status'); if (status) status.textContent = text; }
@@ -2540,7 +2579,8 @@
   function endDrag() {
     if (!dragState || dragState.type !== 'move') return;
     const moved = dragState.moved; dragState = null;
-    if (moved) { save(); drawWires(); }
+    // Where a step sits on the canvas is not something candidates see: saved, but never an "unpublished change".
+    if (moved) { save({ internal: true }); drawWires(); }
   }
   function startConnect(event, port) {
     if (event.button !== 0) return;
@@ -2549,7 +2589,7 @@
     port.addEventListener('pointermove', moveConnect); port.addEventListener('pointerup', event => {
       const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.node')?.dataset.node;
       if (target) finishConnect(event, target);
-      else { connectFrom = null; window.pendingPointer = null; drawCanvas(); setStatus('Connection cancelled. Drag a port to a destination step.'); }
+      else { connectFrom = null; window.pendingPointer = null; drawCanvas(); }
     }, { once: true });
   }
   function moveConnect(event) { if (!connectFrom) return; window.pendingPointer = { x: event.clientX, y: event.clientY }; drawWires(); }
@@ -2560,7 +2600,7 @@
     const optionValue = source.type === 'singleChoice' ? connectFrom.optionValue : null;
     flow.edges = flow.edges.filter(edge => !(edge.fromNodeId === source.id && (source.type !== 'singleChoice' || edge.optionValue === optionValue)));
     flow.edges.push({ id: C.uid('edge'), fromNodeId: source.id, toNodeId: target.id, ...(source.type === 'singleChoice' ? { optionValue } : {}) });
-    connectFrom = null; window.pendingPointer = null; save(); selectedId = source.id; drawCanvas(); drawInspector(); setStatus('Connected · click any line to remove it');
+    connectFrom = null; window.pendingPointer = null; save(); selectedId = source.id; drawCanvas(); drawInspector();
   }
 
   function drawInspector() {
@@ -2630,26 +2670,20 @@
     setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Build your journey</div><h2>Add a step</h2><p>Pick the kind of answer you need from candidates.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="type-picker"><button class="type-choice" data-type="shortText"><strong>Short answer</strong><span>An open-ended written response.</span></button><button class="type-choice" data-type="singleChoice"><strong>Choose one</strong><span>Route each answer down its own path.</span></button><button class="type-choice" data-type="multiChoice"><strong>Choose many</strong><span>Let candidates select all that apply.</span></button><button class="type-choice" data-type="end"><strong>Ending</strong><span>Show a final message and finish the flow.</span></button></div><div class="modal-actions"><button class="btn" data-close>Cancel</button></div>`);
     modalRoot.querySelectorAll('.type-choice').forEach(button => button.addEventListener('click', () => { addNode(button.dataset.type); closeModal(); }));
   }
+  // A new step appears loose, in the part of the canvas the person is looking at; nothing is reconnected, they decide where it goes.
+  function newNodeSpot(flow) {
+    const view = document.getElementById('workspace'), stage = document.getElementById('canvas-stage');
+    const width = stage ? stage.offsetWidth : 1840, height = stage ? stage.offsetHeight : 1080;
+    let x = (view ? view.scrollLeft + view.clientWidth / 2 : 600) - 122, y = (view ? view.scrollTop + view.clientHeight / 2 : 340) - 70;
+    const taken = (px, py) => flow.nodes.some(node => Math.abs(node.x - px) < 270 && Math.abs(node.y - py) < 180);
+    for (let attempt = 0; attempt < 14 && taken(x, y); attempt += 1) { x += 40; y += 40; }
+    return { x: Math.min(Math.max(24, x), Math.max(24, width - 270)), y: Math.min(Math.max(24, y), Math.max(24, height - 190)) };
+  }
   function addNode(type) {
-    const flow = currentFlow(); const newNode = C.createNode(type, 390 + ((flow.nodes.length - 2) % 3) * 295, 145 + ((flow.nodes.length - 2) % 3) * 210);
+    const flow = currentFlow(); const spot = newNodeSpot(flow); const newNode = C.createNode(type, spot.x, spot.y);
     if (type === 'end') { newNode.label = 'Application received'; newNode.subtype = 'submitted'; }
     flow.nodes.push(newNode);
-    const primaryEnd = flow.nodes.find(node => node.type === 'end' && node.id !== newNode.id && node.subtype !== 'disqualified');
-    if (type === 'end') {
-      // Keep existing paths intact; the new ending is available for a branch connection.
-    } else if (primaryEnd) {
-      const inbound = flow.edges.filter(edge => edge.toNodeId === primaryEnd.id);
-      if (inbound.length) inbound.forEach(edge => { edge.toNodeId = newNode.id; });
-      else {
-        const info = flow.nodes.find(node => node.type === 'candidateInfo');
-        const edge = flow.edges.find(item => item.fromNodeId === info.id);
-        if (edge) edge.toNodeId = newNode.id;
-      }
-      if (type === 'singleChoice') {
-        newNode.options.forEach(option => flow.edges.push({ id: C.uid('edge'), fromNodeId: newNode.id, toNodeId: primaryEnd.id, optionValue: option }));
-      } else flow.edges.push({ id: C.uid('edge'), fromNodeId: newNode.id, toNodeId: primaryEnd.id });
-    }
-    selectedId = newNode.id; save(); renderEditor();
+    selectedId = newNode.id; save(); drawCanvas(); drawInspector();
   }
   function deleteNode(id) {
     const flow = currentFlow(); const doomed = flow.nodes.find(node => node.id === id); if (!doomed || doomed.type === 'candidateInfo') return;

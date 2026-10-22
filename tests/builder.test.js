@@ -8,7 +8,7 @@ const styles = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8')
 
 test('empty flow-canvas background pans both axes without hijacking node or connection gestures', () => {
   assert.match(builder, /bindCanvasPan\(workspace\)/);
-  assert.match(builder, /event\.target\.closest\('\.node, \.port, \.target-port, \.edge-path, \.canvas-toolbar, button, input, textarea, select'\)/);
+  assert.match(builder, /event\.target\.closest\('\.node, \.port, \.target-port, \.edge-path, \.edge-hit, \.canvas-toolbar, button, input, textarea, select'\)/);
   assert.match(builder, /workspace\.scrollLeft = pan\.left - \(event\.clientX - pan\.x\)/);
   assert.match(builder, /workspace\.scrollTop = pan\.top - \(event\.clientY - pan\.y\)/);
   assert.match(builder, /setPointerCapture\(event\.pointerId\)/);
