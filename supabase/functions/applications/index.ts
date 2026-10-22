@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildConfirmationEmail } from "./email.ts";
 import { verifyTurnstileToken } from "./captcha.ts";
+import { COUNTRY_NAMES, PRONOUNS, PRONOUN_OTHER, PRONOUN_OTHER_MAX } from "./geo.ts";
 
 const APP_ORIGINS = new Set([
   "https://soyfelps.github.io",
@@ -231,14 +232,21 @@ async function validateApplicantSubmission(snapshot: Record<string, unknown>, in
 
   const configured = snapshot.candidateInfoFields && typeof snapshot.candidateInfoFields === "object"
     ? snapshot.candidateInfoFields as Record<string, unknown> : {};
-  const allowedOptional = new Set(["phone", "country", "address", "city", "linkedin", "portfolio", "workAuthorization", "pronouns"]);
+  // Details the employer may ask for (address, work authorization and the separate current-country list are no longer offered, so they are never stored).
+  const allowedOptional = new Set(["phone", "country", "city", "linkedin", "portfolio", "pronouns"]);
+  const countries = new Set(COUNTRY_NAMES);
   const rawInfo = input.candidateInfo && typeof input.candidateInfo === "object" && !Array.isArray(input.candidateInfo)
     ? input.candidateInfo as Record<string, unknown> : {};
   const candidateInfo: Record<string, string> = {};
   for (const [key, value] of Object.entries(rawInfo)) {
     if (!allowedOptional.has(key) || configured[key] !== true) continue;
-    const text = cleanName(value, key === "address" ? 300 : key === "linkedin" || key === "portfolio" ? 500 : 150);
+    const text = cleanName(value, key === "linkedin" || key === "portfolio" ? 500 : 150);
     if (!text) continue;
+    if (key === "country" && !countries.has(text)) throw new Error("Choose your country of birth from the list.");
+    if (key === "pronouns" && !PRONOUNS.includes(text) && text !== PRONOUN_OTHER
+        && !(text.startsWith(`${PRONOUN_OTHER}: `) && text.length > PRONOUN_OTHER.length + 2 && text.length <= PRONOUN_OTHER.length + 2 + PRONOUN_OTHER_MAX)) {
+      throw new Error("Choose your pronouns from the list.");
+    }
     if (key === "linkedin" || key === "portfolio") {
       try {
         const parsed = new URL(text);

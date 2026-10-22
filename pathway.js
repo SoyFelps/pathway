@@ -5,14 +5,15 @@
   const REQUIRED_FIELDS = ['name', 'email', 'resume'];
   const OPTIONAL_FIELDS = [
     { key: 'phone', label: 'Phone number', type: 'tel' },
-    { key: 'country', label: 'Country', type: 'text' },
-    { key: 'address', label: 'Address', type: 'text' },
-    { key: 'city', label: 'Current location', type: 'text' },
+    { key: 'country', label: 'Country of birth', type: 'country' },
+    { key: 'city', label: 'Current location', type: 'city' },
     { key: 'linkedin', label: 'LinkedIn profile', type: 'url' },
     { key: 'portfolio', label: 'Portfolio website', type: 'url' },
-    { key: 'workAuthorization', label: 'Work authorization', type: 'text' },
-    { key: 'pronouns', label: 'Pronouns', type: 'text' }
+    { key: 'pronouns', label: 'Pronouns', type: 'pronouns' }
   ];
+  // Details that employers can no longer ask for but that older applications may still hold: kept readable in the candidate panel.
+  const LEGACY_FIELD_LABELS = { address: 'Address', workAuthorization: 'Work authorization', currentCountry: 'Current country' };
+  const infoFieldLabel = key => (OPTIONAL_FIELDS.find(field => field.key === key) || {}).label || LEGACY_FIELD_LABELS[key] || key;
   const FIELD_META = {
     name: { label: 'Full name', type: 'text', autocomplete: 'name' },
     email: { label: 'Email address', type: 'email', autocomplete: 'email' },
@@ -259,5 +260,5 @@
     return [example];
   }
 
-  window.PathwayCore = { candidateKey, groupApplicants, STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, flowIsUsable, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
+  window.PathwayCore = { infoFieldLabel, candidateKey, groupApplicants, STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, flowIsUsable, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
 })();

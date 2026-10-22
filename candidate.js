@@ -8,6 +8,7 @@
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx'
   };
   const INFO_LABELS = Object.fromEntries(C.OPTIONAL_FIELDS.map(field => [field.key, field.label]));
+  const G = window.PathwayGeo;
   const STATUS_LABELS = { new: 'New', failed: 'Failed', promising: 'Promising', approved: 'Approved' };
 
   // Cloudflare Turnstile CAPTCHA. The site key is public and lives in turnstile-config.js; without one the check is skipped.
@@ -48,12 +49,62 @@
     });
   }
 
+  // The resume field: a drop area instead of the browser's own file button (whose words follow the browser language and look dated).
+  // The real <input type="file"> stays inside, invisible and covering the area, so clicking, dragging a file onto it, the keyboard and form validation all keep working.
+  const RESUME_MAX_BYTES = 10 * 1024 * 1024;
+  const UPLOAD_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16"/></svg>';
+  const FILE_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7.5A1.5 1.5 0 0 0 6 4.5v15A1.5 1.5 0 0 0 7.5 21h9a1.5 1.5 0 0 0 1.5-1.5V7z"/><path d="M14 3v4h4"/><path d="M9 14l2 2 4-4"/></svg>';
+  function resumeUploadHtml(meta) {
+    return `<div class="candidate-field candidate-upload"><label for="candidate-resume">${C.esc(meta.label)} <span aria-hidden="true">*</span></label><div class="upload-drop"><input id="candidate-resume" name="resume" type="file" accept="${C.esc(meta.accept)}" required class="upload-native" aria-describedby="candidate-resume-hint"><div class="upload-box" aria-hidden="true"><span class="upload-icon">${UPLOAD_ICON}</span><span class="upload-text"><strong class="upload-title">Choose a file <span class="upload-drag">or drag it here</span></strong><span class="upload-sub" id="candidate-resume-hint">PDF, DOC or DOCX · up to 10 MB</span></span></div></div></div>`;
+  }
+  function formatFileSize(bytes) {
+    return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB';
+  }
+  function bindResumeUpload(form, getFile) {
+    const input = form.elements.resume;
+    if (!input) return;
+    const drop = input.closest('.upload-drop'), box = drop.querySelector('.upload-box');
+    const icon = box.querySelector('.upload-icon'), title = box.querySelector('.upload-title'), sub = box.querySelector('.upload-sub');
+    const show = file => {
+      box.classList.toggle('has-file', Boolean(file));
+      if (file) {
+        icon.innerHTML = FILE_ICON; title.textContent = file.name; sub.textContent = formatFileSize(file.size) + ' · Click to replace';
+      } else {
+        icon.innerHTML = UPLOAD_ICON; title.innerHTML = 'Choose a file <span class="upload-drag">or drag it here</span>'; sub.textContent = 'PDF, DOC or DOCX · up to 10 MB';
+      }
+    };
+    const check = file => {
+      const extension = (file.name.split('.').pop() || '').toLowerCase();
+      if (!['pdf', 'doc', 'docx'].includes(extension)) return 'Upload your resume as a PDF, DOC or DOCX file.';
+      if (file.size > RESUME_MAX_BYTES) return 'Your resume must be 10 MB or smaller.';
+      return '';
+    };
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      const problem = file ? check(file) : '';
+      input.setCustomValidity(problem);
+      if (problem) { input.value = ''; show(getFile()); input.reportValidity(); return; }
+      show(file || getFile());
+    });
+    ['dragenter', 'dragover'].forEach(name => drop.addEventListener(name, () => box.classList.add('is-dragging')));
+    ['dragleave', 'drop'].forEach(name => drop.addEventListener(name, () => box.classList.remove('is-dragging')));
+    show(getFile());
+  }
+
   function candidateFieldHtml(key, optional = false) {
     const meta = C.FIELD_META[key] || C.OPTIONAL_FIELDS.find(field => field.key === key);
     if (!meta) return '';
+    if (key === 'resume') return resumeUploadHtml(meta);
     const required = (!optional || key === 'resume') ? 'required' : '';
-    const type = meta.type === 'file' ? 'file' : meta.type;
+    const type = meta.type === 'file' ? 'file' : ['country', 'city', 'pronouns'].includes(meta.type) ? 'text' : meta.type;
     const placeholder = key === 'name' ? 'e.g. Alex Morgan' : key === 'email' ? 'you@example.com' : '';
+    // Searchable country / city lists and the pronouns list (see geo.js); without it they fall back to plain text.
+    if (G && (meta.type === 'country' || meta.type === 'city')) {
+      return `<div class="candidate-field"><label for="candidate-${C.esc(key)}">${C.esc(meta.label)}</label><input id="candidate-${C.esc(key)}" name="${C.esc(key)}" type="text" data-geo="${meta.type}" maxlength="150" placeholder="Type or select"></div>`;
+    }
+    if (G && meta.type === 'pronouns') {
+      return `<div class="candidate-field"><label for="candidate-pronouns">${C.esc(meta.label)}</label><select id="candidate-pronouns" name="pronouns" data-geo="pronouns"><option value="">Select…</option>${G.PRONOUNS.concat([G.PRONOUN_OTHER]).map(option => `<option value="${C.esc(option)}">${C.esc(option)}</option>`).join('')}</select><input type="text" name="pronounsOther" data-geo="pronouns-other" class="candidate-pronouns-other" maxlength="${G.PRONOUN_OTHER_MAX}" placeholder="How should we refer to you?" aria-label="Your pronouns" hidden></div>`;
+    }
     return `<div class="candidate-field"><label for="candidate-${C.esc(key)}">${C.esc(meta.label)}${required ? ' <span aria-hidden="true">*</span>' : ''}</label><input id="candidate-${C.esc(key)}" name="${C.esc(key)}" type="${C.esc(type)}" ${required} ${meta.autocomplete ? `autocomplete="${C.esc(meta.autocomplete)}"` : ''} ${meta.accept ? `accept="${C.esc(meta.accept)}"` : ''} ${placeholder ? `placeholder="${C.esc(placeholder)}"` : ''} ${key === 'resume' ? 'class="file-input"' : ''}></div>`;
   }
 
@@ -124,14 +175,11 @@
         const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         root.querySelector('#candidate-form-card').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
       });
-      Object.entries(state.info).forEach(([key, value]) => { const input = form.elements[key]; if (input && input.type !== 'file' && input.type !== 'checkbox') input.value = value; });
+      Object.entries(state.info).forEach(([key, value]) => { const input = form.elements[key]; if (input && input.type !== 'file' && input.type !== 'checkbox' && key !== 'pronouns') input.value = value; });
+      if (G) { G.enhanceForm(form); G.fillPronouns(form, state.info.pronouns); }
       const resumeInput = form.elements.resume;
-      if (state.resumeFile) {
-        resumeInput.required = false;
-        const resumeLabel = document.createElement('p'); resumeLabel.className = 'resume-selected-note';
-        resumeLabel.textContent = `Selected resume: ${state.resumeFile.name} · Choose another file to replace it.`;
-        resumeInput.insertAdjacentElement('afterend', resumeLabel);
-      }
+      if (state.resumeFile) resumeInput.required = false;
+      bindResumeUpload(form, () => state.resumeFile);
       form.addEventListener('submit', event => {
         event.preventDefault();
         if (!form.reportValidity()) return;
@@ -141,6 +189,8 @@
           if (key === 'name' || key === 'email') state.info[key] = String(value).trim();
           else if (key !== 'resume' && key !== 'privacyAcknowledged' && key !== 'website') state.info[key] = String(value).trim();
         });
+        if (G && form.elements.pronouns) { state.info.pronouns = G.joinPronouns(String(data.get('pronouns') || ''), data.get('pronounsOther')); }
+        delete state.info.pronounsOther;
         const picked = data.get('resume');
         if (picked && picked.size) state.resumeFile = picked;
         if (live) state.info.privacyAcknowledged = true; // Consent is recorded when the candidate submits under the notice.

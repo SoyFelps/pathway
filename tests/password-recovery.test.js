@@ -44,8 +44,8 @@ test('new password must match, meet minimum length, and is updated through Supab
 test('password recovery styles and cache-busted assets are included in the static app', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /styles\.css\?v=zoom4-20261022/);
-  assert.match(html, /backend\.js\?v=zoom4-20261022/);
-  assert.match(html, /auth\.js\?v=zoom4-20261022/);
+  assert.match(html, /styles\.css\?v=geo6-20261022/);
+  assert.match(html, /backend\.js\?v=geo6-20261022/);
+  assert.match(html, /auth\.js\?v=geo6-20261022/);
   assert.match(css, /\.auth-forgot-link/);
 });
