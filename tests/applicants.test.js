@@ -83,7 +83,7 @@ test('a Customize button opens a modal that turns stages on and off; Failed, New
   assert.match(migration, /check \(status in \('failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'\)\)/);
   assert.match(migration, /public\.workspace_user_has_permission\(workspace_id, 'applicants'\)/);
   assert.match(read('styles.css'), /\.stage-option\.is-locked\{cursor:not-allowed\}/);
-  assert.match(read('index.html'), /builder\.js\?v=canvas7-20261022/);
+  assert.match(read('index.html'), /builder\.js\?v=zoom4-20261022/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -156,13 +156,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=canvas7-20261022/);
-  assert.match(read('index.html'), /pathway\.js\?v=canvas7-20261022/);
-  assert.match(read('apply.html'), /candidate\.js\?v=canvas7-20261022/);
-  assert.match(read('index.html'), /candidate\.js\?v=canvas7-20261022/);
-  assert.match(read('apply.html'), /styles\.css\?v=canvas7-20261022/);
-  assert.match(read('index.html'), /styles\.css\?v=canvas7-20261022/);
-  assert.match(read('apply.html'), /backend\.js\?v=canvas7-20261022/);
+  assert.match(read('apply.html'), /pathway\.js\?v=zoom4-20261022/);
+  assert.match(read('index.html'), /pathway\.js\?v=zoom4-20261022/);
+  assert.match(read('apply.html'), /candidate\.js\?v=zoom4-20261022/);
+  assert.match(read('index.html'), /candidate\.js\?v=zoom4-20261022/);
+  assert.match(read('apply.html'), /styles\.css\?v=zoom4-20261022/);
+  assert.match(read('index.html'), /styles\.css\?v=zoom4-20261022/);
+  assert.match(read('apply.html'), /backend\.js\?v=zoom4-20261022/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 

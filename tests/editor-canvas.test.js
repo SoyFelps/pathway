@@ -83,3 +83,24 @@ test('the dashed preview line follows the pointer even after the canvas was pann
   assert.match(wires, /window.pendingPointer.x - stageBox.left/);
   assert.doesNotMatch(wires, /scrollLeft|scrollTop/, 'the stage box already includes the scroll position');
 });
+
+test('the canvas can be zoomed out to 40% (in steps of 20%) but never closer than the original 100%', () => {
+  assert.match(builder, /const ZOOM_MIN = 0\.4, ZOOM_MAX = 1, ZOOM_STEP = 0\.2/);
+  const apply = functionBody(builder, 'applyZoom');
+  assert.match(apply, /Math\.min\(ZOOM_MAX, Math\.max\(ZOOM_MIN, next\)\)/, 'the limits are enforced in one place');
+  assert.match(apply, /zin\.disabled = zoom >= ZOOM_MAX/, 'the + button is off at 100%');
+  assert.match(apply, /out\.disabled = zoom <= ZOOM_MIN/);
+  assert.match(builder, /id="zoom-out"/);
+  assert.match(builder, /id="zoom-in"/);
+  assert.match(builder, /id="zoom-reset"/);
+  assert.match(builder, /passive: false/, 'ctrl/cmd + wheel zoom must be able to cancel the browser page zoom');
+  assert.match(styles, /\.canvas-zoom-controls\{position:fixed;bottom:24px;left:calc\(\(100vw - 120px\)\/2 \+ 72px\)/, 'next to the Add a step button');
+  assert.match(styles, /\.edge-path,\.edge-hit\{vector-effect:non-scaling-stroke\}/, 'lines keep a clickable width when zoomed out');
+});
+
+test('everything that reads the mouse or sizes on the canvas accounts for the zoom', () => {
+  assert.match(functionBody(builder, 'moveDrag'), /\/ canvasZoom/);
+  assert.match(builder, /function center\(element, relativeTo\) \{[^}]*\/ canvasZoom/);
+  assert.match(functionBody(builder, 'drawWires'), /\/ canvasZoom/, 'the dashed preview line');
+  assert.match(functionBody(builder, 'newNodeSpot'), /\/ canvasZoom/, 'a new step lands in the middle of what is visible');
+});

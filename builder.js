@@ -2411,7 +2411,7 @@
   function renderEditor() {
     const flow = currentFlow(); if (!flow) return renderDashboard();
     if (flow.cloudId) setRoute(`flow=${flow.cloudId}`);
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body"><main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' || !subscription?.active ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-status" id="canvas-status"></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body"><main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' || !subscription?.active ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-zoom" id="canvas-zoom"><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-zoom-controls" id="canvas-zoom-controls" role="group" aria-label="Zoom"><button type="button" class="zoom-btn" id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" class="zoom-level" id="zoom-reset" title="Back to 100%">100%</button><button type="button" class="zoom-btn" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button></div><div class="canvas-status" id="canvas-status"></div></main></div></div>`;
     bindPlanControl();
     root.querySelector('.save-indicator')?.insertAdjacentHTML('afterend', '<div id="publish-changes-slot"></div>');
     updatePublicationNotice();
@@ -2424,7 +2424,36 @@
     root.querySelector('#add-node').addEventListener('click', showNodePicker);
     const workspaceElement = document.getElementById('workspace');
     bindCanvasPan(workspaceElement);
+    bindCanvasZoom(workspaceElement);
     drawCanvas(); drawInspector();
+  }
+
+  // Zoom of the flow canvas: 100% is the closest view (the original size) and cannot be exceeded; it can be zoomed out to 40% in steps of 20%.
+  const ZOOM_MIN = 0.4, ZOOM_MAX = 1, ZOOM_STEP = 0.2, ZOOM_KEY = 'pathway.canvasZoom';
+  let canvasZoom = (() => { try { const saved = Number(localStorage.getItem(ZOOM_KEY)); return saved >= ZOOM_MIN && saved <= ZOOM_MAX ? saved : 1; } catch { return 1; } })();
+  function applyZoom(next, anchor) {
+    const view = document.getElementById('workspace'), holder = document.getElementById('canvas-zoom'), stage = document.getElementById('canvas-stage');
+    if (!view || !holder || !stage) return;
+    const old = canvasZoom, zoom = Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next)) * 100) / 100;
+    const box = view.getBoundingClientRect();
+    const ax = anchor ? anchor.x - box.left : view.clientWidth / 2, ay = anchor ? anchor.y - box.top : view.clientHeight / 2;
+    const sx = (view.scrollLeft + ax) / old, sy = (view.scrollTop + ay) / old; // the point under the anchor, in canvas units
+    canvasZoom = zoom;
+    holder.style.width = stage.offsetWidth * zoom + 'px'; holder.style.height = stage.offsetHeight * zoom + 'px';
+    stage.style.transform = zoom === 1 ? '' : 'scale(' + zoom + ')';
+    view.scrollLeft = sx * zoom - ax; view.scrollTop = sy * zoom - ay;
+    const label = document.getElementById('zoom-reset'); if (label) label.textContent = Math.round(zoom * 100) + '%';
+    const out = document.getElementById('zoom-out'), zin = document.getElementById('zoom-in');
+    if (out) out.disabled = zoom <= ZOOM_MIN; if (zin) zin.disabled = zoom >= ZOOM_MAX;
+    try { localStorage.setItem(ZOOM_KEY, String(zoom)); } catch { /* the zoom is a convenience only */ }
+  }
+  function bindCanvasZoom(workspace) {
+    document.getElementById('zoom-out')?.addEventListener('click', () => applyZoom(canvasZoom - ZOOM_STEP));
+    document.getElementById('zoom-in')?.addEventListener('click', () => applyZoom(canvasZoom + ZOOM_STEP));
+    document.getElementById('zoom-reset')?.addEventListener('click', () => applyZoom(1));
+    // Ctrl/Cmd + wheel (also a trackpad pinch) zooms around the pointer
+    workspace?.addEventListener('wheel', event => { if (!event.ctrlKey && !event.metaKey) return; event.preventDefault(); applyZoom(canvasZoom * Math.exp(-event.deltaY * 0.01), { x: event.clientX, y: event.clientY }); }, { passive: false });
+    applyZoom(canvasZoom);
   }
 
   function bindCanvasPan(workspace) {
@@ -2525,7 +2554,7 @@
     });
     if (connectFrom && window.pendingPointer) {
       const source = stage.querySelector(`.port[data-from="${CSS.escape(connectFrom.id)}"][data-option="${CSS.escape(connectFrom.optionValue || '')}"]`);
-      if (source) { const a = center(source, stage); /* the box already moves when the canvas is panned: adding the pan offset again threw the dashed line off */ const stageBox = stage.getBoundingClientRect(); const b = { x: window.pendingPointer.x - stageBox.left, y: window.pendingPointer.y - stageBox.top }; const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', `M ${a.x} ${a.y} C ${a.x + 70} ${a.y}, ${b.x - 70} ${b.y}, ${b.x} ${b.y}`); path.setAttribute('class', 'edge-path edge-dash'); svg.appendChild(path); }
+      if (source) { const a = center(source, stage); /* the box already moves when the canvas is panned: adding the pan offset again threw the dashed line off */ const stageBox = stage.getBoundingClientRect(); const b = { x: (window.pendingPointer.x - stageBox.left) / canvasZoom, y: (window.pendingPointer.y - stageBox.top) / canvasZoom }; const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', `M ${a.x} ${a.y} C ${a.x + 70} ${a.y}, ${b.x - 70} ${b.y}, ${b.x} ${b.y}`); path.setAttribute('class', 'edge-path edge-dash'); svg.appendChild(path); }
     }
   }
   let reconnectingEdgeId = null;
@@ -2560,7 +2589,7 @@
     const onCancel = () => finish(null, true);
     window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onCancel);
   }
-  function center(element, relativeTo) { const a = element.getBoundingClientRect(), b = relativeTo.getBoundingClientRect(); return { x: a.left - b.left + a.width / 2, y: a.top - b.top + a.height / 2 }; }
+  function center(element, relativeTo) { const a = element.getBoundingClientRect(), b = relativeTo.getBoundingClientRect(); return { x: (a.left - b.left + a.width / 2) / canvasZoom, y: (a.top - b.top + a.height / 2) / canvasZoom }; }
   function setStatus(text) { const status = document.getElementById('canvas-status'); if (status) status.textContent = text; }
 
   function startDrag(event, element) {
@@ -2571,7 +2600,7 @@
   }
   function moveDrag(event) {
     if (!dragState || dragState.type !== 'move') return;
-    const dx = event.clientX - dragState.x, dy = event.clientY - dragState.y;
+    const dx = (event.clientX - dragState.x) / canvasZoom, dy = (event.clientY - dragState.y) / canvasZoom;
     if (Math.abs(dx) + Math.abs(dy) > 3) dragState.moved = true;
     dragState.node.x = Math.max(24, dragState.left + dx); dragState.node.y = Math.max(24, dragState.top + dy);
     dragState.element.style.left = `${dragState.node.x}px`; dragState.element.style.top = `${dragState.node.y}px`; drawWires();
@@ -2674,7 +2703,7 @@
   function newNodeSpot(flow) {
     const view = document.getElementById('workspace'), stage = document.getElementById('canvas-stage');
     const width = stage ? stage.offsetWidth : 1840, height = stage ? stage.offsetHeight : 1080;
-    let x = (view ? view.scrollLeft + view.clientWidth / 2 : 600) - 122, y = (view ? view.scrollTop + view.clientHeight / 2 : 340) - 70;
+    let x = (view ? (view.scrollLeft + view.clientWidth / 2) / canvasZoom : 600) - 122, y = (view ? (view.scrollTop + view.clientHeight / 2) / canvasZoom : 340) - 70;
     const taken = (px, py) => flow.nodes.some(node => Math.abs(node.x - px) < 270 && Math.abs(node.y - py) < 180);
     for (let attempt = 0; attempt < 14 && taken(x, y); attempt += 1) { x += 40; y += 40; }
     return { x: Math.min(Math.max(24, x), Math.max(24, width - 270)), y: Math.min(Math.max(24, y), Math.max(24, height - 190)) };
