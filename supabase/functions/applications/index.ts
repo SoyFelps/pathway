@@ -421,7 +421,7 @@ async function submitApplicant(req: Request, form: FormData) {
     const answers = normalized.diversity;
     const { error: diversityError } = await admin.from("applicant_diversity").insert({
       applicant_id: submissionKey, workspace_id: active.flow.workspace_id, flow_id: active.flow.id,
-      gender_identity: answers.genderIdentity, sexual_orientation: answers.sexualOrientation, race_ethnicity: answers.raceEthnicity,
+      gender_identity: answers.genderIdentity, transgender: answers.transgender, sexual_orientation: answers.sexualOrientation, race_ethnicity: answers.raceEthnicity,
       disability: answers.disability, disability_type: answers.disabilityType || null,
     });
     if (diversityError) console.error("Diversity answers could not be saved:", diversityError.message);

@@ -5,13 +5,18 @@ export const PRONOUNS: string[] = ["He/him","She/her","They/them","He/they","She
 export const PRONOUN_OTHER = "Other";
 export const PRONOUN_OTHER_MAX = 40;
 // Voluntary self-identification answers (the "Diversity questions" page). Every question lists "Prefer not to say".
-export const DIVERSITY_KEYS: string[] = ["genderIdentity","sexualOrientation","raceEthnicity","disability","disabilityType"];
+export const DIVERSITY_KEYS: string[] = ["genderIdentity","transgender","sexualOrientation","raceEthnicity","disability","disabilityType"];
 export const DIVERSITY: Record<string, string[]> = {
  "genderIdentity": [
   "Woman",
   "Man",
   "Non-binary",
   "Another gender identity",
+  "Prefer not to say"
+ ],
+ "transgender": [
+  "Yes",
+  "No",
   "Prefer not to say"
  ],
  "sexualOrientation": [

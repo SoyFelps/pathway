@@ -23,7 +23,7 @@ test('"Reports" is a team permission: on by default, in invitations, members, th
   assert.match(edge, /can_view_reports: permissions\.reports !== false/);
   assert.match(edge, /p_can_view_reports: permissions\.can_view_reports/);
   assert.match(edge, /p_can_view_reports: p\.can_view_reports/);
-  assert.match(edge, /can_view_reports: p\.can_view_reports,\s*\}\)\.eq\("id", invitationId\)/);
+  assert.match(edge, /can_view_reports: p\.can_view_reports,\s*(\.\.\.\(p\.can_diversity[^\n]*\n\s*)?\}\)\.eq\("id", invitationId\)/);
   assert.equal((edge.match(/can_customize_stages,can_view_reports/g) || []).length >= 3, true, 'members and invitations are read with the new column');
   assert.match(read('backend.js'), /can_view_reports: row\.can_view_reports/);
 });
@@ -80,7 +80,7 @@ test('My Team lets managers choose the Reports permission for members and invita
 test('the page offers period and job filters, the four summary numbers, the chart, the funnel and a CSV export', () => {
   const builder = read('builder.js');
   ['7 days', '30 days', '90 days', 'All time'].forEach(label => assert.ok(builder.includes(label), label));
-  ['Page visits', 'Started applying', 'New candidates', 'Completion rate', 'Applications over time', 'Application funnel', 'Where candidates are now', 'Automatic screening'].forEach(label => assert.ok(builder.includes(label), label));
+  ['Page visits', 'Started applying', "card('Candidates', reportNumber(t.candidates)", 'Completion rate', 'Applications over time', 'Application funnel', 'Where candidates are now', 'Automatic screening'].forEach(label => assert.ok(builder.includes(label), label));
   assert.match(builder, /id="report-export"/);
   assert.match(builder, /downloadTextFile\('pathway-report-'/);
   assert.match(builder, /can be inflated by anyone who knows the job link/);
@@ -108,9 +108,9 @@ test('report text coming from the database is escaped before it reaches the page
 test('the Reports styles exist and the changed files carry a new cache version', () => {
   const css = read('styles.css');
   ['.reports-page', '.rpt-stats', '.rpt-chart', '.rpt-table'].forEach(selector => assert.ok(css.includes(selector), selector));
-  assert.match(read('index.html'), /builder\.js\?v=phone10-20261022/);
-  assert.match(read('index.html'), /backend\.js\?v=phone10-20261022/);
-  assert.match(read('index.html'), /styles\.css\?v=phone10-20261022/);
+  assert.match(read('index.html'), /builder\.js\?v=div3-20261022/);
+  assert.match(read('index.html'), /backend\.js\?v=div3-20261022/);
+  assert.match(read('index.html'), /styles\.css\?v=div3-20261022/);
 });
 
 const scaling = read('supabase/migrations/20261020230000_report_scaling_and_step_counts.sql');

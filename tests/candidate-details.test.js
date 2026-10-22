@@ -180,7 +180,7 @@ test('the diversity questions: a second, voluntary page with "Prefer not to say"
   const core = loadCore();
   const field = core.OPTIONAL_FIELDS.find(item => item.key === 'diversity');
   assert.ok(field && field.type === 'diversity');
-  assert.deepEqual(plain(G.DIVERSITY_KEYS), ['genderIdentity', 'sexualOrientation', 'raceEthnicity', 'disability', 'disabilityType']);
+  assert.deepEqual(plain(G.DIVERSITY_KEYS), ['genderIdentity', 'transgender', 'sexualOrientation', 'raceEthnicity', 'disability', 'disabilityType']);
   G.DIVERSITY_KEYS.forEach(key => assert.ok(G.DIVERSITY[key].options.includes('Prefer not to say'), key + ' offers "Prefer not to say"'));
   assert.deepEqual(plain(G.DIVERSITY.disability.options), ['Yes', 'No', 'Prefer not to say']);
   assert.ok(G.DIVERSITY.raceEthnicity.options.includes('Hispanic or Latino'));
@@ -214,7 +214,8 @@ test('the diversity answers are validated by the server and kept apart from cand
   assert.match(migration, /grant all on public\.applicant_diversity to service_role;/);
   assert.doesNotMatch(migration, /grant (select|insert|update|delete)[^;]* to authenticated/i);
   const builder = read('builder.js');
-  assert.doesNotMatch(builder, /applicant_diversity|raceEthnicity|sexualOrientation/, 'the candidate panel and exports never show them');
+  assert.doesNotMatch(builder, /applicant_diversity/, 'the candidate panel and exports never read the table');
+  assert.doesNotMatch(read('backend.js'), /applicant_diversity/, 'the browser never reads the table either: only the checked report functions');
 });
 
 test('the phone number: a country (calling code) list and a field written the way that country writes numbers', () => {

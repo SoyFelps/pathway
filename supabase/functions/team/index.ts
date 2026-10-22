@@ -45,6 +45,8 @@ function normalizePermissions(value: unknown) {
     can_manage_team: permissions.team !== false,
     can_customize_stages: permissions.stages !== false,
     can_view_reports: permissions.reports !== false,
+    // Diversity is OFF unless explicitly ticked; null (not sent by an older client) leaves a member's current value untouched.
+    can_diversity: typeof permissions.diversity === "boolean" ? permissions.diversity : null,
   };
 }
 async function sha256Hex(value: string): Promise<string> {
@@ -110,7 +112,7 @@ async function getWorkspaceContext(userId: string) {
     return { workspace: ownerWorkspace, isOwner: true, member: null, premiumActive };
   }
   const { data: member, error: memberError } = await admin.from("workspace_members")
-    .select("id,workspace_id,user_id,member_email,can_flows,can_applicants,can_manage_team,can_customize_stages,can_view_reports,created_at")
+    .select("id,workspace_id,user_id,member_email,can_flows,can_applicants,can_manage_team,can_customize_stages,can_view_reports,can_diversity,created_at")
     .eq("user_id", userId).maybeSingle();
   if (memberError) throw memberError;
   if (!member) return { workspace: null, isOwner: false, member: null, premiumActive: false };
@@ -130,6 +132,7 @@ async function getWorkspaceContext(userId: string) {
     can_manage_team: member.can_manage_team,
     can_customize_stages: member.can_customize_stages,
     can_view_reports: member.can_view_reports,
+    can_diversity: member.can_diversity,
     created_at: member.created_at,
   };
   return { workspace: workspace ? { id: workspace.id, name: workspace.name, created_at: workspace.created_at, owner_id: workspace.owner_id } : null, isOwner: false, member: safeMember, premiumActive };
@@ -249,6 +252,7 @@ async function handle(req: Request): Promise<Response> {
         p_can_manage_team: permissions.can_manage_team,
         p_can_customize_stages: permissions.can_customize_stages,
         p_can_view_reports: permissions.can_view_reports,
+        p_can_diversity: permissions.can_diversity,
       });
       if (error) return fail(req, 400, error.message || "The invitation could not be created.");
       const inviteUrl = new URL(appUrl.href);
@@ -308,8 +312,8 @@ async function handle(req: Request): Promise<Response> {
         });
       }
       const [membersResult, invitesResult, ownerResult] = await Promise.all([
-        admin.from("workspace_members").select("id,user_id,member_email,can_flows,can_applicants,can_manage_team,can_customize_stages,can_view_reports,created_at").eq("workspace_id", workspaceId).order("created_at"),
-        admin.from("workspace_invitations").select("id,invited_email,can_flows,can_applicants,can_manage_team,can_customize_stages,can_view_reports,status,expires_at,created_at").eq("workspace_id", workspaceId).eq("status", "pending").gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }),
+        admin.from("workspace_members").select("id,user_id,member_email,can_flows,can_applicants,can_manage_team,can_customize_stages,can_view_reports,can_diversity,created_at").eq("workspace_id", workspaceId).order("created_at"),
+        admin.from("workspace_invitations").select("id,invited_email,can_flows,can_applicants,can_manage_team,can_customize_stages,can_view_reports,can_diversity,status,expires_at,created_at").eq("workspace_id", workspaceId).eq("status", "pending").gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }),
         isOwner ? Promise.resolve({ data: { user: { email: user.email || null } }, error: null }) : admin.auth.admin.getUserById(context.workspace.owner_id),
       ]);
       if (membersResult.error || invitesResult.error) return fail(req, 503, "Team members could not be loaded.");
@@ -335,7 +339,7 @@ async function handle(req: Request): Promise<Response> {
       const { data, error } = await userClient.rpc("update_team_member_permissions", {
         p_workspace_id: workspaceId, p_member_id: memberId,
         p_can_flows: p.can_flows, p_can_applicants: p.can_applicants, p_can_manage_team: p.can_manage_team,
-        p_can_customize_stages: p.can_customize_stages, p_can_view_reports: p.can_view_reports,
+        p_can_customize_stages: p.can_customize_stages, p_can_view_reports: p.can_view_reports, p_can_diversity: p.can_diversity,
       });
       if (error) return fail(req, 400, error.message || "Permissions could not be saved.");
       return response(req, 200, { updated: Boolean(data) });
@@ -349,6 +353,7 @@ async function handle(req: Request): Promise<Response> {
       const p = normalizePermissions(body.permissions);
       const { data, error } = await admin.from("workspace_invitations").update({
         can_flows: p.can_flows, can_applicants: p.can_applicants, can_manage_team: p.can_manage_team, can_customize_stages: p.can_customize_stages, can_view_reports: p.can_view_reports,
+        ...(p.can_diversity === null ? {} : { can_diversity: p.can_diversity }),
       }).eq("id", invitationId).eq("workspace_id", workspaceId).eq("status", "pending").select("id").maybeSingle();
       if (error || !data) return fail(req, 400, "Pending invitation could not be updated.");
       return response(req, 200, { updated: true });

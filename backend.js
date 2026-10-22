@@ -81,7 +81,7 @@
     await requireSession();
     const { data, error } = await client.rpc('list_team_overview', { p_workspace_id: workspaceId });
     if (error) throw error;
-    return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, can_customize_stages: row.can_customize_stages, can_view_reports: row.can_view_reports, memberSince: row.member_since, firstName: row.first_name || '', lastName: row.last_name || '' }));
+    return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, can_customize_stages: row.can_customize_stages, can_view_reports: row.can_view_reports, can_diversity: row.can_diversity, memberSince: row.member_since, firstName: row.first_name || '', lastName: row.last_name || '' }));
   }
   // Internal team comments: one list per candidate (same job + same e-mail address, so repeat applications share it).
   const mapComment = row => ({ id: row.id, authorId: row.author_id || null, authorName: row.author_name, body: row.body, createdAt: row.created_at, mentions: Array.isArray(row.mentions) ? row.mentions.map(item => ({ userId: item.userId, name: String(item.name || '') })) : [] });
@@ -746,6 +746,23 @@
     return { total: Number(data.total), jobs: data.jobs };
   }
 
+  // Diversity reports (permission "Diversity"). The database returns rounded percentages only: never a head count, a name or an e-mail address.
+  async function getDiversityJobs(workspaceId) {
+    await requireSession();
+    const { data, error } = await client.rpc('get_diversity_jobs', { p_workspace_id: workspaceId });
+    if (error) throw error;
+    if (!Array.isArray(data)) throw new Error('The list of jobs could not be read. Please try again.');
+    return data;
+  }
+  async function getDiversityReport(workspaceId, flowId) {
+    await requireSession();
+    if (typeof flowId !== 'string' || !/^[0-9a-f-]{36}$/i.test(flowId)) throw new Error('Choose a job to see its diversity report.');
+    const { data, error } = await client.rpc('get_diversity_report', { p_workspace_id: workspaceId, p_flow_id: flowId });
+    if (error) throw error;
+    if (!data || typeof data !== 'object' || typeof data.enough !== 'boolean' || !Array.isArray(data.questions)) throw new Error('The report could not be read. Please try again.');
+    return data;
+  }
+
   // Board setup shared by the whole workspace: custom columns, their order and which columns are on.
   async function getBoardConfig(workspaceId) {
     await requireSession();
@@ -937,6 +954,8 @@
     listTeamOverview,
     getWorkspaceReport,
     getReportJobs,
+    getDiversityJobs,
+    getDiversityReport,
     getReportSteps,
     getBoardConfig,
     createCustomStage,

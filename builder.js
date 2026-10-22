@@ -12,7 +12,8 @@
     node: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="8" height="6" rx="1.5"/><rect x="13" y="14" width="8" height="6" rx="1.5"/><path d="M11 7h3a2 2 0 0 1 2 2v5"/></svg>',
     arrow: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 5l7 7-7 7"/></svg>',
     copy: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>',
-    reports: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20v-8M12 20V5M19 20v-5"/></svg>'
+    reports: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20v-8M12 20V5M19 20v-5"/></svg>',
+    diversity: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9h9"/></svg>'
   };
   let flows = [];
   let companies = [];
@@ -317,7 +318,7 @@
   function closeModal() { modalRoot.innerHTML = ''; root.querySelector('.app-shell')?.classList.remove('is-creating-flow'); }
 
   function renderSidebar(active) {
-    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>Applicants</button>${hasPermission('view_reports') ? `<button class="sidebar-link ${active === 'reports' ? 'active' : ''}" data-route="reports"><span class="sidebar-icon" aria-hidden="true">${ICONS.reports}</span>Reports</button>` : ''}${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.team}</span>My Team</button>` : ''}${hasPermission('flows') ? `<button class="sidebar-link ${active === 'my-companies' ? 'active' : ''}" data-route="my-companies"><span class="sidebar-icon" aria-hidden="true">▣</span>My Companies</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">◈</span>My Plan</button>` : ''}<button class="sidebar-link ${active === 'settings' ? 'active' : ''}" data-route="settings"><span class="sidebar-icon" aria-hidden="true">⚙</span>Settings</button></aside>`;
+    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>Applicants</button>${hasPermission('view_reports') ? `<button class="sidebar-link ${active === 'reports' ? 'active' : ''}" data-route="reports"><span class="sidebar-icon" aria-hidden="true">${ICONS.reports}</span>Reports</button>` : ''}${hasPermission('diversity') ? `<button class="sidebar-link ${active === 'diversity' ? 'active' : ''}" data-route="diversity"><span class="sidebar-icon" aria-hidden="true">${ICONS.diversity}</span>Diversity</button>` : ''}${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.team}</span>My Team</button>` : ''}${hasPermission('flows') ? `<button class="sidebar-link ${active === 'my-companies' ? 'active' : ''}" data-route="my-companies"><span class="sidebar-icon" aria-hidden="true">▣</span>My Companies</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">◈</span>My Plan</button>` : ''}<button class="sidebar-link ${active === 'settings' ? 'active' : ''}" data-route="settings"><span class="sidebar-icon" aria-hidden="true">⚙</span>Settings</button></aside>`;
   }
 
   function bindSidebar() {
@@ -325,6 +326,7 @@
     root.querySelector('[data-route="my-companies"]')?.addEventListener('click', renderMyCompanies);
     root.querySelector('[data-route="applicants"]')?.addEventListener('click', () => { void renderApplicants(); });
     root.querySelector('[data-route="reports"]')?.addEventListener('click', () => { void renderReports(); });
+    root.querySelector('[data-route="diversity"]')?.addEventListener('click', () => { void renderDiversity(); });
     root.querySelector('[data-route="my-plan"]')?.addEventListener('click', renderMyPlan);
     root.querySelector('[data-route="my-team"]')?.addEventListener('click', () => { void renderMyTeam(); });
     root.querySelector('[data-route="settings"]')?.addEventListener('click', renderSettings);
@@ -882,7 +884,7 @@
       const autoFail = Number(job.candidates || 0) ? reportNumber(job.autoFailed) + ' (' + reportPercentText(Number(job.autoFailed || 0), Number(job.candidates || 0)) + ')' : '—';
       return '<tr data-report-job="' + esc(job.id) + '" tabindex="0" role="button" aria-label="Show only ' + esc(job.title || 'Untitled role') + '"><th scope="row" class="rpt-job-name"><span class="' + (job.status === 'published' ? 'published-tag' : 'draft-tag') + '"><span class="status-dot"></span>' + (job.status === 'published' ? 'Published' : 'Draft') + '</span><strong>' + esc(job.title || 'Untitled role') + '</strong><small>' + esc(job.company || '') + '</small></th><td data-label="Visits">' + reportNumber(job.views) + '</td><td data-label="Started">' + reportNumber(job.starts) + '</td><td data-label="New candidates">' + reportNumber(job.candidates) + '</td><td data-label="Completion">' + rate + '</td><td data-label="Auto-fail">' + autoFail + '</td></tr>';
     }).join('');
-    return '<div class="rpt-table-wrap"><table class="rpt-table"><thead><tr><th scope="col">Job</th><th scope="col">Visits</th><th scope="col">Started</th><th scope="col">New candidates</th><th scope="col">Completion</th><th scope="col">Auto-fail</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    return '<div class="rpt-table-wrap"><table class="rpt-table"><thead><tr><th scope="col">Job</th><th scope="col">Visits</th><th scope="col">Started</th><th scope="col">Candidates</th><th scope="col">Completion</th><th scope="col">Auto-fail</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
   function reportJobsBodyHtml() {
     const { rows, total, loading, error } = reportJobs;
@@ -1036,7 +1038,7 @@
       ['note', 'Days are UTC days. Visits and form starts are anonymous page counters and can be inflated by anyone who knows the job link. A candidate is one person per job and e-mail address; a repeat application is not counted as a new candidate.']
     ]);
     block('Summary', ['metric', 'value'], [
-      ['visits', t.views], ['form starts', t.starts], ['new candidates', t.candidates], ['applications', t.applications],
+      ['visits', t.views], ['form starts', t.starts], ['candidates', t.candidates], ['applications', t.applications],
       ['repeat applications', Math.max(0, Number(t.applications || 0) - Number(t.candidates || 0))], ['moved to Failed automatically', t.autoFailed],
       ['completion rate', reportPercentText(Number(t.funnelApplications || 0), Number(t.starts || 0))]
     ]);
@@ -1045,7 +1047,7 @@
     if (data.selectedJob) {
       if (reportSteps && reportSteps.hasData) block('Where candidates drop off' + (reportSteps.version && reportSteps.versions.length > 1 ? ' (form version ' + reportSteps.version.number + ')' : ''), ['step', 'people who reached it', 'stopped here', 'share who stopped'], reportStepsModel(reportSteps).rows.map(row => [(row.kind === 'question' ? 'Question ' + row.number + ': ' : '') + row.label, row.reached, row.left === null ? '' : row.left, row.share === null ? '' : Math.round(row.share * 100) + '%']));
       block('Auto-fail reasons', ['question', 'reason', 'candidates'], (data.autoFailGroups || []).flatMap(group => group.reasons.map(item => [group.question, item.reason, item.n])));
-    } else block('Jobs', ['job', 'company', 'status', 'visits', 'form starts', 'new candidates', 'applications', 'completion rate', 'moved to Failed automatically'], jobRows.map(j => [j.title, j.company, j.status, j.views, j.starts, j.candidates, j.applications, reportPercentText(Number(j.funnelApplications || 0), Number(j.starts || 0)), j.autoFailed]));
+    } else block('Jobs', ['job', 'company', 'status', 'visits', 'form starts', 'candidates', 'applications', 'completion rate', 'moved to Failed automatically'], jobRows.map(j => [j.title, j.company, j.status, j.views, j.starts, j.candidates, j.applications, reportPercentText(Number(j.funnelApplications || 0), Number(j.starts || 0)), j.autoFailed]));
     return rowsToCsv(rows);
   }
   function paintReport() {
@@ -1083,7 +1085,7 @@
       + '<section class="rpt-stats" aria-label="Summary">'
       + card('Page visits', reportNumber(t.views), 'Times the job page was opened')
       + card('Started applying', reportNumber(t.starts), 'People who began the form')
-      + card('New candidates', reportNumber(t.candidates), repeats ? '+ ' + reportNumber(repeats) + (repeats === 1 ? ' repeat application' : ' repeat applications') : 'First application of each person')
+      + card('Candidates', reportNumber(t.candidates), repeats ? '+ ' + reportNumber(repeats) + (repeats === 1 ? ' repeat application' : ' repeat applications') : 'First application of each person')
       + card('Completion rate', rate, 'Of those who started, how many sent the application')
       + '</section>'
       + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Applications over time</h2><p>New candidates per ' + (data.daily.length > 100 ? 'week' : 'day') + '.</p></div></div>' + reportChartHtml(data.daily) + '</section>'
@@ -1214,6 +1216,96 @@
     await loadReport();
   }
 
+  // Diversity page (permission "Diversity"): combined percentages of the candidates' voluntary answers, one job at a time.
+  // The database does all the counting, the rounding and the hiding of small groups; this page only draws what it is given
+  // (it never receives a head count, a name or an e-mail address).
+  const DIVERSITY_TITLES = { genderIdentity: 'Gender identity', transgender: 'Transgender', sexualOrientation: 'Sexual orientation', raceEthnicity: 'Race and ethnicity', disability: 'Disability or chronic condition', disabilityType: 'Type of disability or condition' };
+  let diversityFlow = '';
+  let diversityRequestId = 0;
+
+  function diversityQuestionHtml(question) {
+    const title = DIVERSITY_TITLES[question.key] || String(question.key);
+    if (!question.enough) return `<section class="rpt-card"><div class="rpt-card-head"><h2>${esc(title)}</h2></div><p class="rpt-empty">Not enough answers to show this question privately.</p></section>`;
+    const PNTS = 'Prefer not to say';
+    const items = [...(question.items || [])].sort((a, b) => (a.answer === PNTS) - (b.answer === PNTS) || b.pct - a.pct);
+    if (question.other) items.push({ answer: 'Other groups (small groups combined)', pct: question.other.pct, muted: true });
+    const rows = items.map(item => {
+      const pct = Math.max(0, Math.min(100, Math.round(Number(item.pct) || 0)));
+      return `<li class="rpt-funnel-row"><div class="rpt-funnel-head"><span>${esc(item.answer)}</span><strong>${pct}%</strong></div><span class="rpt-track" aria-hidden="true"><span class="rpt-fill${item.muted ? ' is-muted' : ''}" style="width:${pct}%"></span></span></li>`;
+    }).join('');
+    return `<section class="rpt-card"><div class="rpt-card-head"><h2>${esc(title)}</h2></div><ul class="rpt-funnel">${rows}</ul></section>`;
+  }
+
+  function paintDiversityReport(data) {
+    const content = root.querySelector('#diversity-content');
+    if (!content) return;
+    content.setAttribute('aria-busy', 'false');
+    if (!data.enough) {
+      content.innerHTML = '<section class="rpt-card"><p class="rpt-empty">There are not enough answers for this job to show results privately yet. Candidates count once their application is at least 7 days old, and results appear once at least 10 candidates have answered.</p></section>';
+      return;
+    }
+    const updated = data.generatedAt && !Number.isNaN(new Date(data.generatedAt).getTime()) ? new Date(data.generatedAt).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    const coverage = Number.isFinite(Number(data.coverage)) && data.coverage !== null ? Math.round(Number(data.coverage)) : null;
+    // The database only sends a band for the number of answers (never the exact number).
+    const SIZES = { '10-29': '10 to 29', '30-99': '30 to 99', '100-199': '100 to 199', '200-399': '200 to 399', '400-999': '400 to 999', '1000+': '1,000 or more' };
+    const size = SIZES[data.size] || '';
+    const summary = [size ? `Based on <strong>${size}</strong> answers` : '', coverage === null ? '' : `<strong>${coverage}%</strong> of the candidates answered the voluntary questions`, updated ? `updated ${esc(updated)}` : ''].filter(Boolean).join(' · ');
+    content.innerHTML = `<p class="rpt-summary">${summary}</p><div class="rpt-grid">${(data.questions || []).map(diversityQuestionHtml).join('')}</div><p class="rpt-note">Use these numbers to understand your hiring process, not to make decisions about individual people. Candidates count once their application is at least 7 days old and the numbers refresh once a day. Percentages are rounded to whole numbers, so they may not add up to exactly 100%. Groups of fewer than 5 people are never shown on their own: they are combined under “Other groups”.</p>`;
+  }
+
+  async function loadDiversityReport() {
+    const content = root.querySelector('#diversity-content');
+    if (!content || !diversityFlow) return;
+    const requestId = ++diversityRequestId;
+    content.setAttribute('aria-busy', 'true');
+    content.innerHTML = '<p class="rpt-empty">Loading…</p>';
+    try {
+      const data = await window.PathwayBackend.getDiversityReport(workspace.id, diversityFlow);
+      if (requestId !== diversityRequestId || !root.querySelector('.diversity-page')) return;
+      paintDiversityReport(data);
+    } catch (error) {
+      if (requestId !== diversityRequestId || !root.querySelector('.diversity-page')) return;
+      content.setAttribute('aria-busy', 'false');
+      content.innerHTML = '<div class="auth-error show" role="alert">' + esc('Could not load the report: ' + (error.message || 'check your connection and try again')) + '</div><button class="btn" id="diversity-retry" style="margin-top:12px">Try again</button>';
+      content.querySelector('#diversity-retry')?.addEventListener('click', () => { void loadDiversityReport(); });
+    }
+  }
+
+  async function renderDiversity() {
+    if (!hasPermission('diversity')) return renderAccessMessage('diversity');
+    setRoute('diversity');
+    currentId = null; selectedId = null;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('diversity')}<main class="diversity-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Diversity</h1><p>Combined percentages from candidates’ voluntary self-identification answers, one job at a time.</p></div><div class="reports-tools"><select id="diversity-job" class="applicants-filter" aria-label="Choose a job" hidden></select></div></div><div id="diversity-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
+    bindSidebar(); bindPlanControl();
+    root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
+    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+    const content = root.querySelector('#diversity-content');
+    const select = root.querySelector('#diversity-job');
+    const requestId = ++diversityRequestId;
+    let jobs = [];
+    try {
+      jobs = await window.PathwayBackend.getDiversityJobs(workspace.id);
+    } catch (error) {
+      if (requestId !== diversityRequestId || !root.querySelector('.diversity-page')) return;
+      content.setAttribute('aria-busy', 'false');
+      content.innerHTML = '<div class="auth-error show" role="alert">' + esc('Could not load the jobs: ' + (error.message || 'check your connection and try again')) + '</div><button class="btn" id="diversity-retry" style="margin-top:12px">Try again</button>';
+      content.querySelector('#diversity-retry')?.addEventListener('click', () => { void renderDiversity(); });
+      return;
+    }
+    if (requestId !== diversityRequestId || !root.querySelector('.diversity-page')) return;
+    if (!jobs.length) {
+      content.setAttribute('aria-busy', 'false');
+      content.innerHTML = '<section class="rpt-card"><p class="rpt-empty">None of your jobs has collected diversity answers yet.</p></section>';
+      return;
+    }
+    if (!jobs.some(job => job.id === diversityFlow)) diversityFlow = jobs[0].id;
+    select.innerHTML = jobs.map(job => `<option value="${esc(job.id)}">${esc(job.title)}${job.company ? ' · ' + esc(job.company) : ''}</option>`).join('');
+    select.value = diversityFlow;
+    select.hidden = false;
+    select.addEventListener('change', () => { diversityFlow = select.value; void loadDiversityReport(); });
+    await loadDiversityReport();
+  }
+
   function formatPlanDate(value) {
     if (!value) return '';
     const date = new Date(value);
@@ -1226,7 +1318,7 @@
 
   function renderAccessMessage(section) {
     currentId = null; selectedId = null;
-    const area = section === 'flows' ? 'Flows' : section === 'view_reports' ? 'Reports' : 'Applicants';
+    const area = section === 'flows' ? 'Flows' : section === 'view_reports' ? 'Reports' : section === 'diversity' ? 'Diversity' : 'Applicants';
     const permitted = Boolean(teamMember?.[`can_${section}`]);
     const message = !subscription?.active
       ? 'The workspace Premium plan is inactive. Access to shared workspace data is paused until the owner restores Premium.'
@@ -1239,7 +1331,7 @@
   }
 
   function teamPermissionControls(permissions = {}, disabled = false) {
-    return `<div class="team-permission-grid"><label><input type="checkbox" data-permission="flows" ${permissions.can_flows !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Flows</span></label><label><input type="checkbox" data-permission="applicants" ${permissions.can_applicants !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Candidates</span></label><label><input type="checkbox" data-permission="team" ${permissions.can_manage_team !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Team</span></label><label><input type="checkbox" data-permission="stages" ${permissions.can_customize_stages !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Customize stages</span></label><label><input type="checkbox" data-permission="reports" ${permissions.can_view_reports !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Reports</span></label></div>`;
+    return `<div class="team-permission-grid"><label><input type="checkbox" data-permission="flows" ${permissions.can_flows !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Flows</span></label><label><input type="checkbox" data-permission="applicants" ${permissions.can_applicants !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Candidates</span></label><label><input type="checkbox" data-permission="team" ${permissions.can_manage_team !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Team</span></label><label><input type="checkbox" data-permission="stages" ${permissions.can_customize_stages !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Customize stages</span></label><label><input type="checkbox" data-permission="reports" ${permissions.can_view_reports !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Reports</span></label><label><input type="checkbox" data-permission="diversity" ${permissions.can_diversity === true ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Diversity</span></label></div>`;
   }
 
   // Name on top and e-mail below it (the e-mail always stays visible in My Team). Without a known name only the e-mail shows.
@@ -1250,11 +1342,11 @@
   }
   function renderMyTeamMarkup(data) {
     const manager = Boolean(data.canManage);
-    const describe = p => [p.can_flows && 'Flows', p.can_applicants && 'Candidates', p.can_manage_team && 'Team', p.can_customize_stages && 'Customize stages', p.can_view_reports && 'Reports'].filter(Boolean).join(' · ') || 'No access';
+    const describe = p => [p.can_flows && 'Flows', p.can_applicants && 'Candidates', p.can_manage_team && 'Team', p.can_customize_stages && 'Customize stages', p.can_view_reports && 'Reports', p.can_diversity && 'Diversity'].filter(Boolean).join(' · ') || 'No access';
     const members = manager ? (data.members || []).map(member => `<article class="team-person" data-member-id="${esc(member.user_id)}"><div class="team-person-heading"><div>${teamPersonLines(member.user_id, member.member_email)}<span>Member since ${esc(new Date(member.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div><button class="btn btn-danger btn-sm" data-remove-member="${esc(member.user_id)}">Remove</button></div>${teamPermissionControls(member)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : data.readOnlyTeam ? data.readOnlyTeam.filter(person => !person.isOwner).map(person => `<article class="team-person${person.userId === user.id ? ' team-self' : ''}"><div class="team-person-heading"><div>${teamPersonLines(person.userId, person.email)}<span>${person.userId === user.id ? 'You · ' : ''}Member since ${esc(new Date(person.memberSince).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div></div><div class="team-permission-summary">${esc(describe(person))}</div></article>`).join('') : teamMember ? `<article class="team-person team-self"><div class="team-person-heading"><div>${teamPersonLines(user.id, teamMember.email || user.email)}<span>You · ${data.premiumActive ? 'Team member' : 'Workspace access paused'}</span></div></div><div class="team-permission-summary">${esc(describe(teamMember))}</div></article>` : '';
     const pending = manager ? (data.invitations || []).map(invite => `<article class="team-invite-item" data-invitation-id="${esc(invite.id)}"><div class="team-person-heading"><div><strong>${esc(invite.invited_email)}</strong><span>Expires ${esc(new Date(invite.expires_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${data.premiumActive ? `<button class="btn btn-sm" data-copy-invitation-link="${esc(invite.id)}">Copy invitation link</button>` : ''}<button class="btn btn-sm" data-revoke-invitation="${esc(invite.id)}">Revoke</button></div></div>${teamPermissionControls(invite)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : '';
     const paused = !subscription?.active;
-    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>${manager ? `Manage access to ${esc(workspace.name)}. Premium includes up to 3 additional members at no extra seat charge.` : `See who has access to ${esc(workspace.name)}.`}</p></div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>No team access</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>View only</strong><p>You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All are enabled by default.</small></div><div class="team-permission-grid"><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label><label><input type="checkbox" data-invite-permission="stages" checked><span>Customize stages</span></label><label><input type="checkbox" data-invite-permission="reports" checked><span>Reports</span></label></div><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${(data.isOwner || data.readOnlyTeam) ? `<article class="team-person team-owner"><div class="team-person-heading"><div>${teamPersonLines(teamDirectory.find(person => person.isOwner)?.userId || (isOwner ? user.id : ''), data.owner?.email || data.readOnlyTeam?.find(person => person.isOwner)?.email || user.email)}<span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
+    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>${manager ? `Manage access to ${esc(workspace.name)}. Premium includes up to 3 additional members at no extra seat charge.` : `See who has access to ${esc(workspace.name)}.`}</p></div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>No team access</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>View only</strong><p>You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All are enabled by default, except Diversity.</small></div><div class="team-permission-grid"><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label><label><input type="checkbox" data-invite-permission="stages" checked><span>Customize stages</span></label><label><input type="checkbox" data-invite-permission="reports" checked><span>Reports</span></label><label><input type="checkbox" data-invite-permission="diversity"><span>Diversity</span></label></div><p class="team-permission-hint">Diversity shows combined percentages from candidates’ voluntary self-identification answers. It is off by default; give it to someone who does not move candidates between stages.</p><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${(data.isOwner || data.readOnlyTeam) ? `<article class="team-person team-owner"><div class="team-person-heading"><div>${teamPersonLines(teamDirectory.find(person => person.isOwner)?.userId || (isOwner ? user.id : ''), data.owner?.email || data.readOnlyTeam?.find(person => person.isOwner)?.email || user.email)}<span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
   }
 
   function renderMyTeamLoadingMarkup() {
@@ -1406,7 +1498,7 @@
   function myDataToCsv(data) {
     const rows = [['section', 'record', 'field', 'value']];
     // The database returns keys sorted by length; this puts the fields in a natural reading order.
-    const ORDER = ['exportedAt', 'note', 'userId', 'email', 'firstName', 'lastName', 'name', 'workspaceName', 'title', 'company', 'job', 'status', 'text', 'writtenAt', 'canManageFlows', 'canReviewCandidates', 'canManageTeam', 'canCustomizeStages', 'canViewReports', 'memberSince', 'planStatus', 'planCurrentPeriodEnd', 'planCancelAtPeriodEnd', 'createdAt', 'updatedAt', 'emailConfirmedAt', 'lastSignInAt'];
+    const ORDER = ['exportedAt', 'note', 'userId', 'email', 'firstName', 'lastName', 'name', 'workspaceName', 'title', 'company', 'job', 'status', 'text', 'writtenAt', 'canManageFlows', 'canReviewCandidates', 'canManageTeam', 'canCustomizeStages', 'canViewReports', 'canDiversity', 'memberSince', 'planStatus', 'planCurrentPeriodEnd', 'planCancelAtPeriodEnd', 'createdAt', 'updatedAt', 'emailConfirmedAt', 'lastSignInAt'];
     const rank = field => { const i = ORDER.indexOf(field); return i < 0 ? ORDER.length : i; };
     const add = (section, record, object) => Object.entries(object || {}).sort((x, y) => rank(x[0]) - rank(y[0])).forEach(([field, value]) => rows.push([section, record, field, value]));
     add('export', '', { exportedAt: data?.exportedAt, note: 'Your account, profile, workspace and plan details and the jobs you created. Candidate details belong to the employer and are not included. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.' });
@@ -2856,6 +2948,7 @@
     if (requestedPage === 'my-companies') renderMyCompanies();
     else if (requestedPage === 'applicants') void renderApplicants();
     else if (requestedPage === 'reports') void renderReports();
+    else if (requestedPage === 'diversity') void renderDiversity();
     else if (requestedPage === 'my-plan') renderMyPlan();
     else if (requestedPage === 'my-team') void renderMyTeam();
     else if (requestedPage === 'settings') renderSettings();

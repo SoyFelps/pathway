@@ -64,12 +64,13 @@
   const PREFER_NOT_TO_SAY = 'Prefer not to say';
   const DIVERSITY = {
     genderIdentity: { label: 'Gender identity', options: ['Woman', 'Man', 'Non-binary', 'Another gender identity', PREFER_NOT_TO_SAY] },
+    transgender: { label: 'Do you identify as transgender?', options: ['Yes', 'No', PREFER_NOT_TO_SAY] },
     sexualOrientation: { label: 'Sexual orientation', options: ['Heterosexual or straight', 'Gay or lesbian', 'Bisexual', 'Pansexual', 'Asexual', 'Another sexual orientation', PREFER_NOT_TO_SAY] },
     raceEthnicity: { label: 'Race and ethnicity', options: ['Hispanic or Latino', 'White (not Hispanic or Latino)', 'Black or African American (not Hispanic or Latino)', 'Asian (not Hispanic or Latino)', 'Native Hawaiian or Other Pacific Islander (not Hispanic or Latino)', 'American Indian or Alaska Native (not Hispanic or Latino)', 'Two or more races (not Hispanic or Latino)', 'Another race or ethnicity', PREFER_NOT_TO_SAY] },
     disability: { label: 'Do you have a disability or a chronic condition?', options: ['Yes', 'No', PREFER_NOT_TO_SAY] },
     disabilityType: { label: 'Which best describes it?', options: ['Physical or mobility', 'Visual', 'Hearing', 'Neurodivergence (for example ADHD, autism or dyslexia)', 'Mental health', 'Chronic illness', 'More than one of these', 'Another disability or condition', PREFER_NOT_TO_SAY] }
   };
-  const DIVERSITY_KEYS = ['genderIdentity', 'sexualOrientation', 'raceEthnicity', 'disability', 'disabilityType'];
+  const DIVERSITY_KEYS = ['genderIdentity', 'transgender', 'sexualOrientation', 'raceEthnicity', 'disability', 'disabilityType'];
 
   const COUNTRY_NAMES = COUNTRIES.map(country => country[1]);
   const COUNTRY_BY_CODE = new Map(COUNTRIES.map(country => [country[0], country[1]]));
