@@ -270,7 +270,14 @@
       renderAuth('', 'Your password has been updated. Sign in with your new password.');
     } catch (error) { busy = false; renderPasswordUpdate(friendlyError(error)); }
   }
+  const UNAVAILABLE_MESSAGE = 'A momentary instability occurred. Please try again in a few seconds.';
+  // The settings file or the Supabase library did not load (see backend.js): a plain message and a way to try again.
+  function renderUnavailable() {
+    root.innerHTML = '<main class="loading-screen"><div class="loading-card is-error" role="alert"><span class="brand-mark">↗</span><span>' + UNAVAILABLE_MESSAGE + '</span><button class="btn btn-primary" id="retry-load" type="button">Try again</button></div></main>';
+    root.querySelector('#retry-load').addEventListener('click', () => window.location.reload());
+  }
   async function start(callback) {
+    if (!window.PathwayBackend) { renderUnavailable(); return; }
     onAuthenticated = callback; inviteToken = getInviteToken(); showLoading();
     try {
       if (inviteToken) {

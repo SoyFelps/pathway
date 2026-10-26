@@ -1,7 +1,9 @@
 /* Authenticated Supabase data access for the static GitHub Pages client. */
 (function () {
   const config = window.PATHWAY_SUPABASE_CONFIG;
-  if (!config || !window.supabase || !window.supabase.createClient) throw new Error('Pathway could not load its Supabase settings.');
+  // If the settings file or the Supabase library did not load (a momentary hosting or network hiccup), do not crash with a technical error:
+  // leave window.PathwayBackend undefined and flag it, so the pages can show a plain "try again in a few seconds" message.
+  if (!config || !window.supabase || !window.supabase.createClient) { window.PathwayBackendUnavailable = true; return; }
   const client = window.supabase.createClient(config.url, config.publishableKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
@@ -12,7 +14,7 @@
   const BILLING_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/billing`;
   const TEAM_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/team`;
   const DELETE_ACCOUNT_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/delete-account`;
-  const APPLICANT_STATUSES = new Set(['failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired']);
+  const APPLICANT_STATUSES = new Set(['failed', 'new', 'screening', 'team_fit', 'skill_fit', 'ai_interview', 'interview', 'promising', 'offer', 'withdrawn', 'hired']);
   const CUSTOM_STATUS_PATTERN = /^custom:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   const isApplicantStatus = status => APPLICANT_STATUSES.has(status) || CUSTOM_STATUS_PATTERN.test(String(status));
 

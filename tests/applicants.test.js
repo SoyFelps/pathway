@@ -31,13 +31,13 @@ test('applicant board filters by workspace and optional flow and validates stage
   const backend = read('backend.js');
   assert.match(backend, /from\('applicants'\)[\s\S]*?eq\('workspace_id', workspaceId\)/);
   assert.match(backend, /if \(flowId\) query = query\.eq\('flow_id', flowId\)/);
-  assert.match(backend, /new Set\(\['failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'\]\)/);
+  assert.match(backend, /new Set\(\['failed', 'new', 'screening', 'team_fit', 'skill_fit', 'ai_interview', 'interview', 'promising', 'offer', 'withdrawn', 'hired'\]\)/);
   assert.match(backend, /update\(\{ status \}\)/);
 });
 
 test('workspace UI includes search, flow filter, standard and fit Kanban stages, card drag/drop, and detail review', () => {
   const builder = read('builder.js');
-  for (const text of ['Dashboard', 'Applicants', 'applicant-flow-filter', 'applicant-search', 'new', 'failed', 'screening', 'interview', 'promising', 'offer', 'withdrawn', 'hired', 'team_fit', 'skill_fit', 'Team Fit', 'Skill Fit', 'dragstart', "dataTransfer.getData('text/plain')", 'showApplicantDetails', 'applicant-status-select', 'Preview resume', 'Download resume', 'applicant-review-layout', 'applicant-review-left', 'applicant-review-right', 'applicant-resume-preview', 'applicant-resume-frame']) {
+  for (const text of ['Dashboard', 'Applicants', 'applicant-flow-filter', 'applicant-search', 'new', 'failed', 'screening', 'interview', 'promising', 'offer', 'withdrawn', 'hired', 'team_fit', 'skill_fit', 'ai_interview', 'AI Interview', 'Team Fit', 'Skill Fit', 'dragstart', "dataTransfer.getData('text/plain')", 'showApplicantDetails', 'applicant-status-select', 'Preview resume', 'Download resume', 'applicant-review-layout', 'applicant-review-left', 'applicant-review-right', 'applicant-resume-preview', 'applicant-resume-frame']) {
     assert.ok(builder.includes(text), `missing expected applicants UI fragment: ${text}`);
   }
 });
@@ -46,7 +46,7 @@ test('stages have one fixed order: Failed, New, Screening, Team Fit, Skill Fit, 
   const builder = read('builder.js');
   const stages = builder.match(/const standardApplicantStages = \[([\s\S]*?)\n  \];/)?.[1];
   assert.ok(stages, 'applicant stage list exists');
-  const order = ['failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'].map(key => stages.indexOf(`key: '${key}'`));
+  const order = ['failed', 'new', 'screening', 'team_fit', 'skill_fit', 'ai_interview', 'interview', 'promising', 'offer', 'withdrawn', 'hired'].map(key => stages.indexOf(`key: '${key}'`));
   assert.ok(order.every(index => index >= 0));
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
 });
@@ -83,7 +83,7 @@ test('a Customize button opens a modal that turns stages on and off; Failed, New
   assert.match(migration, /check \(status in \('failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'\)\)/);
   assert.match(migration, /public\.workspace_user_has_permission\(workspace_id, 'applicants'\)/);
   assert.match(read('styles.css'), /\.stage-option\.is-locked\{cursor:not-allowed\}/);
-  assert.match(read('index.html'), /builder\.js\?v=div3-20261022/);
+  assert.match(read('index.html'), /builder\.js\?v=ai2-20261026/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -156,13 +156,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=div3-20261022/);
-  assert.match(read('index.html'), /pathway\.js\?v=div3-20261022/);
-  assert.match(read('apply.html'), /candidate\.js\?v=div3-20261022/);
-  assert.match(read('index.html'), /candidate\.js\?v=div3-20261022/);
-  assert.match(read('apply.html'), /styles\.css\?v=div3-20261022/);
-  assert.match(read('index.html'), /styles\.css\?v=div3-20261022/);
-  assert.match(read('apply.html'), /backend\.js\?v=div3-20261022/);
+  assert.match(read('apply.html'), /pathway\.js\?v=ai2-20261026/);
+  assert.match(read('index.html'), /pathway\.js\?v=ai2-20261026/);
+  assert.match(read('apply.html'), /candidate\.js\?v=ai2-20261026/);
+  assert.match(read('index.html'), /candidate\.js\?v=ai2-20261026/);
+  assert.match(read('apply.html'), /styles\.css\?v=ai2-20261026/);
+  assert.match(read('index.html'), /styles\.css\?v=ai2-20261026/);
+  assert.match(read('apply.html'), /backend\.js\?v=ai2-20261026/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 

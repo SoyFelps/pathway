@@ -56,6 +56,7 @@
     { key: 'screening', label: 'Screening', color: 'stage-screening', defaultOn: true },
     { key: 'team_fit', label: 'Team Fit', color: 'stage-team-fit' },
     { key: 'skill_fit', label: 'Skill Fit', color: 'stage-skill-fit' },
+    { key: 'ai_interview', label: 'AI Interview', color: 'stage-ai-interview', defaultOn: true },
     { key: 'interview', label: 'Interview', color: 'stage-interview', defaultOn: true },
     { key: 'promising', label: 'Promising', color: 'stage-promising', defaultOn: true },
     { key: 'offer', label: 'Offer', color: 'stage-offer', defaultOn: true },
@@ -74,7 +75,13 @@
     const byKey = new Map(all.map(stage => [stage.key, stage]));
     const movable = movableApplicantStageKeys();
     const saved = boardConfig.order.filter((key, index, list) => movable.includes(key) && list.indexOf(key) === index);
-    const order = [...saved, ...movable.filter(key => !saved.includes(key))];
+    // A stage the saved order does not know yet (for example a standard column added later) goes right before the next stage that follows it
+    // in the default order, so it lands where it belongs; with nothing saved this is just the default order.
+    const order = [...saved];
+    movable.filter(key => !saved.includes(key)).forEach(key => {
+      const next = movable.slice(movable.indexOf(key) + 1).find(candidate => order.includes(candidate));
+      if (next) order.splice(order.indexOf(next), 0, key); else order.push(key);
+    });
     return [...all.filter(stage => stage.locked), ...order.map(key => byKey.get(key)), ...all.filter(stage => stage.pinnedLast)];
   }
   function applicantStageEnabled(stage) {
