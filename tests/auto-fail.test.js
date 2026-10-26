@@ -88,5 +88,5 @@ test('the legal page explains answer-based auto-fail and keeps human responsibil
   assert.ok(html.includes('Pathway does not send automatic rejection messages'));
   assert.ok(html.includes('automatically place an application in a “Failed” list'));
   assert.ok(html.includes('LGPD art. 20 and GDPR art. 22'));
-  assert.ok(html.includes('Version 2026-10-20-v8'));
+  assert.ok(html.includes('Version 2026-10-26-v9'));
 });
