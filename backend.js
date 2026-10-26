@@ -10,6 +10,9 @@
   let passwordRecoveryPending = false;
   client.auth.onAuthStateChange(event => { if (event === 'PASSWORD_RECOVERY') passwordRecoveryPending = true; });
   const saveQueues = new Map();
+  // The workspace this tab is working in (a person can belong to several). Set by bootstrap and added to every call that needs it.
+  let currentWorkspaceId = '';
+  const billingBody = body => JSON.stringify({ ...body, ...(currentWorkspaceId ? { workspaceId: currentWorkspaceId } : {}) });
   const APPLICATIONS_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/applications`;
   const BILLING_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/billing`;
   const TEAM_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/team`;
@@ -21,6 +24,7 @@
   async function callApplications(body, accessToken = '') {
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
     const headers = { apikey: config.publishableKey };
+    if (!isFormData && accessToken && currentWorkspaceId && !body.workspaceId && (body.action === 'listApplicantFlowLabels' || body.action === 'deleteFailedApplicants' || body.action === 'deleteFlow')) body = { ...body, workspaceId: currentWorkspaceId };
     if (!isFormData) headers['Content-Type'] = 'application/json';
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
     let result;
@@ -32,6 +36,11 @@
     return payload;
   }
 
+  async function sha256Hex(value) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(value)));
+    return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
   async function requireSession() {
     const { data, error } = await client.auth.getSession();
     if (error) throw error;
@@ -39,16 +48,26 @@
     return data.session;
   }
 
+  // The person was removed from (or never belonged to) the workspace this tab has open: tell the app once, so it can move them elsewhere.
+  let workspaceLostAnnounced = false;
+  function announceWorkspaceLost() {
+    if (workspaceLostAnnounced) return;
+    workspaceLostAnnounced = true;
+    window.dispatchEvent(new CustomEvent('pathway:workspace-lost'));
+  }
+
   async function callTeam(body, accessToken = null) {
     const session = accessToken === null ? await requireSession() : null;
     const token = accessToken === null ? session.access_token : accessToken;
     const headers = { apikey: config.publishableKey, 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
+    if (token && currentWorkspaceId && !body.workspaceId) body = { ...body, workspaceId: currentWorkspaceId };
     let result;
     try { result = await fetch(TEAM_FUNCTION, { method: 'POST', headers, body: JSON.stringify(body) }); }
     catch (_) { throw new Error('Could not reach the team service. Check your connection and try again.'); }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (result.status === 403 && /do not belong to this workspace/i.test(String(payload.error || '')) && body.workspaceId && body.workspaceId === currentWorkspaceId) announceWorkspaceLost();
     if (!result.ok) throw new Error(payload.error || 'The team service could not complete this request.');
     return payload;
   }
@@ -164,16 +183,16 @@
   async function getTeamInvitationLink(invitationId) { return callTeam({ action: 'getInvitationLink', invitationId, appUrl: window.location.origin + window.location.pathname }); }
   async function revokeTeamInvitation(invitationId) { return callTeam({ action: 'revokeInvitation', invitationId }); }
   async function removeTeamMember(memberId) { return callTeam({ action: 'removeMember', memberId }); }
-  async function leaveTeam() { return callTeam({ action: 'leaveTeam' }); }
+  async function leaveTeam(workspaceId = '') { return callTeam({ action: 'leaveTeam', ...(workspaceId ? { workspaceId } : {}) }); }
 
-  async function deleteWorkspace() {
+  async function deleteWorkspace(workspaceId = '') {
     const session = await requireSession();
     let result;
     try {
       result = await fetch(BILLING_FUNCTION, {
         method: 'POST',
         headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'deleteWorkspace' })
+        body: JSON.stringify({ action: 'deleteWorkspace', workspaceId: workspaceId || currentWorkspaceId })
       });
     } catch (_) {
       throw new Error('Could not reach the workspace service. Check your connection and try again.');
@@ -207,10 +226,10 @@
   }
 
   async function createWorkspace(name) {
-    const session = await requireSession();
+    await requireSession();
     const cleanName = String(name || '').trim().slice(0, 120);
     if (!cleanName) throw new Error('Enter a name for your workspace.');
-    const { data, error } = await client.from('workspaces').insert({ owner_id: session.user.id, name: cleanName }).select('id,name,created_at').single();
+    const { data, error } = await client.rpc('create_workspace', { p_name: cleanName });
     if (error) throw error;
     return data;
   }
@@ -226,7 +245,7 @@
       const { data: membership, error: membershipError } = await client.from('workspace_members').select('id').eq('workspace_id', workspaceId).eq('user_id', session.user.id).maybeSingle();
       if (membershipError) throw membershipError;
       if (membership) {
-        const team = await callTeam({ action: 'context' });
+        const team = await callTeam({ action: 'context', workspaceId });
         if (team.workspace?.id === workspaceId && team.isMember) {
           return { status: team.premiumActive ? 'active' : 'expired', currentPeriodEnd: null, cancelAtPeriodEnd: false, hasBillingHistory: false, active: Boolean(team.premiumActive) };
         }
@@ -243,12 +262,14 @@
 
   async function createCheckoutSession() {
     const session = await requireSession();
+    // The return from Stripe reopens the workspace being paid for: remember it now (best effort).
+    if (currentWorkspaceId) { try { await callTeam({ action: 'setLastWorkspace', workspaceId: currentWorkspaceId }); } catch (_) { /* the checkout itself still works */ } }
     let result;
     try {
       result = await fetch(BILLING_FUNCTION, {
         method: 'POST',
         headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: '{}'
+        body: billingBody({})
       });
     } catch (_) {
       throw new Error('Could not reach the billing service. Check your connection and try again.');
@@ -267,7 +288,7 @@
       result = await fetch(BILLING_FUNCTION, {
         method: 'POST',
         headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'createPaymentMethodUpdateSession' })
+        body: billingBody({ action: 'createPaymentMethodUpdateSession' })
       });
     } catch (_) {
       throw new Error('Could not reach the billing service. Check your connection and try again.');
@@ -291,7 +312,7 @@
       result = await fetch(BILLING_FUNCTION, {
         method: 'POST',
         headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'getPaymentMethodSummary' })
+        body: billingBody({ action: 'getPaymentMethodSummary' })
       });
     } catch (_) {
       throw new Error('Could not reach the billing service. Check your connection and try again.');
@@ -317,7 +338,7 @@
       result = await fetch(BILLING_FUNCTION, {
         method: 'POST',
         headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'listPaymentHistory', ...(startingAfter ? { starting_after: startingAfter } : {}) })
+        body: billingBody({ action: 'listPaymentHistory', ...(startingAfter ? { starting_after: startingAfter } : {}) })
       });
     } catch (_) {
       throw new Error('Could not reach the billing service. Check your connection and try again.');
@@ -368,7 +389,7 @@
       result = await fetch(BILLING_FUNCTION, {
         method: 'POST',
         headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'syncPaymentMethodFromCustomer' })
+        body: billingBody({ action: 'syncPaymentMethodFromCustomer' })
       });
     } catch (_) {
       throw new Error('Could not reach the billing service. Check your connection and try again.');
@@ -387,7 +408,7 @@
       result = await fetch(BILLING_FUNCTION, {
         method: 'POST',
         headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'cancelSubscription' })
+        body: billingBody({ action: 'cancelSubscription' })
       });
     } catch (_) {
       throw new Error('Could not reach the billing service. Check your connection and try again.');
@@ -406,7 +427,7 @@
       result = await fetch(BILLING_FUNCTION, {
         method: 'POST',
         headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'resumeSubscription' })
+        body: billingBody({ action: 'resumeSubscription' })
       });
     } catch (_) {
       throw new Error('Could not reach the billing service. Check your connection and try again.');
@@ -540,31 +561,51 @@
     }
   }
 
-  async function bootstrap() {
+  // Every workspace the person owns or belongs to, oldest first.
+  async function listMyWorkspaces() {
+    await requireSession();
+    const { data, error } = await client.rpc('list_my_workspaces');
+    if (error) throw new Error(error.message || 'Your workspaces could not be loaded.');
+    return (data || []).map(row => ({
+      id: row.workspace_id, name: row.name, createdAt: row.created_at, isOwner: Boolean(row.is_owner), isLast: Boolean(row.is_last), premiumActive: Boolean(row.premium_active)
+    }));
+  }
+  // Remembers the choice on the server (the next sign-in opens it). The page reloads afterwards, so nothing of the old workspace stays in memory.
+  async function selectWorkspace(workspaceId) {
+    await callTeam({ action: 'setLastWorkspace', workspaceId });
+  }
+  async function renameWorkspace(workspaceId, name) {
+    const result = await callTeam({ action: 'renameWorkspace', workspaceId, name: String(name || '').trim() });
+    return result.workspace;
+  }
+
+  async function bootstrap(preferredWorkspaceId = '') {
     const { data: authData, error: authError } = await client.auth.getSession();
     if (authError) throw authError;
-    if (!authData.session) return { session: null, workspace: null, flows: [], companies: [], teamMember: null, canCreateWorkspace: false };
+    currentWorkspaceId = '';
+    if (!authData.session) return { session: null, workspace: null, workspaces: [], flows: [], companies: [], teamMember: null, canCreateWorkspace: false };
     const user = authData.session.user;
-    const profile = await getMyProfile().catch(() => null);
-    const { data: ownedWorkspace, error: ownerError } = await client.from('workspaces').select('id,name,created_at').eq('owner_id', user.id).maybeSingle();
-    if (ownerError) throw new Error(`Could not load your workspace: ${ownerError.message}`);
-    if (ownedWorkspace) {
-      const subscription = await getSubscriptionState(ownedWorkspace.id);
-      const flows = await listFlows(ownedWorkspace.id);
-      const companies = await listCompanies(ownedWorkspace.id);
-      return { session: authData.session, user, profile, workspace: ownedWorkspace, subscription, flows, companies, isOwner: true, teamMember: null, canCreateWorkspace: false };
+    const [profile, workspaces] = await Promise.all([getMyProfile().catch(() => null), listMyWorkspaces()]);
+    const chosen = workspaces.find(row => row.id === preferredWorkspaceId) || workspaces.find(row => row.isLast) || workspaces.find(row => row.isOwner) || workspaces[0];
+    if (chosen) {
+      currentWorkspaceId = chosen.id;
+      if (chosen.isOwner) {
+        const workspace = { id: chosen.id, name: chosen.name, created_at: chosen.createdAt };
+        const [subscription, flows, companies] = await Promise.all([getSubscriptionState(workspace.id), listFlows(workspace.id), listCompanies(workspace.id)]);
+        return { session: authData.session, user, profile, workspace, workspaces, subscription, flows, companies, isOwner: true, teamMember: null, canCreateWorkspace: false };
+      }
+      const team = await callTeam({ action: 'context', workspaceId: chosen.id });
+      if (team.workspace) {
+        const subscription = { status: team.premiumActive ? 'active' : 'expired', currentPeriodEnd: null, cancelAtPeriodEnd: false, hasBillingHistory: false, active: Boolean(team.premiumActive) };
+        const member = team.member || {};
+        const [flows, companies] = team.premiumActive && member.can_flows ? await Promise.all([listFlows(team.workspace.id), listCompanies(team.workspace.id)]) : [[], []];
+        return { session: authData.session, user, profile, workspace: team.workspace, workspaces, subscription, flows, companies, isOwner: false, teamMember: member, canCreateWorkspace: false };
+      }
     }
-    const team = await callTeam({ action: 'context' });
-    if (team.workspace) {
-      const subscription = { status: team.premiumActive ? 'active' : 'expired', currentPeriodEnd: null, cancelAtPeriodEnd: false, hasBillingHistory: false, active: Boolean(team.premiumActive) };
-      const member = team.member || {};
-      const flows = team.premiumActive && member.can_flows ? await listFlows(team.workspace.id) : [];
-      const companies = team.premiumActive && member.can_flows ? await listCompanies(team.workspace.id) : [];
-      return { session: authData.session, user, profile, workspace: team.workspace, subscription, flows, companies, isOwner: false, teamMember: member, canCreateWorkspace: false };
-    }
+    currentWorkspaceId = '';
     const { data: canCreateWorkspace, error: setupError } = await client.rpc('current_user_can_create_workspace');
     if (setupError) throw new Error(`Could not verify workspace setup: ${setupError.message}`);
-    return { session: authData.session, user, profile, workspace: null, subscription: null, flows: [], companies: [], isOwner: false, teamMember: null, canCreateWorkspace: Boolean(canCreateWorkspace) };
+    return { session: authData.session, user, profile, workspace: null, workspaces, subscription: null, flows: [], companies: [], isOwner: false, teamMember: null, canCreateWorkspace: Boolean(canCreateWorkspace) };
   }
 
   async function listFlows(workspaceId) {
@@ -893,9 +934,7 @@
   }
 
   async function updateWorkspaceName(workspace, name) {
-    const { data, error } = await client.from('workspaces').update({ name }).eq('id', workspace.id).select('id,name,created_at').single();
-    if (error) throw error;
-    return data;
+    return renameWorkspace(workspace.id, name);
   }
 
   async function signOut() {
@@ -939,6 +978,9 @@
   window.PathwayBackend = {
     client,
     bootstrap,
+    listMyWorkspaces,
+    selectWorkspace,
+    renameWorkspace,
     getSubscriptionState,
     createWorkspace,
     previewTeamInvitation,
@@ -1014,11 +1056,11 @@
     signOutLocal,
     consumePasswordRecovery,
     signIn: (email, password) => client.auth.signInWithPassword({ email, password }),
-    signUp: (email, password, workspaceName, inviteToken = '', firstName = '', lastName = '') => client.auth.signUp({
+    signUp: async (email, password, workspaceName, inviteToken = '', firstName = '', lastName = '') => client.auth.signUp({
       email,
       password,
       options: {
-        data: inviteToken ? { pathway_team_invite_pending: true, first_name: firstName, last_name: lastName } : { workspace_name: workspaceName, first_name: firstName, last_name: lastName },
+        data: inviteToken ? { pathway_team_invite_pending: true, pathway_team_invite_hash: await sha256Hex(inviteToken), first_name: firstName, last_name: lastName } : { workspace_name: workspaceName, first_name: firstName, last_name: lastName },
         emailRedirectTo: window.location.origin + window.location.pathname
       }
     })

@@ -45,7 +45,7 @@ test('members cannot read subscription records and My Plan is rendered only for 
   assert.doesNotMatch(sql, /create policy[^;]+workspace_subscriptions/is);
   assert.match(builder, /if \(!isOwner\) return hasPermission\('flows'\) \? renderDashboard\(\) : renderAccessMessage\('flows'\)/);
   assert.match(builder, /\$\{isOwner \? `<button class="sidebar-link \$\{active === 'my-plan'/);
-  assert.match(builder, /if \(!isOwner\) return '';/);
+  assert.match(builder, /if \(!isOwner\) return subscription\?\.active \? premiumPill : '';/);
 });
 
 test('invitation auth accepts the invited email, allows existing-account sign-in, and keeps former accounts reusable', () => {
@@ -57,7 +57,9 @@ test('invitation auth accepts the invited email, allows existing-account sign-in
   assert.match(auth, /Create account and join/);
   assert.match(auth, /acceptTeamInvitation\(inviteToken\)/);
   assert.match(auth, /acceptPendingTeamInvitation\(\)/);
-  assert.match(auth, /Create your own workspace/);
+  assert.match(read('builder.js'), /Create a workspace/);
+  assert.doesNotMatch(auth, /already belongs to a workspace|renderInviteConflict/);
+  assert.match(auth, /You can belong to several workspaces and create your own whenever you like\./);
   assert.match(auth, /After confirmation, Pathway will add you to the invited workspace automatically/);
   assert.doesNotMatch(auth, /reopen the copied invitation link to finish joining/i);
   assert.match(backend, /pathway_team_invite_pending/);
@@ -72,7 +74,7 @@ test('confirmed invite signups are joined automatically from the standard app UR
   const auth = read('auth.js');
   const backend = read('backend.js');
   const edge = read('supabase/functions/team/index.ts');
-  assert.match(auth, /if \(context\.user\?\.user_metadata\?\.pathway_team_invite_pending === true\)/);
+  assert.match(auth, /context\.user\?\.user_metadata\?\.pathway_team_invite_pending === true\)/);
   assert.match(auth, /const result = await window\.PathwayBackend\.acceptPendingTeamInvitation\(\)/);
   assert.match(auth, /context = await acceptPendingTeamIfNeeded\(context\)/);
   assert.match(auth, /clearInviteUrl\(\)/);
@@ -141,22 +143,22 @@ test('My Team shows up to three included seats, defaults permissions on, and sup
   assert.match(builder, /Your account will remain active/);
   assert.match(builder, /id="leave-team"/);
   assert.match(builder, /data-route="my-team"/);
-  assert.match(builder, /if \(!isOwner\) return '';/);
+  assert.match(builder, /if \(!isOwner\) return subscription\?\.active \? premiumPill : '';/);
   assert.match(builder, /if \(!hasPermission\('flows'\)\) return renderAccessMessage\('flows'\)/);
   assert.match(sql, /The workspace owner cannot leave their own workspace/);
   assert.match(sql, /The workspace owner cannot be removed/);
   assert.match(sql, /lower\(invited_email\) = \(\s*select lower\(m\.member_email\) from public\.workspace_members m\s*where m\.workspace_id = p_workspace_id and m\.user_id = auth\.uid\(\)/);
-  assert.match(builder, /if \(id === user\.id\) \{ await doSignOut\(\); return; \}/);
+  assert.match(builder, /if \(id === user\.id\) \{ await openWorkspaceDashboard\(\); return; \}/);
   assert.match(builder, /if \(card\.dataset\.memberId === user\.id\) \{ await renderMyTeam\(\); return; \}/);
 });
 
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=ai2-20261026/);
-  assert.match(html, /backend\.js\?v=ai2-20261026/);
-  assert.match(html, /builder\.js\?v=ai2-20261026/);
-  assert.match(html, /styles\.css\?v=ai2-20261026/);
+  assert.match(html, /auth\.js\?v=mw-20261026/);
+  assert.match(html, /backend\.js\?v=mw-20261026/);
+  assert.match(html, /builder\.js\?v=mw-20261026/);
+  assert.match(html, /styles\.css\?v=mw-20261026/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });

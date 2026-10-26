@@ -72,7 +72,7 @@ test('My Plan shows account status and requires confirmation before scheduling c
 test('cancellation adapter sends the authenticated period-end cancellation action', () => {
   const backend = read('backend.js');
   assert.match(backend, /async function cancelSubscriptionAtPeriodEnd\(\)/);
-  assert.match(backend, /JSON\.stringify\(\{ action: 'cancelSubscription' \}\)/);
+  assert.match(backend, /billingBody\(\{ action: 'cancelSubscription' \}\)/);
   assert.match(backend, /Authorization: `Bearer \$\{session\.access_token\}`/);
   assert.match(backend, /if \(!payload\.cancel_at_period_end\)/);
   assert.match(backend, /cancelSubscriptionAtPeriodEnd,/);
@@ -81,7 +81,7 @@ test('cancellation adapter sends the authenticated period-end cancellation actio
 test('Keep Premium adapter sends an authenticated request to remove scheduled cancellation', () => {
   const backend = read('backend.js');
   assert.match(backend, /async function keepPremiumSubscription\(\)/);
-  assert.match(backend, /JSON\.stringify\(\{ action: 'resumeSubscription' \}\)/);
+  assert.match(backend, /billingBody\(\{ action: 'resumeSubscription' \}\)/);
   assert.match(backend, /payload\.cancel_at_period_end !== false/);
   assert.match(backend, /keepPremiumSubscription,/);
 });
@@ -89,7 +89,7 @@ test('Keep Premium adapter sends an authenticated request to remove scheduled ca
 test('payment-method adapter accepts only HTTPS Stripe Billing Portal session URLs', () => {
   const backend = read('backend.js');
   assert.match(backend, /async function createPaymentMethodUpdateSession\(\)/);
-  assert.match(backend, /JSON\.stringify\(\{ action: 'createPaymentMethodUpdateSession' \}\)/);
+  assert.match(backend, /billingBody\(\{ action: 'createPaymentMethodUpdateSession' \}\)/);
   assert.match(backend, /Authorization: `Bearer \$\{session\.access_token\}`/);
   assert.match(backend, /portalUrl\.protocol !== 'https:'/);
   assert.match(backend, /portalUrl\.hostname !== 'billing\.stripe\.com'/);
@@ -111,7 +111,7 @@ test('payment-method summary is authenticated, uses Stripe default-method preced
   assert.match(edge, /return \{ brand, last4, exp_month: month, exp_year: year \}/);
   assert.match(edge, /payment_method: summary/);
   assert.match(backend, /async function getCurrentPaymentMethodSummary\(\)/);
-  assert.match(backend, /JSON\.stringify\(\{ action: 'getPaymentMethodSummary' \}\)/);
+  assert.match(backend, /billingBody\(\{ action: 'getPaymentMethodSummary' \}\)/);
   assert.match(backend, /!\/\^\\d\{4\}\$\/\.test\(card\.last4\)/);
   assert.match(backend, /getCurrentPaymentMethodSummary,/);
   assert.match(builder, /id="current-payment-method"/);
@@ -138,7 +138,7 @@ test('payment history is authenticated, paginated, and restricted to verified Pa
   assert.match(edge, /has_more: Boolean\(page\.has_more\)/);
   assert.match(edge, /limit: 10/);
   assert.match(backend, /async function listPaymentHistory\(startingAfter = null\)/);
-  assert.match(backend, /JSON\.stringify\(\{ action: 'listPaymentHistory'/);
+  assert.match(backend, /billingBody\(\{ action: 'listPaymentHistory'/);
   assert.match(backend, /invoices\.length > 10/);
   assert.match(backend, /url\.protocol === 'https:'/);
   assert.match(backend, /listPaymentHistory,/);
@@ -154,9 +154,9 @@ test('payment history is authenticated, paginated, and restricted to verified Pa
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=ai2-20261026/);
-  assert.match(html, /builder\.js\?v=ai2-20261026/);
-  assert.match(html, /styles\.css\?v=ai2-20261026/);
+  assert.match(html, /backend\.js\?v=mw-20261026/);
+  assert.match(html, /builder\.js\?v=mw-20261026/);
+  assert.match(html, /styles\.css\?v=mw-20261026/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);

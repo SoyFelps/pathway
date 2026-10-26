@@ -136,10 +136,12 @@ Deno.serve(async (req: Request) => {
 
   let action = "checkout";
   let startingAfter = "";
+  let requestedWorkspaceId = "";
   try {
     const body = await req.json();
     if (body && typeof body.action === "string") action = body.action;
     if (body && typeof body.starting_after === "string") startingAfter = body.starting_after;
+    if (body && typeof body.workspaceId === "string") requestedWorkspaceId = body.workspaceId.trim();
   } catch {
     return fail(req, 400, "The request body must be valid JSON.");
   }
@@ -150,9 +152,15 @@ Deno.serve(async (req: Request) => {
   const { data: auth, error: authError } = await admin.auth.getUser(bearer);
   if (authError || !auth.user) return fail(req, 401, "Your session expired. Sign in again.");
 
-  const { data: workspace, error: workspaceError } = await admin
-    .from("workspaces").select("id,name").eq("owner_id", auth.user.id).maybeSingle();
-  if (workspaceError || !workspace) return fail(req, 403, "Your workspace could not be verified.");
+  // A person can own several workspaces, so the app says which one. An older app version sends none: that works only when the person owns exactly one.
+  if (requestedWorkspaceId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedWorkspaceId)) return fail(req, 400, "Choose a valid workspace.");
+  let ownedQuery = admin.from("workspaces").select("id,name").eq("owner_id", auth.user.id);
+  if (requestedWorkspaceId) ownedQuery = ownedQuery.eq("id", requestedWorkspaceId);
+  const { data: ownedWorkspaces, error: workspaceError } = await ownedQuery.order("created_at").order("id").limit(2);
+  if (workspaceError) return fail(req, 403, "Your workspace could not be verified.");
+  if (!requestedWorkspaceId && (ownedWorkspaces?.length || 0) > 1) return fail(req, 400, "Choose a workspace.");
+  const workspace = ownedWorkspaces?.[0];
+  if (!workspace) return fail(req, 403, "Your workspace could not be verified.");
 
   const { data: existing, error: subscriptionError } = await admin
     .from("workspace_subscriptions").select("status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id")

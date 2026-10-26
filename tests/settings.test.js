@@ -6,20 +6,24 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
-test('Settings is in workspace navigation and shows email/workspace read-only with shared sign-out', () => {
+test('Settings opens from the user menu in the header (not from the sidebar) and shows the e-mail read-only with shared sign-out', () => {
   const builder = read('builder.js');
-  assert.match(builder, /data-route="settings"/);
+  assert.match(builder, /data-user-menu="settings"/);
   assert.match(builder, /function renderSettings\(\)/);
+  const sidebar = builder.slice(builder.indexOf('function renderSidebar(active)'), builder.indexOf('function bindSidebar()'));
+  const withWorkspace = sidebar.slice(sidebar.indexOf('\n    return `<aside class="app-sidebar" aria-label="Workspace navigation"'));
+  assert.doesNotMatch(withWorkspace, /data-route="settings"/, 'with a workspace, Settings is only in the user menu');
+  assert.match(sidebar, /if \(!workspace\) return `<aside[\s\S]*data-route="settings"/, 'without a workspace the sidebar offers only Settings');
   assert.match(builder, /Email address/);
-  assert.match(builder, /<h2 id="settings-account-heading">Account and workspace<\/h2>/);
+  assert.match(builder, /<h2 id="settings-account-heading">Account<\/h2>/);
   assert.match(builder, /id="settings-signout"[\s\S]*?doSignOut/);
   assert.match(builder, /else if \(requestedPage === 'settings'\) renderSettings\(\)/);
 });
 
 test('Settings exposes leave only to members, workspace deletion only to owners, and password-confirmed account deletion', () => {
   const builder = read('builder.js');
-  assert.match(builder, /isOwner \? '<button class="btn btn-danger" id="settings-delete-workspace"/);
-  assert.match(builder, /: teamMember \? '<button class="btn btn-danger" id="settings-leave-workspace"/);
+  // One row per workspace: owners get Rename and Delete, members get Leave.
+  assert.match(builder, /item\.isOwner\s*\? `<button[^`]*data-ws-rename[^`]*data-ws-delete[^`]*`\s*: `<button[^`]*data-ws-leave/);
   assert.match(builder, /id="settings-delete-account"/);
   assert.match(builder, /showAccountDeletionConfirmation/);
   assert.doesNotMatch(builder, /Delete account · Coming soon/);
@@ -29,7 +33,7 @@ test('Settings exposes leave only to members, workspace deletion only to owners,
 
 test('owner must type the exact workspace name and sees immediate cancellation and irreversible deletion consequences', () => {
   const builder = read('builder.js');
-  const start = builder.indexOf('function showDeleteWorkspaceConfirmation()');
+  const start = builder.indexOf('function showDeleteWorkspaceConfirmation(item = workspace)');
   const end = builder.indexOf('function formatInvoiceAmount(', start);
   const modal = builder.slice(start, end);
   assert.ok(start >= 0 && end > start);
@@ -37,14 +41,14 @@ test('owner must type the exact workspace name and sees immediate cancellation a
   assert.match(modal, /canceled immediately/i);
   assert.match(modal, /not automatically refunded/i);
   assert.match(modal, /input\.value\.trim\(\) !== name/);
-  assert.match(modal, /await window\.PathwayBackend\.deleteWorkspace\(\)/);
+  assert.match(modal, /await window\.PathwayBackend\.deleteWorkspace\(item\.id\)/);
 });
 
-test('workspace deletion request contains no client-supplied workspace ID and requires an authenticated session', () => {
+test('workspace deletion names the workspace (the server still checks the person owns it) and requires an authenticated session', () => {
   const backend = read('backend.js');
-  assert.match(backend, /async function deleteWorkspace\(\)/);
+  assert.match(backend, /async function deleteWorkspace\(workspaceId = ''\)/);
   assert.match(backend, /const session = await requireSession\(\)/);
-  assert.match(backend, /JSON\.stringify\(\{ action: 'deleteWorkspace' \}\)/);
+  assert.match(backend, /JSON\.stringify\(\{ action: 'deleteWorkspace', workspaceId: workspaceId \|\| currentWorkspaceId \}\)/);
   assert.match(backend, /if \(!payload\.deleted\)/);
   assert.match(backend, /deleteWorkspace,/);
 });
@@ -80,8 +84,8 @@ test('late signed Stripe events cannot recreate a deleted workspace subscription
 
 test('Settings uses a fresh cache version for frontend assets', () => {
   const html = read('index.html');
-  assert.match(html, /styles\.css\?v=ai2-20261026/);
-  assert.match(html, /backend\.js\?v=ai2-20261026/);
-  assert.match(html, /auth\.js\?v=ai2-20261026/);
-  assert.match(html, /builder\.js\?v=ai2-20261026/);
+  assert.match(html, /styles\.css\?v=mw-20261026/);
+  assert.match(html, /backend\.js\?v=mw-20261026/);
+  assert.match(html, /auth\.js\?v=mw-20261026/);
+  assert.match(html, /builder\.js\?v=mw-20261026/);
 });

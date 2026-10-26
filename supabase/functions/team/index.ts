@@ -99,22 +99,36 @@ async function authenticate(req: Request): Promise<{ user: { id: string; email?:
   return { user: { id: data.user.id, email: data.user.email, email_confirmed_at: data.user.email_confirmed_at, user_metadata: data.user.user_metadata || {} }, token, userClient };
 }
 
-async function getWorkspaceContext(userId: string) {
+// A person can own several workspaces and belong to others. With a workspace id the person must be its owner or a member of it.
+// Without one (an older app version, or a first load) the last workspace used is taken, then the oldest owned one, then the oldest membership.
+async function getWorkspaceContext(userId: string, requestedId = "") {
   if (!admin) throw new Error("Team service is not configured.");
-  const { data: ownerWorkspace, error: ownerError } = await admin.from("workspaces")
-    .select("id,name,created_at,owner_id").eq("owner_id", userId).maybeSingle();
-  if (ownerError) throw ownerError;
-  if (ownerWorkspace) {
+  const [{ data: owned, error: ownedError }, { data: memberships, error: membershipsError }, { data: profile, error: profileError }] = await Promise.all([
+    admin.from("workspaces").select("id,name,created_at,owner_id").eq("owner_id", userId).order("created_at").order("id"),
+    admin.from("workspace_members")
+      .select("id,workspace_id,user_id,member_email,can_flows,can_applicants,can_manage_team,can_customize_stages,can_view_reports,can_diversity,created_at")
+      .eq("user_id", userId).order("created_at").order("id"),
+    admin.from("profiles").select("last_workspace_id").eq("user_id", userId).maybeSingle(),
+  ]);
+  if (ownedError) throw ownedError;
+  if (membershipsError) throw membershipsError;
+  if (profileError) throw profileError;
+  const ownedList = owned || [];
+  const memberList = memberships || [];
+  const wanted = requestedId || String(profile?.last_workspace_id || "");
+  let ownedWorkspace = ownedList.find((row) => row.id === wanted);
+  let member = ownedWorkspace ? undefined : memberList.find((row) => row.workspace_id === wanted);
+  if (!ownedWorkspace && !member && !requestedId) {
+    ownedWorkspace = ownedList[0];
+    member = ownedWorkspace ? undefined : memberList[0];
+  }
+  if (ownedWorkspace) {
     const { data: subscription, error } = await admin.from("workspace_subscriptions")
-      .select("status,current_period_end").eq("workspace_id", ownerWorkspace.id).maybeSingle();
+      .select("status,current_period_end").eq("workspace_id", ownedWorkspace.id).maybeSingle();
     if (error) throw error;
     const premiumActive = subscription?.status === "active" && Date.parse(subscription.current_period_end || "") > Date.now();
-    return { workspace: ownerWorkspace, isOwner: true, member: null, premiumActive };
+    return { workspace: ownedWorkspace, isOwner: true, member: null, premiumActive };
   }
-  const { data: member, error: memberError } = await admin.from("workspace_members")
-    .select("id,workspace_id,user_id,member_email,can_flows,can_applicants,can_manage_team,can_customize_stages,can_view_reports,can_diversity,created_at")
-    .eq("user_id", userId).maybeSingle();
-  if (memberError) throw memberError;
   if (!member) return { workspace: null, isOwner: false, member: null, premiumActive: false };
   const [{ data: workspace, error: workspaceError }, { data: subscription, error: subscriptionError }] = await Promise.all([
     admin.from("workspaces").select("id,name,created_at,owner_id").eq("id", member.workspace_id).maybeSingle(),
@@ -153,6 +167,9 @@ async function handle(req: Request): Promise<Response> {
     body = JSON.parse(text);
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Invalid request");
   } catch { return fail(req, 400, "The team request is invalid."); }
+  // The workspace the person is working in (several are possible). Optional: an older app version does not send it.
+  const requestedWorkspaceId = body.workspaceId == null ? "" : cleanText(body.workspaceId, 64);
+  if (requestedWorkspaceId && !UUID_RE.test(requestedWorkspaceId)) return fail(req, 400, "Choose a valid workspace.");
 
   if (body.action === "previewInvitation") {
     const token = cleanText(body.token, 128);
@@ -180,8 +197,30 @@ async function handle(req: Request): Promise<Response> {
 
   try {
     if (body.action === "context") {
-      const context = await getWorkspaceContext(user.id);
+      const context = await getWorkspaceContext(user.id, requestedWorkspaceId);
       return response(req, 200, { ...context, isMember: Boolean(context.member), canCreateWorkspace: !context.workspace });
+    }
+
+    // Every workspace the person belongs to (the database function checks who is asking), oldest first.
+    if (body.action === "listWorkspaces") {
+      const { data, error } = await userClient.rpc("list_my_workspaces");
+      if (error) return fail(req, 400, error.message || "Your workspaces could not be loaded.");
+      return response(req, 200, { workspaces: data || [] });
+    }
+
+    if (body.action === "setLastWorkspace") {
+      if (!requestedWorkspaceId) return fail(req, 400, "Choose a workspace.");
+      const { error } = await userClient.rpc("set_last_workspace", { p_workspace_id: requestedWorkspaceId });
+      if (error) return fail(req, 403, error.message || "That workspace could not be selected.");
+      return response(req, 200, { selected: true });
+    }
+
+    // Only the owner can rename (the database function enforces it).
+    if (body.action === "renameWorkspace") {
+      if (!requestedWorkspaceId) return fail(req, 400, "Choose a workspace.");
+      const { data, error } = await userClient.rpc("rename_workspace", { p_workspace_id: requestedWorkspaceId, p_name: cleanText(body.name, 120) });
+      if (error) return fail(req, 400, error.message || "The workspace could not be renamed.");
+      return response(req, 200, { workspace: data });
     }
 
     if (body.action === "acceptInvitation") {
@@ -192,7 +231,7 @@ async function handle(req: Request): Promise<Response> {
       if (error) return fail(req, 403, error.message || "The invitation could not be accepted.");
       const result = Array.isArray(data) ? data[0] : data;
       if (!result?.workspace_id) return fail(req, 503, "The team invitation could not be confirmed.");
-      const userMetadata = { ...(auth.user.user_metadata || {}), pathway_team_invite_pending: false };
+      const userMetadata = { ...(auth.user.user_metadata || {}), pathway_team_invite_pending: false, pathway_team_invite_hash: "" };
       try { await admin.auth.admin.updateUserById(user.id, { user_metadata: userMetadata }); } catch { /* membership is authoritative; invite token is already single-use */ }
       return response(req, 200, { accepted: true, workspaceId: result.workspace_id, workspaceName: result.workspace_name });
     }
@@ -204,12 +243,18 @@ async function handle(req: Request): Promise<Response> {
       }
       const email = cleanText(user.email).toLowerCase();
       if (!email) return fail(req, 403, "The confirmed account email could not be verified.");
-      const { data: invitation, error: invitationError } = await admin.from("workspace_invitations")
+      // Several pending invitations for the same address are possible now (one per workspace): take the one the person signed up with,
+      // when the sign-up stored it, otherwise the newest.
+      const signedUpWith = String(user.user_metadata?.pathway_team_invite_hash || "");
+      let pending = admin.from("workspace_invitations")
         .select("token_hash").eq("invited_email", email).eq("status", "pending")
-        .gt("expires_at", new Date().toISOString()).maybeSingle();
+        .gt("expires_at", new Date().toISOString());
+      if (TOKEN_RE.test(signedUpWith)) pending = pending.eq("token_hash", signedUpWith);
+      const { data: pendingRows, error: invitationError } = await pending.order("created_at", { ascending: false }).limit(1);
+      const invitation = pendingRows?.[0];
       if (invitationError) return fail(req, 503, "The pending workspace invitation could not be checked.");
       if (!invitation) {
-        const userMetadata = { ...(user.user_metadata || {}), pathway_team_invite_pending: false };
+        const userMetadata = { ...(user.user_metadata || {}), pathway_team_invite_pending: false, pathway_team_invite_hash: "" };
         try { await admin.auth.admin.updateUserById(user.id, { user_metadata: userMetadata }); } catch { /* marker is advisory; no invitation remains */ }
         return response(req, 200, { accepted: false, reason: "no_pending_invitation" });
       }
@@ -217,12 +262,13 @@ async function handle(req: Request): Promise<Response> {
       if (error) return fail(req, 403, error.message || "The invitation could not be accepted.");
       const result = Array.isArray(data) ? data[0] : data;
       if (!result?.workspace_id) return fail(req, 503, "The team invitation could not be confirmed.");
-      const userMetadata = { ...(user.user_metadata || {}), pathway_team_invite_pending: false };
+      const userMetadata = { ...(user.user_metadata || {}), pathway_team_invite_pending: false, pathway_team_invite_hash: "" };
       try { await admin.auth.admin.updateUserById(user.id, { user_metadata: userMetadata }); } catch { /* membership is authoritative; invitation is single-use */ }
       return response(req, 200, { accepted: true, workspaceId: result.workspace_id, workspaceName: result.workspace_name });
     }
 
-    const context = await getWorkspaceContext(user.id);
+    const context = await getWorkspaceContext(user.id, requestedWorkspaceId);
+    if (!context.workspace && requestedWorkspaceId) return fail(req, 403, "You do not belong to this workspace.");
     if (!context.workspace) return fail(req, 403, "This account does not belong to a workspace. Accept a team invitation or create your own workspace first.");
     const workspaceId = context.workspace.id;
     const isOwner = context.isOwner;

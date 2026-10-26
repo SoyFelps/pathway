@@ -10,9 +10,9 @@ test('Settings and workspace setup expose the shared password-confirmed account 
   const builder = read('builder.js');
   const auth = read('auth.js');
   assert.match(builder, /id="settings-delete-account"/);
-  assert.match(builder, /showAccountDeletionConfirmation\(\{ isOwner, workspaceName: workspace\.name, email: user\.email \}\)/);
+  assert.match(builder, /showAccountDeletionConfirmation\(\{\s*ownedWorkspaceNames: ownedNames,/);
   assert.match(auth, /function showAccountDeletionConfirmation\(options = \{\}\)/);
-  assert.match(auth, /deleteAccountButton\.id = 'setup-delete-account'/);
+  assert.match(auth, /every workspace you own/);
   assert.match(auth, /autocomplete="current-password"/);
   assert.match(auth, /Delete account permanently/);
 });
@@ -61,12 +61,13 @@ test('server requires a valid bearer user and matching password before any destr
 
 test('owners must complete existing workspace and subscription cleanup before hard account deletion', () => {
   const edge = read('supabase/functions/delete-account/index.ts');
-  const ownerStart = edge.indexOf('if (ownedWorkspace) {');
+  const ownerStart = edge.indexOf('for (const ownedWorkspace of ownedWorkspaces || []) {');
   const billingCall = edge.indexOf('/functions/v1/billing', ownerStart);
   const invitationCleanup = edge.indexOf('revokeAccountInvitations(auth.user.id', ownerStart);
   const hardDelete = edge.indexOf('admin.auth.admin.deleteUser(auth.user.id, false)');
   assert.ok(ownerStart >= 0 && billingCall > ownerStart && invitationCleanup > billingCall && hardDelete > invitationCleanup);
-  assert.match(edge, /JSON\.stringify\(\{ action: "deleteWorkspace" \}\)/);
+  assert.match(edge, /JSON\.stringify\(\{ action: "deleteWorkspace", workspaceId: ownedWorkspace\.id \}\)/);
+  assert.doesNotMatch(edge, /conflicting workspace roles/, 'owning several workspaces and belonging to others is normal now');
   assert.match(edge, /billingResult\.deleted !== true/);
   assert.match(edge, /workspace_deleted: workspaceDeleted/);
 });
@@ -74,8 +75,8 @@ test('owners must complete existing workspace and subscription cleanup before ha
 test('member account deletion cleans invite records while leaving workspace, jobs, applicants and resumes to the existing workspace', () => {
   const edge = read('supabase/functions/delete-account/index.ts');
   const billingCall = edge.indexOf('/functions/v1/billing');
-  const ownerBranch = edge.indexOf('if (ownedWorkspace) {');
-  const memberLookup = edge.indexOf('from("workspace_members").select("workspace_id,member_email")');
+  const ownerBranch = edge.indexOf('for (const ownedWorkspace of ownedWorkspaces || []) {');
+  const memberLookup = 0;
   const revoke = edge.indexOf('update({ status: "revoked" })');
   assert.ok(memberLookup >= 0 && revoke >= 0);
   assert.ok(edge.indexOf('revokeAccountInvitations(auth.user.id') > ownerBranch);
@@ -98,8 +99,8 @@ test('delete-account Edge Function is explicitly JWT-protected and frontend asse
   const config = read('supabase/config.toml');
   const html = read('index.html');
   assert.match(config, /\[functions\.delete-account\]\s*\nverify_jwt = true/);
-  assert.match(html, /styles\.css\?v=ai2-20261026/);
-  assert.match(html, /backend\.js\?v=ai2-20261026/);
-  assert.match(html, /auth\.js\?v=ai2-20261026/);
-  assert.match(html, /builder\.js\?v=ai2-20261026/);
+  assert.match(html, /styles\.css\?v=mw-20261026/);
+  assert.match(html, /backend\.js\?v=mw-20261026/);
+  assert.match(html, /auth\.js\?v=mw-20261026/);
+  assert.match(html, /builder\.js\?v=mw-20261026/);
 });

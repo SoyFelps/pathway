@@ -23,7 +23,7 @@ test('people without the Team permission see the whole team read-only, with no m
   assert.equal(/data-remove-member|data-permission|<input|<button/.test(readOnlyCard), false, 'no remove button, no checkboxes');
   assert.ok(markup.includes('${manager ? `<section class="team-card">'), 'the invite form is still manager-only');
   assert.ok(markup.includes('${manager && data.invitations?.length ?'), 'pending invitations are still manager-only');
-  assert.ok(markup.includes('(data.isOwner || data.readOnlyTeam) ?'), 'the owner is listed for everyone');
+  assert.ok(markup.includes('${ownerEmail ? `<article class="team-person team-owner">') && markup.includes('const ownerEmail = data.owner?.email || teamDirectory.find'), 'the owner is listed for everyone (managers and members alike)');
   assert.ok(markup.includes('<strong>View only</strong>'));
   assert.ok(markup.includes("id=\"leave-team\"") , 'leaving your own membership is still possible');
 });

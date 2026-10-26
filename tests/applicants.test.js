@@ -83,7 +83,7 @@ test('a Customize button opens a modal that turns stages on and off; Failed, New
   assert.match(migration, /check \(status in \('failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'\)\)/);
   assert.match(migration, /public\.workspace_user_has_permission\(workspace_id, 'applicants'\)/);
   assert.match(read('styles.css'), /\.stage-option\.is-locked\{cursor:not-allowed\}/);
-  assert.match(read('index.html'), /builder\.js\?v=ai2-20261026/);
+  assert.match(read('index.html'), /builder\.js\?v=mw-20261026/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -137,8 +137,10 @@ test('Applicants-only members receive job labels without opening full Flows data
   const builder = read('builder.js');
   assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
   assert.match(handler, /admin\.auth\.getUser\(bearer\)/);
-  assert.match(handler, /membership\?\.can_applicants/);
-  assert.match(handler, /workspace_subscriptions/);
+  assert.match(handler, /resolveApplicantsWorkspace\(req, auth\.user\.id, body\.workspaceId/);
+  const resolver = edge.slice(edge.indexOf('async function resolveApplicantsWorkspace'), edge.indexOf('async function deleteFlowForOwner'));
+  assert.match(resolver, /membership\?\.can_applicants/);
+  assert.match(resolver, /workspace_subscriptions/);
   assert.match(handler, /select\("id,job_title,company_name"\)/);
   assert.doesNotMatch(handler, /flow_data|snapshot|responses|resume_path/);
   assert.match(backend, /listApplicantFlowLabels/);
@@ -156,13 +158,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=ai2-20261026/);
-  assert.match(read('index.html'), /pathway\.js\?v=ai2-20261026/);
-  assert.match(read('apply.html'), /candidate\.js\?v=ai2-20261026/);
-  assert.match(read('index.html'), /candidate\.js\?v=ai2-20261026/);
-  assert.match(read('apply.html'), /styles\.css\?v=ai2-20261026/);
-  assert.match(read('index.html'), /styles\.css\?v=ai2-20261026/);
-  assert.match(read('apply.html'), /backend\.js\?v=ai2-20261026/);
+  assert.match(read('apply.html'), /pathway\.js\?v=mw-20261026/);
+  assert.match(read('index.html'), /pathway\.js\?v=mw-20261026/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw-20261026/);
+  assert.match(read('index.html'), /candidate\.js\?v=mw-20261026/);
+  assert.match(read('apply.html'), /styles\.css\?v=mw-20261026/);
+  assert.match(read('index.html'), /styles\.css\?v=mw-20261026/);
+  assert.match(read('apply.html'), /backend\.js\?v=mw-20261026/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 

@@ -437,6 +437,39 @@ async function submitApplicant(req: Request, form: FormData) {
   return response(req, 200, { submitted: true, accepted: true });
 }
 
+// The workspace an Applicants request is about. A person can own or belong to several: use the one the app names, else the one that holds the flow,
+// else the last one used, the oldest owned one, the oldest membership. Owners always pass; members need Applicants access and an active plan.
+async function resolveApplicantsWorkspace(req: Request, userId: string, requestedId: unknown, flowId: string, planMessage: string): Promise<{ workspaceId: string } | Response> {
+  if (!admin) return fail(req, 500, "Application service is not configured.");
+  let workspaceId = String(requestedId || "");
+  if (workspaceId && !UUID_RE.test(workspaceId)) return fail(req, 400, "Choose a valid workspace.");
+  if (!workspaceId && flowId) {
+    const { data: flow, error } = await admin.from("application_flows").select("workspace_id").eq("id", flowId).maybeSingle();
+    if (error) return fail(req, 503, "The job flow could not be checked.");
+    workspaceId = String(flow?.workspace_id || "");
+  }
+  const [{ data: owned, error: ownerError }, { data: memberships, error: memberError }, { data: profile, error: profileError }] = await Promise.all([
+    admin.from("workspaces").select("id").eq("owner_id", userId).order("created_at").order("id"),
+    admin.from("workspace_members").select("workspace_id,can_applicants").eq("user_id", userId).order("created_at").order("id"),
+    admin.from("profiles").select("last_workspace_id").eq("user_id", userId).maybeSingle(),
+  ]);
+  if (ownerError || memberError || profileError) return fail(req, 503, "Your workspace access could not be checked.");
+  const ownedList = owned || [];
+  const memberList = memberships || [];
+  if (!workspaceId) {
+    const last = String(profile?.last_workspace_id || "");
+    workspaceId = ownedList.find((row) => row.id === last)?.id || memberList.find((row) => row.workspace_id === last)?.workspace_id
+      || ownedList[0]?.id || memberList[0]?.workspace_id || "";
+  }
+  if (ownedList.some((row) => row.id === workspaceId)) return { workspaceId };
+  const membership = memberList.find((row) => row.workspace_id === workspaceId);
+  if (!membership?.can_applicants || !workspaceId) return fail(req, 403, "You do not have Applicants access to a workspace.");
+  const { data: plan, error: planError } = await admin.from("workspace_subscriptions").select("status,current_period_end").eq("workspace_id", workspaceId).maybeSingle();
+  if (planError) return fail(req, 503, "Your workspace access could not be checked.");
+  if (plan?.status !== "active" || Date.parse(plan.current_period_end || "") <= Date.now()) return fail(req, 403, planMessage);
+  return { workspaceId };
+}
+
 async function deleteFlowForOwner(req: Request, body: Record<string, unknown>) {
   if (!admin) return fail(req, 500, "Application service is not configured.");
   const authHeader = req.headers.get("authorization") || "";
@@ -461,7 +494,9 @@ async function deleteFlowForOwner(req: Request, body: Record<string, unknown>) {
       if (membershipError || subscriptionError || !membership?.can_flows || !active) return fail(req, 403, "You do not have active Flow access to this workspace.");
     }
   } else {
-    const { data: workspaces, error: workspaceError } = await admin.from("workspaces").select("id").eq("owner_id", auth.user.id).limit(1);
+    let ownedQuery = admin.from("workspaces").select("id").eq("owner_id", auth.user.id);
+    if (UUID_RE.test(String(body.workspaceId || ""))) ownedQuery = ownedQuery.eq("id", String(body.workspaceId));
+    const { data: workspaces, error: workspaceError } = await ownedQuery.order("created_at").order("id").limit(1);
     if (workspaceError || !workspaces?.length) return fail(req, 403, "You do not have access to this workspace.");
     workspaceId = workspaces[0].id;
   }
@@ -501,19 +536,9 @@ async function deleteFailedApplicants(req: Request, body: Record<string, unknown
   const flowId = String(body.flowId || "");
   if (flowId && !UUID_RE.test(flowId)) return fail(req, 400, "This job flow is invalid.");
 
-  const { data: ownedWorkspace, error: ownerError } = await admin.from("workspaces").select("id").eq("owner_id", auth.user.id).maybeSingle();
-  if (ownerError) return fail(req, 503, "Your workspace could not be checked.");
-  let workspaceId = ownedWorkspace?.id as string | undefined;
-  if (!workspaceId) {
-    const { data: membership, error: memberError } = await admin.from("workspace_members")
-      .select("workspace_id,can_applicants").eq("user_id", auth.user.id).maybeSingle();
-    if (memberError) return fail(req, 503, "Your team access could not be checked.");
-    workspaceId = membership?.workspace_id as string | undefined;
-    if (!membership?.can_applicants || !workspaceId) return fail(req, 403, "You do not have Applicants access to a workspace.");
-    const { data: plan, error: planError } = await admin.from("workspace_subscriptions").select("status,current_period_end").eq("workspace_id", workspaceId).maybeSingle();
-    if (planError) return fail(req, 503, "Your workspace access could not be checked.");
-    if (plan?.status !== "active" || Date.parse(plan.current_period_end || "") <= Date.now()) return fail(req, 403, "Active Premium access is required to manage shared applicants.");
-  }
+  const resolved = await resolveApplicantsWorkspace(req, auth.user.id, body.workspaceId, flowId, "Active Premium access is required to manage shared applicants.");
+  if (resolved instanceof Response) return resolved;
+  const workspaceId = resolved.workspaceId;
 
   let deleted = 0;
   for (let batch = 0; batch < 100; batch++) {
@@ -662,19 +687,9 @@ Deno.serve(async (req: Request) => {
     if (!bearer) return fail(req, 401, "Sign in to review applicants.");
     const { data: auth, error: authError } = await admin.auth.getUser(bearer);
     if (authError || !auth.user) return fail(req, 401, "Your session expired. Sign in again.");
-    const { data: ownedWorkspace, error: ownerError } = await admin.from("workspaces").select("id").eq("owner_id", auth.user.id).maybeSingle();
-    if (ownerError) return fail(req, 503, "Your workspace could not be checked.");
-    let workspaceId = ownedWorkspace?.id as string | undefined;
-    if (!workspaceId) {
-      const { data: membership, error: memberError } = await admin.from("workspace_members")
-        .select("workspace_id,can_applicants").eq("user_id", auth.user.id).maybeSingle();
-      if (memberError) return fail(req, 503, "Your team access could not be checked.");
-      workspaceId = membership?.workspace_id as string | undefined;
-      if (!membership?.can_applicants || !workspaceId) return fail(req, 403, "You do not have Applicants access to a workspace.");
-      const { data: plan, error: planError } = await admin.from("workspace_subscriptions").select("status,current_period_end").eq("workspace_id", workspaceId).maybeSingle();
-      if (planError) return fail(req, 503, "Your workspace access could not be checked.");
-      if (plan?.status !== "active" || Date.parse(plan.current_period_end || "") <= Date.now()) return fail(req, 403, "Active Premium access is required to review shared applicants.");
-    }
+    const resolved = await resolveApplicantsWorkspace(req, auth.user.id, body.workspaceId, "", "Active Premium access is required to review shared applicants.");
+    if (resolved instanceof Response) return resolved;
+    const workspaceId = resolved.workspaceId;
     const { data: flowLabels, error: flowError } = await admin.from("application_flows")
       .select("id,job_title,company_name").eq("workspace_id", workspaceId).order("updated_at", { ascending: false }).limit(1000);
     if (flowError) return fail(req, 503, "Job filters could not be loaded.");

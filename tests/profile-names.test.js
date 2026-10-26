@@ -41,8 +41,8 @@ test('sign-up (also by invitation) asks for first and last name and sends them a
   assert.ok(auth.includes('autocomplete="given-name"') && auth.includes('autocomplete="family-name"'));
   assert.ok(auth.includes("Enter your first and last name."));
   assert.ok(auth.includes('state.firstName, state.lastName'));
-  assert.match(backend, /signUp: \(email, password, workspaceName, inviteToken = '', firstName = '', lastName = ''\)/);
-  assert.ok(backend.includes('pathway_team_invite_pending: true, first_name: firstName') && backend.includes('workspace_name: workspaceName, first_name: firstName'));
+  assert.match(backend, /signUp: async \(email, password, workspaceName, inviteToken = '', firstName = '', lastName = ''\)/);
+  assert.ok(backend.includes('pathway_team_invite_pending: true, pathway_team_invite_hash: await sha256Hex(inviteToken), first_name: firstName') && backend.includes('workspace_name: workspaceName, first_name: firstName'));
 });
 
 test('the backend reads and saves the profile and passes names through', () => {
@@ -100,8 +100,11 @@ test('changing the people responsible does not count as an unpublished change', 
 test('the header shows the person\'s name, with the e-mail as tooltip, on every screen', () => {
   const builder = read('builder.js');
   assert.ok(builder.includes('function headerUserHtml()'));
-  assert.ok(builder.includes("esc(name || user.email || '—')") && builder.includes("title=\"' + esc(user.email || '')"));
-  assert.equal((builder.match(/\$\{headerUserHtml\(\)\}/g) || []).length, 11, 'all eleven headers use it');
+  assert.ok(builder.includes("esc(name || user.email || '—')") && builder.includes('title="${esc(user.email || \'\')}"'));
+  const headers = (builder.match(/\$\{headerUserHtml\(\)\}/g) || []).length;
+  assert.equal(headers, 13, 'every header with a workspace uses it (one shared account menu)');
+  assert.equal((builder.match(/\$\{workspaceSwitcherHtml\(\)\}/g) || []).length, headers + 0, 'and the same headers show the workspace selector');
+  assert.equal(/class="workspace-name"/.test(builder), false, 'the old plain workspace name is gone from every header');
   assert.equal(/<span class="auth-user"[^>]*>\$\{esc\(user\.email/.test(builder), false, 'no header prints the e-mail directly');
   assert.ok(builder.includes("root.querySelector('.topbar .auth-user')"), 'saving the name updates the header at once');
 });

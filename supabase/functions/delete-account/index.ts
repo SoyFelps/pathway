@@ -109,22 +109,21 @@ Deno.serve(async (req: Request) => {
   }
   if (verifiedUserId !== auth.user.id) return fail(req, 401, "Password verification failed. Check your password and try again.");
 
-  const [{ data: ownedWorkspace, error: ownerError }, { data: membership, error: memberError }] = await Promise.all([
-    admin.from("workspaces").select("id,name").eq("owner_id", auth.user.id).maybeSingle(),
-    admin.from("workspace_members").select("workspace_id,member_email").eq("user_id", auth.user.id).maybeSingle(),
-  ]);
-  if (ownerError || memberError) return fail(req, 503, "Workspace access could not be verified. Your account was not deleted.");
-  if (ownedWorkspace && membership) return fail(req, 409, "This account has conflicting workspace roles. No data was changed; contact support.");
+  // Memberships in other people's workspaces disappear with the account; every workspace the person OWNS is deleted first.
+  const { data: ownedWorkspaces, error: ownerError } = await admin
+    .from("workspaces").select("id,name").eq("owner_id", auth.user.id).order("created_at").order("id");
+  if (ownerError) return fail(req, 503, "Workspace access could not be verified. Your account was not deleted.");
 
   let workspaceDeleted = false;
-  if (ownedWorkspace) {
+  // One at a time; the first failure stops everything, so the account is never deleted while a workspace (or its subscription) is left behind.
+  for (const ownedWorkspace of ownedWorkspaces || []) {
     // Reuse the existing owner-only cleanup, which cancels Stripe before deleting workspace data and resumes.
     let billingResponse: Response;
     try {
       billingResponse = await fetch(`${projectUrl.replace(/\/$/, "")}/functions/v1/billing`, {
         method: "POST",
         headers: { apikey: publicKey, Authorization: `Bearer ${bearer}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "deleteWorkspace" }),
+        body: JSON.stringify({ action: "deleteWorkspace", workspaceId: ownedWorkspace.id }),
       });
     } catch {
       return fail(req, 503, "We could not confirm workspace cleanup, so account deletion did not continue. The workspace or subscription may already have been removed or canceled. Refresh and retry to finish safely.");

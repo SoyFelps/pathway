@@ -30,7 +30,7 @@ test('editor canvas element does not shadow workspace data used by its header', 
   const end = builder.indexOf('function bindCanvasPan(', start);
   const editor = builder.slice(start, end);
   assert.match(builder, /let workspace = null;/);
-  assert.match(editor, /esc\(workspace\.name\)/);
+  assert.match(editor, /workspaceSwitcherHtml\(\)/);
   assert.match(editor, /const workspaceElement = document\.getElementById\('workspace'\)/);
   assert.match(editor, /bindCanvasPan\(workspaceElement\)/);
   assert.doesNotMatch(editor, /const workspace\s*=/);

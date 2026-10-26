@@ -21,6 +21,8 @@
   let user = null;
   let isOwner = false;
   let teamMember = null;
+  let myWorkspaces = [];
+  let pendingCloudSave = null;
   let subscription = { status: 'free', active: false, currentPeriodEnd: null, cancelAtPeriodEnd: false };
   let subscriptionReturnPage = 'dashboard';
   let subscriptionReturnFlowId = null;
@@ -106,6 +108,7 @@
     return !Number.isFinite(publishedAt) || (Number.isFinite(updatedAt) && updatedAt > publishedAt);
   }
   const publishingFlows = new WeakSet();
+  let publishingCount = 0;
   function updatePublicationNotice() {
     const slot = root.querySelector('#publish-changes-slot');
     if (!slot) return;
@@ -128,7 +131,8 @@
     const indicator = document.querySelector('.save-indicator');
     if (indicator) indicator.innerHTML = '<span class="status-dot"></span> Saving…';
     clearTimeout(cloudSaveTimer);
-    cloudSaveTimer = setTimeout(async () => {
+    const runCloudSave = async () => {
+      pendingCloudSave = null;
       try {
         await window.PathwayBackend.saveFlow(flow, workspace);
         if (flow.cloudId && currentFlow() === flow) setRoute(`flow=${flow.cloudId}`); // a brand-new flow only gets its id after the first save
@@ -142,7 +146,9 @@
         if (item) item.innerHTML = '<span class="save-failed">Save failed</span>';
         showToast(`Could not save this flow: ${error.message || 'check your connection'}`);
       }
-    }, 350);
+    };
+    pendingCloudSave = runCloudSave;
+    cloudSaveTimer = setTimeout(runCloudSave, 350);
   };
   // Keep the current page in the URL hash so a browser refresh returns to it. replaceState avoids polluting history.
   function setRoute(route) {
@@ -197,7 +203,7 @@
   function mountNotificationBell() {
     const actions = root.querySelector('.top-actions');
     if (!actions || actions.querySelector('#notif') || !workspace || !hasPermission('applicants')) return;
-    actions.insertAdjacentHTML('afterbegin', '<div class="notif" id="notif"><button type="button" class="notif-btn" id="notif-bell" aria-haspopup="true" aria-expanded="false" aria-label="Notifications">' + BELL_ICON + '<span class="notif-badge" hidden></span></button><div class="notif-menu" role="menu" hidden></div></div>');
+    const bellHost = actions.querySelector('.ws-switch'); (bellHost ? (html => bellHost.insertAdjacentHTML('afterend', html)) : (html => actions.insertAdjacentHTML('afterbegin', html)))('<div class="notif" id="notif"><button type="button" class="notif-btn" id="notif-bell" aria-haspopup="true" aria-expanded="false" aria-label="Notifications">' + BELL_ICON + '<span class="notif-badge" hidden></span></button><div class="notif-menu" role="menu" hidden></div></div>');
     const host = actions.querySelector('#notif'), button = host.querySelector('#notif-bell'), menu = host.querySelector('.notif-menu');
     const setOpen = open => { menu.hidden = !open; button.setAttribute('aria-expanded', String(open)); };
     button.addEventListener('click', () => { setOpen(menu.hidden); if (!menu.hidden) void refreshNotifications(true); });
@@ -244,11 +250,6 @@
   }
   let myProfile = null;
   let teamDirectory = [];
-  // The header shows the person's name; the e-mail stays available as the tooltip.
-  function headerUserHtml() {
-    const name = personName(myProfile);
-    return '<span class="auth-user" title="' + esc(user.email || '') + '">' + esc(name || user.email || '—') + '</span>';
-  }
   function personName(person) {
     return [person?.firstName, person?.lastName].map(part => String(part || '').trim()).filter(Boolean).join(' ');
   }
@@ -324,8 +325,215 @@
   }
   function closeModal() { modalRoot.innerHTML = ''; root.querySelector('.app-shell')?.classList.remove('is-creating-flow'); }
 
+  // ---- Workspaces: a person can own up to 5 and belong to others. The header shows a selector; Settings lists them all. ----
+  const MAX_OWNED_WORKSPACES = 5;
+  const ROMAN_NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+  // Only on screen, worked out from the person's own list: equal names (ignoring capitals and spaces at the ends) get I, II, III by creation date.
+  function workspaceLabels(list = myWorkspaces) {
+    const groups = new Map();
+    [...list].sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || String(a.id).localeCompare(String(b.id))).forEach(item => {
+      const key = String(item.name || '').trim().toLowerCase();
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    });
+    const labels = new Map();
+    groups.forEach(items => items.forEach((item, index) => {
+      labels.set(item.id, items.length > 1 ? `${item.name} ${ROMAN_NUMERALS[index] || index + 1}` : item.name);
+    }));
+    return labels;
+  }
+  const workspaceLabel = item => (item && workspaceLabels().get(item.id)) || (item ? item.name : '');
+  const workspaceMark = name => initials(String(name || '').trim()) || '?';
+  const OWNED_COUNT = () => myWorkspaces.filter(item => item.isOwner).length;
+  const CHEVRON = '<svg class="ws-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  const CHECK_MARK = '<svg class="ws-check" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>';
+
+  // The workspace selector in the header (custom, not a native select).
+  function workspaceSwitcherHtml() {
+    if (!workspace) {
+      return '<div class="ws-switch"><button type="button" class="ws-switch-btn" disabled aria-disabled="true"><span class="ws-switch-mark" aria-hidden="true">–</span><span class="ws-switch-name">No workspace</span></button></div>';
+    }
+    const labels = workspaceLabels();
+    const options = myWorkspaces.map(item => {
+      const current = item.id === workspace.id;
+      return `<button type="button" class="ws-option${current ? ' is-current' : ''}" role="menuitemradio" aria-checked="${current}" data-ws-id="${esc(item.id)}"><span class="ws-switch-mark" aria-hidden="true">${esc(workspaceMark(item.name))}</span><span class="ws-option-name">${esc(labels.get(item.id) || item.name)}</span><span class="ws-badge">${item.isOwner ? 'Owner' : 'Member'}</span>${item.premiumActive ? '<span class="ws-badge ws-badge-premium">Premium</span>' : ''}${current ? CHECK_MARK : ''}</button>`;
+    }).join('');
+    const label = labels.get(workspace.id) || workspace.name;
+    return `<div class="ws-switch" id="ws-switch"><button type="button" class="ws-switch-btn" id="ws-switch-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="ws-switch-panel" title="${esc(label)}"><span class="ws-switch-mark" aria-hidden="true">${esc(workspaceMark(workspace.name))}</span><span class="ws-switch-name">${esc(label)}</span>${CHEVRON}</button><div class="ws-switch-panel" id="ws-switch-panel" role="menu" aria-label="Your workspaces" hidden><div class="ws-switch-caption">Your workspaces</div>${options}<div class="ws-switch-sep" role="separator"></div><button type="button" class="ws-new" id="ws-new" role="menuitem"><span class="ws-new-plus" aria-hidden="true">+</span>New workspace</button></div></div>`;
+  }
+
+  // The user's name in the header opens a small menu: Settings and Sign out.
+  function headerUserHtml() {
+    const name = personName(myProfile);
+    return `<div class="user-menu" id="user-menu"><button type="button" class="user-menu-btn" id="user-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="user-menu-panel" title="${esc(user.email || '')}"><span class="user-menu-avatar" aria-hidden="true">${esc(workspaceMark(name || user.email || '?'))}</span><span class="auth-user">${esc(name || user.email || '—')}</span>${CHEVRON}</button><div class="user-menu-panel" id="user-menu-panel" role="menu" hidden><div class="user-menu-email">${esc(user.email || '')}</div><button type="button" class="user-menu-item" role="menuitem" data-user-menu="settings">Settings</button><button type="button" class="user-menu-item" role="menuitem" data-user-menu="signout">Sign out</button></div></div>`;
+  }
+
+  function closeHeaderMenus(except = null) {
+    root.querySelectorAll('.ws-switch-panel, .user-menu-panel').forEach(panel => {
+      if (panel === except || panel.hidden) return;
+      panel.hidden = true;
+      panel.parentElement?.querySelector('[aria-haspopup]')?.setAttribute('aria-expanded', 'false');
+    });
+  }
+  function toggleHeaderMenu(panel, focusFirst = false) {
+    if (!panel) return;
+    const button = panel.parentElement.querySelector('[aria-haspopup]');
+    const open = panel.hidden;
+    closeHeaderMenus(open ? panel : null);
+    panel.hidden = !open;
+    button.setAttribute('aria-expanded', String(open));
+    if (open && focusFirst) (panel.querySelector('.is-current') || panel.querySelector('[role^="menuitem"]'))?.focus();
+  }
+  let headerMenusBound = false;
+  // One set of listeners for every header (they are rebuilt on each page), so a page never has to bind them itself.
+  function bindHeaderMenus() {
+    if (headerMenusBound) return;
+    headerMenusBound = true;
+    root.addEventListener('click', event => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+      const switchButton = target.closest('#ws-switch-btn');
+      if (switchButton) { toggleHeaderMenu(root.querySelector('#ws-switch-panel')); return; }
+      const userButton = target.closest('#user-menu-btn');
+      if (userButton) { toggleHeaderMenu(root.querySelector('#user-menu-panel')); return; }
+      const option = target.closest('[data-ws-id]');
+      if (option && option.closest('#ws-switch-panel')) { closeHeaderMenus(); void switchWorkspace(option.dataset.wsId); return; }
+      if (target.closest('#ws-new, [data-new-workspace]')) { closeHeaderMenus(); showNewWorkspace(); return; }
+      const userItem = target.closest('[data-user-menu]');
+      if (userItem) {
+        closeHeaderMenus();
+        if (userItem.dataset.userMenu === 'settings') renderSettings(); else void doSignOut();
+        return;
+      }
+      const rename = target.closest('[data-ws-rename]');
+      if (rename) { const item = myWorkspaces.find(row => row.id === rename.dataset.wsRename); if (item) showRenameWorkspace(item); return; }
+      const leave = target.closest('[data-ws-leave]');
+      if (leave) { const item = myWorkspaces.find(row => row.id === leave.dataset.wsLeave); if (item) showLeaveTeamConfirmation(item); return; }
+      const remove = target.closest('[data-ws-delete]');
+      if (remove) { const item = myWorkspaces.find(row => row.id === remove.dataset.wsDelete); if (item) showDeleteWorkspaceConfirmation(item); return; }
+    });
+    document.addEventListener('pointerdown', event => {
+      if (event.target instanceof Element && event.target.closest('.ws-switch, .user-menu')) return;
+      closeHeaderMenus();
+    }, true);
+    // Tabbing out of an open menu closes it (a click elsewhere is handled by the pointerdown listener above).
+    root.addEventListener('focusout', event => {
+      const host = event.target instanceof Element ? event.target.closest('.ws-switch, .user-menu') : null;
+      if (host && event.relatedTarget instanceof Element && !host.contains(event.relatedTarget)) closeHeaderMenus();
+    });
+    root.addEventListener('keydown', event => {
+      const panel = event.target instanceof Element ? event.target.closest('.ws-switch-panel, .user-menu-panel') : null;
+      const host = event.target instanceof Element ? event.target.closest('.ws-switch, .user-menu') : null;
+      if (!host) return;
+      const button = host.querySelector('[aria-haspopup]');
+      const menu = host.querySelector('.ws-switch-panel, .user-menu-panel');
+      if (event.key === 'Escape' && !menu.hidden) { event.preventDefault(); closeHeaderMenus(); button.focus(); return; }
+      if (event.target === button && (event.key === 'ArrowDown' || event.key === 'ArrowUp') && menu.hidden) { event.preventDefault(); toggleHeaderMenu(menu, true); return; }
+      if (!panel || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const items = [...panel.querySelectorAll('[role^="menuitem"]')];
+      const at = items.indexOf(document.activeElement);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[next]?.focus();
+    });
+  }
+
+  // Wait for an unsaved edit and for a publish in progress, so nothing is lost when the page reloads into another workspace.
+  async function flushPendingWork() {
+    clearTimeout(cloudSaveTimer);
+    const run = pendingCloudSave; pendingCloudSave = null;
+    if (run) await run();
+    for (let waited = 0; publishingCount > 0 && waited < 60; waited += 1) await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  // Switching is "save the choice, then reload": nothing from the previous workspace can stay in memory. It always lands on the Dashboard.
+  async function openWorkspaceDashboard(workspaceId) {
+    await flushPendingWork();
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#dashboard`);
+    window.location.reload();
+  }
+  async function switchWorkspace(workspaceId) {
+    if (!workspace || workspaceId === workspace.id) return;
+    try {
+      await flushPendingWork();
+      await window.PathwayBackend.selectWorkspace(workspaceId);
+      await openWorkspaceDashboard(workspaceId);
+    } catch (error) {
+      showToast(error.message || 'Could not switch workspace. Please try again.');
+      try { myWorkspaces = await window.PathwayBackend.listMyWorkspaces(); refreshHeaderSwitcher(); } catch (_) { /* the next page load refreshes the list */ }
+    }
+  }
+  function refreshHeaderSwitcher() {
+    const host = root.querySelector('.ws-switch');
+    if (host) host.outerHTML = workspaceSwitcherHtml();
+  }
+
+  function showNewWorkspace() {
+    const atLimit = OWNED_COUNT() >= MAX_OWNED_WORKSPACES;
+    // At the limit there is nothing to fill in: only the explanation (in red) and a Close button.
+    setModal(atLimit
+      ? `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">New workspace</div><h2>Workspace limit reached</h2></div><button class="modal-x" data-close aria-label="Close">×</button></div><p class="workspace-limit-note" role="alert">You can own up to ${MAX_OWNED_WORKSPACES} workspaces. Delete one you no longer need to create another.</p><div class="modal-actions"><button class="btn" type="button" data-close>Close</button></div>`
+      : `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">New workspace</div><h2>Create a workspace</h2><p>Each workspace has its own jobs, candidates, team and plan. You can switch between them at any time.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-workspace-form" novalidate><div class="field-group"><label for="new-workspace-name">Workspace name</label><input class="text-input" id="new-workspace-name" name="name" maxlength="120" autocomplete="organization" placeholder="e.g. Northstar Studio" required></div><p class="settings-delete-error" id="new-workspace-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" id="create-workspace" type="submit">Create workspace</button></div></form>`);
+    if (atLimit) return;
+    const form = modalRoot.querySelector('#new-workspace-form');
+    const input = form.querySelector('#new-workspace-name');
+    const errorBox = form.querySelector('#new-workspace-error');
+    const button = form.querySelector('#create-workspace');
+    input.focus();
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const name = input.value.trim();
+      if (!name || button.disabled) { errorBox.textContent = 'Enter a name for your workspace.'; errorBox.hidden = false; return; }
+      button.disabled = true; input.disabled = true; button.textContent = 'Creating…'; errorBox.hidden = true;
+      try {
+        await window.PathwayBackend.createWorkspace(name);
+        closeModal();
+        await openWorkspaceDashboard();
+      } catch (error) {
+        errorBox.textContent = error.message || 'The workspace could not be created. Please try again.';
+        errorBox.hidden = false; button.disabled = false; input.disabled = false; button.textContent = 'Create workspace';
+      }
+    });
+  }
+
+  function showRenameWorkspace(item) {
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Rename workspace</div><h2>Rename ${esc(workspaceLabel(item))}</h2><p>Only you, as the owner, can rename it. The new name appears for everyone on the team.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="rename-workspace-form" novalidate><div class="field-group"><label for="rename-workspace-name">Workspace name</label><input class="text-input" id="rename-workspace-name" maxlength="120" autocomplete="organization" required value="${esc(item.name)}"></div><p class="settings-delete-error" id="rename-workspace-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" id="save-workspace-name" type="submit">Save name</button></div></form>`);
+    const input = modalRoot.querySelector('#rename-workspace-name');
+    const errorBox = modalRoot.querySelector('#rename-workspace-error');
+    const button = modalRoot.querySelector('#save-workspace-name');
+    input.focus(); input.select();
+    modalRoot.querySelector('#rename-workspace-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const name = input.value.trim();
+      if (!name) { errorBox.textContent = 'Enter a name for your workspace.'; errorBox.hidden = false; return; }
+      button.disabled = true; button.textContent = 'Saving…'; errorBox.hidden = true;
+      try {
+        const saved = await window.PathwayBackend.renameWorkspace(item.id, name);
+        const newName = saved?.name || name;
+        myWorkspaces = myWorkspaces.map(row => row.id === item.id ? { ...row, name: newName } : row);
+        if (workspace && workspace.id === item.id) workspace = { ...workspace, name: newName };
+        closeModal(); refreshHeaderSwitcher();
+        if (root.querySelector('.settings-page')) renderSettings();
+        else if (root.querySelector('.my-team-page')) void renderMyTeam();
+        showToast('Workspace renamed.');
+      } catch (error) {
+        errorBox.textContent = error.message || 'The workspace could not be renamed.';
+        errorBox.hidden = false; button.disabled = false; button.textContent = 'Save name';
+      }
+    });
+  }
+
+  // Shown when the person belongs to no workspace (they left or deleted every one): only Settings is available.
+  function renderNoWorkspace() {
+    currentId = null; selectedId = null;
+    setRoute('dashboard');
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('')}<main class="my-team-page"><section class="team-empty-state no-workspace-state"><div class="eyebrow">No workspace yet</div><h1>You are not in a workspace</h1><p>Create a workspace for your company, or open an invitation link from a team to join theirs. Your account stays yours either way.</p><button class="btn btn-primary" id="empty-create-workspace" type="button" data-new-workspace>Create a workspace</button></section></main></div></div>`;
+    bindSidebar();
+    root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); renderNoWorkspace(); });
+  }
+
   function renderSidebar(active) {
-    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>Applicants</button>${hasPermission('view_reports') ? `<button class="sidebar-link ${active === 'reports' ? 'active' : ''}" data-route="reports"><span class="sidebar-icon" aria-hidden="true">${ICONS.reports}</span>Reports</button>` : ''}${hasPermission('diversity') ? `<button class="sidebar-link ${active === 'diversity' ? 'active' : ''}" data-route="diversity"><span class="sidebar-icon" aria-hidden="true">${ICONS.diversity}</span>Diversity</button>` : ''}${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.team}</span>My Team</button>` : ''}${hasPermission('flows') ? `<button class="sidebar-link ${active === 'my-companies' ? 'active' : ''}" data-route="my-companies"><span class="sidebar-icon" aria-hidden="true">▣</span>My Companies</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">◈</span>My Plan</button>` : ''}<button class="sidebar-link ${active === 'settings' ? 'active' : ''}" data-route="settings"><span class="sidebar-icon" aria-hidden="true">⚙</span>Settings</button></aside>`;
+    if (!workspace) return `<aside class="app-sidebar" aria-label="Account navigation"><div class="sidebar-caption">Account</div><button class="sidebar-link ${active === 'settings' ? 'active' : ''}" data-route="settings"><span class="sidebar-icon" aria-hidden="true">⚙</span>Settings</button></aside>`;
+    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">▦</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>Applicants</button>${hasPermission('view_reports') ? `<button class="sidebar-link ${active === 'reports' ? 'active' : ''}" data-route="reports"><span class="sidebar-icon" aria-hidden="true">${ICONS.reports}</span>Reports</button>` : ''}${hasPermission('diversity') ? `<button class="sidebar-link ${active === 'diversity' ? 'active' : ''}" data-route="diversity"><span class="sidebar-icon" aria-hidden="true">${ICONS.diversity}</span>Diversity</button>` : ''}${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.team}</span>My Team</button>` : ''}${hasPermission('flows') ? `<button class="sidebar-link ${active === 'my-companies' ? 'active' : ''}" data-route="my-companies"><span class="sidebar-icon" aria-hidden="true">▣</span>My Companies</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">◈</span>My Plan</button>` : ''}</aside>`;
   }
 
   function bindSidebar() {
@@ -348,10 +556,10 @@
     setRoute('my-companies');
     currentId = null; selectedId = null;
     const atLimit = companies.length >= 3;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-companies')}<main class="companies-page"><div class="companies-heading"><div><div class="eyebrow">Hiring workspace</div><h1>My Companies</h1><p>Choose a company to represent a job on its public application page.</p></div><div class="companies-heading-actions"><span class="companies-count">${companies.length} / 3 companies</span><button class="btn btn-primary" id="new-company" ${atLimit ? 'disabled title="You can add up to three companies."' : ''}>＋ &nbsp;New company</button></div></div>${companies.length ? `<section class="companies-grid" aria-label="Your companies">${companies.map(companyCardHtml).join('')}</section>` : `<section class="companies-empty"><span class="brand-mark">↗</span><h2>No companies yet</h2><p>New flows will use ${esc(workspace.name)} until you add a company profile.</p><button class="btn btn-primary" id="empty-new-company">＋ &nbsp;New company</button></section>`}</main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-companies')}<main class="companies-page"><div class="companies-heading"><div><div class="eyebrow">Hiring workspace</div><h1>My Companies</h1><p>Choose a company to represent a job on its public application page.</p></div><div class="companies-heading-actions"><span class="companies-count">${companies.length} / 3 companies</span><button class="btn btn-primary" id="new-company" ${atLimit ? 'disabled title="You can add up to three companies."' : ''}>＋ &nbsp;New company</button></div></div>${companies.length ? `<section class="companies-grid" aria-label="Your companies">${companies.map(companyCardHtml).join('')}</section>` : `<section class="companies-empty"><span class="brand-mark">↗</span><h2>No companies yet</h2><p>New flows will use ${esc(workspace.name)} until you add a company profile.</p><button class="btn btn-primary" id="empty-new-company">＋ &nbsp;New company</button></section>`}</main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
-    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+    
     root.querySelector('#new-company')?.addEventListener('click', showNewCompany);
     root.querySelector('#empty-new-company')?.addEventListener('click', showNewCompany);
     root.querySelectorAll('[data-edit-company]').forEach(button => button.addEventListener('click', () => {
@@ -499,9 +707,11 @@
   }
 
   function renderPlanControl() {
-    if (!isOwner) return '';
+    const premiumPill = '<span class="status-pill" title="Your workspace can publish job flows"><span class="status-dot"></span>Premium</span>';
+    // Members see the tag too (but never the upgrade button, which belongs to the owner).
+    if (!isOwner) return subscription?.active ? premiumPill : '';
     return subscription?.active
-      ? '<span class="status-pill" title="Your workspace can publish job flows"><span class="status-dot"></span>Premium</span>'
+      ? premiumPill
       : '<button class="btn btn-sm btn-lime" id="upgrade-to-publish">Upgrade to publish</button>';
   }
 
@@ -698,12 +908,12 @@
     const drafts = flows.filter(flow => flow.publicationStatus !== 'published').length;
     const published = count - drafts;
     const nodes = flows.reduce((sum, flow) => sum + (flowIsDamaged(flow) ? 0 : flow.nodes.length), 0);
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Hiring made organized</h1><p>Build application flows, share role links and review every candidate in one place.</p></div><div class="dash-action"><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.applicants}</span><div><strong id="dashboard-new-applicant-count" title="${hasPermission('applicants') ? 'Loading new applicants' : 'Candidates access required'}">—</strong><span>New applicants</span></div></div><div class="stat"><span class="stat-icon">${ICONS.published}</span><div><strong>${published}</strong><span>Published flows</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${drafts} draft${drafts === 1 ? '' : 's'} · ${published} published</span></div>${flows.length ? `${flowFiltersHtml()}<section class="flow-grid" id="flow-grid">${flowCardsHtml()}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Hiring made organized</h1><p>Build application flows, share role links and review every candidate in one place.</p></div><div class="dash-action"><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.applicants}</span><div><strong id="dashboard-new-applicant-count" title="${hasPermission('applicants') ? 'Loading new applicants' : 'Candidates access required'}">—</strong><span>New applicants</span></div></div><div class="stat"><span class="stat-icon">${ICONS.published}</span><div><strong>${published}</strong><span>Published flows</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${drafts} draft${drafts === 1 ? '' : 's'} · ${published} published</span></div>${flows.length ? `${flowFiltersHtml()}<section class="flow-grid" id="flow-grid">${flowCardsHtml()}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div></div>`;
     bindSidebar();
     bindPlanControl();
     root.querySelector('#empty-new-flow')?.addEventListener('click', showNewFlow);
     root.querySelector('#new-flow').addEventListener('click', showNewFlow);
-    root.querySelector('#signout').addEventListener('click', doSignOut);
+    
     bindFlowCards();
     bindFlowFilters();
     if (hasPermission('applicants')) void loadDashboardNewApplicantCount(metricsRequestId);
@@ -739,10 +949,10 @@
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
     flowResponsiblesCache.clear();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><select id="applicant-flow-filter" class="applicants-filter" aria-label="Filter applicants by job"><option value="">All jobs</option>${applicantFlowLabels.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join('')}</select><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button></div></div><div class="applicant-stage-toggle-wrap" id="applicant-stage-toggle-wrap">${hasPermission('customize_stages') ? '<button class="btn btn-sm" type="button" id="customize-stages">Customize</button>' : ''}</div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><select id="applicant-flow-filter" class="applicants-filter" aria-label="Filter applicants by job"><option value="">All jobs</option>${applicantFlowLabels.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join('')}</select><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button></div></div><div class="applicant-stage-toggle-wrap" id="applicant-stage-toggle-wrap">${hasPermission('customize_stages') ? '<button class="btn btn-sm" type="button" id="customize-stages">Customize</button>' : ''}</div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
     bindSidebar();
     bindPlanControl();
-    root.querySelector('#signout').addEventListener('click', doSignOut);
+    
     root.querySelector('#applicant-flow-filter').addEventListener('change', event => { applicantFilter = event.target.value; void renderApplicants(); });
     root.querySelector('#applicant-search').addEventListener('input', event => {
       applicantSearch = event.target.value;
@@ -1202,10 +1412,10 @@
     setRoute('reports');
     currentId = null; selectedId = null;
     reportData = null; reportRangeResolved = null;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('reports')}<main class="reports-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Reports</h1><p>See how your jobs are doing: who visits, who applies and where candidates end up.</p></div><div class="reports-tools"><div class="rpt-seg-control" role="group" aria-label="Period">${REPORT_RANGES.map(item => `<button type="button" class="rpt-seg-btn${item.key === reportRange ? ' is-active' : ''}" data-report-range="${item.key}" aria-pressed="${item.key === reportRange}">${item.label}</button>`).join('')}</div><select id="report-company" class="applicants-filter" aria-label="Filter by company" hidden><option value="">All companies</option></select><div class="rpt-picker" id="report-picker"><button type="button" class="applicants-filter rpt-picker-btn" id="report-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Filter by job"><span id="report-picker-label">All jobs</span><span aria-hidden="true">▾</span></button><div class="rpt-picker-menu" hidden><input type="search" class="rpt-picker-search" placeholder="Search jobs" aria-label="Search jobs" maxlength="100"><ul class="rpt-picker-list" role="listbox"></ul></div></div><button class="btn btn-sm" id="report-export" type="button" disabled>↓ Export CSV</button></div></div><div id="reports-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('reports')}<main class="reports-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Reports</h1><p>See how your jobs are doing: who visits, who applies and where candidates end up.</p></div><div class="reports-tools"><div class="rpt-seg-control" role="group" aria-label="Period">${REPORT_RANGES.map(item => `<button type="button" class="rpt-seg-btn${item.key === reportRange ? ' is-active' : ''}" data-report-range="${item.key}" aria-pressed="${item.key === reportRange}">${item.label}</button>`).join('')}</div><select id="report-company" class="applicants-filter" aria-label="Filter by company" hidden><option value="">All companies</option></select><div class="rpt-picker" id="report-picker"><button type="button" class="applicants-filter rpt-picker-btn" id="report-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Filter by job"><span id="report-picker-label">All jobs</span><span aria-hidden="true">▾</span></button><div class="rpt-picker-menu" hidden><input type="search" class="rpt-picker-search" placeholder="Search jobs" aria-label="Search jobs" maxlength="100"><ul class="rpt-picker-list" role="listbox"></ul></div></div><button class="btn btn-sm" id="report-export" type="button" disabled>↓ Export CSV</button></div></div><div id="reports-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
-    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+    
     root.querySelectorAll('[data-report-range]').forEach(button => button.addEventListener('click', () => {
       if (reportRange === button.dataset.reportRange) return;
       reportRange = button.dataset.reportRange;
@@ -1282,10 +1492,10 @@
     if (!hasPermission('diversity')) return renderAccessMessage('diversity');
     setRoute('diversity');
     currentId = null; selectedId = null;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('diversity')}<main class="diversity-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Diversity</h1><p>Combined percentages from candidates’ voluntary self-identification answers, one job at a time.</p></div><div class="reports-tools"><select id="diversity-job" class="applicants-filter" aria-label="Choose a job" hidden></select></div></div><div id="diversity-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('diversity')}<main class="diversity-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Diversity</h1><p>Combined percentages from candidates’ voluntary self-identification answers, one job at a time.</p></div><div class="reports-tools"><select id="diversity-job" class="applicants-filter" aria-label="Choose a job" hidden></select></div></div><div id="diversity-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
-    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+    
     const content = root.querySelector('#diversity-content');
     const select = root.querySelector('#diversity-job');
     const requestId = ++diversityRequestId;
@@ -1330,10 +1540,10 @@
     const message = !subscription?.active
       ? 'The workspace Premium plan is inactive. Access to shared workspace data is paused until the owner restores Premium.'
       : permitted ? 'This area is unavailable for this account.' : `The workspace owner has not enabled ${area} access for your account.`;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions"><span class="workspace-name">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('')}<main class="my-team-page"><section class="team-empty-state"><div class="eyebrow">Workspace access</div><h1>${area} access is unavailable</h1><p>${esc(message)}</p>${teamMember ? '<button class="btn" id="open-my-team">Open My Team</button>' : ''}</section></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('')}<main class="my-team-page"><section class="team-empty-state"><div class="eyebrow">Workspace access</div><h1>${area} access is unavailable</h1><p>${esc(message)}</p>${teamMember ? '<button class="btn" id="open-my-team">Open My Team</button>' : ''}</section></main></div></div>`;
     bindSidebar();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); if (hasPermission('flows')) renderDashboard(); });
-    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+    
     root.querySelector('#open-my-team')?.addEventListener('click', () => { void renderMyTeam(); });
   }
 
@@ -1353,18 +1563,20 @@
     const members = manager ? (data.members || []).map(member => `<article class="team-person" data-member-id="${esc(member.user_id)}"><div class="team-person-heading"><div>${teamPersonLines(member.user_id, member.member_email)}<span>Member since ${esc(new Date(member.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div><button class="btn btn-danger btn-sm" data-remove-member="${esc(member.user_id)}">Remove</button></div>${teamPermissionControls(member)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : data.readOnlyTeam ? data.readOnlyTeam.filter(person => !person.isOwner).map(person => `<article class="team-person${person.userId === user.id ? ' team-self' : ''}"><div class="team-person-heading"><div>${teamPersonLines(person.userId, person.email)}<span>${person.userId === user.id ? 'You · ' : ''}Member since ${esc(new Date(person.memberSince).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div></div><div class="team-permission-summary">${esc(describe(person))}</div></article>`).join('') : teamMember ? `<article class="team-person team-self"><div class="team-person-heading"><div>${teamPersonLines(user.id, teamMember.email || user.email)}<span>You · ${data.premiumActive ? 'Team member' : 'Workspace access paused'}</span></div></div><div class="team-permission-summary">${esc(describe(teamMember))}</div></article>` : '';
     const pending = manager ? (data.invitations || []).map(invite => `<article class="team-invite-item" data-invitation-id="${esc(invite.id)}"><div class="team-person-heading"><div><strong>${esc(invite.invited_email)}</strong><span>Expires ${esc(new Date(invite.expires_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${data.premiumActive ? `<button class="btn btn-sm" data-copy-invitation-link="${esc(invite.id)}">Copy invitation link</button>` : ''}<button class="btn btn-sm" data-revoke-invitation="${esc(invite.id)}">Revoke</button></div></div>${teamPermissionControls(invite)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : '';
     const paused = !subscription?.active;
-    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>${manager ? `Manage access to ${esc(workspace.name)}. Premium includes up to 3 additional members at no extra seat charge.` : `See who has access to ${esc(workspace.name)}.`}</p></div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>No team access</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>View only</strong><p>You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All are enabled by default, except Diversity.</small></div><div class="team-permission-grid"><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label><label><input type="checkbox" data-invite-permission="stages" checked><span>Customize stages</span></label><label><input type="checkbox" data-invite-permission="reports" checked><span>Reports</span></label><label><input type="checkbox" data-invite-permission="diversity"><span>Diversity</span></label></div><p class="team-permission-hint">Diversity shows combined percentages from candidates’ voluntary self-identification answers. It is off by default; give it to someone who does not move candidates between stages.</p><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${(data.isOwner || data.readOnlyTeam) ? `<article class="team-person team-owner"><div class="team-person-heading"><div>${teamPersonLines(teamDirectory.find(person => person.isOwner)?.userId || (isOwner ? user.id : ''), data.owner?.email || data.readOnlyTeam?.find(person => person.isOwner)?.email || user.email)}<span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
+    // Everyone on the team can see who owns the workspace (managers get it with the team data, members from the team overview).
+    const ownerEmail = data.owner?.email || teamDirectory.find(person => person.isOwner)?.email || data.readOnlyTeam?.find(person => person.isOwner)?.email || (isOwner ? user.email : '');
+    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>${manager ? `Manage access to ${esc(workspaceLabel(workspace))}. Premium includes up to 3 additional members at no extra seat charge.` : `See who has access to ${esc(workspaceLabel(workspace))}.`}</p>${isOwner ? `<button class="btn btn-sm team-rename" type="button" data-ws-rename="${esc(workspace.id)}">Rename workspace</button>` : ''}</div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>No team access</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>View only</strong><p>You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All are enabled by default, except Diversity.</small></div><div class="team-permission-grid"><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label><label><input type="checkbox" data-invite-permission="stages" checked><span>Customize stages</span></label><label><input type="checkbox" data-invite-permission="reports" checked><span>Reports</span></label><label><input type="checkbox" data-invite-permission="diversity"><span>Diversity</span></label></div><p class="team-permission-hint">Diversity shows combined percentages from candidates’ voluntary self-identification answers. It is off by default; give it to someone who does not move candidates between stages.</p><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${ownerEmail ? `<article class="team-person team-owner"><div class="team-person-heading"><div>${teamPersonLines(teamDirectory.find(person => person.isOwner)?.userId || (isOwner ? user.id : ''), ownerEmail)}<span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
   }
 
   function renderMyTeamLoadingMarkup() {
-    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page" aria-busy="true"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>Loading team members and invitations…</p></div><div class="team-skeleton team-skeleton-seat" aria-hidden="true"></div></div><section class="team-card team-loading-card" aria-hidden="true"><div class="team-skeleton team-skeleton-title"></div><div class="team-skeleton team-skeleton-copy"></div><div class="team-skeleton team-skeleton-field"></div><div class="team-skeleton team-skeleton-button"></div></section><section class="team-card team-loading-card" aria-hidden="true"><div class="team-skeleton team-skeleton-title"></div><div class="team-skeleton team-skeleton-person"></div><div class="team-skeleton team-skeleton-person short"></div></section><p class="team-loading-status" role="status">Loading your team…</p></main></div></div>`;
+    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page" aria-busy="true"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>Loading team members and invitations…</p></div><div class="team-skeleton team-skeleton-seat" aria-hidden="true"></div></div><section class="team-card team-loading-card" aria-hidden="true"><div class="team-skeleton team-skeleton-title"></div><div class="team-skeleton team-skeleton-copy"></div><div class="team-skeleton team-skeleton-field"></div><div class="team-skeleton team-skeleton-button"></div></section><section class="team-card team-loading-card" aria-hidden="true"><div class="team-skeleton team-skeleton-title"></div><div class="team-skeleton team-skeleton-person"></div><div class="team-skeleton team-skeleton-person short"></div></section><p class="team-loading-status" role="status">Loading your team…</p></main></div></div>`;
   }
 
   function renderMyTeamLoading() {
     root.innerHTML = renderMyTeamLoadingMarkup();
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
-    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+    
   }
 
   async function renderMyTeam() {
@@ -1383,7 +1595,7 @@
       root.innerHTML = renderMyTeamMarkup(data);
       bindSidebar(); bindPlanControl();
       root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
-      root.querySelector('#signout')?.addEventListener('click', doSignOut);
+      
       root.querySelector('#team-upgrade')?.addEventListener('click', openSubscriptionPage);
       root.querySelector('#team-invite-form')?.addEventListener('submit', event => { void createTeamInvite(event); });
       root.querySelectorAll('[data-remove-member]').forEach(button => button.addEventListener('click', () => confirmRemoveTeamMember(button.dataset.removeMember)));
@@ -1394,8 +1606,8 @@
       root.querySelector('#leave-team')?.addEventListener('click', showLeaveTeamConfirmation);
     } catch (error) {
       if (requestId !== teamRenderRequestId || !root.querySelector('[data-route="my-team"].active')) return;
-      root.innerHTML = `<div class="app-shell"><header class="topbar"><span class="brand">pathway</span><div class="top-actions"><span class="workspace-name">${esc(workspace.name)}</span><button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><section class="team-notice is-paused"><h1>Team data unavailable</h1><p>${esc(error.message || 'Please try again.')}</p><button class="btn" id="retry-team">Retry</button></section></main></div></div>`;
-      bindSidebar(); root.querySelector('#retry-team')?.addEventListener('click', () => { void renderMyTeam(); }); root.querySelector('#signout')?.addEventListener('click', doSignOut);
+      root.innerHTML = `<div class="app-shell"><header class="topbar"><span class="brand">pathway</span><div class="top-actions">${workspaceSwitcherHtml()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><section class="team-notice is-paused"><h1>Team data unavailable</h1><p>${esc(error.message || 'Please try again.')}</p><button class="btn" id="retry-team">Retry</button></section></main></div></div>`;
+      bindSidebar(); root.querySelector('#retry-team')?.addEventListener('click', () => { void renderMyTeam(); }); 
     }
   }
 
@@ -1480,16 +1692,18 @@
     setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Remove team member</div><h2>Revoke this person's workspace access?</h2><p>Their Pathway account and email remain intact. They can create their own workspace or join another team.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn" data-close>Keep member</button><button class="btn btn-danger" id="confirm-remove-member">Remove member</button></div>`);
     modalRoot.querySelector('#confirm-remove-member').addEventListener('click', async event => {
       event.currentTarget.disabled = true; event.currentTarget.textContent = 'Removing…';
-      try { await window.PathwayBackend.removeTeamMember(id); closeModal(); if (id === user.id) { await doSignOut(); return; } showToast('Team access removed.'); await renderMyTeam(); }
+      try { await window.PathwayBackend.removeTeamMember(id); closeModal(); if (id === user.id) { await openWorkspaceDashboard(); return; } showToast('Team access removed.'); await renderMyTeam(); }
       catch (error) { closeModal(); showToast(error.message || 'Member could not be removed.'); }
     });
   }
 
-  function showLeaveTeamConfirmation() {
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Leave workspace</div><h2>Leave ${esc(workspace.name)}?</h2><p>Your account will remain active, but you will immediately lose access to this workspace and its data. You can create a personal workspace or accept another team's invitation later.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn" data-close>Stay on team</button><button class="btn btn-danger" id="confirm-leave-team">Leave team</button></div>`);
+  function showLeaveTeamConfirmation(item = workspace) {
+    const name = String(item?.name || '');
+    const label = item && item.id ? workspaceLabel(item) : name;
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Leave workspace</div><h2>Leave ${esc(label)}?</h2><p>Your account will remain active, but you will immediately lose access to this workspace and its data. You can create a personal workspace or accept another team's invitation later.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn" data-close>Stay on team</button><button class="btn btn-danger" id="confirm-leave-team">Leave team</button></div>`);
     modalRoot.querySelector('#confirm-leave-team').addEventListener('click', async event => {
       event.currentTarget.disabled = true; event.currentTarget.textContent = 'Leaving…';
-      try { await window.PathwayBackend.leaveTeam(); closeModal(); await doSignOut(); }
+      try { await window.PathwayBackend.leaveTeam(item.id); closeModal(); await afterWorkspaceRemoved(item); }
       catch (error) { closeModal(); showToast(error.message || 'Could not leave the workspace.'); }
     });
   }
@@ -1537,13 +1751,27 @@
     document.body.appendChild(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  function settingsWorkspaceRowHtml(item, labels) {
+    const label = labels.get(item.id) || item.name;
+    const current = workspace && item.id === workspace.id;
+    const actions = item.isOwner
+      ? `<button class="btn btn-sm" type="button" data-ws-rename="${esc(item.id)}">Rename</button><button class="btn btn-sm btn-danger" type="button" data-ws-delete="${esc(item.id)}">Delete</button>`
+      : `<button class="btn btn-sm btn-danger" type="button" data-ws-leave="${esc(item.id)}">Leave</button>`;
+    return `<li class="settings-workspace-row"><span class="ws-switch-mark" aria-hidden="true">${esc(workspaceMark(item.name))}</span><div class="settings-workspace-main"><strong>${esc(label)}</strong>${label !== item.name ? `<small>Real name: ${esc(item.name)}</small>` : ''}<span class="settings-workspace-tags"><span class="ws-badge">${item.isOwner ? 'Owner' : 'Member'}</span><span class="ws-badge${item.premiumActive ? ' ws-badge-premium' : ''}">${item.premiumActive ? 'Premium' : 'Free'}</span>${current ? '<span class="ws-badge ws-badge-current">Current</span>' : ''}</span></div><div class="settings-workspace-actions">${actions}</div></li>`;
+  }
   function renderSettings() {
     currentId = null; selectedId = null;
     setRoute('settings');
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">Your account and workspace</div><h1>Settings</h1><p>View your account details and manage workspace access.</p></div></div><section class="settings-card" aria-labelledby="settings-profile-heading"><div class="settings-card-heading"><div><h2 id="settings-profile-heading">Name</h2></div><button class="btn" id="settings-profile-edit" type="button">Edit</button></div><div id="settings-profile-body"></div></section><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">Account and workspace</h2><p>These details are read-only.</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>Email address</span><strong>${esc(user.email || '—')}</strong><small>Your sign-in email.</small></div><div class="settings-info-item"><span>Workspace</span><strong>${esc(workspace.name)}</strong><small>The workspace you currently belong to.</small></div></div></section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>Sign out</h2><p>End your current Pathway session on this device.</p></div><button class="btn" id="settings-signout" type="button">Sign out</button></div></section><section class="settings-card settings-danger-card"><div class="settings-card-heading"><div><h2>Workspace access</h2><p>${isOwner ? 'Permanently remove this workspace and its data.' : 'Leave this workspace without deleting your Pathway account.'}</p></div></div>${isOwner ? '<button class="btn btn-danger" id="settings-delete-workspace" type="button">Delete workspace</button>' : teamMember ? '<button class="btn btn-danger" id="settings-leave-workspace" type="button">Leave workspace</button>' : ''}</section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>Delete account</h2><p>${isOwner ? 'This also deletes your workspace and all its data, and immediately cancels any subscription.' : 'Your workspace, flows, candidates and subscription will remain for the owner and team.'}</p></div><button class="btn btn-danger" id="settings-delete-account" type="button">Delete account</button></div></section><div class="settings-footer-row"><p class="settings-legal-note">Legal questions? Check our <a href="legal.html#terms" target="_blank" rel="noopener">Terms of Use</a> and <a href="legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p><button type="button" class="settings-link-button" id="settings-download-data">Download my data</button></div></main></div></div>`;
+    const labels = workspaceLabels();
+    const ownedNames = myWorkspaces.filter(item => item.isOwner).map(item => item.name);
+    const memberOnly = myWorkspaces.filter(item => !item.isOwner);
+    const atLimit = ownedNames.length >= MAX_OWNED_WORKSPACES;
+    const deleteAccountNote = ownedNames.length
+      ? `This also deletes ${ownedNames.length === 1 ? 'your workspace' : `all ${ownedNames.length} workspaces you own`} and all their data, and immediately cancels ${ownedNames.length === 1 ? 'its' : 'their'} subscription${ownedNames.length === 1 ? '' : 's'}.`
+      : 'The workspaces you belong to, their flows, candidates and subscriptions will remain for their owners and teams.';
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">Your account</div><h1>Settings</h1><p>Your details and every workspace you belong to.</p></div></div><section class="settings-card" aria-labelledby="settings-profile-heading"><div class="settings-card-heading"><div><h2 id="settings-profile-heading">Name</h2></div><button class="btn" id="settings-profile-edit" type="button">Edit</button></div><div id="settings-profile-body"></div></section><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">Account</h2><p>This detail is read-only.</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>Email address</span><strong>${esc(user.email || '—')}</strong><small>Your sign-in email.</small></div></div></section><section class="settings-card settings-workspaces-card" aria-labelledby="settings-workspaces-heading"><div class="settings-card-heading"><div><h2 id="settings-workspaces-heading">Workspaces</h2><p>${ownedNames.length} of ${MAX_OWNED_WORKSPACES} owned${memberOnly.length ? ` · member of ${memberOnly.length}` : ''}. Switch between them from the header.</p></div><button class="btn" type="button" data-new-workspace ${atLimit ? 'disabled title="You can own up to 5 workspaces."' : ''}>+ New workspace</button></div>${myWorkspaces.length ? `<ul class="settings-workspace-list">${myWorkspaces.map(item => settingsWorkspaceRowHtml(item, labels)).join('')}</ul>` : '<p class="settings-workspace-empty">You are not in any workspace yet.</p>'}</section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>Sign out</h2><p>End your current Pathway session on this device.</p></div><button class="btn" id="settings-signout" type="button">Sign out</button></div></section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>Delete account</h2><p>${esc(deleteAccountNote)}</p></div><button class="btn btn-danger" id="settings-delete-account" type="button">Delete account</button></div></section><div class="settings-footer-row"><p class="settings-legal-note">Legal questions? Check our <a href="legal.html#terms" target="_blank" rel="noopener">Terms of Use</a> and <a href="legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p><button type="button" class="settings-link-button" id="settings-download-data">Download my data</button></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
-    root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
-    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+    root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); if (!workspace) renderNoWorkspace(); else hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
     root.querySelector('#settings-signout')?.addEventListener('click', doSignOut);
     root.querySelector('#settings-download-data')?.addEventListener('click', async event => {
       const button = event.currentTarget;
@@ -1588,14 +1816,24 @@
     };
     profileEdit.addEventListener('click', showProfileForm);
     showProfileView();
-    root.querySelector('#settings-leave-workspace')?.addEventListener('click', showLeaveTeamConfirmation);
-    root.querySelector('#settings-delete-workspace')?.addEventListener('click', showDeleteWorkspaceConfirmation);
-    root.querySelector('#settings-delete-account')?.addEventListener('click', () => window.PathwayAuth.showAccountDeletionConfirmation({ isOwner, workspaceName: workspace.name, email: user.email }));
+    root.querySelector('#settings-delete-account')?.addEventListener('click', () => window.PathwayAuth.showAccountDeletionConfirmation({
+      ownedWorkspaceNames: ownedNames, workspaceName: memberOnly.length === 1 && !ownedNames.length ? memberOnly[0].name : '', email: user.email
+    }));
   }
 
-  function showDeleteWorkspaceConfirmation() {
-    const name = String(workspace?.name || '');
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Delete workspace</div><h2>Permanently delete ${esc(name)}?</h2><p>This removes the workspace, job flows and public pages, candidate applications and private resumes, pending invitations, and all member access. Other members' Pathway accounts will remain active.</p><p>Any Stripe subscription will be canceled immediately. This stops future renewals; unused paid time is not automatically refunded. Your own Pathway account will remain, and you can create another workspace.</p><p><strong>This action is irreversible.</strong></p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="field-group settings-delete-confirmation"><label for="delete-workspace-name">Type <strong>${esc(name)}</strong> to enable deletion.</label><input class="text-input" id="delete-workspace-name" autocomplete="off" autocapitalize="off" spellcheck="false"></div><p class="settings-delete-error" id="delete-workspace-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" data-close>Keep workspace</button><button class="btn btn-danger" id="confirm-delete-workspace" type="button" disabled>Delete workspace permanently</button></div>`);
+  // After leaving or deleting a workspace: if it was the one open, start over on another (or the empty screen); otherwise just refresh the list.
+  async function afterWorkspaceRemoved(item) {
+    if (workspace && item.id === workspace.id) { await openWorkspaceDashboard(); return; }
+    try { myWorkspaces = await window.PathwayBackend.listMyWorkspaces(); } catch (_) { myWorkspaces = myWorkspaces.filter(row => row.id !== item.id); }
+    refreshHeaderSwitcher();
+    renderSettings();
+  }
+
+  function showDeleteWorkspaceConfirmation(item = workspace) {
+    const name = String(item?.name || '');
+    const label = item && item.id ? workspaceLabel(item) : name;
+    const shown = label !== name ? `${label} (real name: ${name})` : name;
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Delete workspace</div><h2>Permanently delete ${esc(shown)}?</h2><p>This removes the workspace, job flows and public pages, candidate applications and private resumes, pending invitations, and all member access. Other members' Pathway accounts will remain active.</p><p>Any Stripe subscription will be canceled immediately. This stops future renewals; unused paid time is not automatically refunded. Your own Pathway account will remain, and you can create another workspace.</p><p><strong>This action is irreversible.</strong></p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="field-group settings-delete-confirmation"><label for="delete-workspace-name">Type <strong>${esc(name)}</strong> to enable deletion.</label><input class="text-input" id="delete-workspace-name" autocomplete="off" autocapitalize="off" spellcheck="false"></div><p class="settings-delete-error" id="delete-workspace-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" data-close>Keep workspace</button><button class="btn btn-danger" id="confirm-delete-workspace" type="button" disabled>Delete workspace permanently</button></div>`);
     const input = modalRoot.querySelector('#delete-workspace-name');
     const button = modalRoot.querySelector('#confirm-delete-workspace');
     const errorBox = modalRoot.querySelector('#delete-workspace-error');
@@ -1604,8 +1842,9 @@
       if (input.value.trim() !== name || button.disabled) return;
       input.disabled = true; button.disabled = true; button.textContent = 'Deleting workspace…'; errorBox.hidden = true;
       try {
-        await window.PathwayBackend.deleteWorkspace();
-        closeModal(); window.location.hash = ''; window.location.reload();
+        await window.PathwayBackend.deleteWorkspace(item.id);
+        closeModal();
+        await afterWorkspaceRemoved(item);
       } catch (error) {
         errorBox.textContent = error.message || 'Workspace deletion could not be completed. Refresh the page or retry.';
         errorBox.hidden = false; input.disabled = false; button.disabled = input.value.trim() !== name; button.textContent = 'Delete workspace permanently';
@@ -1654,7 +1893,7 @@
     const freeBenefits = !premium
       ? `<section class="premium-benefits-card"><div class="premium-benefits-heading"><span class="premium-benefits-mark" aria-hidden="true">✦</span><div><div class="eyebrow">Premium plan</div><h2>Everything you need to move from job post to decision</h2><p>Publish a role and manage the full applicant journey in Pathway.</p></div></div><ul class="premium-benefits-list"><li><span aria-hidden="true">↗</span><div><strong>Publish your job flow</strong><p>Turn your application journey into a live job posting.</p></div></li><li><span aria-hidden="true">⤴</span><div><strong>Share a public job link</strong><p>Send one simple link to candidates wherever you recruit.</p></div></li><li><span aria-hidden="true">＋</span><div><strong>Receive applications in Pathway</strong><p>Collect candidate details and answers in your workspace.</p></div></li><li><span aria-hidden="true">▤</span><div><strong>Review candidates and resumes</strong><p>See application responses and preview or download resumes.</p></div></li><li><span aria-hidden="true">✓</span><div><strong>Approve or reject candidates</strong><p>Organize your pipeline and make hiring decisions as applications come in.</p></div></li></ul><button class="btn btn-primary" id="my-plan-benefits-upgrade">Upgrade to Premium</button></section>`
       : '';
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name" title="${esc(workspace.name)}">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body">${renderSidebar('my-plan')}<main class="my-plan-page"><div class="my-plan-heading"><div class="eyebrow">Workspace billing</div><h1>My Plan</h1><p>View your plan and manage billing for ${esc(workspace.name)}.</p></div><section class="plan-overview-card ${premium ? 'is-premium' : 'is-free'}"><div class="plan-overview-copy"><h2>${premium ? 'Premium' : 'Free'}</h2><p>${statusText}</p></div>${premium ? `<div class="plan-overview-price"><strong>US$ 24.90</strong><span>per month</span></div>` : '<button class="btn btn-primary" id="my-plan-upgrade">Upgrade to Premium</button>'}</section>${premium ? '<section class="plan-benefit-strip"><span class="plan-benefit-icon">✓</span><div><strong>Job publishing is enabled</strong><p>You can publish and manage job application links while your subscription is active.</p></div></section>' : ''}${freeBenefits}${management}</main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-plan')}<main class="my-plan-page"><div class="my-plan-heading"><div class="eyebrow">Workspace billing</div><h1>My Plan</h1><p>View your plan and manage billing for ${esc(workspace.name)}.</p></div><section class="plan-overview-card ${premium ? 'is-premium' : 'is-free'}"><div class="plan-overview-copy"><h2>${premium ? 'Premium' : 'Free'}</h2><p>${statusText}</p></div>${premium ? `<div class="plan-overview-price"><strong>US$ 24.90</strong><span>per month</span></div>` : '<button class="btn btn-primary" id="my-plan-upgrade">Upgrade to Premium</button>'}</section>${premium ? '<section class="plan-benefit-strip"><span class="plan-benefit-icon">✓</span><div><strong>Job publishing is enabled</strong><p>You can publish and manage job application links while your subscription is active.</p></div></section>' : ''}${freeBenefits}${management}</main></div></div>`;
     if (premium) {
       const historyRow = [...root.querySelectorAll('.plan-action-row')].find(row => row.querySelector('strong')?.textContent === 'Payment history');
       const historyButton = historyRow?.querySelector('button');
@@ -1671,7 +1910,7 @@
     bindSidebar();
     bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
-    root.querySelector('#signout')?.addEventListener('click', doSignOut);
+    
     root.querySelector('#my-plan-upgrade')?.addEventListener('click', openSubscriptionPage);
     root.querySelector('#my-plan-benefits-upgrade')?.addEventListener('click', openSubscriptionPage);
     root.querySelector('#cancel-subscription')?.addEventListener('click', showCancelSubscriptionConfirmation);
@@ -2447,7 +2686,7 @@
     }));
   }
   async function doSignOut() {
-    try { await window.PathwayBackend.signOut(); flows = []; companies = []; applicants = []; workspace = null; user = null; setRoute('login'); window.PathwayAuth.renderAuth(); }
+    try { await window.PathwayBackend.signOut(); flows = []; companies = []; applicants = []; workspace = null; myWorkspaces = []; user = null; setRoute('login'); window.PathwayAuth.renderAuth(); }
     catch (error) { showToast(`Could not sign out: ${error.message || 'please retry'}`); }
   }
 
@@ -2510,12 +2749,12 @@
   function renderEditor() {
     const flow = currentFlow(); if (!flow) return renderDashboard();
     if (flow.cloudId) setRoute(`flow=${flow.cloudId}`);
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${renderPlanControl()}<span class="workspace-name">${esc(workspace.name)}</span>${headerUserHtml()}<button class="btn btn-sm" id="signout">Sign out</button></div></header><div class="workspace-body"><main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' || !subscription?.active ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-zoom" id="canvas-zoom"><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-zoom-controls" id="canvas-zoom-controls" role="group" aria-label="Zoom"><button type="button" class="zoom-btn" id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" class="zoom-level" id="zoom-reset" title="Back to 100%">100%</button><button type="button" class="zoom-btn" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button></div><div class="canvas-status" id="canvas-status"></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body"><main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="crumb-link" id="dashboard-back">My flows</button><span class="crumb-chevron">/</span><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' || !subscription?.active ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-zoom" id="canvas-zoom"><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-zoom-controls" id="canvas-zoom-controls" role="group" aria-label="Zoom"><button type="button" class="zoom-btn" id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" class="zoom-level" id="zoom-reset" title="Back to 100%">100%</button><button type="button" class="zoom-btn" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button></div><div class="canvas-status" id="canvas-status"></div></main></div></div>`;
     bindPlanControl();
     root.querySelector('.save-indicator')?.insertAdjacentHTML('afterend', '<div id="publish-changes-slot"></div>');
     updatePublicationNotice();
     root.querySelector('#brand-home').addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
-    root.querySelector('#signout').addEventListener('click', doSignOut);
+    
     root.querySelector('#dashboard-back').addEventListener('click', renderDashboard);
     root.querySelector('#preview-btn').addEventListener('click', openPreview);
     root.querySelector('#copy-job-url')?.addEventListener('click', copyJobUrl);
@@ -2900,7 +3139,7 @@
     try { C.normalizeFlow(flow); }
     catch (error) { showToast(error.message || 'This flow needs a fix before it can be published.'); return; }
     const editRevision = flowEditRevisions.get(flow) || 0;
-    publishingFlows.add(flow);
+    publishingFlows.add(flow); publishingCount += 1;
     clearTimeout(cloudSaveTimer);
     clearTimeout(saveTimer);
     updatePublicationNotice();
@@ -2927,14 +3166,21 @@
         : '<span class="save-failed">Save failed</span>';
       showToast(`Could not publish changes: ${error.message || 'please try again'}`);
     } finally {
-      publishingFlows.delete(flow);
+      publishingFlows.delete(flow); publishingCount -= 1;
       updatePublicationNotice();
     }
   }
 
   window.addEventListener('pointerup', () => { if (connectFrom && window.pendingPointer) { connectFrom = null; window.pendingPointer = null; drawCanvas(); } });
+  bindHeaderMenus();
+  // Removed from the workspace that is open (for example by its owner): say so and open another one.
+  window.addEventListener('pathway:workspace-lost', () => {
+    showToast('You no longer have access to this workspace. Opening another one…', 4500);
+    setTimeout(() => { void openWorkspaceDashboard(); }, 2200);
+  });
   window.PathwayAuth.start(context => {
     workspace = context.workspace;
+    myWorkspaces = context.workspaces || [];
     user = context.user;
     myProfile = context.profile || null;
     isOwner = Boolean(context.isOwner);
@@ -2952,7 +3198,8 @@
     if (checkoutComplete || paymentMethodUpdated) {
       window.history.replaceState({}, '', window.location.pathname + window.location.hash);
     }
-    if (requestedPage === 'my-companies') renderMyCompanies();
+    if (!workspace) { if (requestedPage === 'settings') renderSettings(); else renderNoWorkspace(); }
+    else if (requestedPage === 'my-companies') renderMyCompanies();
     else if (requestedPage === 'applicants') void renderApplicants();
     else if (requestedPage === 'reports') void renderReports();
     else if (requestedPage === 'diversity') void renderDiversity();

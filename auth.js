@@ -73,7 +73,7 @@
   function renderAuth(errorMessage = '', successMessage = '') {
     const isInvite = Boolean(inviteToken && invitePreview);
     const email = state.email || (isInvite ? invitePreview.invitedEmail : '');
-    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">A calmer way to hire</div><h1>Hiring made organized</h1><p>Build application flows, share role links and review every candidate in one place.</p><div class="auth-feature-list"><div class="auth-feature"><span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v10M18 11c0 4-6 3-12 6"/></svg></span>Branching flows that adapt to every answer</div><div class="auth-feature"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span>One public link per role, ready to share</div><div class="auth-feature"><span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg></span>A shared board to review candidates with your team</div></div></div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">${isInvite ? 'Workspace invitation' : state.mode === 'signup' ? 'Get started' : 'Welcome back'}</div><h2>${isInvite ? `Join ${window.PathwayCore.esc(invitePreview.workspaceName)}` : state.mode === 'signup' ? 'Create your account' : 'Sign in to Pathway'}</h2><p class="auth-card-intro">${isInvite ? `Use the invited email address to join ${window.PathwayCore.esc(invitePreview.workspaceName)}. Your account can belong to one workspace at a time.` : state.mode === 'signup' ? 'Start with a private workspace for your company.' : 'Pick up where you left off.'}</p>${isInvite ? '<div class="auth-success" role="status">This link is valid for the invited email address. It expires in 7 days and can be revoked by a team manager.</div>' : `<div class="auth-tabs"><button class="auth-tab ${state.mode === 'signup' ? 'active' : ''}" data-mode="signup" type="button">Create account</button><button class="auth-tab ${state.mode === 'signin' ? 'active' : ''}" data-mode="signin" type="button">Sign in</button></div>`}${successMessage ? `<div class="auth-success" role="status">${window.PathwayCore.esc(successMessage)}</div>` : ''}<div class="auth-error ${errorMessage ? 'show' : ''}" role="alert">${errorMessage ? window.PathwayCore.esc(errorMessage) : ''}</div><form id="auth-form">${state.mode === 'signup' && !isInvite ? `<div class="field-group"><label for="auth-workspace">Company / workspace name</label><input id="auth-workspace" class="text-input" name="workspaceName" autocomplete="organization" placeholder="e.g. Northstar Studio" value="${window.PathwayCore.esc(state.workspaceName)}" required maxlength="120"></div>` : ''}${state.mode === 'signup' ? `<div class="field-row"><div class="field-group"><label for="auth-first-name">First name</label><input id="auth-first-name" class="text-input" name="firstName" autocomplete="given-name" value="${window.PathwayCore.esc(state.firstName)}" required maxlength="60"></div><div class="field-group"><label for="auth-last-name">Last name</label><input id="auth-last-name" class="text-input" name="lastName" autocomplete="family-name" value="${window.PathwayCore.esc(state.lastName)}" required maxlength="60"></div></div>` : ''}<div class="field-group"><label for="auth-email">${isInvite ? 'Invited email' : 'Work email'}</label><input id="auth-email" class="text-input" name="email" type="email" autocomplete="email" placeholder="you@company.com" value="${window.PathwayCore.esc(email)}" ${isInvite ? 'readonly' : ''} required></div><div class="field-group"><label for="auth-password">Password</label><input id="auth-password" class="text-input" name="password" type="password" autocomplete="${state.mode === 'signup' ? 'new-password' : 'current-password'}" minlength="8" placeholder="At least 8 characters" required></div><button class="btn btn-primary auth-submit" id="auth-submit" type="submit" ${busy ? 'disabled' : ''}>${busy ? 'Please wait…' : state.mode === 'signup' ? isInvite ? 'Create account and join →' : 'Create account →' : isInvite ? 'Sign in and join →' : 'Sign in →'}</button></form><p class="auth-legal">${isInvite ? 'Pathway will only add you to the invited workspace after you confirm the invited email address. You can leave later without deleting your account.' + (state.mode === 'signup' ? ' ' + legalConsentHtml('creating an account') : '') : legalConsentHtml(state.mode === 'signup' ? 'creating an account' : 'signing in')}</p></div></section></main>${isInvite ? '' : howItWorksHtml()}`;
+    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">A calmer way to hire</div><h1>Hiring made organized</h1><p>Build application flows, share role links and review every candidate in one place.</p><div class="auth-feature-list"><div class="auth-feature"><span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v10M18 11c0 4-6 3-12 6"/></svg></span>Branching flows that adapt to every answer</div><div class="auth-feature"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span>One public link per role, ready to share</div><div class="auth-feature"><span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/></svg></span>A shared board to review candidates with your team</div></div></div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">${isInvite ? 'Workspace invitation' : state.mode === 'signup' ? 'Get started' : 'Welcome back'}</div><h2>${isInvite ? `Join ${window.PathwayCore.esc(invitePreview.workspaceName)}` : state.mode === 'signup' ? 'Create your account' : 'Sign in to Pathway'}</h2><p class="auth-card-intro">${isInvite ? `Use the invited email address to join ${window.PathwayCore.esc(invitePreview.workspaceName)}. You can belong to several workspaces and create your own whenever you like.` : state.mode === 'signup' ? 'Start with a private workspace for your company.' : 'Pick up where you left off.'}</p>${isInvite ? '<div class="auth-success" role="status">This link is valid for the invited email address. It expires in 7 days and can be revoked by a team manager.</div>' : `<div class="auth-tabs"><button class="auth-tab ${state.mode === 'signup' ? 'active' : ''}" data-mode="signup" type="button">Create account</button><button class="auth-tab ${state.mode === 'signin' ? 'active' : ''}" data-mode="signin" type="button">Sign in</button></div>`}${successMessage ? `<div class="auth-success" role="status">${window.PathwayCore.esc(successMessage)}</div>` : ''}<div class="auth-error ${errorMessage ? 'show' : ''}" role="alert">${errorMessage ? window.PathwayCore.esc(errorMessage) : ''}</div><form id="auth-form">${state.mode === 'signup' && !isInvite ? `<div class="field-group"><label for="auth-workspace">Company / workspace name</label><input id="auth-workspace" class="text-input" name="workspaceName" autocomplete="organization" placeholder="e.g. Northstar Studio" value="${window.PathwayCore.esc(state.workspaceName)}" required maxlength="120"></div>` : ''}${state.mode === 'signup' ? `<div class="field-row"><div class="field-group"><label for="auth-first-name">First name</label><input id="auth-first-name" class="text-input" name="firstName" autocomplete="given-name" value="${window.PathwayCore.esc(state.firstName)}" required maxlength="60"></div><div class="field-group"><label for="auth-last-name">Last name</label><input id="auth-last-name" class="text-input" name="lastName" autocomplete="family-name" value="${window.PathwayCore.esc(state.lastName)}" required maxlength="60"></div></div>` : ''}<div class="field-group"><label for="auth-email">${isInvite ? 'Invited email' : 'Work email'}</label><input id="auth-email" class="text-input" name="email" type="email" autocomplete="email" placeholder="you@company.com" value="${window.PathwayCore.esc(email)}" ${isInvite ? 'readonly' : ''} required></div><div class="field-group"><label for="auth-password">Password</label><input id="auth-password" class="text-input" name="password" type="password" autocomplete="${state.mode === 'signup' ? 'new-password' : 'current-password'}" minlength="8" placeholder="At least 8 characters" required></div><button class="btn btn-primary auth-submit" id="auth-submit" type="submit" ${busy ? 'disabled' : ''}>${busy ? 'Please wait…' : state.mode === 'signup' ? isInvite ? 'Create account and join →' : 'Create account →' : isInvite ? 'Sign in and join →' : 'Sign in →'}</button></form><p class="auth-legal">${isInvite ? 'Pathway will only add you to the invited workspace after you confirm the invited email address. You can leave later without deleting your account.' + (state.mode === 'signup' ? ' ' + legalConsentHtml('creating an account') : '') : legalConsentHtml(state.mode === 'signup' ? 'creating an account' : 'signing in')}</p></div></section></main>${isInvite ? '' : howItWorksHtml()}`;
     if (isInvite) root.querySelector('.auth-success')?.insertAdjacentHTML('afterend', `<div class="auth-tabs"><button class="auth-tab ${state.mode === 'signup' ? 'active' : ''}" data-mode="signup" type="button">New account</button><button class="auth-tab ${state.mode === 'signin' ? 'active' : ''}" data-mode="signin" type="button">Already registered? Sign in</button></div>`);
     root.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => {
       if (busy || state.mode === button.dataset.mode) return;
@@ -84,8 +84,7 @@
       root.querySelector('#continue-without-invite')?.addEventListener('click', async () => {
         clearInviteUrl(); invitePreview = null; state.mode = 'signup'; state.password = '';
         const context = await window.PathwayBackend.bootstrap();
-        if (context.session && context.workspace) onAuthenticated(context);
-        else if (context.session) { state.email = context.user?.email || state.email; renderWorkspaceSetup(); }
+        if (context.session) onAuthenticated(context);
         else renderAuth();
       });
     }
@@ -108,36 +107,6 @@
       });
     }
   }
-  function renderWorkspaceSetup(errorMessage = '') {
-    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Your next chapter</div><h1>Create your own workspace.</h1><p>Your Pathway account remains yours. Choose a workspace name to get started as its owner.</p></div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Workspace setup</div><h2>Start a private workspace</h2><p class="auth-card-intro">You are signed in as ${window.PathwayCore.esc(state.email)}. Creating a workspace does not delete your existing account.</p><div class="auth-error ${errorMessage ? 'show' : ''}" role="alert">${errorMessage ? window.PathwayCore.esc(errorMessage) : ''}</div><form id="workspace-form"><div class="field-group"><label for="setup-workspace">Company / workspace name</label><input id="setup-workspace" class="text-input" name="workspaceName" autocomplete="organization" maxlength="120" required placeholder="e.g. Northstar Studio" value="${window.PathwayCore.esc(state.workspaceName)}"></div><button class="btn btn-primary auth-submit" type="submit" ${busy ? 'disabled' : ''}>${busy ? 'Please wait…' : 'Create workspace →'}</button></form><button class="btn btn-quiet auth-submit" id="setup-signout" type="button">Sign out</button><p class="auth-legal">You can join an existing team from an invitation link, or create your own workspace.</p></div></section></main>`;
-    root.querySelector('#workspace-form').addEventListener('submit', async event => {
-      event.preventDefault(); if (busy) return;
-      const data = new FormData(event.currentTarget);
-      state.workspaceName = String(data.get('workspaceName') || '').trim();
-      busy = true; renderWorkspaceSetup();
-      try {
-        await window.PathwayBackend.createWorkspace(state.workspaceName);
-        const context = await window.PathwayBackend.bootstrap();
-        busy = false; onAuthenticated(context);
-      } catch (error) { busy = false; renderWorkspaceSetup(friendlyError(error)); }
-    });
-    root.querySelector('#setup-signout').addEventListener('click', async () => {
-      await window.PathwayBackend.signOut(); state = { mode: 'signup', workspaceName: '', firstName: '', lastName: '', email: '', password: '' }; inviteToken = ''; invitePreview = null; renderAuth();
-    });
-    const deleteAccountButton = document.createElement('button');
-    deleteAccountButton.className = 'btn btn-quiet auth-submit';
-    deleteAccountButton.id = 'setup-delete-account';
-    deleteAccountButton.type = 'button';
-    deleteAccountButton.textContent = 'Delete account…';
-    root.querySelector('#setup-signout')?.insertAdjacentElement('afterend', deleteAccountButton);
-    deleteAccountButton.addEventListener('click', () => showAccountDeletionConfirmation({ isOwner: false, workspaceName: '', email: state.email }));
-  }
-  function renderInviteConflict(message) {
-    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Workspace invitation</div><h1>One workspace per account.</h1><p>To join this team, this account must first leave its current workspace. The existing workspace owner cannot leave their own workspace.</p></div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Invitation not accepted</div><h2>Check your account</h2><div class="auth-error show" role="alert">${window.PathwayCore.esc(message)}</div><p class="auth-card-intro">Sign out, then sign in with the email address invited to this workspace.</p><button class="btn btn-primary auth-submit" id="invite-conflict-signout">Sign out</button></div></section></main>`;
-    root.querySelector('#invite-conflict-signout').addEventListener('click', async () => {
-      try { await window.PathwayBackend.signOut(); } finally { state = { mode: 'signup', workspaceName: '', firstName: '', lastName: '', email: '', password: '' }; renderAuth(); }
-    });
-  }
   function renderInviteAcceptanceFailure(message) {
     root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">Workspace invitation</div><h1>Your account is ready.</h1><p>Pathway couldn't finish adding this account to the invited workspace automatically.</p></div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">Finish joining your team</div><h2>We couldn't join this workspace</h2><div class="auth-error show" role="alert">${window.PathwayCore.esc(message)}</div><p class="auth-card-intro">Try again. If the invitation expired, was revoked, or the workspace no longer has Premium access, ask its manager to send a new invitation.</p><button class="btn btn-primary auth-submit" id="retry-team-acceptance" type="button">Try again</button><button class="btn btn-quiet auth-submit" id="team-acceptance-signout" type="button">Sign out</button></div></section></main>`;
     root.querySelector('#retry-team-acceptance')?.addEventListener('click', () => window.location.reload());
@@ -151,8 +120,7 @@
       clearInviteUrl(); invitePreview = null; state.mode = 'signup';
       try {
         const context = await window.PathwayBackend.bootstrap();
-        if (context.session && context.workspace) onAuthenticated(context);
-        else if (context.session) { state.email = context.user?.email || state.email; renderWorkspaceSetup(); }
+        if (context.session) onAuthenticated(context);
         else renderAuth();
       } catch (error) { renderAuth(friendlyError(error)); }
     });
@@ -170,27 +138,22 @@
     let context = await window.PathwayBackend.bootstrap();
     if (!context.session) throw new Error('Please sign in again to continue.');
     if (inviteToken) {
-      if (context.workspace) throw new Error('This account already belongs to a workspace. Leave it first, or sign in with the invited email account.');
-      await window.PathwayBackend.acceptTeamInvitation(inviteToken);
+      // An account that already has workspaces simply joins one more; the invited workspace becomes the current one.
+      const joinedInvite = await window.PathwayBackend.acceptTeamInvitation(inviteToken);
       clearInviteUrl();
-      context = await window.PathwayBackend.bootstrap();
+      context = await window.PathwayBackend.bootstrap(joinedInvite.workspaceId);
     }
     context = await acceptPendingTeamIfNeeded(context);
-    if (!context.workspace) {
-      busy = false;
-      state.email = context.user?.email || state.email;
-      renderWorkspaceSetup();
-      return;
-    }
+    // No workspace is fine: the app shows its empty screen, with Settings and a button to create one.
     busy = false;
     onAuthenticated(context);
   }
   async function acceptPendingTeamIfNeeded(context) {
-    if (context.workspace || context.user?.user_metadata?.pathway_team_invite_pending !== true) return context;
+    if (context.user?.user_metadata?.pathway_team_invite_pending !== true) return context;
     const result = await window.PathwayBackend.acceptPendingTeamInvitation();
     clearInviteUrl();
     if (!result.accepted) return context;
-    const joined = await window.PathwayBackend.bootstrap();
+    const joined = await window.PathwayBackend.bootstrap(result.workspaceId);
     if (!joined.workspace) throw new Error('Your invitation was accepted, but the workspace could not be loaded yet.');
     return joined;
   }
@@ -216,9 +179,7 @@
       await finishAuthentication();
     } catch (error) {
       busy = false;
-      const message = friendlyError(error);
-      if (inviteToken && /already belongs to a workspace/i.test(message)) renderInviteConflict(message);
-      else renderAuth(message);
+      renderAuth(friendlyError(error));
     }
   }
   function clearPasswordRecoveryUrl() {
@@ -297,29 +258,21 @@
         return;
       }
       if (context.session) {
-        if (inviteToken && !context.workspace) {
+        if (inviteToken) {
           try {
-            await window.PathwayBackend.acceptTeamInvitation(inviteToken);
+            const joinedInvite = await window.PathwayBackend.acceptTeamInvitation(inviteToken);
             clearInviteUrl();
-            onAuthenticated(await window.PathwayBackend.bootstrap());
+            onAuthenticated(await window.PathwayBackend.bootstrap(joinedInvite.workspaceId));
             return;
           } catch (error) {
             renderAuth(friendlyError(error));
             return;
           }
         }
-        if (inviteToken && context.workspace) { renderInviteConflict('This account already belongs to a workspace. Leave it first, or sign out and reopen the invitation with the invited account.'); return; }
-        if (!context.workspace) {
+        if (!context.workspace && context.user?.user_metadata?.pathway_team_invite_pending === true) {
           state.email = context.user?.email || '';
-          if (context.user?.user_metadata?.pathway_team_invite_pending === true) {
-            try {
-              const joined = await acceptPendingTeamIfNeeded(context);
-              if (joined.workspace) onAuthenticated(joined);
-              else renderWorkspaceSetup();
-            } catch (error) { renderInviteAcceptanceFailure(friendlyError(error)); }
-            return;
-          }
-          renderWorkspaceSetup();
+          try { onAuthenticated(await acceptPendingTeamIfNeeded(context)); }
+          catch (error) { renderInviteAcceptanceFailure(friendlyError(error)); }
           return;
         }
         onAuthenticated(context); return;
@@ -332,12 +285,16 @@
   }
   function showAccountDeletionConfirmation(options = {}) {
     if (!modalRoot) return;
-    const isOwner = Boolean(options.isOwner);
-    const workspaceName = String(options.workspaceName || '');
+    const ownedNames = Array.isArray(options.ownedWorkspaceNames) ? options.ownedWorkspaceNames.map(String) : (options.isOwner && options.workspaceName ? [String(options.workspaceName)] : []);
+    const isOwner = ownedNames.length > 0;
+    const workspaceName = ownedNames.length === 1 ? ownedNames[0] : (ownedNames.length ? '' : String(options.workspaceName || ''));
     const email = String(options.email || state.email || '');
     const workspaceLabel = workspaceName ? ` ${window.PathwayCore.esc(workspaceName)}` : '';
-    const title = isOwner ? `Delete your account and${workspaceLabel}?` : 'Permanently delete your account?';
-    const explanation = isOwner
+    const title = ownedNames.length > 1 ? `Delete your account and ${ownedNames.length} workspaces?` : isOwner ? `Delete your account and${workspaceLabel}?` : 'Permanently delete your account?';
+    const ownedList = ownedNames.length > 1 ? ownedNames.map(name => window.PathwayCore.esc(name)).join(', ') : '';
+    const explanation = ownedNames.length > 1
+      ? `This permanently deletes your Pathway account and every workspace you own (${ownedList}), including their job flows, public job pages, candidate applications, private resumes, invitations, and all member access. The subscription of each of these workspaces will be canceled immediately; unused paid time is not automatically refunded. Workspaces where you are only a member stay with their owners and teams. This action is irreversible.`
+      : isOwner
       ? `This permanently deletes your Pathway account and workspace${workspaceLabel}, including job flows, public job pages, candidate applications, private resumes, invitations, and all member access. Any subscription attached to the workspace will be canceled immediately; unused paid time is not automatically refunded. This action is irreversible.`
       : workspaceName
         ? `This permanently deletes your Pathway account and removes your access and membership from${workspaceLabel}. The workspace, job flows, candidate applications, private resumes, and subscription remain for the owner and team. Any pending invitations you sent will be revoked. This action is irreversible.`
@@ -380,5 +337,5 @@
     });
     passwordInput.focus();
   }
-  window.PathwayAuth = { start, renderAuth, renderWorkspaceSetup, showLoading, showAccountDeletionConfirmation };
+  window.PathwayAuth = { start, renderAuth, showLoading, showAccountDeletionConfirmation };
 })();
