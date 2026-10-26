@@ -54,5 +54,5 @@ export const DIVERSITY: Record<string, string[]> = {
   "More than one of these",
   "Another disability or condition",
   "Prefer not to say"
- ]
+ ],
 };

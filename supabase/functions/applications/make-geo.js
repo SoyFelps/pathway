@@ -13,7 +13,7 @@ export const PRONOUN_OTHER = ${JSON.stringify(G.PRONOUN_OTHER)};
 export const PRONOUN_OTHER_MAX = ${G.PRONOUN_OTHER_MAX};
 // Voluntary self-identification answers (the "Diversity questions" page). Every question lists "Prefer not to say".
 export const DIVERSITY_KEYS: string[] = ${JSON.stringify(G.DIVERSITY_KEYS)};
-export const DIVERSITY: Record<string, string[]> = ${JSON.stringify(Object.fromEntries(G.DIVERSITY_KEYS.map(key => [key, G.DIVERSITY[key].options])), null, 1)};
+export const DIVERSITY: Record<string, string[]> = ${JSON.stringify(Object.fromEntries(G.DIVERSITY_KEYS.map(key => [key, G.DIVERSITY[key].options])), null, 1).slice(0, -2) + ',\n}'};
 `;
 fs.writeFileSync(path.join(__dirname, 'geo.ts'), out);
 console.log('geo.ts written:', G.COUNTRY_NAMES.length, 'countries');
