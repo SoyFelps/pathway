@@ -198,7 +198,8 @@ test('the diversity questions: a second, voluntary page with "Prefer not to say"
 test('the diversity answers are validated by the server and kept apart from candidate_info (hidden from reviewers)', () => {
   const ts = read('supabase/functions/applications/geo.ts');
   assert.deepEqual(JSON.parse(ts.match(/DIVERSITY_KEYS: string\[\] = (\[[^;]*\]);/)[1]), plain(G.DIVERSITY_KEYS));
-  const served = JSON.parse(ts.match(/DIVERSITY: Record<string, string\[\]> = (\{[^;]*\});/)[1]);
+  // the generated TypeScript object ends with a trailing comma (valid TS, not valid JSON): drop it before parsing
+  const served = JSON.parse(ts.match(/DIVERSITY: Record<string, string\[\]> = (\{[^;]*\});/)[1].replace(/,\s*\}$/, '}'));
   G.DIVERSITY_KEYS.forEach(key => assert.deepEqual(served[key], plain(G.DIVERSITY[key].options), key));
   const index = read('supabase/functions/applications/index.ts');
   assert.match(index, /if \(configured\.diversity === true\)/, 'only when the employer asked');
