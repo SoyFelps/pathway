@@ -1547,8 +1547,59 @@
     root.querySelector('#open-my-team')?.addEventListener('click', () => { void renderMyTeam(); });
   }
 
+  // The access options of a person or an invitation are a multiselect: the checkboxes (unchanged) live in a dropdown, the chosen ones show as chips.
+  function paintPermissionMulti(multi) {
+    const chosen = [...multi.querySelectorAll('.perm-multi-panel label')].filter(label => label.querySelector('input').checked).map(label => label.querySelector('span').textContent);
+    multi.querySelector('.perm-multi-summary').innerHTML = chosen.length ? chosen.map(name => '<span class="perm-chip">' + esc(name) + '</span>').join('') : '<span class="perm-none">No access</span>';
+    multi.dataset.painted = '1';
+  }
+  function closePermissionMultis(except = null) {
+    root.querySelectorAll('.perm-multi').forEach(multi => {
+      if (multi === except) return;
+      const panel = multi.querySelector('.perm-multi-panel');
+      if (panel.hidden) return;
+      panel.hidden = true; multi.querySelector('.perm-multi-btn').setAttribute('aria-expanded', 'false');
+    });
+  }
+  // While a change is being saved the options are locked: say so, above them.
+  function setPermissionBusy(card, busy) {
+    card.querySelectorAll('.perm-multi').forEach(multi => {
+      const notice = multi.querySelector('.perm-multi-busy');
+      if (notice) notice.hidden = !busy;
+      multi.classList.toggle('is-busy', busy);
+    });
+  }
+  function bindPermissionMultis() {
+    const paintNew = () => root.querySelectorAll('.perm-multi:not([data-painted])').forEach(paintPermissionMulti);
+    new MutationObserver(paintNew).observe(root, { childList: true, subtree: true });
+    root.addEventListener('click', event => {
+      const button = event.target instanceof Element ? event.target.closest('.perm-multi-btn') : null;
+      if (!button) return;
+      const multi = button.closest('.perm-multi'), panel = multi.querySelector('.perm-multi-panel');
+      const open = panel.hidden;
+      closePermissionMultis(open ? multi : null);
+      panel.hidden = !open; button.setAttribute('aria-expanded', String(open));
+    });
+    root.addEventListener('change', event => {
+      const multi = event.target instanceof Element ? event.target.closest('.perm-multi') : null;
+      if (multi) paintPermissionMulti(multi);
+    });
+    root.addEventListener('keydown', event => {
+      const multi = event.target instanceof Element ? event.target.closest('.perm-multi') : null;
+      if (multi && event.key === 'Escape' && !multi.querySelector('.perm-multi-panel').hidden) { event.preventDefault(); closePermissionMultis(); multi.querySelector('.perm-multi-btn').focus(); }
+    });
+    root.addEventListener('focusout', event => {
+      const multi = event.target instanceof Element ? event.target.closest('.perm-multi') : null;
+      if (multi && event.relatedTarget instanceof Element && !multi.contains(event.relatedTarget)) closePermissionMultis();
+    });
+    document.addEventListener('pointerdown', event => {
+      if (!(event.target instanceof Element) || !event.target.closest('.perm-multi')) closePermissionMultis();
+    }, true);
+    paintNew();
+  }
+
   function teamPermissionControls(permissions = {}, disabled = false) {
-    return `<div class="team-permission-grid"><label><input type="checkbox" data-permission="flows" ${permissions.can_flows !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Flows</span></label><label><input type="checkbox" data-permission="applicants" ${permissions.can_applicants !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Candidates</span></label><label><input type="checkbox" data-permission="team" ${permissions.can_manage_team !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Team</span></label><label><input type="checkbox" data-permission="stages" ${permissions.can_customize_stages !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Customize stages</span></label><label><input type="checkbox" data-permission="reports" ${permissions.can_view_reports !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Reports</span></label><label><input type="checkbox" data-permission="diversity" ${permissions.can_diversity === true ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Diversity</span></label></div>`;
+    return `<div class="perm-multi"><button type="button" class="perm-multi-btn" aria-haspopup="true" aria-expanded="false" aria-label="Choose what this person can access"><span class="perm-multi-summary"></span>${CHEVRON}</button><div class="perm-multi-panel" role="group" aria-label="Access" hidden><div class="perm-multi-busy" role="status" aria-live="polite" hidden>Applying changes, please wait.</div><label><input type="checkbox" data-permission="flows" ${permissions.can_flows !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Flows</span></label><label><input type="checkbox" data-permission="applicants" ${permissions.can_applicants !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Candidates</span></label><label><input type="checkbox" data-permission="team" ${permissions.can_manage_team !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Team</span></label><label><input type="checkbox" data-permission="stages" ${permissions.can_customize_stages !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Customize stages</span></label><label><input type="checkbox" data-permission="reports" ${permissions.can_view_reports !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Reports</span></label><label><input type="checkbox" data-permission="diversity" ${permissions.can_diversity === true ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Diversity</span></label></div></div>`;
   }
 
   // Name on top and e-mail below it (the e-mail always stays visible in My Team). Without a known name only the e-mail shows.
@@ -1565,7 +1616,7 @@
     const paused = !subscription?.active;
     // Everyone on the team can see who owns the workspace (managers get it with the team data, members from the team overview).
     const ownerEmail = data.owner?.email || teamDirectory.find(person => person.isOwner)?.email || data.readOnlyTeam?.find(person => person.isOwner)?.email || (isOwner ? user.email : '');
-    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>${manager ? `Manage access to ${esc(workspaceLabel(workspace))}. Premium includes up to 3 additional members at no extra seat charge.` : `See who has access to ${esc(workspaceLabel(workspace))}.`}</p>${isOwner ? `<button class="btn btn-sm team-rename" type="button" data-ws-rename="${esc(workspace.id)}">Rename workspace</button>` : ''}</div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>No team access</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>View only</strong><p>You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All are enabled by default, except Diversity.</small></div><div class="team-permission-grid"><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label><label><input type="checkbox" data-invite-permission="stages" checked><span>Customize stages</span></label><label><input type="checkbox" data-invite-permission="reports" checked><span>Reports</span></label><label><input type="checkbox" data-invite-permission="diversity"><span>Diversity</span></label></div><p class="team-permission-hint">Diversity shows combined percentages from candidates’ voluntary self-identification answers. It is off by default; give it to someone who does not move candidates between stages.</p><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${ownerEmail ? `<article class="team-person team-owner"><div class="team-person-heading"><div>${teamPersonLines(teamDirectory.find(person => person.isOwner)?.userId || (isOwner ? user.id : ''), ownerEmail)}<span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
+    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>${manager ? `Manage access to ${esc(workspaceLabel(workspace))}. Premium includes up to 3 additional members at no extra seat charge.` : `See who has access to ${esc(workspaceLabel(workspace))}.`}</p>${isOwner ? `<button class="btn btn-sm team-rename" type="button" data-ws-rename="${esc(workspace.id)}">Rename workspace</button>` : ''}</div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>No team access</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>View only</strong><p>You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All are enabled by default, except Diversity.</small></div><div class="perm-multi"><button type="button" class="perm-multi-btn" aria-haspopup="true" aria-expanded="false" aria-label="Choose what this person can access"><span class="perm-multi-summary"></span>${CHEVRON}</button><div class="perm-multi-panel" role="group" aria-label="Access" hidden><div class="perm-multi-busy" role="status" aria-live="polite" hidden>Applying changes, please wait.</div><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label><label><input type="checkbox" data-invite-permission="stages" checked><span>Customize stages</span></label><label><input type="checkbox" data-invite-permission="reports" checked><span>Reports</span></label><label><input type="checkbox" data-invite-permission="diversity"><span>Diversity</span></label></div></div><p class="team-permission-hint">Diversity shows combined percentages from candidates’ voluntary self-identification answers. It is off by default; give it to someone who does not move candidates between stages.</p><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${ownerEmail ? `<article class="team-person team-owner"><div class="team-person-heading"><div>${teamPersonLines(teamDirectory.find(person => person.isOwner)?.userId || (isOwner ? user.id : ''), ownerEmail)}<span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
   }
 
   function renderMyTeamLoadingMarkup() {
@@ -1638,6 +1689,7 @@
     const inputs = [...card.querySelectorAll('[data-permission]')];
     const status = card.querySelector('.team-save-status');
     inputs.forEach(input => { input.disabled = true; });
+    setPermissionBusy(card, true);
     if (status) status.textContent = 'Saving…';
     try {
       const permissions = Object.fromEntries(inputs.map(input => [input.dataset.permission, input.checked]));
@@ -1645,20 +1697,21 @@
       if (card.dataset.memberId === user.id) { await renderMyTeam(); return; }
       if (status) status.textContent = 'Permissions saved';
     } catch (error) { if (status) status.textContent = error.message || 'Could not save'; }
-    finally { inputs.forEach(input => { input.disabled = false; }); }
+    finally { inputs.forEach(input => { input.disabled = false; }); setPermissionBusy(card, false); }
   }
 
   async function saveInvitationPermissions(card) {
     const inputs = [...card.querySelectorAll('[data-permission]')];
     const status = card.querySelector('.team-save-status');
     inputs.forEach(input => { input.disabled = true; });
+    setPermissionBusy(card, true);
     if (status) status.textContent = 'Saving…';
     try {
       const permissions = Object.fromEntries(inputs.map(input => [input.dataset.permission, input.checked]));
       await window.PathwayBackend.updateTeamInvitationPermissions(card.dataset.invitationId, permissions);
       if (status) status.textContent = 'Invitation permissions saved';
     } catch (error) { if (status) status.textContent = error.message || 'Could not save'; }
-    finally { inputs.forEach(input => { input.disabled = false; }); }
+    finally { inputs.forEach(input => { input.disabled = false; }); setPermissionBusy(card, false); }
   }
 
   async function revokeTeamInvite(id) {
@@ -3173,6 +3226,7 @@
 
   window.addEventListener('pointerup', () => { if (connectFrom && window.pendingPointer) { connectFrom = null; window.pendingPointer = null; drawCanvas(); } });
   bindHeaderMenus();
+  bindPermissionMultis();
   // Removed from the workspace that is open (for example by its owner): say so and open another one.
   window.addEventListener('pathway:workspace-lost', () => {
     showToast('You no longer have access to this workspace. Opening another one…', 4500);

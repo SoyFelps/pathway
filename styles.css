@@ -728,3 +728,21 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .team-rename{margin-top:10px}
 @media(max-width:560px){.settings-workspace-row{flex-wrap:wrap}.settings-workspace-actions{width:100%;justify-content:flex-end}}
 .modal .workspace-limit-note{color:var(--red);font-weight:700;font-size:14px;line-height:1.5;margin:6px 0 4px}
+/* Team permissions as a multiselect (same checkboxes, shown in a dropdown) */
+.perm-multi{position:relative;margin:8px 0 13px;max-width:560px}
+.perm-multi-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:42px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;text-align:left;transition:border-color .16s,background .16s}
+.perm-multi-btn:hover{border-color:var(--border-strong);background:var(--bg-page)}
+.perm-multi-btn[aria-expanded="true"]{border-color:var(--green-soft);background:var(--tint)}
+.perm-multi-btn:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.perm-multi-summary{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.perm-chip{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:var(--tint);border:1px solid var(--line);color:var(--green);font-size:11.5px;font-weight:600}
+.perm-none{color:var(--muted);font-size:12px}
+.perm-multi-panel{position:absolute;left:0;top:calc(100% + 6px);z-index:40;width:max(100%,260px);max-width:calc(100vw - 32px);background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px var(--shadow-md);padding:6px;display:flex;flex-direction:column;gap:2px}
+.perm-multi-panel[hidden]{display:none}
+.perm-multi-panel label{display:flex;align-items:center;gap:10px;padding:9px 10px;border:0;border-radius:8px;background:transparent;font-size:13px;color:var(--text-body);cursor:pointer}
+.perm-multi-panel label:hover{background:var(--tint)}
+.perm-multi-panel input[type="checkbox"]{flex:none;accent-color:var(--green)}
+.perm-multi-busy{margin:2px 4px 6px;padding:8px 10px;border-radius:8px;background:var(--tint);font-size:12.5px;font-weight:700;color:var(--green)}
+.perm-multi-busy[hidden]{display:none}
+.perm-multi.is-busy .perm-multi-btn{cursor:progress}
+.perm-multi.is-busy .perm-multi-panel label{cursor:progress;opacity:.55}

@@ -131,3 +131,12 @@ test('being removed from the open workspace shows a notice and opens another one
   assert.match(builder, /addEventListener\('pathway:workspace-lost'/);
   assert.match(builder, /You no longer have access to this workspace\. Opening another one…/);
 });
+
+test('team permissions are a multiselect: same checkboxes and handlers, shown in a dropdown with chips', () => {
+  assert.equal((builder.match(/class="perm-multi"/g) || []).length, 2, 'the invite form and every person/invitation card share it');
+  assert.match(builder, /data-invite-permission="flows" checked/);
+  assert.match(builder, /data-permission="flows"/);
+  assert.match(builder, /function paintPermissionMulti\(multi\)/);
+  assert.match(builder, /bindPermissionMultis\(\);/);
+  assert.doesNotMatch(builder, /team-permission-grid/);
+});
