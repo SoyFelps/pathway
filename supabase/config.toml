@@ -18,3 +18,12 @@ verify_jwt = false
 
 [functions.delete-account]
 verify_jwt = true
+
+[functions.ai-interview]
+# Signed-in reviewers re-send, cancel or retry an AI interview; the function also checks the Candidates permission through the database.
+verify_jwt = true
+
+[functions.ai-interview-webhook]
+# The callers are Witcher (signed notices) and a database job (the 10-second tick), not Pathway users, so there is no user JWT.
+# Notices are checked with WITCHER_WEBHOOK_SECRET inside the function. Never turn this on: Witcher would get 401 and no result would arrive.
+verify_jwt = false

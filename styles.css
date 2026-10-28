@@ -73,6 +73,8 @@
   --stage-team-fit:#8271b3;
   --stage-skill-fit:#4e8da2;
   /* Status dots */
+  --positive-bg:#e1f0e3;
+  --positive-text:#2c6a41;
   --status-ok:#85b36d;
   --published-dot:#4f865d;
   /* Translucent: focus rings, shadows, overlays */
@@ -148,7 +150,7 @@
 .applicant-review-content .applicant-detail-actions{justify-content:space-between;align-items:flex-end}
 .applicant-review-content .applicant-info-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .applicant-resume-actions{display:flex;gap:8px;flex-wrap:wrap}
-.applicant-review-right{position:relative;display:flex;align-items:stretch;justify-content:stretch;min-width:0;min-height:0;overflow:hidden;background:var(--tint)}
+.applicant-review-right{position:relative;display:flex;flex-direction:column;align-items:stretch;justify-content:stretch;min-width:0;min-height:0;overflow:hidden;background:var(--tint)}
 .applicant-preview-empty{width:min(100%,420px);margin:auto;padding:34px;text-align:center}
 .applicant-preview-icon{width:48px;height:48px;margin:0 auto 16px;border-radius:14px;display:grid;place-items:center;background:var(--mint-strong);color:var(--green);font-size:22px}
 .applicant-preview-empty h3{margin:0 0 8px;font:700 17px var(--display);color:var(--text-strong)}
@@ -746,3 +748,43 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .perm-multi-busy[hidden]{display:none}
 .perm-multi.is-busy .perm-multi-btn{cursor:progress}
 .perm-multi.is-busy .perm-multi-panel label{cursor:progress;opacity:.55}
+
+/* AI Interview (Witcher): tag on the card, tab and panel in the candidate view, questions field of a job */
+.applicant-card-ai{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:7px 0 3px}
+.ai-chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;background:var(--tint);color:var(--green-text);font-size:10px;font-weight:650;white-space:nowrap}
+.ai-chip.is-wait{background:var(--node-single-bg);color:var(--stage-ai-interview)}
+.ai-chip.is-warn{background:var(--amber-bg);color:var(--amber-text)}
+.ai-chip.is-muted{background:var(--border-subtle);color:var(--text-subtle)}
+.ai-impression{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;white-space:nowrap}
+.ai-impression.is-positive{background:var(--positive-bg);color:var(--positive-text)}
+.ai-impression.is-negative{background:var(--red-bg);color:var(--red-text)}
+.applicant-right-tabs{display:flex;gap:4px;flex:0 0 auto;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--border-subtle)}
+.applicant-right-body{position:relative;flex:1 1 auto;min-height:0;min-width:0;display:flex}
+.applicant-right-pane{position:absolute;inset:0;display:flex;align-items:stretch;justify-content:stretch;min-width:0;min-height:0}
+.applicant-right-pane.is-hidden{display:none}
+.applicant-ai-panel{flex:1 1 auto;min-width:0;overflow-y:auto;background:var(--surface);padding:0 0 28px}
+.applicant-ai-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px clamp(16px,3vw,32px) 8px}
+.applicant-ai-head h3{margin:4px 0 0;font:700 18px var(--display);color:var(--text-strong);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.applicant-ai-body{padding:6px clamp(16px,3vw,32px) 0;color:var(--text-body);font-size:13px;line-height:1.6}
+.applicant-ai-body h4{margin:22px 0 8px;font:700 12px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--text-subtle)}
+.applicant-ai-body p{margin:0 0 12px}
+.applicant-ai-loading{padding:34px;color:var(--text-subtle);font-size:13px}
+.applicant-ai-close{display:none}
+.ai-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0 4px}
+.ai-confirm{display:inline-flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--text-strong)}
+.btn-danger-ghost{color:var(--red-text);border-color:var(--red-border)}
+.btn-danger-ghost:hover:not(:disabled){background:var(--red-bg);border-color:var(--red-border-strong)}
+.ai-note{margin:12px 0;padding:11px 13px;border-radius:9px;background:var(--tint);color:var(--text-strong);font-size:12px;line-height:1.6}
+.ai-note.is-warn{background:var(--amber-bg);color:var(--amber-dark);border:1px solid var(--amber-border)}
+.ai-evaluation{white-space:pre-wrap;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:var(--bg-page);color:var(--text-strong)}
+.ai-conversation{display:flex;flex-direction:column;gap:10px}
+.ai-msg{max-width:92%;padding:10px 13px;border-radius:12px;border:1px solid var(--line)}
+.ai-msg p{margin:3px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.ai-msg-who{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-subtle)}
+.ai-msg.is-ai{align-self:flex-start;background:var(--tint)}
+.ai-msg.is-candidate{align-self:flex-end;background:var(--surface);border-color:var(--border-strong)}
+.ai-msg .is-skipped{color:var(--text-subtle);font-style:italic}
+.ai-questions{display:flex;flex-direction:column;gap:8px}
+.ai-question-row{display:flex;align-items:center;gap:6px}
+.ai-question-row .text-input{flex:1 1 auto;min-width:0}
+@media(max-width:760px){.applicant-ai-close{display:inline-flex}.applicant-right-tabs{padding:0 10px}}

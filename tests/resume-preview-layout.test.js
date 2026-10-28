@@ -38,7 +38,7 @@ test('files that cannot be previewed still offer the download, in the placeholde
 test('on desktop the preview still opens by itself, and Preview resume reopens it after Close preview', () => {
   const d = details();
   assert.ok(d.includes('if (previewButton && !phoneLayout) void loadPreview(previewButton);'), 'auto-open only when the screen is not a phone');
-  assert.ok(d.includes("previewButton?.addEventListener('click', () => { void loadPreview(previewButton); });"));
+  assert.ok(d.includes("previewButton?.addEventListener('click', () => { showRightPane('resume'); void loadPreview(previewButton); });"));
   assert.ok(d.includes("modalRoot.querySelector('#close-applicant-resume-preview')?.addEventListener('click', closePreview);"));
 });
 
@@ -57,7 +57,7 @@ test('on phones a bottom menu offers Preview resume and Download resume; the pre
   const bar = d.slice(barStart, d.indexOf('</section>', barStart));
   assert.ok(bar.includes('id="mobile-preview-resume"') && bar.includes('js-download-resume'), 'both options are in the bar');
   assert.ok(bar.indexOf('Preview resume') < bar.indexOf('Download resume'), 'preview first, then download');
-  assert.ok(d.includes("mobilePreviewButton?.addEventListener('click', () => { void loadPreview(mobilePreviewButton); });"));
+  assert.ok(d.includes("mobilePreviewButton?.addEventListener('click', () => { showRightPane('resume'); void loadPreview(mobilePreviewButton); });"));
   assert.ok(d.includes("reviewLayout.classList.add('is-previewing');") && d.includes("reviewLayout.classList.remove('is-previewing');"), 'Close preview returns to the information');
   const css = read('styles.css');
   const phone = css.slice(css.indexOf('/* Applicant panel on phones'));

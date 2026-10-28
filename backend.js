@@ -16,6 +16,7 @@
   const APPLICATIONS_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/applications`;
   const BILLING_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/billing`;
   const TEAM_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/team`;
+  const AI_INTERVIEW_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/ai-interview`;
   const DELETE_ACCOUNT_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/delete-account`;
   const APPLICANT_STATUSES = new Set(['failed', 'new', 'screening', 'team_fit', 'skill_fit', 'ai_interview', 'interview', 'promising', 'offer', 'withdrawn', 'hired']);
   const CUSTOM_STATUS_PATTERN = /^custom:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -86,6 +87,56 @@
     const { data, error } = await client.rpc('list_workspace_people', { p_workspace_id: workspaceId });
     if (error) throw error;
     return (data || []).map(person => ({ userId: person.user_id, email: person.email, isOwner: Boolean(person.is_owner), firstName: person.first_name || '', lastName: person.last_name || '' }));
+  }
+  // AI interview (Witcher). The questions of a job are a column of their own, never part of flow_data. The database accepts 1 to 5
+  // questions of 3 to 500 characters, so what is typed halfway (empty or very short lines) is left out of every save.
+  function cleanInterviewQuestions(value) {
+    if (!Array.isArray(value)) return [];
+    return value.map(item => String(item ?? '').replace(/\s+/g, ' ').trim().slice(0, 500)).filter(item => item.length >= 3).slice(0, 5);
+  }
+  const mapAiInterview = row => ({
+    id: row.id, workspaceId: row.workspace_id, flowId: row.flow_id, email: row.candidate_email, applicantId: row.applicant_id || null,
+    state: row.state, blockedReason: row.blocked_reason || null, sendAt: row.send_at, impression: row.impression || null,
+    evaluationReady: Boolean(row.evaluation_ready), completedAt: row.completed_at || null, createdAt: row.created_at
+  });
+  // The state of the AI interviews of the candidates this person may review (the database policy decides which). Newest first.
+  async function listAiInterviews(workspaceId, flowId = '') {
+    await requireSession();
+    let query = client.from('ai_interviews').select('id,workspace_id,flow_id,candidate_email,applicant_id,state,blocked_reason,send_at,impression,evaluation_ready,completed_at,created_at')
+      .eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(2000);
+    if (flowId) query = query.eq('flow_id', flowId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map(mapAiInterview);
+  }
+  // One call to the checked server function: status (live from Witcher), resend, cancel, reevaluate, retry. The browser never talks to Witcher.
+  async function callAiInterview(body) {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(AI_INTERVIEW_FUNCTION, { method: 'POST', headers: { apikey: config.publishableKey, 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify(body) });
+    } catch (_) { throw new Error('Could not reach the interview service. Check your connection and try again.'); }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) { const error = new Error(payload.error || 'The interview service could not complete this request.'); error.code = payload.code || null; error.retryAt = payload.retryAt || null; throw error; }
+    return payload;
+  }
+  async function getAiInterviewStatus(flowId, email) {
+    const payload = await callAiInterview({ action: 'status', flowId, email });
+    return { interview: payload.interview ? { id: payload.interview.id, flowId: payload.interview.flowId, email: payload.interview.email, state: payload.interview.state, blockedReason: payload.interview.blockedReason || null, sendAt: payload.interview.sendAt, impression: payload.interview.impression || null, evaluationReady: Boolean(payload.interview.evaluationReady), completedAt: payload.interview.completedAt || null } : null, live: payload.live || null, liveError: payload.liveError || '' };
+  }
+  const aiInterviewAction = (action, aiInterviewId) => callAiInterview({ action, aiInterviewId });
+  // Bell notices for finished interviews (one per interview and person; each person marks it seen on their own).
+  async function listAiInterviewNotices(workspaceId) {
+    await requireSession();
+    const { data, error } = await client.rpc('get_ai_interview_notices', { p_workspace_id: workspaceId });
+    if (error) throw error;
+    return (data || []).map(row => ({ id: row.ai_interview_id, flowId: row.flow_id, jobTitle: row.job_title, companyName: row.company_name, candidateName: row.candidate_name, candidateEmail: row.candidate_email, impression: row.impression || null, completedAt: row.completed_at }));
+  }
+  async function markAiInterviewNoticeSeen(aiInterviewId) {
+    await requireSession();
+    const { error } = await client.rpc('mark_ai_interview_notice_seen', { p_ai_interview_id: aiInterviewId });
+    if (error) throw error;
   }
   async function listFlowNotifications(workspaceId) {
     await requireSession();
@@ -610,17 +661,17 @@
 
   async function listFlows(workspaceId) {
     await requireSession();
-    const { data, error } = await client.from('application_flows').select('id,workspace_id,created_by,company_id,company_name,job_title,flow_data,responsible_user_ids,publication_status,active_published_flow_id,published_at,created_at,updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false });
+    const { data, error } = await client.from('application_flows').select('id,workspace_id,created_by,company_id,company_name,job_title,flow_data,responsible_user_ids,interview_questions,publication_status,active_published_flow_id,published_at,created_at,updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false });
     if (error) throw error;
-    return (data || []).map(row => ({ ...row.flow_data, id: row.flow_data.id || row.id, cloudId: row.id, workspaceId: row.workspace_id, createdBy: row.created_by, companyId: row.company_id || null, companyProfile: row.company_id ? row.flow_data.companyProfile || null : null, companyName: row.company_name, jobTitle: row.job_title, responsibleIds: Array.isArray(row.responsible_user_ids) ? row.responsible_user_ids : [], publicationStatus: row.publication_status || 'draft', activePublishedFlowId: row.active_published_flow_id || null, publishedAt: row.published_at || null, updatedAt: row.updated_at }));
+    return (data || []).map(row => ({ ...row.flow_data, id: row.flow_data.id || row.id, cloudId: row.id, workspaceId: row.workspace_id, createdBy: row.created_by, companyId: row.company_id || null, companyProfile: row.company_id ? row.flow_data.companyProfile || null : null, companyName: row.company_name, jobTitle: row.job_title, responsibleIds: Array.isArray(row.responsible_user_ids) ? row.responsible_user_ids : [], interviewQuestions: Array.isArray(row.interview_questions) ? row.interview_questions : [], publicationStatus: row.publication_status || 'draft', activePublishedFlowId: row.active_published_flow_id || null, publishedAt: row.published_at || null, updatedAt: row.updated_at }));
   }
 
   function saveFlow(flow, workspace) {
     const previous = saveQueues.get(flow.id) || Promise.resolve();
     const pending = previous.catch(() => {}).then(async () => {
       const session = await requireSession();
-      const { cloudId, workspaceId, createdBy, companyId, publicationStatus, activePublishedFlowId, publishedAt, responsibleIds, ...flowData } = flow;
-      const row = { workspace_id: workspace.id, created_by: cloudId ? (createdBy || session.user.id) : session.user.id, company_id: companyId || null, company_name: flow.companyName, job_title: flow.jobTitle, responsible_user_ids: Array.isArray(responsibleIds) ? responsibleIds : [], flow_data: flowData };
+      const { cloudId, workspaceId, createdBy, companyId, publicationStatus, activePublishedFlowId, publishedAt, responsibleIds, interviewQuestions, ...flowData } = flow;
+      const row = { workspace_id: workspace.id, created_by: cloudId ? (createdBy || session.user.id) : session.user.id, company_id: companyId || null, company_name: flow.companyName, job_title: flow.jobTitle, responsible_user_ids: Array.isArray(responsibleIds) ? responsibleIds : [], interview_questions: cleanInterviewQuestions(interviewQuestions), flow_data: flowData };
       let result;
       if (cloudId) result = await client.from('application_flows').update(row).eq('id', cloudId).eq('workspace_id', workspace.id).select('id,updated_at').single();
       else result = await client.from('application_flows').insert(row).select('id,updated_at').single();
@@ -652,7 +703,7 @@
     if (!subscription.active) throw new Error('An active subscription is required to publish job flows.');
     await saveFlow(flow, workspace);
     const session = await requireSession();
-    const { cloudId, workspaceId, createdBy, companyId, publicationStatus, activePublishedFlowId, publishedAt, responsibleIds, ...flowData } = flow;
+    const { cloudId, workspaceId, createdBy, companyId, publicationStatus, activePublishedFlowId, publishedAt, responsibleIds, interviewQuestions, ...flowData } = flow;
     const { data, error } = await client.from('published_flows').insert({
       workspace_id: workspace.id,
       flow_id: flow.cloudId,
@@ -1009,6 +1060,12 @@
     listWorkspacePeople,
     listFlowNotifications,
     markFlowNotificationSeen,
+    cleanInterviewQuestions,
+    listAiInterviews,
+    getAiInterviewStatus,
+    aiInterviewAction,
+    listAiInterviewNotices,
+    markAiInterviewNoticeSeen,
     acceptTeamInvitation,
     acceptPendingTeamInvitation,
     updateTeamMemberPermissions,

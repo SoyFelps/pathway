@@ -167,6 +167,12 @@
   // In-app notifications: one entry per job with new candidates; it disappears when this person opens that job's board.
   let notifications = [];
   let mentionNotifs = [];
+  // AI interviews (Witcher): bell notices for finished interviews, the state of each candidate's interview (key "jobId|e-mail"),
+  // and whether a candidate opened from the bell should land on the AI Interview tab.
+  let aiNotifs = [];
+  let aiInterviewMap = new Map();
+  let aiInterviewSignature = '';
+  let pendingOpenAiTab = false;
   let pendingCandidateOpen = null;
   let notifLoadedAt = 0;
   let notifTimer = null;
@@ -174,13 +180,16 @@
   const NOTIF_REFRESH_MS = 60000;
   const BELL_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
   async function refreshNotifications(force = false) {
-    if (!workspace || !hasPermission('applicants')) { notifications = []; mentionNotifs = []; paintNotifications(); return; }
+    if (!workspace || !hasPermission('applicants')) { notifications = []; mentionNotifs = []; aiNotifs = []; paintNotifications(); return; }
     if (!force && Date.now() - notifLoadedAt < 15000) return;
     try {
       notifications = await window.PathwayBackend.listFlowNotifications(workspace.id);
       notifLoadedAt = Date.now();
     } catch (error) { return; /* keep what we had; the next check tries again */ }
     try { mentionNotifs = await window.PathwayBackend.listCommentMentions(workspace.id); } catch (error) { /* keep what we had */ }
+    try { aiNotifs = await window.PathwayBackend.listAiInterviewNotices(workspace.id); } catch (error) { /* keep what we had */ }
+    // On the board, the interview tags (sent, completed, badge) follow what happened since the board was loaded.
+    if (root.querySelector('.applicants-page') && !modalRoot.innerHTML) void refreshAiInterviewTags();
     // Already looking at that job's board: show the new candidates there instead of lighting the bell.
     const onBoard = root.querySelector('.applicants-page') && !modalRoot.innerHTML;
     const showingThatJob = applicantFilter && notifications.some(item => item.flowId === applicantFilter);
@@ -191,13 +200,14 @@
   function paintNotifications() {
     const host = root.querySelector('#notif'); if (!host) return;
     const badge = host.querySelector('.notif-badge'), menu = host.querySelector('.notif-menu'), button = host.querySelector('#notif-bell');
-    const total = notifications.length + mentionNotifs.length;
+    const total = notifications.length + mentionNotifs.length + aiNotifs.length;
     badge.textContent = total > 9 ? '9+' : String(total);
     badge.hidden = !total;
     button.setAttribute('aria-label', total ? 'Notifications, ' + total + ' unread' : 'Notifications');
     const mentionItems = mentionNotifs.map(item => '<button type="button" class="notif-item" data-notif-mention-flow="' + esc(item.flowId) + '" data-notif-mention-email="' + esc(item.candidateEmail) + '"><span class="notif-text"><strong>' + esc(item.authorName) + '</strong> mentioned you in a comment</span><span class="notif-sub">' + esc(item.candidateName) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
+    const aiItems = aiNotifs.map(item => '<button type="button" class="notif-item" data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"><span class="notif-text"><strong>' + esc(item.candidateName) + '</strong> finished the AI interview</span><span class="notif-sub">' + (item.impression ? (item.impression === 'positive' ? 'Positive' : 'Negative') + ' impression' : 'Evaluation pending') + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
     menu.innerHTML = total
-      ? mentionItems + notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">There are new applications for <strong>' + esc(item.jobTitle || 'Untitled role') + '</strong></span><span class="notif-sub">' + item.newCount + (item.newCount === 1 ? ' new candidate' : ' new candidates') + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
+      ? aiItems + mentionItems + notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">There are new applications for <strong>' + esc(item.jobTitle || 'Untitled role') + '</strong></span><span class="notif-sub">' + item.newCount + (item.newCount === 1 ? ' new candidate' : ' new candidates') + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
       : '<div class="notif-empty">You are all caught up.</div>';
   }
   function mountNotificationBell() {
@@ -208,6 +218,15 @@
     const setOpen = open => { menu.hidden = !open; button.setAttribute('aria-expanded', String(open)); };
     button.addEventListener('click', () => { setOpen(menu.hidden); if (!menu.hidden) void refreshNotifications(true); });
     menu.addEventListener('click', event => {
+      const aiNotice = event.target.closest('[data-notif-ai]');
+      if (aiNotice) {
+        setOpen(false);
+        const noticeId = aiNotice.dataset.notifAi;
+        aiNotifs = aiNotifs.filter(item => item.id !== noticeId); paintNotifications();
+        window.PathwayBackend.markAiInterviewNoticeSeen(noticeId).catch(() => {});
+        pendingCandidateOpen = { flowId: aiNotice.dataset.notifAiFlow, email: String(aiNotice.dataset.notifAiEmail || '').trim().toLowerCase() };
+        pendingOpenAiTab = true; applicantFilter = pendingCandidateOpen.flowId; applicantSearch = ''; void renderApplicants(); return;
+      }
       const mention = event.target.closest('[data-notif-mention-flow]');
       if (mention) {
         setOpen(false); pendingCandidateOpen = { flowId: mention.dataset.notifMentionFlow, email: String(mention.dataset.notifMentionEmail || '').trim().toLowerCase() };
@@ -246,7 +265,162 @@
       notifTimer = setInterval(() => { if (document.visibilityState === 'visible') void refreshNotifications(true); }, NOTIF_REFRESH_MS);
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void refreshNotifications(); });
     }
-    notifications = []; notifLoadedAt = 0; mountNotificationBell();
+    notifications = []; aiNotifs = []; notifLoadedAt = 0; mountNotificationBell();
+  }
+  // ---- AI interview: tags on the cards, the tab in the candidate panel, the questions of a job -------------------------------
+  const aiInterviewKey = (flowId, email) => flowId + '|' + String(email || '').trim().toLowerCase();
+  const aiInterviewFor = (flowId, email) => aiInterviewMap.get(aiInterviewKey(flowId, email)) || null;
+  // rows arrive newest first: the first one of a candidate is the interview in play, older cancelled ones are history
+  function setAiInterviews(rows) {
+    const next = new Map();
+    for (const row of rows) { const key = aiInterviewKey(row.flowId, row.email); if (!next.has(key)) next.set(key, row); }
+    aiInterviewMap = next;
+    aiInterviewSignature = rows.map(row => row.id + row.state + (row.blockedReason || '') + (row.impression || '') + row.evaluationReady).join('|');
+  }
+  async function refreshAiInterviewTags(force = false) {
+    if (!workspace || !hasPermission('applicants')) return;
+    try {
+      const rows = await window.PathwayBackend.listAiInterviews(workspace.id, applicantFilter);
+      const before = aiInterviewSignature;
+      setAiInterviews(rows);
+      if (aiInterviewSignature !== before && root.querySelector('.applicants-page') && (force || !modalRoot.innerHTML)) renderApplicantBoard();
+    } catch (error) { /* keep what the board shows; the next check tries again */ }
+  }
+  const AI_BLOCK_TEXT = {
+    no_questions: ['Add interview questions', 'This job has no AI interview questions yet. Add them in the job details (first step); the interview goes out by itself once they are there.'],
+    no_plan: ['Premium needed', 'AI interviews are part of the Premium plan. The interview goes out by itself once the workspace has an active plan.'],
+    no_company_name: ['Company name missing', 'The company needs a name before the interview can be sent.']
+  };
+  // [label, tone] of the small tag on a candidate's card
+  function aiInterviewTag(row) {
+    switch (row.state) {
+      case 'pending': return ['Creating interview…', 'wait'];
+      case 'blocked': return [(AI_BLOCK_TEXT[row.blockedReason] || ['Interview waiting'])[0], 'warn'];
+      case 'invited': return ['Interview sent', 'ok'];
+      case 'in_progress': return ['Interview in progress', 'ok'];
+      case 'completed': return [row.evaluationReady ? 'Interview completed' : 'Interview completed · evaluation pending', row.evaluationReady ? 'ok' : 'warn'];
+      case 'abandoned': return ['Interview left', 'muted'];
+      case 'expired': return ['Interview expired', 'muted'];
+      case 'cancelled': return ['Interview cancelled', 'muted'];
+      case 'failed': return ['Interview not sent', 'warn'];
+      default: return null;
+    }
+  }
+  function aiImpressionBadge(impression) {
+    if (impression !== 'positive' && impression !== 'negative') return '';
+    return '<span class="ai-impression is-' + impression + '">' + (impression === 'positive' ? 'Positive' : 'Negative') + '</span>';
+  }
+  function aiInterviewCardHtml(row) {
+    const tag = row && aiInterviewTag(row);
+    if (!tag) return '';
+    return '<div class="applicant-card-ai"><span class="ai-chip is-' + tag[1] + '">' + esc(tag[0]) + '</span>' + (row.state === 'completed' ? aiImpressionBadge(row.impression) : '') + '</div>';
+  }
+  // The AI Interview tab of a candidate: what happened, and what the reviewer can still do. Everything shown about a finished
+  // interview (evaluation, badge, conversation) is fetched live from Witcher by the checked server function, never stored here.
+  function mountAiInterviewPanel(host, flowId, email) {
+    if (!host) return;
+    const B = window.PathwayBackend;
+    const STATE_LABEL = { pending: 'Being prepared', blocked: 'Waiting', invited: 'Sent', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled', abandoned: 'Left before finishing', expired: 'Expired', failed: 'Not sent' };
+    const REINVITE = ' To invite the candidate again, move the card out of AI Interview and back in.';
+    const when = value => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : ''; };
+    const clock = seconds => Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+    const info = (label, value) => value ? '<div class="applicant-info-item"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>' : '';
+    let confirming = '';
+    let busy = false;
+    let timer = null;
+    let waits = 0;
+    const conversationHtml = messages => {
+      const items = (Array.isArray(messages) ? messages : []).filter(message => message.kind !== 'closing').map(message => {
+        if (message.role === 'ai') return '<div class="ai-msg is-ai"><span class="ai-msg-who">' + (message.kind === 'followup' ? 'Follow-up' : 'Question') + '</span><p>' + esc(message.body || '') + '</p></div>';
+        const skipped = message.answer_status === 'skipped' || !message.body;
+        return '<div class="ai-msg is-candidate"><span class="ai-msg-who">Candidate' + (!skipped && message.audio_seconds ? ' · ' + esc(clock(message.audio_seconds)) : '') + '</span><p' + (skipped ? ' class="is-skipped"' : '') + '>' + (skipped ? 'Skipped' : esc(message.body)) + '</p></div>';
+      });
+      return items.length ? '<div class="ai-conversation">' + items.join('') + '</div>' : '<p class="muted">No conversation was saved.</p>';
+    };
+    const button = (action, label, extra = '', disabled = false) => '<button type="button" class="btn btn-sm' + (extra ? ' ' + extra : '') + '" data-ai-action="' + action + '"' + (busy || disabled ? ' disabled' : '') + '>' + esc(label) + '</button>';
+    const cancelControl = label => confirming === 'cancel'
+      ? '<span class="ai-confirm">Cancel this invitation? <button type="button" class="btn btn-sm btn-danger" data-ai-action="cancel-yes">Yes, cancel</button><button type="button" class="btn btn-sm" data-ai-action="cancel-no">Keep it</button></span>'
+      : button('cancel', label, 'btn-danger-ghost');
+    const render = (data, errorText = '') => {
+      const row = data.interview, live = data.live || {};
+      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">AI Interview</span><h3>' + esc(row ? STATE_LABEL[row.state] || row.state : 'No interview') + (row && row.state === 'completed' ? ' ' + aiImpressionBadge(row.impression) : '') + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-ai-close>Close</button></header>';
+      let body = '';
+      if (!row) body = '<p class="muted">This candidate has no AI interview.</p>';
+      else if (row.state === 'pending') body = '<p>The interview is being prepared. It will be e-mailed to the candidate in a few seconds.</p><div class="ai-actions">' + cancelControl('Cancel') + '</div>';
+      else if (row.state === 'blocked') body = '<p>' + esc((AI_BLOCK_TEXT[row.blockedReason] || ['', 'The interview is waiting to be sent.'])[1]) + '</p><div class="ai-actions">' + button('retry', 'Check again now') + cancelControl('Cancel') + '</div>';
+      else if (row.state === 'failed') body = '<p>The interview could not be sent because the interview service did not answer. Nothing was sent to the candidate.</p><div class="ai-actions">' + button('retry', 'Try again') + '</div>';
+      else if (row.state === 'invited') {
+        const left = typeof live.resendsLeft === 'number' ? live.resendsLeft : null;
+        body = '<div class="applicant-info-grid">' + info('Sent to', row.email) + info('Last e-mail', when(live.lastInviteAt)) + info('Link valid until', when(live.expiresAt)) + (left === null ? '' : info('Re-sends left', String(left))) + '</div><p class="muted">The candidate has not started yet. Re-sending e-mails the same link with a new access code (once a day, up to 3 times).</p><div class="ai-actions">' + button('resend', 'Re-send e-mail', '', left === 0) + cancelControl('Cancel invitation') + '</div>';
+      } else if (row.state === 'in_progress') body = '<p>The candidate is answering the interview right now.</p><div class="applicant-info-grid">' + info('Started', when(live.startedAt)) + '</div><p class="muted">Leaving or refreshing the page cancels the interview automatically.</p>';
+      else if (row.state === 'completed') {
+        const ready = row.evaluationReady && live.evaluation;
+        body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt || live.completedAt)) + '<div class="applicant-info-item"><span>Impression</span><strong>' + (aiImpressionBadge(row.impression) || 'Not available') + '</strong></div></div>'
+          + (ready ? '<h4>Evaluation</h4><p class="ai-evaluation">' + esc(live.evaluation) + '</p>'
+            : '<div class="ai-note is-warn"><strong>The evaluation is not ready.</strong> The AI could not write it automatically. Read the conversation below, or ask for a new evaluation.</div><div class="ai-actions">' + button('reevaluate', 'Write the evaluation again') + '</div>')
+          + '<p class="muted">The impression and the evaluation are written by an AI to help your team. The AI does not decide who moves forward; your team does.</p><h4>Conversation</h4>' + conversationHtml(live.messages);
+      } else if (row.state === 'cancelled') body = '<p>This invitation was cancelled and its link no longer works.' + REINVITE + '</p>';
+      else if (row.state === 'abandoned') body = '<p>The candidate left the interview before finishing, so it was cancelled and the answers were discarded.' + REINVITE + '</p>';
+      else if (row.state === 'expired') body = '<p>The invitation expired before the candidate started.' + REINVITE + '</p>';
+      host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + (data.liveError ? '<div class="ai-note is-warn">' + esc(data.liveError) + '</div>' : '') + body + '</div>';
+      schedule(row, live);
+    };
+    // Keep it fresh while something is about to happen: the e-mail going out, the candidate answering, the evaluation being written.
+    const schedule = (row, live) => {
+      clearTimeout(timer);
+      if (!row) return;
+      const waitingForEvaluation = row.state === 'completed' && !row.evaluationReady && waits < 20;
+      const delay = row.state === 'pending' ? 4000 : row.state === 'in_progress' ? 10000 : waitingForEvaluation ? 8000 : 0;
+      if (!delay) return;
+      if (waitingForEvaluation) waits += 1;
+      timer = setTimeout(() => { if (host.isConnected && !busy) void load(); }, delay);
+    };
+    const load = async (errorText = '') => {
+      try { render(await B.getAiInterviewStatus(flowId, email), errorText); }
+      catch (error) { clearTimeout(timer); host.innerHTML = '<header class="applicant-ai-head"><div><span class="eyebrow">AI Interview</span><h3>Could not load</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-ai-close>Close</button></header><div class="applicant-ai-body"><p>' + esc(error.message || 'Please try again.') + '</p><div class="ai-actions"><button type="button" class="btn btn-sm" data-ai-action="reload">Try again</button></div></div>'; }
+    };
+    host.addEventListener('click', async event => {
+      if (event.target.closest('[data-ai-close]')) { host.closest('.applicant-review-layout')?.classList.remove('is-previewing'); return; }
+      const trigger = event.target.closest('[data-ai-action]');
+      if (!trigger || busy) return;
+      const action = trigger.dataset.aiAction;
+      if (action === 'reload') { void load(); return; }
+      if (action === 'cancel') { confirming = 'cancel'; void load(); return; }
+      if (action === 'cancel-no') { confirming = ''; void load(); return; }
+      let current;
+      try { current = (await B.getAiInterviewStatus(flowId, email)).interview; } catch (error) { showToast(error.message || 'Please try again.'); return; }
+      if (!current) { void load(); return; }
+      busy = true; trigger.disabled = true;
+      const names = { 'cancel-yes': 'cancel', resend: 'resend', retry: 'retry', reevaluate: 'reevaluate' };
+      try {
+        const result = await B.aiInterviewAction(names[action], current.id);
+        confirming = '';
+        if (action === 'resend') showToast(result.emailSent ? 'E-mail sent again with a new access code.' : 'The e-mail could not be sent right now. Try again in a moment.');
+        else if (action === 'cancel-yes') showToast('Invitation cancelled.');
+        else if (action === 'retry') showToast('Checking again. The interview goes out in a few seconds if nothing blocks it.');
+        else if (action === 'reevaluate') { waits = 0; showToast('Writing the evaluation. It can take up to a minute.'); }
+        busy = false;
+        await load();
+        void refreshAiInterviewTags(true);
+      } catch (error) {
+        busy = false; confirming = '';
+        await load(error.message || 'Something went wrong. Try again.');
+      }
+    });
+    void load();
+  }
+  // The questions the AI asks out loud (1 to 5, three lines to start with). Empty lines are ignored; with none, the interview is not sent.
+  function mountInterviewQuestionsField(host, getList, setList) {
+    if (!host) return;
+    let list = (getList() || []).map(item => String(item ?? ''));
+    while (list.length < 3) list.push('');
+    const paint = () => {
+      host.innerHTML = '<div class="ai-questions">' + list.map((text, index) => '<div class="ai-question-row"><input class="text-input ai-question-input" data-index="' + index + '" maxlength="500" value="' + esc(text) + '" placeholder="' + (index === 0 ? 'e.g. Tell us about a project you are proud of.' : 'Question ' + (index + 1)) + '" aria-label="Interview question ' + (index + 1) + '">' + (list.length > 1 ? '<button type="button" class="icon-btn ai-question-remove" data-index="' + index + '" aria-label="Remove question ' + (index + 1) + '">×</button>' : '') + '</div>').join('') + '</div>' + (list.length < 5 ? '<button type="button" class="add-option" id="ai-question-add">＋ Add a question</button>' : '') + '<p class="field-help">The AI asks these out loud when a candidate is moved to AI Interview, with one follow-up each. Leave them empty to send no AI interviews for this job.</p>';
+      host.querySelectorAll('.ai-question-input').forEach(input => input.addEventListener('input', event => { list[Number(event.target.dataset.index)] = event.target.value; setList(list.slice()); }));
+      host.querySelectorAll('.ai-question-remove').forEach(button => button.addEventListener('click', event => { list.splice(Number(event.currentTarget.dataset.index), 1); setList(list.slice()); paint(); }));
+      host.querySelector('#ai-question-add')?.addEventListener('click', () => { list.push(''); paint(); host.querySelectorAll('.ai-question-input')[list.length - 1]?.focus(); });
+    };
+    paint();
   }
   let myProfile = null;
   let teamDirectory = [];
@@ -966,12 +1140,14 @@
         const filter = root.querySelector('#applicant-flow-filter');
         if (filter) filter.insertAdjacentHTML('beforeend', applicantFlowLabels.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join(''));
       }
-      const [loadedApplicants, loadedBoardConfig] = await Promise.all([
+      const [loadedApplicants, loadedBoardConfig, loadedInterviews] = await Promise.all([
         window.PathwayBackend.listApplicants(workspace.id, applicantFilter),
-        window.PathwayBackend.getBoardConfig(workspace.id).catch(() => null)
+        window.PathwayBackend.getBoardConfig(workspace.id).catch(() => null),
+        window.PathwayBackend.listAiInterviews(workspace.id, applicantFilter).catch(() => null)
       ]);
       applicants = loadedApplicants;
       if (loadedBoardConfig) boardConfig = loadedBoardConfig;
+      if (loadedInterviews) setAiInterviews(loadedInterviews);
       if (!root.querySelector('.applicants-page')) return;
       renderApplicantBoard();
       if (pendingCandidateOpen) {
@@ -2315,7 +2491,7 @@
       const cardHtml = group => {
         const applicant = group.latest;
         const repeat = group.count > 1 ? `<span class="repeat-chip" title="This candidate applied ${group.count} times">↻ ${group.count} applications</span>` : '';
-        return `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}${group.count > 1 ? `, ${group.count} applications` : ''}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span>${repeat}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div></article>`;
+        return `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}${group.count > 1 ? `, ${group.count} applications` : ''}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}<div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span>${repeat}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div></article>`;
       };
       if (stage.key === 'failed') {
         const head = `<div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div>`;
@@ -2640,6 +2816,10 @@
     // Why the system moved this candidate to Failed (only while the candidate is still in Failed).
     const autoFailReason = group.status === 'failed' ? (group.items.find(item => item.auto_fail_reason) || {}).auto_fail_reason || '' : '';
     const statusOptions = visibleApplicantStages().map(stage => `<option value="${esc(stage.key)}" ${group.status === stage.key ? 'selected' : ''}>${esc(stage.label)}</option>`).join('');
+    // The AI Interview tab (next to Resume) exists only for a candidate who has an interview.
+    const aiRow = aiInterviewFor(applicant.flow_id, person.candidate_email);
+    const rightTabs = aiRow ? '<div class="applicant-right-tabs" role="tablist" aria-label="Resume and AI interview"><button class="applicant-tab" type="button" role="tab" aria-selected="true" data-right-tab="resume">Resume</button><button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="ai">AI Interview</button></div>' : '';
+    const aiPane = aiRow ? '<div class="applicant-right-pane is-hidden" data-right-pane="ai"><section class="applicant-ai-panel" id="applicant-ai-panel" aria-label="AI interview"><div class="applicant-ai-loading">Loading the interview…</div></section></div>' : '';
 
     setModal(`<div class="applicant-review-layout" data-detail-applicant="${esc(person.id)}" data-detail-tab="${tab}">
       <section class="applicant-review-left" aria-label="Applicant details">
@@ -2658,15 +2838,18 @@
           <section class="applicant-detail-section applicant-comments" aria-labelledby="applicant-comments-heading"><h3 id="applicant-comments-heading">Team comments</h3><div class="comment-list" id="applicant-comment-list" aria-live="polite"><p class="comment-empty">Loading comments…</p></div><form class="comment-form" id="applicant-comment-form" novalidate><label class="visually-hidden" for="applicant-comment-input">Add a comment</label><textarea class="text-area" id="applicant-comment-input" maxlength="2000" rows="3" placeholder="Write a comment for your team… Type @ to mention someone."></textarea><div class="mention-menu" id="applicant-mention-menu" role="listbox" aria-label="Mention a teammate" hidden></div><div class="comment-form-actions"><span class="comment-status" id="applicant-comment-status" role="status" aria-live="polite"></span><button class="btn btn-primary btn-sm" type="submit" id="applicant-comment-submit">Add comment</button></div></form></section>
           <section class="applicant-delete-row" id="applicant-delete-row"></section>
         </div>
-        <div class="applicant-mobile-bar">${isPdf ? '<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;Preview resume</button>' : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;Download resume</button></div>
+        <div class="applicant-mobile-bar">${isPdf ? '<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;Preview resume</button>' : ''}${aiRow ? '<button class="btn" id="mobile-open-ai" type="button">AI Interview</button>' : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;Download resume</button></div>
       </section>
-      <aside class="applicant-review-right" aria-label="Resume preview">
+      <aside class="applicant-review-right" aria-label="Resume preview${aiRow ? ' and AI interview' : ''}">
+        ${rightTabs}
+        <div class="applicant-right-body"><div class="applicant-right-pane" data-right-pane="resume">
         <div class="applicant-preview-empty" id="applicant-preview-empty"><span class="applicant-preview-icon">▧</span><h3>${isPdf ? 'Resume preview' : 'Preview unavailable'}</h3>${isPdf ? '<button class="btn applicant-resume-button" id="preview-applicant-resume" type="button">▧ &nbsp;Preview resume</button>' : '<p>This file type cannot be previewed in the browser. Download the resume to open it.</p><button class="btn applicant-resume-button js-download-resume" type="button">↓ &nbsp;Download resume</button>'}</div>
         <section class="applicant-resume-preview is-hidden" id="applicant-resume-preview" aria-label="PDF resume preview">
           <div class="applicant-resume-preview-head"><div><span class="eyebrow">Private document</span><strong title="${esc(filename)}">${esc(filename)}</strong></div><div class="applicant-resume-preview-actions"><button class="btn btn-sm js-download-resume" type="button">↓ &nbsp;Download resume</button><button class="btn btn-sm" id="close-applicant-resume-preview" type="button">Close preview</button></div></div>
           <iframe id="applicant-resume-frame" title="PDF preview of ${esc(filename)}" loading="lazy" referrerpolicy="no-referrer"></iframe>
           <div class="applicant-pdf-pages" id="applicant-pdf-pages" role="document" aria-label="PDF preview of ${esc(filename)}" hidden></div>
         </section>
+        </div>${aiPane}</div>
       </aside>
     </div>`);
 
@@ -2680,6 +2863,24 @@
         .catch(() => { responsibleNode.closest('.applicant-responsible-item')?.remove(); });
     }
     modalRoot.querySelector('#applicant-status-select').addEventListener('change', event => { void moveApplicant(applicant.id, event.target.value); });
+    // Right-hand tabs (only when the candidate has an AI interview): Resume or AI Interview. The interview is loaded the first time its tab opens.
+    const showRightPane = name => {
+      modalRoot.querySelectorAll('[data-right-pane]').forEach(pane => pane.classList.toggle('is-hidden', pane.dataset.rightPane !== name));
+      modalRoot.querySelectorAll('[data-right-tab]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.rightTab === name)));
+    };
+    let aiPanelMounted = false;
+    const openAiTab = () => {
+      showRightPane('ai');
+      modalRoot.querySelector('.applicant-review-layout')?.classList.add('is-previewing'); // on phones the right side is only shown when asked for
+      if (aiPanelMounted) return;
+      aiPanelMounted = true;
+      const notice = aiNotifs.find(item => item.flowId === applicant.flow_id && String(item.candidateEmail || '').trim().toLowerCase() === String(person.candidate_email || '').trim().toLowerCase());
+      if (notice) { aiNotifs = aiNotifs.filter(item => item !== notice); paintNotifications(); window.PathwayBackend.markAiInterviewNoticeSeen(notice.id).catch(() => {}); }
+      mountAiInterviewPanel(modalRoot.querySelector('#applicant-ai-panel'), applicant.flow_id, person.candidate_email);
+    };
+    modalRoot.querySelectorAll('[data-right-tab]').forEach(button => button.addEventListener('click', () => { if (button.dataset.rightTab === 'ai') openAiTab(); else showRightPane('resume'); }));
+    modalRoot.querySelector('#mobile-open-ai')?.addEventListener('click', openAiTab);
+    if (aiRow && pendingOpenAiTab) { pendingOpenAiTab = false; openAiTab(); }
     modalRoot.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => showApplicantDetails(person.id, Number(button.dataset.tab))));
     const previewButton = modalRoot.querySelector('#preview-applicant-resume');
     const previewPanel = modalRoot.querySelector('#applicant-resume-preview');
@@ -2719,8 +2920,9 @@
       } catch (error) { showToast(`Could not preview resume: ${error.message || 'please retry'}`); }
       finally { if (trigger.isConnected) { trigger.disabled = false; trigger.innerHTML = '▧ &nbsp;Preview resume'; } }
     };
-    previewButton?.addEventListener('click', () => { void loadPreview(previewButton); });
-    mobilePreviewButton?.addEventListener('click', () => { void loadPreview(mobilePreviewButton); });
+    // The resume loads by itself on wide screens, which must not pull the person away from the AI Interview tab they asked for.
+    previewButton?.addEventListener('click', () => { showRightPane('resume'); void loadPreview(previewButton); });
+    mobilePreviewButton?.addEventListener('click', () => { showRightPane('resume'); void loadPreview(mobilePreviewButton); });
     if (previewButton && !phoneLayout) void loadPreview(previewButton);
     modalRoot.querySelector('#close-applicant-resume-preview')?.addEventListener('click', closePreview);
     modalRoot.querySelectorAll('.js-download-resume').forEach(downloadButton => downloadButton.addEventListener('click', async event => {
@@ -2745,15 +2947,18 @@
 
   function showNewFlow() {
     root.querySelector('.app-shell')?.classList.add('is-creating-flow');
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Start with the role</div><h2>Create a new application flow</h2><p>Give candidates a clear picture of the opportunity before they apply.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-flow-form">${companies.length ? `<div class="field-group"><label for="new-company-id">Company</label><select class="select-input" id="new-company-id" name="companyId">${companyOptionsHtml()}</select></div>` : `<p class="field-help">This job will use your workspace name: ${esc(workspace.name)}. Add a company profile from My Companies to choose another.</p>`}<div class="field-group"><label for="new-title">Job title</label><input class="text-input" id="new-title" name="jobTitle" placeholder="e.g. Senior Product Designer" required></div><div class="field-group"><label for="new-description">Job description</label><textarea class="text-area" id="new-description" name="jobDescription" placeholder="A short, welcoming overview of the role and the team…" required></textarea></div><div class="field-group"><span class="form-label" id="new-responsible-label">Responsible</span><div id="new-responsible"></div></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit">Create flow</button></div></form>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Start with the role</div><h2>Create a new application flow</h2><p>Give candidates a clear picture of the opportunity before they apply.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-flow-form">${companies.length ? `<div class="field-group"><label for="new-company-id">Company</label><select class="select-input" id="new-company-id" name="companyId">${companyOptionsHtml()}</select></div>` : `<p class="field-help">This job will use your workspace name: ${esc(workspace.name)}. Add a company profile from My Companies to choose another.</p>`}<div class="field-group"><label for="new-title">Job title</label><input class="text-input" id="new-title" name="jobTitle" placeholder="e.g. Senior Product Designer" required></div><div class="field-group"><label for="new-description">Job description</label><textarea class="text-area" id="new-description" name="jobDescription" placeholder="A short, welcoming overview of the role and the team…" required></textarea></div><div class="field-group"><span class="form-label" id="new-responsible-label">Responsible</span><div id="new-responsible"></div></div><div class="field-group"><span class="form-label" id="new-ai-questions-label">AI interview questions <small>(optional)</small></span><div id="new-ai-questions"></div></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit">Create flow</button></div></form>`);
     let newResponsible = [];
     mountResponsibleField(modalRoot.querySelector('#new-responsible'), 'new-responsible-label', () => newResponsible, ids => { newResponsible = ids; });
+    let newInterviewQuestions = [];
+    mountInterviewQuestionsField(modalRoot.querySelector('#new-ai-questions'), () => newInterviewQuestions, list => { newInterviewQuestions = list; });
     modalRoot.querySelector('#new-flow-form').addEventListener('submit', event => {
       event.preventDefault(); const data = new FormData(event.currentTarget);
       const company = companies.find(item => item.id === data.get('companyId')) || null;
       const flow = C.createFlow(company?.name || workspace.name, data.get('jobTitle').trim(), data.get('jobDescription').trim());
       flow.companyId = company?.id || null; flow.companyProfile = companySnapshot(company);
       flow.responsibleIds = currentResponsibleIds(newResponsible);
+      flow.interviewQuestions = window.PathwayBackend.cleanInterviewQuestions(newInterviewQuestions);
       flows.unshift(flow); closeModal(); openFlow(flow.id); save();
     });
   }
@@ -3028,7 +3233,7 @@
     const selected = flow.nodes.find(node => node.id === selectedId) || flow.nodes[0];
     const [title] = typeInfo(selected);
     const roleSettings = selected.type === 'candidateInfo'
-      ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div><button class="icon-btn" id="edit-role" aria-label="Edit role details">✎</button></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><label for="role-description">Job description</label><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">Responsible</span><div id="role-responsible"></div></div><hr class="inspector-divider">`
+      ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div><button class="icon-btn" id="edit-role" aria-label="Edit role details">✎</button></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><label for="role-description">Job description</label><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">Responsible</span><div id="role-responsible"></div></div><div class="field-group"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><div id="role-ai-questions"></div></div><hr class="inspector-divider">`
       : '';
     panel.innerHTML = `${roleSettings}<div class="inspector-title"><div><div class="inspector-kicker">Selected step</div><h2>${esc(title)}</h2></div>${selected.type === 'candidateInfo' ? '<span class="node-badge">Fixed start</span>' : ''}</div><div id="node-editor"></div>`;
     const syncRole = (key, value) => { flow[key] = value; const crumb = document.querySelector('.crumb-title'); if (crumb && key === 'jobTitle') crumb.textContent = value || 'Untitled role'; save(); };
@@ -3037,6 +3242,8 @@
     panel.querySelector('#role-description')?.addEventListener('input', event => syncRole('jobDescription', event.target.value));
     const responsibleHost = panel.querySelector('#role-responsible');
     if (responsibleHost) mountResponsibleField(responsibleHost, 'role-responsible-label', () => flow.responsibleIds || [], ids => { flow.responsibleIds = ids; save({ internal: true }); });
+    // Like the responsible people, the questions are never shown to candidates, so editing them does not count as an unpublished change.
+    mountInterviewQuestionsField(panel.querySelector('#role-ai-questions'), () => flow.interviewQuestions || [], list => { flow.interviewQuestions = list; save({ internal: true }); });
     panel.querySelector('#edit-role')?.addEventListener('click', () => { panel.querySelector('#role-title')?.focus(); });
     const editor = panel.querySelector('#node-editor');
     if (selected.type === 'candidateInfo') {
