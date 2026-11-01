@@ -2032,7 +2032,7 @@
     return rowsToCsv(rows);
   }
   // "Export data" for one candidate: everything Pathway holds about them for this job, as the same flat CSV.
-  function candidateDataToCsv({ person, items, jobTitle, stage, exportedAt }) {
+  function candidateDataToCsv({ person, items, jobTitle, stage, exportedAt, interview = null }) {
     const rows = [['section', 'record', 'field', 'value']];
     const add = (section, record, object) => Object.entries(object || {}).forEach(([field, value]) => { if (value !== null && value !== undefined && value !== '') rows.push([section, record, field, value]); });
     add('export', '', { exportedAt, note: 'The application data Pathway holds about this candidate for this job. The resume file is not inside this CSV: download it from the candidate panel. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.' });
@@ -2043,6 +2043,22 @@
       add('details', record, item.candidate_info);
       (item.responses || []).forEach(response => add('answer', record + '.' + (response.order ?? ''), { question: response.question, answer: Array.isArray(response.answer) ? response.answer.join('; ') : response.answer }));
     });
+    // The AI interview (kept by Witcher, Pathway's interview provider): every interview of this candidate for this job (state and dates),
+    // and for the latest finished one the impression, the evaluation and the transcript. The audio is never stored anywhere.
+    if (interview && interview.rows.length) {
+      add('aiInterviewNote', '', { note: 'AI interview data comes from Witcher, the interview service Pathway uses. Only the transcript is kept: the audio of the answers is never stored. The impression and the evaluation are written by an AI to help the hiring team; the AI does not decide who moves forward.' });
+      [...interview.rows].reverse().forEach((row, index) => add('aiInterview', String(index + 1), { state: row.state, createdAt: row.createdAt, completedAt: row.completedAt, impression: row.impression }));
+      const live = interview.live;
+      if (live && live.status === 'completed') {
+        add('aiInterviewResult', '', { impression: live.impression, evaluation: live.evaluation, answeredInEnglishOnly: live.languageFlag ? 'no (an answer in another language sets the impression to negative)' : 'yes' });
+        (live.messages || []).filter(message => message.kind !== 'closing').forEach(message => add('aiInterviewTranscript', String(message.seq), {
+          speaker: message.role === 'ai' ? 'AI interviewer' : 'Candidate',
+          type: message.kind,
+          text: message.role === 'candidate' && message.answer_status === 'skipped' ? '(skipped)' : message.body,
+          answerSeconds: message.role === 'candidate' ? message.audio_seconds : ''
+        }));
+      } else if (live && live.status) add('aiInterviewResult', '', { note: 'The latest interview has no result to export (status: ' + live.status + ').' });
+    }
     return rowsToCsv(rows);
   }
   function downloadTextFile(filename, text) {
@@ -2844,9 +2860,24 @@
         if (button.disabled) return;
         button.disabled = true; button.textContent = 'Preparing…';
         try {
-          const csv = candidateDataToCsv({ person, items: group.items.map(item => ({ ...item, status: applicantStageLabel(item.status) })), jobTitle, stage: applicantStageLabel(group.status), exportedAt: new Date().toISOString() });
+          // The AI interview is read live (it is kept by Witcher). If it cannot be read, the export still downloads but says so,
+          // so nobody takes an export without the interview for a complete one.
+          let interview = null;
+          let interviewMissing = false;
+          try {
+            const [rows, status] = await Promise.all([
+              window.PathwayBackend.listAiInterviews(workspace.id, flowId),
+              window.PathwayBackend.getAiInterviewStatus(flowId, email).catch(() => ({ failed: true }))
+            ]);
+            const mine = rows.filter(item => String(item.email || '').trim().toLowerCase() === email);
+            if (mine.length) {
+              interviewMissing = Boolean(status.failed) || Boolean(status.liveError);
+              interview = { rows: mine, live: status.live || null };
+            }
+          } catch (interviewError) { interviewMissing = true; }
+          const csv = candidateDataToCsv({ person, items: group.items.map(item => ({ ...item, status: applicantStageLabel(item.status) })), jobTitle, stage: applicantStageLabel(group.status), exportedAt: new Date().toISOString(), interview });
           downloadTextFile('pathway-candidate-data-' + new Date().toISOString().slice(0, 10) + '.csv', csv);
-          showToast('Candidate data downloaded.');
+          showToast(interviewMissing ? 'Candidate data downloaded, but the AI interview part could not be loaded. Try the export again to include it.' : 'Candidate data downloaded.', interviewMissing ? 7000 : 2400);
         } catch (error) {
           showToast('Could not prepare the candidate data. Please try again.');
         } finally { button.disabled = false; button.textContent = 'Export data'; }

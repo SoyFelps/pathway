@@ -172,3 +172,22 @@ test('on computer screens the applicants board is as tall as the window and scro
   assert.ok(block.includes('align-self:stretch;height:100%;'), 'the page fills the area even where the workspace row is set to align its items at the start');
   assert.equal(/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(block), false, 'colour tokens only');
 });
+
+test('the candidate data export includes the AI interview (history, impression, evaluation, transcript) and says so when it could not be loaded', () => {
+  const csv = builder.slice(builder.indexOf('function candidateDataToCsv'), builder.indexOf('function downloadTextFile'));
+  for (const section of ["'aiInterviewNote'", "'aiInterview'", "'aiInterviewResult'", "'aiInterviewTranscript'"]) assert.ok(csv.includes(section), section);
+  assert.ok(csv.includes('the audio of the answers is never stored'), 'the audio is never part of it');
+  assert.ok(csv.includes("message.kind !== 'closing'"), 'the closing line of the AI is not a candidate record');
+  const click = builder.slice(builder.indexOf("row.querySelector('#export-candidate')"), builder.indexOf('const showConfirm'));
+  assert.ok(click.includes('window.PathwayBackend.listAiInterviews(workspace.id, flowId)') && click.includes('getAiInterviewStatus(flowId, email)'));
+  assert.ok(click.includes('the AI interview part could not be loaded'), 'an export without the interview is never mistaken for a complete one');
+});
+
+test('every way of deleting a candidate, a job, a workspace or an account reaches Witcher through the erasure queue', () => {
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261029100000_ai_interviews.sql'), 'utf8');
+  assert.ok(migration.includes('after delete on public.applicants'), 'deleting the last application of a candidate (also what a deleted job or workspace does, row by row)');
+  assert.ok(migration.includes('after delete on public.ai_interviews'), 'whatever removes an interview row, whether directly or by cascade, queues its erasure');
+  assert.ok(migration.includes('references public.application_flows (id) on delete cascade') && migration.includes('references public.workspaces (id) on delete cascade'), 'a deleted job or workspace takes its interviews along');
+  const worker = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'ai-interview-webhook', 'index.ts'), 'utf8');
+  assert.ok(worker.includes('eraseQueued()') && worker.includes('callWitcher(witcher, "delete"'), 'the worker empties the queue');
+});
