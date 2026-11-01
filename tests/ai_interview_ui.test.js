@@ -26,7 +26,7 @@ test('the questions of a job are cleaned the way the database wants them and are
 
 test('the card shows the interview tag and badge, and the candidate panel gets an AI Interview tab next to Resume', () => {
   assert.ok(builder.includes('aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))'));
-  for (const label of ['Setting up AI Interview', 'Invite sent for AI Interview', 'Interview completed', 'Interview left', 'Interview expired', 'Interview cancelled', 'Interview not sent', 'Add interview questions', 'Premium needed']) {
+  for (const label of ['Setting up AI Interview', 'Invite sent for AI Interview', 'AI Interview completed', 'Interview left', 'Interview expired', 'Interview cancelled', 'Interview not sent', 'Add interview questions', 'Premium needed']) {
     assert.ok(builder.includes(label), label);
   }
   assert.ok(builder.includes('data-right-tab="resume"') && builder.includes('data-right-tab="ai"'));

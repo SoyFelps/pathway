@@ -298,7 +298,7 @@
       case 'blocked': return [(AI_BLOCK_TEXT[row.blockedReason] || ['Interview waiting'])[0], 'warn'];
       case 'invited': return ['Invite sent for AI Interview', 'ok'];
       case 'in_progress': return ['Interview in progress', 'ok'];
-      case 'completed': return [row.evaluationReady ? 'Interview completed' : 'Interview completed · evaluation pending', row.evaluationReady ? 'ok' : 'warn'];
+      case 'completed': return [row.evaluationReady ? 'AI Interview completed' : 'AI Interview completed · evaluation pending', row.evaluationReady ? 'ok' : 'warn'];
       case 'abandoned': return ['Interview left', 'muted'];
       case 'expired': return ['Interview expired', 'muted'];
       case 'cancelled': return ['Interview cancelled', 'muted'];
