@@ -197,3 +197,14 @@ test('the delete-candidate confirmation tells the person that the AI interview g
   assert.ok(confirm.includes("aiInterviewFor(flowId, email) ? ', their AI interview (answers, evaluation and impression)' : ''"));
   assert.ok(confirm.includes('the resume file') && confirm.includes('the team comments about them. This cannot be undone.'), 'the rest of the warning is unchanged');
 });
+
+test('every action of the AI Interview tab that goes to the server replaces its button by a notice at the click, with no lookup first', () => {
+  const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
+  for (const text of ['Sending the invitation again…', 'Sending the e-mail again…', 'Cancelling the invitation…', 'Checking again…']) assert.ok(panel.includes(text), text);
+  assert.ok(panel.includes("const button = (action, label, extra = '', disabled = false) => working ? '' :"), 'while an action is being done there is no button to press');
+  const generic = panel.slice(panel.indexOf("const names = { 'cancel-yes'"), panel.indexOf('void load();\n  }') > 0 ? panel.indexOf('await B.aiInterviewAction(names[action]') : undefined);
+  assert.ok(generic.includes('working = WORKING_TEXT[action]; render(lastData);'), 'the notice is drawn right away');
+  assert.ok(!generic.includes('getAiInterviewStatus'), 'no round trip between the click and the notice (it used to leave the button on screen for seconds)');
+  assert.ok(panel.includes("if (action === 'cancel') { confirming = 'cancel'; if (lastData) render(lastData);"), 'the "are you sure?" of Cancel invitation appears at once too');
+  assert.ok(panel.includes('busy = false; working = null;'), 'the notice stays until the fresh state arrives');
+});

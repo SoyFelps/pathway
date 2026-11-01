@@ -364,6 +364,15 @@
     // Redoing an evaluation: '' (nothing), 'sending' (clicked, the request is going out) or 'running' (Witcher is writing it).
     // The button is replaced by a notice from the moment of the click, and only comes back when the AI really failed.
     let reevaluating = '';
+    // Any other action that goes to the server (Invite again, Re-send, Cancel invitation, Check again): from the click on, its button is
+    // replaced by a notice that it is being done, so there is feedback at once and nothing to press twice. null when nothing is going on.
+    let working = null;
+    const WORKING_TEXT = {
+      reinvite: ['Sending the invitation again…', 'The e-mail goes out in a few seconds. This page updates by itself.'],
+      resend: ['Sending the e-mail again…', 'This takes a few seconds.'],
+      'cancel-yes': ['Cancelling the invitation…', 'This takes a few seconds.'],
+      retry: ['Checking again…', 'The interview goes out in a few seconds if nothing blocks it.']
+    };
     let triedReevaluating = false;
     let evalPolls = 0;
     let lastData = null;
@@ -375,7 +384,7 @@
       });
       return items.length ? '<div class="ai-conversation">' + items.join('') + '</div>' : '<p class="muted">No conversation was saved.</p>';
     };
-    const button = (action, label, extra = '', disabled = false) => '<button type="button" class="btn btn-sm' + (extra ? ' ' + extra : '') + '" data-ai-action="' + action + '"' + (busy || disabled ? ' disabled' : '') + '>' + esc(label) + '</button>';
+    const button = (action, label, extra = '', disabled = false) => working ? '' : '<button type="button" class="btn btn-sm' + (extra ? ' ' + extra : '') + '" data-ai-action="' + action + '"' + (busy || disabled ? ' disabled' : '') + '>' + esc(label) + '</button>';
     const cancelControl = label => confirming === 'cancel'
       ? '<span class="ai-confirm">Cancel this invitation? <button type="button" class="btn btn-sm btn-danger" data-ai-action="cancel-yes">Yes, cancel</button><button type="button" class="btn btn-sm" data-ai-action="cancel-no">Keep it</button></span>'
       : button('cancel', label, 'btn-danger-ghost');
@@ -406,7 +415,8 @@
       else if (row.state === 'abandoned') body = '<p>The candidate left the interview before finishing, so it was cancelled and the answers were discarded.</p>' + reinviteBlock(row);
       else if (row.state === 'expired') body = '<p>The invitation expired before the candidate started.</p>' + reinviteBlock(row);
       // An interview that is still going on (being prepared, sent, in progress) while the card sits in another column: offer the way back.
-      const away = row && ['pending', 'blocked', 'invited', 'in_progress'].includes(row.state) && stage.getStage && stage.getStage() !== 'ai_interview' && stage.canMove && stage.canMove();
+      if (working) body = '<div class="ai-note is-working" role="status"><strong>' + esc(working[0]) + '</strong> ' + esc(working[1]) + '</div>' + body;
+      const away = !working && row && ['pending', 'blocked', 'invited', 'in_progress'].includes(row.state) && stage.getStage && stage.getStage() !== 'ai_interview' && stage.canMove && stage.canMove();
       if (away) body += '<div class="ai-note is-warn ai-column-note" role="status"><span>This candidate is not in the AI Interview column of the Kanban.</span><div class="ai-actions">' + button('move-stage', 'Move to AI Interview column') + '</div></div>';
       host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + (data.liveError ? '<div class="ai-note is-warn">' + esc(data.liveError) + '</div>' : '') + body + '</div>';
       schedule(row, live);
@@ -433,8 +443,9 @@
       if (!trigger || busy) return;
       const action = trigger.dataset.aiAction;
       if (action === 'reload') { void load(); return; }
-      if (action === 'cancel') { confirming = 'cancel'; void load(); return; }
-      if (action === 'cancel-no') { confirming = ''; void load(); return; }
+      // Asking "are you sure?" needs no round trip: draw it from what is already on the page.
+      if (action === 'cancel') { confirming = 'cancel'; if (lastData) render(lastData); else void load(); return; }
+      if (action === 'cancel-no') { confirming = ''; if (lastData) render(lastData); else void load(); return; }
       if (action === 'move-stage') {
         // Moving rebuilds the candidate view; asking for the AI Interview tab keeps the person where they were.
         busy = true; trigger.disabled = true; pendingOpenAiTab = true;
@@ -459,23 +470,23 @@
         void refreshAiInterviewTags(true);
         return;
       }
-      let current;
-      try { current = (await B.getAiInterviewStatus(flowId, email)).interview; } catch (error) { showToast(error.message || 'Please try again.'); return; }
-      if (!current) { void load(); return; }
-      busy = true; trigger.disabled = true;
-      const names = { 'cancel-yes': 'cancel', resend: 'resend', retry: 'retry', reevaluate: 'reevaluate', reinvite: 'reinvite' };
+      const names = { 'cancel-yes': 'cancel', resend: 'resend', retry: 'retry', reinvite: 'reinvite' };
+      const interviewId = lastData && lastData.interview && lastData.interview.id;
+      if (!names[action] || !interviewId) { void load(); return; }
+      // The notice replaces the button before anything goes over the network (no extra lookup first): that lookup used to leave the
+      // button on the screen for a few seconds, and people pressed it again. The server checks the state anyway.
+      confirming = ''; busy = true; working = WORKING_TEXT[action]; render(lastData);
       try {
-        const result = await B.aiInterviewAction(names[action], current.id);
-        confirming = '';
+        const result = await B.aiInterviewAction(names[action], interviewId);
         if (action === 'resend') showToast(result.emailSent ? 'E-mail sent again with a new access code.' : 'The e-mail could not be sent right now. Try again in a moment.');
         else if (action === 'cancel-yes') showToast('Invitation cancelled.');
         else if (action === 'retry') showToast('Checking again. The interview goes out in a few seconds if nothing blocks it.');
-        else if (action === 'reinvite') { showToast('Setting up the new interview. The e-mail goes out in a few seconds.'); watchAiInterviewTags(); }
-        busy = false;
+        else if (action === 'reinvite') watchAiInterviewTags(); // the card tag follows: "Setting up AI Interview", then "Invite sent"
+        busy = false; working = null; // nothing is drawn again until the fresh state arrives below
         await load();
         void refreshAiInterviewTags(true);
       } catch (error) {
-        busy = false; confirming = '';
+        busy = false; confirming = ''; working = null;
         await load(error.message || 'Something went wrong. Try again.');
       }
     });
