@@ -119,3 +119,15 @@ test('inside the candidate details the badge keeps its own layout (the label rul
   assert.ok(css.includes('.applicant-info-item span{display:block;'), 'the label rule that used to push the badge around still exists');
   assert.ok(css.includes('.applicant-info-item .ai-impression{display:inline-flex;margin-bottom:0}'), 'and is overridden for the badge, with a more specific selector');
 });
+
+test('the Impression field of the AI Interview tab writes the words before the thumb, bold, red for negative and green for positive', () => {
+  const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
+  assert.ok(panel.includes('aiImpressionLabelled(row.impression)'));
+  const label = builder.slice(builder.indexOf('function aiImpressionLabelled'), builder.indexOf('function aiInterviewCardHtml'));
+  assert.ok(label.includes("'Positive impression'") && label.includes("'Negative impression'"));
+  assert.ok(label.indexOf('ai-impression-text') < label.indexOf('+ badge +'), 'the words come before the thumb');
+  assert.ok(css.includes('.ai-impression-line.is-negative .ai-impression-text{color:var(--red)}'));
+  assert.ok(css.includes('font-weight:700}\n.ai-impression-line.is-negative') || css.includes('.applicant-info-item .ai-impression-text{display:inline;margin-bottom:0;font-size:12px;font-weight:700}'));
+  const card = builder.slice(builder.indexOf('function aiInterviewCardHtml'), builder.indexOf('let aiWatchTimer'));
+  assert.ok(!card.includes('aiImpressionLabelled'), 'the card keeps only the thumb');
+});

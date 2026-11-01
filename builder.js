@@ -318,6 +318,12 @@
   }
   // Small sparkle in a lilac circle, as in the first plan of the card
   const AI_SPARKLE_ICON = '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.9 4.6 11 8l3.4 1.1L11 10.2 9.9 13.6 8.8 10.2 5.4 9.1 8.8 8z"/><path d="M17 12.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>';
+  // In the Impression field of the AI Interview tab the thumb comes with its words in front of it (red or green, bold).
+  function aiImpressionLabelled(impression) {
+    const badge = aiImpressionBadge(impression);
+    if (!badge) return '';
+    return '<span class="ai-impression-line is-' + impression + '"><span class="ai-impression-text">' + (impression === 'positive' ? 'Positive impression' : 'Negative impression') + '</span>' + badge + '</span>';
+  }
   function aiInterviewCardHtml(row) {
     const tag = row && aiInterviewTag(row);
     if (!tag) return '';

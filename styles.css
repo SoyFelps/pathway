@@ -759,6 +759,10 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .ai-impression{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;flex:0 0 auto;width:22px;height:22px;border-radius:50%;line-height:0}.ai-impression svg{display:block}
 /* the small-label rule of the candidate details (.applicant-info-item span) must not turn the badge into a block with a bottom margin */
 .applicant-info-item .ai-impression{display:inline-flex;margin-bottom:0}
+.applicant-info-item .ai-impression-line{display:inline-flex;align-items:center;gap:8px;margin-bottom:0}
+.applicant-info-item .ai-impression-text{display:inline;margin-bottom:0;font-size:12px;font-weight:700}
+.ai-impression-line.is-negative .ai-impression-text{color:var(--red)}
+.ai-impression-line.is-positive .ai-impression-text{color:var(--positive-text)}
 .ai-impression.is-positive{background:var(--positive-bg);color:var(--positive-text)}
 .ai-impression.is-negative{background:var(--red-bg);color:var(--red-text)}
 .ai-impression.is-none{background:var(--border-subtle);color:var(--text-subtle)}
