@@ -2516,7 +2516,7 @@
       const cardHtml = group => {
         const applicant = group.latest;
         // A candidate who applied more than once shows a small count in the corner of the card (the full wording is its tooltip).
-        const repeat = group.count > 1 ? `<span class="repeat-badge" role="img" aria-label="Applied ${group.count} times" title="This candidate applied ${group.count} times">${group.count}</span>` : '';
+        const repeat = group.count > 1 ? `<span class="repeat-badge" role="img" aria-label="Applied ${group.count} times" title="This candidate applied ${group.count} times"><span aria-hidden="true">↻</span>${group.count}</span>` : '';
         return `<article class="applicant-card${group.count > 1 ? ' has-repeat' : ''}" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}${group.count > 1 ? `, ${group.count} applications` : ''}">${repeat}<h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span></span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}</article>`;
       };
       if (stage.key === 'failed') {
