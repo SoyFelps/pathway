@@ -385,7 +385,7 @@
       } else if (row.state === 'in_progress') body = '<p>The candidate is answering the interview right now.</p><div class="applicant-info-grid">' + info('Started', when(live.startedAt)) + '</div><p class="muted">Leaving or refreshing the page cancels the interview automatically.</p>';
       else if (row.state === 'completed') {
         const ready = row.evaluationReady && live.evaluation;
-        body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt || live.completedAt)) + '<div class="applicant-info-item"><span>Impression</span><strong>' + (aiImpressionBadge(row.impression) || 'Not available') + '</strong></div></div>'
+        body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt || live.completedAt)) + '<div class="applicant-info-item"><span>Impression</span><strong>' + (aiImpressionLabelled(row.impression) || 'Not available') + '</strong></div></div>'
           + (ready ? '<h4>Evaluation</h4><p class="ai-evaluation">' + esc(live.evaluation) + '</p>'
             : '<div class="ai-note is-warn"><strong>The evaluation is not ready.</strong> The AI could not write it automatically. Read the conversation below, or ask for a new evaluation.</div><div class="ai-actions">' + button('reevaluate', 'Write the evaluation again') + '</div>')
           + '<p class="muted">The impression and the evaluation are written by an AI to help your team. The AI does not decide who moves forward; your team does.</p><h4>Conversation</h4>' + conversationHtml(live.messages);
