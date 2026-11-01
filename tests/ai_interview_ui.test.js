@@ -66,7 +66,9 @@ test('a new invitation after a cancelled, left or expired interview is only sent
   for (const state of ['cancelled', 'abandoned', 'expired']) {
     const start = panel.indexOf("row.state === '" + state + "'");
     assert.ok(start > 0, state + ' has its own branch');
-    assert.ok(panel.slice(start, panel.indexOf(';', start + 40)).includes('reinviteBlock(row)'), state + ' offers Invite again');
+    const next = panel.indexOf("row.state === '", start + 40);
+    const end = next > 0 ? next : panel.indexOf('// An interview that is still going on', start);
+    assert.ok(panel.slice(start, end).includes('reinviteBlock(row)'), state + ' offers Invite again');
   }
   assert.ok(!panel.includes('move the card out of AI Interview'), 'the old "move the card" advice is gone');
   assert.ok(panel.includes('Moving the card between columns does not send another invitation.'));
@@ -207,4 +209,15 @@ test('every action of the AI Interview tab that goes to the server replaces its 
   assert.ok(!generic.includes('getAiInterviewStatus'), 'no round trip between the click and the notice (it used to leave the button on screen for seconds)');
   assert.ok(panel.includes("if (action === 'cancel') { confirming = 'cancel'; if (lastData) render(lastData);"), 'the "are you sure?" of Cancel invitation appears at once too');
   assert.ok(panel.includes('busy = false; working = null;'), 'the notice stays until the fresh state arrives');
+});
+
+test('the "left before finishing" panel says when and where the candidate left, and warns about inviting again with the same questions', () => {
+  const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
+  const start = panel.indexOf("row.state === 'abandoned'");
+  const branch = panel.slice(start, panel.indexOf("row.state === 'expired'", start));
+  assert.ok(branch.includes("info('Left on', when(live.abandonedAt))") && branch.includes("info('Where they left', where)"));
+  assert.ok(branch.includes('live.progress') && branch.includes('On the follow-up to ') && branch.includes('questionText'));
+  assert.ok(branch.includes('may give this candidate an advantage') && branch.indexOf('may give this candidate an advantage') < branch.indexOf('reinviteBlock(row)'));
+  const user = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'ai-interview', 'index.ts'), 'utf8');
+  assert.ok(user.includes('abandonedAt: result.json.abandonedAt') && user.includes('progress: result.json.progress'));
 });

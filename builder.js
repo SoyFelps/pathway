@@ -412,7 +412,18 @@
             : '<div class="ai-note is-warn"><strong>The evaluation is not ready.</strong> ' + (triedReevaluating ? 'The AI could not write it this time either. You can try again, or read the conversation below.' : 'The AI could not write it automatically. Read the conversation below, or ask for a new evaluation.') + '</div><div class="ai-actions">' + button('reevaluate', 'Write the evaluation again') + '</div>')
           + '<p class="muted">The impression and the evaluation are written by an AI to help your team. The AI does not decide who moves forward; your team does.</p><h4>Conversation</h4>' + conversationHtml(live.messages);
       } else if (row.state === 'cancelled') body = '<p>This invitation was cancelled and its link no longer works.</p>' + reinviteBlock(row);
-      else if (row.state === 'abandoned') body = '<p>The candidate left the interview before finishing, so it was cancelled and the answers were discarded.</p>' + reinviteBlock(row);
+      else if (row.state === 'abandoned') {
+        const progress = live.progress || null;
+        let where = '';
+        if (progress && progress.questionNumber && progress.totalQuestions) {
+          const of = 'question ' + progress.questionNumber + ' of ' + progress.totalQuestions;
+          where = progress.phase === 'followup' ? 'On the follow-up to ' + of : 'On ' + of + (progress.questionText ? ': “' + progress.questionText + '”' : '');
+        }
+        body = '<p>The candidate left the interview before finishing, so it was cancelled and the answers were discarded. The same link no longer works.</p>'
+          + '<div class="applicant-info-grid">' + info('Left on', when(live.abandonedAt)) + info('Where they left', where) + '</div>'
+          + '<div class="ai-note is-warn"><strong>Before inviting again:</strong> the candidate has already seen the questions and has had time to think about their answers. If the questions of this job stay the same, a new interview may give this candidate an advantage. Consider changing the questions in the job details first.</div>'
+          + reinviteBlock(row);
+      }
       else if (row.state === 'expired') body = '<p>The invitation expired before the candidate started.</p>' + reinviteBlock(row);
       // An interview that is still going on (being prepared, sent, in progress) while the card sits in another column: offer the way back.
       if (working) body = '<div class="ai-note is-working" role="status"><strong>' + esc(working[0]) + '</strong> ' + esc(working[1]) + '</div>' + body;
