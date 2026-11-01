@@ -105,6 +105,12 @@ test('a finished interview always reads "AI Interview completed" on the card, wi
   assert.ok(builder.includes("case 'completed': return ['AI Interview completed', 'ok'];"));
   assert.ok(!builder.includes('evaluation pending'), 'the card says nothing about the evaluation');
   const card = builder.slice(builder.indexOf('function aiInterviewCardHtml'), builder.indexOf('let aiWatchTimer'));
-  assert.ok(card.includes('ai-impression is-none') && card.includes('>-</span>'), 'grey circle with a dash');
+  assert.ok(card.includes('ai-impression is-none') && card.includes('M7 12h10'), 'grey circle with a dash');
   assert.ok(css.includes('.ai-impression.is-none{background:var(--border-subtle);color:var(--text-subtle)'));
+});
+
+test('the thumb and the dash sit exactly in the middle of their circle (block icon, flex centring, no baseline gap)', () => {
+  assert.ok(css.includes('.ai-impression{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;'));
+  assert.ok(css.includes('.ai-impression svg{display:block}'));
+  assert.ok(css.includes('line-height:0'));
 });

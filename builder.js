@@ -321,7 +321,7 @@
   function aiInterviewCardHtml(row) {
     const tag = row && aiInterviewTag(row);
     if (!tag) return '';
-    return '<div class="applicant-card-ai ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + AI_SPARKLE_ICON + '</span><span class="ai-tag-text">' + esc(tag[0]) + '</span>' + (row.state === 'completed' ? (aiImpressionBadge(row.impression) || '<span class="ai-impression is-none" role="img" aria-label="No impression yet" title="No impression yet">-</span>') : '') + '</div>';
+    return '<div class="applicant-card-ai ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + AI_SPARKLE_ICON + '</span><span class="ai-tag-text">' + esc(tag[0]) + '</span>' + (row.state === 'completed' ? (aiImpressionBadge(row.impression) || '<span class="ai-impression is-none" role="img" aria-label="No impression yet" title="No impression yet"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M7 12h10"/></svg></span>') : '') + '</div>';
   }
   // After a card moves into or out of the AI Interview column the interview is set up (or dropped) on the server within seconds:
   // look again soon, and keep looking while one is being set up, so the tag follows without pressing Refresh.
