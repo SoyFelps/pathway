@@ -114,3 +114,8 @@ test('the thumb and the dash sit exactly in the middle of their circle (block ic
   assert.ok(css.includes('.ai-impression svg{display:block}'));
   assert.ok(css.includes('line-height:0'));
 });
+
+test('inside the candidate details the badge keeps its own layout (the label rule for spans does not apply to it)', () => {
+  assert.ok(css.includes('.applicant-info-item span{display:block;'), 'the label rule that used to push the badge around still exists');
+  assert.ok(css.includes('.applicant-info-item .ai-impression{display:inline-flex;margin-bottom:0}'), 'and is overridden for the badge, with a more specific selector');
+});
