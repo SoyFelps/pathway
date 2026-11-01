@@ -270,6 +270,12 @@
   // ---- AI interview: tags on the cards, the tab in the candidate panel, the questions of a job -------------------------------
   const aiInterviewKey = (flowId, email) => flowId + '|' + String(email || '').trim().toLowerCase();
   const aiInterviewFor = (flowId, email) => aiInterviewMap.get(aiInterviewKey(flowId, email)) || null;
+  // Witcher erases every interview one year after it was created (transcript, written evaluation, name, e-mail, all of it). Only the
+  // state and the impression badge, kept here, remain. Same rule as `witcher_purge_old` in Witcher's database (one year, not configurable).
+  const AI_RETENTION_MS = 365 * 24 * 3600 * 1000;
+  const aiInterviewPurged = row => Boolean(row && row.state === 'completed' && row.createdAt && Date.now() - Date.parse(row.createdAt) > AI_RETENTION_MS);
+  const aiPurgedText = impression => 'This interview is more than 12 months old, so its transcript and written evaluation were deleted from the interview service to save space.'
+    + (impression === 'positive' || impression === 'negative' ? ' Even though they were deleted, the system recorded that the impression was ' + impression + '.' : '');
   // rows arrive newest first: the first one of a candidate is the interview in play, older cancelled ones are history
   function setAiInterviews(rows) {
     const next = new Map();
@@ -357,6 +363,7 @@
     const when = value => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : ''; };
     const clock = seconds => Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
     const info = (label, value) => value ? '<div class="applicant-info-item"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>' : '';
+    const impressionItem = row => '<div class="applicant-info-item"><span>Impression</span><strong>' + (aiImpressionLabelled(row.impression) || 'Not available') + '</strong></div>';
     let confirming = '';
     let busy = false;
     let timer = null;
@@ -401,12 +408,13 @@
         const left = typeof live.resendsLeft === 'number' ? live.resendsLeft : null;
         body = '<div class="applicant-info-grid">' + info('Sent to', row.email) + info('Last e-mail', when(live.lastInviteAt)) + info('Link valid until', when(live.expiresAt)) + (left === null ? '' : info('Re-sends left', String(left))) + '</div><p class="muted">The candidate has not started yet. Re-sending e-mails the same link with a new access code (once a day, up to 3 times).</p><div class="ai-actions">' + button('resend', 'Re-send e-mail', '', left === 0) + cancelControl('Cancel invitation') + '</div>';
       } else if (row.state === 'in_progress') body = '<p>The candidate is answering the interview right now.</p><div class="applicant-info-grid">' + info('Started', when(live.startedAt)) + '</div><p class="muted">Leaving or refreshing the page cancels the interview automatically.</p>';
+      else if (aiInterviewPurged(row)) body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt)) + impressionItem(row) + '</div><div class="ai-note">' + esc(aiPurgedText(row.impression)) + '</div>';
       else if (row.state === 'completed') {
         const ready = row.evaluationReady && live.evaluation;
         const working = !ready && (reevaluating === 'sending' || live.evaluating === true);
         if (live.evaluating === true) triedReevaluating = true;
         if (reevaluating === 'running' && live.evaluating !== true) reevaluating = ''; // Witcher stopped: it either wrote the evaluation or failed
-        body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt || live.completedAt)) + '<div class="applicant-info-item"><span>Impression</span><strong>' + (aiImpressionLabelled(row.impression) || 'Not available') + '</strong></div></div>'
+        body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt || live.completedAt)) + impressionItem(row) + '</div>'
           + (ready ? '<h4>Evaluation</h4><p class="ai-evaluation">' + esc(live.evaluation) + '</p>'
             : working ? '<div class="ai-note is-working" role="status"><strong>Writing the evaluation…</strong> This can take up to a minute. This page updates by itself.</div>'
             : '<div class="ai-note is-warn"><strong>The evaluation is not ready.</strong> ' + (triedReevaluating ? 'The AI could not write it this time either. You can try again, or read the conversation below.' : 'The AI could not write it automatically. Read the conversation below, or ask for a new evaluation.') + '</div><div class="ai-actions">' + button('reevaluate', 'Write the evaluation again') + '</div>')
@@ -2071,7 +2079,8 @@
       add('aiInterviewNote', '', { note: 'AI interview data comes from Witcher, the interview service Pathway uses. Only the transcript is kept: the audio of the answers is never stored. The impression and the evaluation are written by an AI to help the hiring team; the AI does not decide who moves forward.' });
       [...interview.rows].reverse().forEach((row, index) => add('aiInterview', String(index + 1), { state: row.state, createdAt: row.createdAt, completedAt: row.completedAt, impression: row.impression }));
       const live = interview.live;
-      if (live && live.status === 'completed') {
+      if (aiInterviewPurged(interview.rows[0])) add('aiInterviewResult', '', { impression: interview.rows[0].impression, note: aiPurgedText(interview.rows[0].impression) });
+      else if (live && live.status === 'completed') {
         add('aiInterviewResult', '', { impression: live.impression, evaluation: live.evaluation, answeredInEnglishOnly: live.languageFlag ? 'no (an answer in another language sets the impression to negative)' : 'yes' });
         (live.messages || []).filter(message => message.kind !== 'closing').forEach(message => add('aiInterviewTranscript', String(message.seq), {
           speaker: message.role === 'ai' ? 'AI interviewer' : 'Candidate',

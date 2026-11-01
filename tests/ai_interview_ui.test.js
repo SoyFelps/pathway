@@ -221,3 +221,18 @@ test('the "left before finishing" panel says when and where the candidate left, 
   const user = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'ai-interview', 'index.ts'), 'utf8');
   assert.ok(user.includes('abandonedAt: result.json.abandonedAt') && user.includes('progress: result.json.progress'));
 });
+
+test('after 12 months the transcript and evaluation are gone: the panel and the export say so and keep the impression (retention rule of 2026-11-01)', () => {
+  assert.ok(builder.includes('const AI_RETENTION_MS = 365 * 24 * 3600 * 1000;'));
+  assert.ok(builder.includes("row.state === 'completed' && row.createdAt && Date.now() - Date.parse(row.createdAt) > AI_RETENTION_MS"));
+  assert.ok(builder.includes('This interview is more than 12 months old, so its transcript and written evaluation were deleted from the interview service to save space.'));
+  assert.ok(builder.includes('Even though they were deleted, the system recorded that the impression was '));
+  const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
+  assert.ok(panel.indexOf('aiInterviewPurged(row)') > 0 && panel.indexOf('aiInterviewPurged(row)') < panel.indexOf("row.state === 'completed') {"), 'the old-interview message comes before the normal completed view (no "write the evaluation again" button)');
+  assert.ok(builder.includes('if (aiInterviewPurged(interview.rows[0])) add(\'aiInterviewResult\''), 'the export says it too');
+});
+
+test('the panel row carries createdAt, which the 12-month rule needs', () => {
+  const backend = fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8');
+  assert.ok(backend.includes('createdAt: payload.interview.createdAt || null'));
+});

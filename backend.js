@@ -123,7 +123,7 @@
   }
   async function getAiInterviewStatus(flowId, email) {
     const payload = await callAiInterview({ action: 'status', flowId, email });
-    return { interview: payload.interview ? { id: payload.interview.id, flowId: payload.interview.flowId, email: payload.interview.email, state: payload.interview.state, blockedReason: payload.interview.blockedReason || null, sendAt: payload.interview.sendAt, impression: payload.interview.impression || null, evaluationReady: Boolean(payload.interview.evaluationReady), completedAt: payload.interview.completedAt || null } : null, live: payload.live || null, liveError: payload.liveError || '' };
+    return { interview: payload.interview ? { id: payload.interview.id, flowId: payload.interview.flowId, email: payload.interview.email, state: payload.interview.state, blockedReason: payload.interview.blockedReason || null, sendAt: payload.interview.sendAt, impression: payload.interview.impression || null, evaluationReady: Boolean(payload.interview.evaluationReady), completedAt: payload.interview.completedAt || null, createdAt: payload.interview.createdAt || null } : null, live: payload.live || null, liveError: payload.liveError || '' };
   }
   const aiInterviewAction = (action, aiInterviewId) => callAiInterview({ action, aiInterviewId });
   // Bell notices for finished interviews (one per interview and person; each person marks it seen on their own).
