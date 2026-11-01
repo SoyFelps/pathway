@@ -94,3 +94,9 @@ test('the impression is a thumb, green up for positive and red down for negative
   assert.ok(css.includes('.ai-impression.is-positive{background:var(--positive-bg);color:var(--positive-text)}'), 'positive is green');
   assert.ok(css.includes('.ai-impression.is-negative{background:var(--red-bg);color:var(--red-text)}'), 'negative is red');
 });
+
+test('the board columns are wide enough for the interview tag and its thumb to stay on one line', () => {
+  assert.ok(css.includes('grid-template-columns:repeat(4,minmax(240px,1fr))'), 'desktop columns are at least 240px');
+  assert.ok(css.includes('minmax(225px,1fr)'), 'medium screens keep a slightly narrower minimum');
+  assert.ok(!css.includes('minmax(215px,1fr)'), 'the old narrow minimum is gone everywhere, Failed column included');
+});
