@@ -297,12 +297,12 @@
       case 'pending': return ['Setting up AI Interview', 'wait'];
       case 'blocked': return [(AI_BLOCK_TEXT[row.blockedReason] || ['Interview waiting'])[0], 'warn'];
       case 'invited': return ['Invite sent for AI Interview', 'ok'];
-      case 'in_progress': return ['Interview in progress', 'ok'];
+      case 'in_progress': return ['AI Interview in progress', 'ok'];
       case 'completed': return [row.evaluationReady ? 'AI Interview completed' : 'AI Interview completed · evaluation pending', row.evaluationReady ? 'ok' : 'warn'];
-      case 'abandoned': return ['Interview left', 'muted'];
-      case 'expired': return ['Interview expired', 'muted'];
-      case 'cancelled': return ['Interview cancelled', 'muted'];
-      case 'failed': return ['Interview not sent', 'warn'];
+      case 'abandoned': return ['AI Interview left', 'muted'];
+      case 'expired': return ['AI Interview expired', 'muted'];
+      case 'cancelled': return ['AI Interview cancelled', 'muted'];
+      case 'failed': return ['AI Interview not sent', 'warn'];
       default: return null;
     }
   }
