@@ -50,7 +50,8 @@ set search_path = ''
 as $$
 declare
   v_has boolean := new.status = 'active' and coalesce(new.current_period_end, '-infinity'::timestamptz) > now();
-  v_had boolean := tg_op = 'UPDATE' and old.status = 'active' and coalesce(old.current_period_end, '-infinity'::timestamptz) > now();
+  -- Only the status counts for "had it": Stripe's end-of-period notice arrives AFTER the stored end date, so looking at the date would miss it.
+  v_had boolean := tg_op = 'UPDATE' and old.status = 'active';
 begin
   -- Only the moment the plan is lost (or a subscription is recorded that never had access).
   if not v_has and (tg_op = 'INSERT' or v_had) then

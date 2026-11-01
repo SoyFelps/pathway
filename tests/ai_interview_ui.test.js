@@ -268,3 +268,9 @@ test('free plan, server side: status is not even requested from Witcher, the wor
   assert.ok(sql.includes('cancel_requested_at <= now()'), 'the worker is woken for a due cancellation');
   assert.ok(sql.includes('revoke all on function public.ai_interview_free_plan_cleanup(uuid)'));
 });
+
+test('plan loss is detected from the status only: Stripe\'s end-of-period notice arrives after the stored end date', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261101140000_free_plan_locks.sql'), 'utf8');
+  assert.ok(sql.includes("v_had boolean := tg_op = 'UPDATE' and old.status = 'active';"));
+  assert.ok(!/v_had boolean[^;]*current_period_end/.test(sql), 'the stored date must not decide whether the plan was had');
+});
