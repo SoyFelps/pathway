@@ -191,3 +191,9 @@ test('every way of deleting a candidate, a job, a workspace or an account reache
   const worker = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'ai-interview-webhook', 'index.ts'), 'utf8');
   assert.ok(worker.includes('eraseQueued()') && worker.includes('callWitcher(witcher, "delete"'), 'the worker empties the queue');
 });
+
+test('the delete-candidate confirmation tells the person that the AI interview goes too, when there is one', () => {
+  const confirm = builder.slice(builder.indexOf('const showConfirm = () => {'), builder.indexOf("row.querySelector('#cancel-delete-candidate')"));
+  assert.ok(confirm.includes("aiInterviewFor(flowId, email) ? ', their AI interview (answers, evaluation and impression)' : ''"));
+  assert.ok(confirm.includes('the resume file') && confirm.includes('the team comments about them. This cannot be undone.'), 'the rest of the warning is unchanged');
+});
