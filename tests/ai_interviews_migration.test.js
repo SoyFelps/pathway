@@ -35,3 +35,10 @@ test('the migration stores no secret and no Witcher address', () => {
   assert.ok(!/sk_|whsec_|WITCHER_API_KEY|WITCHER_WEBHOOK_SECRET|functions\/v1/.test(sql));
   assert.ok(sql.includes("cron.schedule('ai-interview-tick', '10 seconds'"));
 });
+
+test('a waiting row that already exists in Witcher is queued for erasure too (found in the first production test)', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261101120000_ai_interview_erase_created.sql'), 'utf8');
+  assert.ok(sql.includes("old.state not in ('pending', 'blocked') or old.witcher_interview_id is not null"));
+  assert.ok(sql.includes('revoke all on function public.ai_interview_queue_erasure()'));
+  assert.ok(!/drop |delete from|update public\./i.test(sql.replace(/--.*$/gm, '')), 'no data changes');
+});
