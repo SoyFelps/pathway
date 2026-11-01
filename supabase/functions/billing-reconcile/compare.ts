@@ -2,6 +2,8 @@
 // decide what is a safe correction and what only needs a human. No Deno or network access: tested in Node.
 // Stripe is the source of truth. The same fields are kept as the webhook keeps them (status, end of the period, cancel at period end).
 
+const FINISHED_STATUSES = new Set(["canceled", "incomplete_expired"]);
+
 export const RECENT_UPDATE_GRACE_MS = 60 * 60 * 1000; // a row changed in the last hour is left alone (the webhook may be mid-flight)
 
 export interface StripeSubscription {
@@ -91,19 +93,21 @@ export function compareSubscriptions(
   }
 
   // Subscriptions Stripe has for a workspace and the database has no record of (for example the checkout notice never arrived).
-  const createdFor = new Set<string>(); // a workspace has one record: a second subscription for it is for a person to look at
-  for (const remote of stripe) {
-    if (knownSubscriptionIds.has(remote.id)) continue;
-    if (!remote.workspaceId) continue; // not made by Pathway (other products on the same Stripe account): ignored on purpose
-    if (!workspaceExists.has(remote.workspaceId)) {
-      findings.push({ kind: "review", reason: "stripe_subscription_without_workspace", workspaceId: remote.workspaceId, subscriptionId: remote.id, detail: "Stripe has a subscription for a workspace that does not exist (any more)." });
+  // A finished subscription (canceled, or a checkout that expired) is history, not a difference: a workspace that cancelled and
+  // subscribed again has the old one in Stripe forever, so those are ignored. Only a live one is looked at.
+  const createdFor = new Set<string>(); // a workspace has one record: a second live subscription for it is for a person to look at
+  const unknown = stripe.filter((item) => !knownSubscriptionIds.has(item.id) && item.workspaceId && !FINISHED_STATUSES.has(item.status));
+  for (const remote of unknown) {
+    const workspaceId = remote.workspaceId as string;
+    if (!workspaceExists.has(workspaceId)) {
+      findings.push({ kind: "review", reason: "stripe_subscription_without_workspace", workspaceId, subscriptionId: remote.id, detail: "Stripe has a live subscription for a workspace that does not exist (any more)." });
       summary.reviews++;
-    } else if (workspacesWithRow.has(remote.workspaceId) || createdFor.has(remote.workspaceId)) {
-      findings.push({ kind: "review", reason: "stripe_subscription_unknown_workspace_has_other", workspaceId: remote.workspaceId, subscriptionId: remote.id, detail: "The workspace already has a different subscription recorded." });
+    } else if (workspacesWithRow.has(workspaceId) || createdFor.has(workspaceId)) {
+      findings.push({ kind: "review", reason: "stripe_subscription_unknown_workspace_has_other", workspaceId, subscriptionId: remote.id, detail: "The workspace has a live subscription in Stripe besides the one recorded: it may be charged twice." });
       summary.reviews++;
     } else {
-      createdFor.add(remote.workspaceId);
-      findings.push({ kind: "create", workspaceId: remote.workspaceId, subscriptionId: remote.id, target: remote });
+      createdFor.add(workspaceId);
+      findings.push({ kind: "create", workspaceId, subscriptionId: remote.id, target: remote });
       summary.creates++;
     }
   }

@@ -75,6 +75,26 @@ test('two subscriptions for one workspace without a record: only the first is cr
   assert.deepEqual(findings.map(item => item.kind + ':' + (item.reason || item.subscriptionId)), ['create:sub_a', 'review:stripe_subscription_unknown_workspace_has_other']);
 });
 
+test('old finished subscriptions are history: a workspace that cancelled and subscribed again raises no alarm', async () => {
+  const { compareSubscriptions } = await compare();
+  const old = st({ id: 'sub_old', status: 'canceled' });
+  const expired = st({ id: 'sub_expired', status: 'incomplete_expired' });
+  // The record points to the new subscription; the old canceled one and an abandoned checkout are still listed by Stripe.
+  const { findings } = compareSubscriptions([db({ stripe_subscription_id: 'sub_new' })], [st({ id: 'sub_new' }), old, expired], new Set(['w1']), NOW);
+  assert.deepEqual(findings, []);
+  // A finished subscription of a workspace that is gone, or of one with no record at all, is ignored too.
+  assert.deepEqual(compareSubscriptions([], [old], new Set(), NOW).findings, []);
+  assert.deepEqual(compareSubscriptions([], [old], new Set(['w1']), NOW).findings, []);
+});
+
+test('two LIVE subscriptions for one workspace are reported (possible double charge); finished ones never count', async () => {
+  const { compareSubscriptions } = await compare();
+  const { findings } = compareSubscriptions([db({ stripe_subscription_id: 'sub_a' })], [st({ id: 'sub_a' }), st({ id: 'sub_b' })], new Set(['w1']), NOW);
+  assert.deepEqual(findings.map(item => item.kind + ':' + item.reason), ['review:stripe_subscription_unknown_workspace_has_other']);
+  const order = compareSubscriptions([], [st({ id: 'sub_old', status: 'canceled' }), st({ id: 'sub_live' })], new Set(['w1']), NOW).findings;
+  assert.deepEqual(order.map(item => item.kind + ':' + item.subscriptionId), ['create:sub_live']);
+});
+
 test('access is the same rule the database uses: active and the end date in the future', async () => {
   const { hasAccess } = await compare();
   assert.equal(hasAccess('active', '2026-11-27T00:00:00Z', NOW), true);
