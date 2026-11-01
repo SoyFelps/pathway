@@ -233,6 +233,55 @@ async function eraseQueued(): Promise<{ erased: number; pending: number }> {
   return { erased, pending };
 }
 
+const CANCEL_RETRY_SECONDS = 60;
+
+/**
+ * Interviews that were sent but not started when the workspace lost its plan (the database sets cancel_requested_at): cancelled in
+ * Witcher, so the link stops working. A failed try is repeated every minute; if the plan came back meanwhile, or the candidate started,
+ * nothing is cancelled. An interview already in progress is never cut: the candidate finishes.
+ */
+async function cancelForPlan(): Promise<number> {
+  const now = new Date().toISOString();
+  const { data: due, error } = await admin!.from("ai_interviews").select("id,workspace_id,state,completed_at")
+    .eq("state", "invited").not("cancel_requested_at", "is", null).lte("cancel_requested_at", now).limit(TICK_BATCH);
+  if (error) throw error;
+  let cancelled = 0;
+  for (const row of due ?? []) {
+    // Push the next try out first, so an overlapping tick leaves this row alone; a failure below simply keeps that delay.
+    await admin!.from("ai_interviews").update({ cancel_requested_at: inSeconds(CANCEL_RETRY_SECONDS) }).eq("id", row.id);
+    if (await premiumActive(row.workspace_id)) {
+      await admin!.from("ai_interviews").update({ cancel_requested_at: null }).eq("id", row.id);
+      continue;
+    }
+    const live = await callWitcher(witcher, "get", { externalId: row.id });
+    const gone = live.status === 404; // nothing exists in Witcher: only the row here needs to change
+    if (!gone && !live.ok) continue;
+    const witcherState = gone ? "invited" : stateFromWitcher(live.json.status);
+    if (witcherState === "invited" || witcherState === "pending") {
+      if (!gone) {
+        const result = await callWitcher(witcher, "cancel", { externalId: row.id });
+        if (!result.ok && result.status !== 409) continue;
+        if (!result.ok) { await syncAfterRace(row, live.json); continue; }
+      }
+      const { error: cancelError } = await admin!.from("ai_interviews")
+        .update({ state: "cancelled", cancel_reason: "plan", impression: null, evaluation_ready: false, cancel_requested_at: null })
+        .eq("id", row.id).eq("state", "invited");
+      if (cancelError) throw cancelError;
+      cancelled++;
+    } else {
+      await syncAfterRace(row, live.json);
+    }
+  }
+  return cancelled;
+}
+
+/** The candidate moved on before the cancellation (started, finished, left): take what Witcher says and stop trying to cancel. */
+async function syncAfterRace(row: Row, view: Record<string, unknown>) {
+  const update = updateFromWitcher(row as { state: string; completed_at?: string | null }, view);
+  const { error } = await admin!.from("ai_interviews").update({ ...(update ?? {}), cancel_requested_at: null }).eq("id", row.id);
+  if (error) throw error;
+}
+
 async function tick(): Promise<Response> {
   if (!witcher.url || !witcher.apiKey) return reply(200, { skipped: "witcher_not_configured" });
   const counts: Record<string, number> = { sent: 0, blocked: 0, dropped: 0, retry: 0, failed: 0 };
@@ -245,7 +294,8 @@ async function tick(): Promise<Response> {
       counts.retry++;
     }
   }
-  return reply(200, { ...counts, ...(await eraseQueued()) });
+  const cancelledForPlan = await cancelForPlan();
+  return reply(200, { ...counts, cancelledForPlan, ...(await eraseQueued()) });
 }
 
 Deno.serve(async (req: Request) => {

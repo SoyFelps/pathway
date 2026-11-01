@@ -274,6 +274,10 @@
   // state and the impression badge, kept here, remain. Same rule as `witcher_purge_old` in Witcher's database (one year, not configurable).
   const AI_RETENTION_MS = 365 * 24 * 3600 * 1000;
   const aiInterviewPurged = row => Boolean(row && row.state === 'completed' && row.createdAt && Date.now() - Date.parse(row.createdAt) > AI_RETENTION_MS);
+  // A workspace on the free plan (it was Premium before, since only published jobs bring candidates): candidates cannot be moved between stages
+  // (the database refuses it too), and the transcript and written evaluation of AI interviews are hidden. Only the owner sees these notes.
+  const workspaceIsFree = () => { const item = workspace && myWorkspaces.find(entry => entry.id === workspace.id); return Boolean(item) && !item.premiumActive; };
+  const FREE_MOVE_NOTE = 'This workspace is on the free plan. Upgrade to Premium to move candidates between stages.';
   const aiPurgedText = impression => 'This interview is more than 12 months old, so its transcript and written evaluation were deleted from the interview service to save space.'
     + (impression === 'positive' || impression === 'negative' ? ' Even though they were deleted, the system recorded that the impression was ' + impression + '.' : '');
   // rows arrive newest first: the first one of a candidate is the interview in play, older cancelled ones are history
@@ -409,6 +413,7 @@
         body = '<div class="applicant-info-grid">' + info('Sent to', row.email) + info('Last e-mail', when(live.lastInviteAt)) + info('Link valid until', when(live.expiresAt)) + (left === null ? '' : info('Re-sends left', String(left))) + '</div><p class="muted">The candidate has not started yet. Re-sending e-mails the same link with a new access code (once a day, up to 3 times).</p><div class="ai-actions">' + button('resend', 'Re-send e-mail', '', left === 0) + cancelControl('Cancel invitation') + '</div>';
       } else if (row.state === 'in_progress') body = '<p>The candidate is answering the interview right now.</p><div class="applicant-info-grid">' + info('Started', when(live.startedAt)) + '</div><p class="muted">Leaving or refreshing the page cancels the interview automatically.</p>';
       else if (aiInterviewPurged(row)) body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt)) + impressionItem(row) + '</div><div class="ai-note">' + esc(aiPurgedText(row.impression)) + '</div>';
+      else if (data.locked && row.state === 'completed') body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt)) + impressionItem(row) + '</div><div class="ai-note is-warn"><strong>Upgrade to Premium to see the transcript and the written evaluation of this interview.</strong> The impression above was recorded when the interview ended.</div>';
       else if (row.state === 'completed') {
         const ready = row.evaluationReady && live.evaluation;
         const working = !ready && (reevaluating === 'sending' || live.evaluating === true);
@@ -419,7 +424,7 @@
             : working ? '<div class="ai-note is-working" role="status"><strong>Writing the evaluation…</strong> This can take up to a minute. This page updates by itself.</div>'
             : '<div class="ai-note is-warn"><strong>The evaluation is not ready.</strong> ' + (triedReevaluating ? 'The AI could not write it this time either. You can try again, or read the conversation below.' : 'The AI could not write it automatically. Read the conversation below, or ask for a new evaluation.') + '</div><div class="ai-actions">' + button('reevaluate', 'Write the evaluation again') + '</div>')
           + '<p class="muted">The impression and the evaluation are written by an AI to help your team. The AI does not decide who moves forward; your team does.</p><h4>Conversation</h4>' + conversationHtml(live.messages);
-      } else if (row.state === 'cancelled') body = '<p>This invitation was cancelled and its link no longer works.</p>' + reinviteBlock(row);
+      } else if (row.state === 'cancelled') body = (row.cancelReason === 'plan' ? '<p>This interview was cancelled when the workspace was on the free plan, and its link no longer works. Invite this candidate again if you want them to take the AI interview.</p>' : '<p>This invitation was cancelled and its link no longer works.</p>') + reinviteBlock(row);
       else if (row.state === 'abandoned') {
         const progress = live.progress || null;
         let where = '';
@@ -2605,13 +2610,14 @@
     const stages = visibleApplicantStages();
     const otherStageCount = stages.length - 1;
     const applicationTotal = visible.reduce((total, group) => total + group.count, 0);
-    content.innerHTML = `<div class="kanban-summary"><strong>${visible.length}</strong> ${visible.length === 1 ? 'applicant' : 'applicants'}${applicationTotal > visible.length ? ` <span class="kanban-summary-extra">· ${applicationTotal} applications</span>` : ''}${filterName ? ` for <strong>${esc(filterName)}</strong>` : ' across all jobs'}${applicants.length >= 1000 ? ' · Showing the latest 1,000; filter by job to narrow the list.' : ''}</div><section class="kanban-board failed-board${failedColumnOpen ? ' failed-open' : ''}" style="--other-stages:${otherStageCount}" aria-label="Applicant pipeline">${stages.map(stage => {
+    const freeNote = isOwner && workspaceIsFree() ? `<div class="ai-note is-warn applicants-free-note" role="note"><span><strong>This workspace is on the free plan.</strong> Upgrade to Premium to move candidates between stages.</span><button type="button" class="btn btn-sm btn-primary" data-open-plan>See plans</button></div>` : '';
+    content.innerHTML = `${freeNote}<div class="kanban-summary"><strong>${visible.length}</strong> ${visible.length === 1 ? 'applicant' : 'applicants'}${applicationTotal > visible.length ? ` <span class="kanban-summary-extra">· ${applicationTotal} applications</span>` : ''}${filterName ? ` for <strong>${esc(filterName)}</strong>` : ' across all jobs'}${applicants.length >= 1000 ? ' · Showing the latest 1,000; filter by job to narrow the list.' : ''}</div><section class="kanban-board failed-board${failedColumnOpen ? ' failed-open' : ''}" style="--other-stages:${otherStageCount}" aria-label="Applicant pipeline">${stages.map(stage => {
       const cards = visible.filter(group => group.status === stage.key);
       const cardHtml = group => {
         const applicant = group.latest;
         // A candidate who applied more than once shows a small count in the corner of the card (the full wording is its tooltip).
         const repeat = group.count > 1 ? `<span class="repeat-badge" role="img" aria-label="Applied ${group.count} times" title="This candidate applied ${group.count} times"><span aria-hidden="true">↻</span>${group.count}</span>` : '';
-        return `<article class="applicant-card${group.count > 1 ? ' has-repeat' : ''}" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}${group.count > 1 ? `, ${group.count} applications` : ''}">${repeat}<h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span></span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}</article>`;
+        return `<article class="applicant-card${group.count > 1 ? ' has-repeat' : ''}" data-applicant="${esc(applicant.id)}" draggable="${workspaceIsFree() ? 'false' : 'true'}" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}${group.count > 1 ? `, ${group.count} applications` : ''}">${repeat}<h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span></span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}</article>`;
       };
       if (stage.key === 'failed') {
         const head = `<div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div>`;
@@ -2621,6 +2627,7 @@
       }
       return `<section class="kanban-column" data-stage="${esc(stage.key)}" aria-label="${esc(stage.label)}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
     }).join('')}</section>`;
+    content.querySelector('[data-open-plan]')?.addEventListener('click', renderMyPlan);
     content.querySelectorAll('[data-failed-toggle]').forEach(button => button.addEventListener('click', () => { failedColumnOpen = !failedColumnOpen; renderApplicantBoard(); }));
     content.querySelector('[data-failed-clear]')?.addEventListener('click', confirmClearFailedApplicants);
     content.querySelectorAll('.applicant-card').forEach(card => {
@@ -2674,6 +2681,7 @@
   async function moveApplicant(id, status) {
     const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
     if (!group || group.status === status || !allApplicantStages().some(stage => stage.key === status)) return;
+    if (workspaceIsFree()) { showToast(FREE_MOVE_NOTE, 6000); return; }
     // The stage belongs to the candidate: every application from the same address to the same job moves together.
     const members = group.items;
     const previous = members.map(member => member.status);
@@ -2898,7 +2906,7 @@
           try {
             const [rows, status] = await Promise.all([
               window.PathwayBackend.listAiInterviews(workspace.id, flowId),
-              window.PathwayBackend.getAiInterviewStatus(flowId, email).catch(() => ({ failed: true }))
+              window.PathwayBackend.getAiInterviewStatus(flowId, email, 'export').catch(() => ({ failed: true }))
             ]);
             const mine = rows.filter(item => String(item.email || '').trim().toLowerCase() === email);
             if (mine.length) {
@@ -2966,7 +2974,7 @@
         ${tabs}
         <div class="applicant-review-content">
           <section class="applicant-detail-section applicant-detail-actions-section"><div class="applicant-detail-actions">
-            <label class="applicant-info-item"><span>Hiring stage</span><select class="applicant-status-select" id="applicant-status-select">${statusOptions}</select>${group.count > 1 ? `<small class="applicant-stage-note">Applies to all ${group.count} applications</small>` : ''}</label>${autoFailReason ? `<p class="applicant-autofail-note"><strong>Moved to Failed automatically:</strong> ${esc(autoFailReason)}</p>` : ''}
+            <label class="applicant-info-item"><span>Hiring stage</span><select class="applicant-status-select" id="applicant-status-select"${workspaceIsFree() ? ' disabled title="Upgrade to Premium to move candidates between stages."' : ''}>${statusOptions}</select>${group.count > 1 ? `<small class="applicant-stage-note">Applies to all ${group.count} applications</small>` : ''}</label>${autoFailReason ? `<p class="applicant-autofail-note"><strong>Moved to Failed automatically:</strong> ${esc(autoFailReason)}</p>` : ''}
           </div></section>
           <section class="applicant-detail-section"><h3>Candidate details</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Full name</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>Email address</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(C.infoFieldLabel(key))}</span><strong>${esc(value)}</strong></div>`).join('')}</div></section>
           <section class="applicant-detail-section"><h3>Application answers · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || 'Application question')}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : '<div class="board-empty">No written answers were submitted for this flow.</div>'}</section>

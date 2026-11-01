@@ -121,9 +121,10 @@
     if (!result.ok) { const error = new Error(payload.error || 'The interview service could not complete this request.'); error.code = payload.code || null; error.retryAt = payload.retryAt || null; throw error; }
     return payload;
   }
-  async function getAiInterviewStatus(flowId, email) {
-    const payload = await callAiInterview({ action: 'status', flowId, email });
-    return { interview: payload.interview ? { id: payload.interview.id, flowId: payload.interview.flowId, email: payload.interview.email, state: payload.interview.state, blockedReason: payload.interview.blockedReason || null, sendAt: payload.interview.sendAt, impression: payload.interview.impression || null, evaluationReady: Boolean(payload.interview.evaluationReady), completedAt: payload.interview.completedAt || null, createdAt: payload.interview.createdAt || null } : null, live: payload.live || null, liveError: payload.liveError || '' };
+  // `purpose` "export" is the candidate data export, the one place that still reads the transcript on the free plan.
+  async function getAiInterviewStatus(flowId, email, purpose) {
+    const payload = await callAiInterview({ action: 'status', flowId, email, ...(purpose ? { purpose } : {}) });
+    return { interview: payload.interview ? { id: payload.interview.id, flowId: payload.interview.flowId, email: payload.interview.email, state: payload.interview.state, blockedReason: payload.interview.blockedReason || null, sendAt: payload.interview.sendAt, impression: payload.interview.impression || null, evaluationReady: Boolean(payload.interview.evaluationReady), completedAt: payload.interview.completedAt || null, createdAt: payload.interview.createdAt || null, cancelReason: payload.interview.cancelReason || null } : null, live: payload.live || null, liveError: payload.liveError || '', locked: Boolean(payload.locked) };
   }
   const aiInterviewAction = (action, aiInterviewId) => callAiInterview({ action, aiInterviewId });
   // Bell notices for finished interviews (one per interview and person; each person marks it seen on their own).

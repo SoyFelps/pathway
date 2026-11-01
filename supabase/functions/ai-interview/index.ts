@@ -60,7 +60,7 @@ async function authenticate(req: Request): Promise<{ userClient: SupabaseClient 
   return { userClient };
 }
 
-const ROW_COLUMNS = "id,workspace_id,flow_id,candidate_email,applicant_id,state,blocked_reason,send_at,witcher_interview_id,impression,evaluation_ready,completed_at,created_at";
+const ROW_COLUMNS = "id,workspace_id,flow_id,candidate_email,applicant_id,state,blocked_reason,send_at,witcher_interview_id,impression,evaluation_ready,completed_at,created_at,cancel_reason";
 
 /** The row, only if the person may review the candidates of its workspace (the database policy decides, not this code). */
 async function visibleRow(userClient: SupabaseClient, body: Record<string, unknown>): Promise<Row | null> {
@@ -89,6 +89,7 @@ function publicRow(row: Row) {
   return {
     id: row.id, flowId: row.flow_id, email: row.candidate_email, state: row.state, blockedReason: row.blocked_reason,
     sendAt: row.send_at, impression: row.impression, evaluationReady: row.evaluation_ready, completedAt: row.completed_at, createdAt: row.created_at,
+    cancelReason: row.cancel_reason ?? null,
   };
 }
 
@@ -106,6 +107,11 @@ async function actionStatus(req: Request, userClient: SupabaseClient, body: Reco
   if (!row) return response(req, 200, { interview: null });
   if (!row.witcher_interview_id || ["pending", "blocked", "failed", "cancelled"].includes(row.state)) {
     return response(req, 200, { interview: publicRow(row), live: null });
+  }
+  // Free plan: the transcript, the written evaluation and every other detail stay in Witcher and are not even requested (only the
+  // impression badge and the state, kept here, are shown). The candidate data export is the one exception (purpose "export").
+  if (body.purpose !== "export" && !(await premiumActive(row.workspace_id))) {
+    return response(req, 200, { interview: publicRow(row), live: null, locked: true });
   }
   const result = await callWitcher(witcher, "get", { externalId: row.id });
   if (result.status === 404) return response(req, 200, { interview: publicRow(row), live: null });

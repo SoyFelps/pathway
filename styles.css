@@ -811,3 +811,5 @@ body:has(#canvas-stage) .toast{bottom:80px}
   .workspace-body.is-board .kanban-summary{flex:0 0 auto}
   .workspace-body.is-board .kanban-board{flex:1 1 auto;min-height:300px;overflow:auto;padding-bottom:0;scrollbar-color:var(--green-hover) var(--border-subtle)}
 }
+/* Free plan note above the applicants board (owner only) */
+.applicants-free-note{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}

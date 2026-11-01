@@ -181,7 +181,7 @@ test('the candidate data export includes the AI interview (history, impression, 
   assert.ok(csv.includes('the audio of the answers is never stored'), 'the audio is never part of it');
   assert.ok(csv.includes("message.kind !== 'closing'"), 'the closing line of the AI is not a candidate record');
   const click = builder.slice(builder.indexOf("row.querySelector('#export-candidate')"), builder.indexOf('const showConfirm'));
-  assert.ok(click.includes('window.PathwayBackend.listAiInterviews(workspace.id, flowId)') && click.includes('getAiInterviewStatus(flowId, email)'));
+  assert.ok(click.includes('window.PathwayBackend.listAiInterviews(workspace.id, flowId)') && click.includes("getAiInterviewStatus(flowId, email, 'export')"));
   assert.ok(click.includes('the AI interview part could not be loaded'), 'an export without the interview is never mistaken for a complete one');
 });
 
@@ -235,4 +235,36 @@ test('after 12 months the transcript and evaluation are gone: the panel and the 
 test('the panel row carries createdAt, which the 12-month rule needs', () => {
   const backend = fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8');
   assert.ok(backend.includes('createdAt: payload.interview.createdAt || null'));
+});
+
+test('free plan (owner decisions 2026-11-01): stage moves locked with a note, transcript and evaluation hidden, plan cancellation explained', () => {
+  assert.ok(builder.includes("const workspaceIsFree = () =>") && builder.includes('!item.premiumActive'));
+  assert.ok(builder.includes("'This workspace is on the free plan. Upgrade to Premium to move candidates between stages.'"));
+  assert.ok(builder.includes("if (workspaceIsFree()) { showToast(FREE_MOVE_NOTE, 6000); return; }"), 'moveApplicant refuses on the free plan');
+  assert.ok(builder.includes("const freeNote = isOwner && workspaceIsFree()"), 'the note above the board is for the owner only');
+  assert.ok(builder.includes("draggable=\"${workspaceIsFree() ? 'false' : 'true'}\"") && builder.includes('id="applicant-status-select"${workspaceIsFree()'));
+  assert.ok(builder.includes("data.locked && row.state === 'completed'") && builder.includes('Upgrade to Premium to see the transcript and the written evaluation of this interview.'));
+  assert.ok(builder.includes('This interview was cancelled when the workspace was on the free plan, and its link no longer works. Invite this candidate again if you want them to take the AI interview.'));
+  assert.ok(builder.includes("getAiInterviewStatus(flowId, email, 'export')"), 'the candidate data export stays complete');
+  const backend = fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8');
+  assert.ok(backend.includes("...(purpose ? { purpose } : {})") && backend.includes('locked: Boolean(payload.locked)') && backend.includes("cancelReason: payload.interview.cancelReason || null"));
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.ok(css.includes('.applicants-free-note{'));
+});
+
+test('free plan, server side: status is not even requested from Witcher, the worker cancels sent interviews, the database refuses stage moves', () => {
+  const user = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'ai-interview', 'index.ts'), 'utf8');
+  const lock = user.indexOf('body.purpose !== "export" && !(await premiumActive(row.workspace_id))');
+  assert.ok(lock > 0 && lock < user.indexOf('callWitcher(witcher, "get", { externalId: row.id })', lock - 400), 'the lock comes before the Witcher call');
+  assert.ok(user.includes('locked: true') && user.includes('cancelReason: row.cancel_reason ?? null'));
+  const worker = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'ai-interview-webhook', 'index.ts'), 'utf8');
+  assert.ok(worker.includes('async function cancelForPlan()') && worker.includes('cancel_reason: "plan"') && worker.includes('CANCEL_RETRY_SECONDS = 60'));
+  assert.ok(worker.includes('if (await premiumActive(row.workspace_id))'), 'a plan that came back stops the cancellation');
+  assert.ok(!/state: "cancelled"[^)]*in_progress/.test(worker) && worker.includes('.eq("state", "invited")'), 'only sent, not started interviews are cancelled; one in progress is never cut');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261101140000_free_plan_locks.sql'), 'utf8');
+  assert.ok(sql.includes('public.workspace_user_has_active_subscription(workspace_id)') && sql.includes('create policy "workspace applicant reviewers can update applicant status"'));
+  assert.ok(sql.includes("delete from public.ai_interviews where workspace_id = p_workspace_id and state in ('pending', 'blocked')"));
+  assert.ok(sql.includes("state = 'invited' and cancel_requested_at is null") && sql.includes('cancel_reason text check (cancel_reason in (\'plan\'))'));
+  assert.ok(sql.includes('cancel_requested_at <= now()'), 'the worker is woken for a due cancellation');
+  assert.ok(sql.includes('revoke all on function public.ai_interview_free_plan_cleanup(uuid)'));
 });
