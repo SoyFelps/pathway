@@ -66,9 +66,10 @@ test('the board shows one card per candidate with an application count, and sear
   assert.ok(builder.includes('const allGroups = C.groupApplicants(applicants);'));
   assert.ok(builder.includes('group.items.some(applicant => {'), 'search looks at every application of a candidate');
   assert.ok(builder.includes("const cards = visible.filter(group => group.status === stage.key);"));
-  assert.ok(builder.includes('class="repeat-chip"') && builder.includes('applications</span>'));
+  assert.ok(builder.includes('class="repeat-badge"') && builder.includes('title="This candidate applied ${group.count} times"'), 'a small count in the corner, with the full wording as its tooltip');
+  assert.ok(!builder.includes('class="repeat-chip"'), 'the wide "N applications" chip is gone from the card');
   assert.ok(builder.includes('const applicant = group.latest;'), 'the card shows the latest application');
-  assert.equal(builder.split('class="applicant-card"').length - 1, 1, 'both the Failed column and the other columns use the same card markup');
+  assert.equal(builder.split('<article class="applicant-card').length - 1, 1, 'both the Failed column and the other columns use the same card markup');
   assert.ok(builder.includes('applicationTotal > visible.length'), 'the summary also reports the number of applications');
 });
 
