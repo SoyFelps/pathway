@@ -759,6 +759,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .ai-impression{display:inline-grid;place-items:center;flex:0 0 auto;width:22px;height:22px;border-radius:50%}
 .ai-impression.is-positive{background:var(--positive-bg);color:var(--positive-text)}
 .ai-impression.is-negative{background:var(--red-bg);color:var(--red-text)}
+.ai-impression.is-none{background:var(--border-subtle);color:var(--text-subtle);font-size:13px;font-weight:700;line-height:1}
 .applicant-right-tabs{display:flex;gap:4px;flex:0 0 auto;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--border-subtle)}
 .applicant-right-body{position:relative;flex:1 1 auto;min-height:0;min-width:0;display:flex}
 .applicant-right-pane{position:absolute;inset:0;display:flex;align-items:stretch;justify-content:stretch;min-width:0;min-height:0}

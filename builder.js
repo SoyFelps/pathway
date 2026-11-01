@@ -298,7 +298,7 @@
       case 'blocked': return [(AI_BLOCK_TEXT[row.blockedReason] || ['Interview waiting'])[0], 'warn'];
       case 'invited': return ['Invite sent for AI Interview', 'ok'];
       case 'in_progress': return ['AI Interview in progress', 'ok'];
-      case 'completed': return [row.evaluationReady ? 'AI Interview completed' : 'AI Interview completed · evaluation pending', row.evaluationReady ? 'ok' : 'warn'];
+      case 'completed': return ['AI Interview completed', 'ok']; // the card never talks about the evaluation: a grey dash stands in for the thumb until there is one
       case 'abandoned': return ['AI Interview left', 'muted'];
       case 'expired': return ['AI Interview expired', 'muted'];
       case 'cancelled': return ['AI Interview cancelled', 'muted'];
@@ -321,7 +321,7 @@
   function aiInterviewCardHtml(row) {
     const tag = row && aiInterviewTag(row);
     if (!tag) return '';
-    return '<div class="applicant-card-ai ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + AI_SPARKLE_ICON + '</span><span class="ai-tag-text">' + esc(tag[0]) + '</span>' + (row.state === 'completed' ? aiImpressionBadge(row.impression) : '') + '</div>';
+    return '<div class="applicant-card-ai ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + AI_SPARKLE_ICON + '</span><span class="ai-tag-text">' + esc(tag[0]) + '</span>' + (row.state === 'completed' ? (aiImpressionBadge(row.impression) || '<span class="ai-impression is-none" role="img" aria-label="No impression yet" title="No impression yet">-</span>') : '') + '</div>';
   }
   // After a card moves into or out of the AI Interview column the interview is set up (or dropped) on the server within seconds:
   // look again soon, and keep looking while one is being set up, so the tag follows without pressing Refresh.

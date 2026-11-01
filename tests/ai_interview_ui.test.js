@@ -100,3 +100,11 @@ test('the board columns are wide enough for the interview tag and its thumb to s
   assert.ok(css.includes('minmax(225px,1fr)'), 'medium screens keep a slightly narrower minimum');
   assert.ok(!css.includes('minmax(215px,1fr)'), 'the old narrow minimum is gone everywhere, Failed column included');
 });
+
+test('a finished interview always reads "AI Interview completed" on the card, with a grey dash instead of a thumb until there is an impression', () => {
+  assert.ok(builder.includes("case 'completed': return ['AI Interview completed', 'ok'];"));
+  assert.ok(!builder.includes('evaluation pending'), 'the card says nothing about the evaluation');
+  const card = builder.slice(builder.indexOf('function aiInterviewCardHtml'), builder.indexOf('let aiWatchTimer'));
+  assert.ok(card.includes('ai-impression is-none') && card.includes('>-</span>'), 'grey circle with a dash');
+  assert.ok(css.includes('.ai-impression.is-none{background:var(--border-subtle);color:var(--text-subtle)'));
+});
