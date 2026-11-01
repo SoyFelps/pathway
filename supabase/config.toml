@@ -27,3 +27,8 @@ verify_jwt = true
 # The callers are Witcher (signed notices) and a database job (the 10-second tick), not Pathway users, so there is no user JWT.
 # Notices are checked with WITCHER_WEBHOOK_SECRET inside the function. Never turn this on: Witcher would get 401 and no result would arrive.
 verify_jwt = false
+
+[functions.billing-reconcile]
+# Called once a day by a database job (no user), and harmless to call by hand: it only brings the database in line with Stripe
+# and does nothing if it already ran in the last 30 minutes.
+verify_jwt = false
