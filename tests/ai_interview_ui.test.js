@@ -161,3 +161,14 @@ test('an interview still going on while the candidate sits in another column sho
   assert.ok(panel.includes('await stage.moveTo()') && panel.includes('pendingOpenAiTab = true'), 'the move keeps the person on the AI Interview tab');
   assert.ok(builder.includes("moveTo: () => moveApplicant(applicant.id, 'ai_interview')"), 'the button uses the normal move, so the stage history and the board stay in order');
 });
+
+test('on computer screens the applicants board is as tall as the window and scrolls inside itself, so both scroll bars stay in view', () => {
+  assert.ok(builder.includes('<div class="workspace-body is-board">${renderSidebar(\'applicants\')}<main class="applicants-page">'));
+  const block = css.slice(css.indexOf('/* Applicants board: on a computer screen'));
+  assert.ok(block.includes('@media(min-width:761px)'), 'phones keep the old page scroll');
+  assert.ok(block.includes('.workspace-body.is-board{height:calc(100vh - 70px);height:calc(100dvh - 70px);'), 'the area is exactly the window minus the top bar');
+  assert.ok(block.includes('.workspace-body.is-board .kanban-board{flex:1 1 auto;min-height:300px;overflow:auto;'), 'the board is the scrolling area, in both directions');
+  assert.ok(block.includes('#applicants-content{flex:1 1 auto;min-height:0;'), 'and takes all the room left under the title and the filters');
+  assert.ok(block.includes('align-self:stretch;height:100%;'), 'the page fills the area even where the workspace row is set to align its items at the start');
+  assert.equal(/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(block), false, 'colour tokens only');
+});
