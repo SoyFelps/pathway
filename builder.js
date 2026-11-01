@@ -294,9 +294,9 @@
   // [label, tone] of the small tag on a candidate's card
   function aiInterviewTag(row) {
     switch (row.state) {
-      case 'pending': return ['Creating interview…', 'wait'];
+      case 'pending': return ['Setting up AI Interview', 'wait'];
       case 'blocked': return [(AI_BLOCK_TEXT[row.blockedReason] || ['Interview waiting'])[0], 'warn'];
-      case 'invited': return ['Interview sent', 'ok'];
+      case 'invited': return ['Invite sent for AI Interview', 'ok'];
       case 'in_progress': return ['Interview in progress', 'ok'];
       case 'completed': return [row.evaluationReady ? 'Interview completed' : 'Interview completed · evaluation pending', row.evaluationReady ? 'ok' : 'warn'];
       case 'abandoned': return ['Interview left', 'muted'];
@@ -310,10 +310,27 @@
     if (impression !== 'positive' && impression !== 'negative') return '';
     return '<span class="ai-impression is-' + impression + '">' + (impression === 'positive' ? 'Positive' : 'Negative') + '</span>';
   }
+  // Small sparkle in a lilac circle, as in the first plan of the card
+  const AI_SPARKLE_ICON = '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.9 4.6 11 8l3.4 1.1L11 10.2 9.9 13.6 8.8 10.2 5.4 9.1 8.8 8z"/><path d="M17 12.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>';
   function aiInterviewCardHtml(row) {
     const tag = row && aiInterviewTag(row);
     if (!tag) return '';
-    return '<div class="applicant-card-ai"><span class="ai-chip is-' + tag[1] + '">' + esc(tag[0]) + '</span>' + (row.state === 'completed' ? aiImpressionBadge(row.impression) : '') + '</div>';
+    return '<div class="applicant-card-ai ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + AI_SPARKLE_ICON + '</span><span class="ai-tag-text">' + esc(tag[0]) + '</span>' + (row.state === 'completed' ? aiImpressionBadge(row.impression) : '') + '</div>';
+  }
+  // After a card moves into or out of the AI Interview column the interview is set up (or dropped) on the server within seconds:
+  // look again soon, and keep looking while one is being set up, so the tag follows without pressing Refresh.
+  let aiWatchTimer = null;
+  function watchAiInterviewTags() {
+    clearTimeout(aiWatchTimer);
+    const startedAt = Date.now();
+    const tick = async () => {
+      if (!root.querySelector('.applicants-page')) return;
+      await refreshAiInterviewTags(true);
+      const settingUp = [...aiInterviewMap.values()].some(row => row.state === 'pending');
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < 120000 && (settingUp || elapsed < 12000)) aiWatchTimer = setTimeout(tick, 3000);
+    };
+    aiWatchTimer = setTimeout(tick, 1200);
   }
   // The AI Interview tab of a candidate: what happened, and what the reviewer can still do. Everything shown about a finished
   // interview (evaluation, badge, conversation) is fetched live from Witcher by the checked server function, never stored here.
@@ -321,7 +338,8 @@
     if (!host) return;
     const B = window.PathwayBackend;
     const STATE_LABEL = { pending: 'Being prepared', blocked: 'Waiting', invited: 'Sent', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled', abandoned: 'Left before finishing', expired: 'Expired', failed: 'Not sent' };
-    const REINVITE = ' To invite the candidate again, move the card out of AI Interview and back in.';
+    // The only way to send another invitation after one ended without a result, whatever column the candidate is in.
+    const reinviteBlock = row => '<div class="ai-actions">' + button('reinvite', 'Invite again') + '</div><p class="muted">Sends a new e-mail to ' + esc(row.email) + ' with a new link and access code. Moving the card between columns does not send another invitation.</p>';
     const when = value => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : ''; };
     const clock = seconds => Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
     const info = (label, value) => value ? '<div class="applicant-info-item"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>' : '';
@@ -359,9 +377,9 @@
           + (ready ? '<h4>Evaluation</h4><p class="ai-evaluation">' + esc(live.evaluation) + '</p>'
             : '<div class="ai-note is-warn"><strong>The evaluation is not ready.</strong> The AI could not write it automatically. Read the conversation below, or ask for a new evaluation.</div><div class="ai-actions">' + button('reevaluate', 'Write the evaluation again') + '</div>')
           + '<p class="muted">The impression and the evaluation are written by an AI to help your team. The AI does not decide who moves forward; your team does.</p><h4>Conversation</h4>' + conversationHtml(live.messages);
-      } else if (row.state === 'cancelled') body = '<p>This invitation was cancelled and its link no longer works.' + REINVITE + '</p>';
-      else if (row.state === 'abandoned') body = '<p>The candidate left the interview before finishing, so it was cancelled and the answers were discarded.' + REINVITE + '</p>';
-      else if (row.state === 'expired') body = '<p>The invitation expired before the candidate started.' + REINVITE + '</p>';
+      } else if (row.state === 'cancelled') body = '<p>This invitation was cancelled and its link no longer works.</p>' + reinviteBlock(row);
+      else if (row.state === 'abandoned') body = '<p>The candidate left the interview before finishing, so it was cancelled and the answers were discarded.</p>' + reinviteBlock(row);
+      else if (row.state === 'expired') body = '<p>The invitation expired before the candidate started.</p>' + reinviteBlock(row);
       host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + (data.liveError ? '<div class="ai-note is-warn">' + esc(data.liveError) + '</div>' : '') + body + '</div>';
       schedule(row, live);
     };
@@ -370,7 +388,7 @@
       clearTimeout(timer);
       if (!row) return;
       const waitingForEvaluation = row.state === 'completed' && !row.evaluationReady && waits < 20;
-      const delay = row.state === 'pending' ? 4000 : row.state === 'in_progress' ? 10000 : waitingForEvaluation ? 8000 : 0;
+      const delay = row.state === 'pending' ? 3000 : row.state === 'in_progress' ? 10000 : waitingForEvaluation ? 8000 : 0;
       if (!delay) return;
       if (waitingForEvaluation) waits += 1;
       timer = setTimeout(() => { if (host.isConnected && !busy) void load(); }, delay);
@@ -391,13 +409,14 @@
       try { current = (await B.getAiInterviewStatus(flowId, email)).interview; } catch (error) { showToast(error.message || 'Please try again.'); return; }
       if (!current) { void load(); return; }
       busy = true; trigger.disabled = true;
-      const names = { 'cancel-yes': 'cancel', resend: 'resend', retry: 'retry', reevaluate: 'reevaluate' };
+      const names = { 'cancel-yes': 'cancel', resend: 'resend', retry: 'retry', reevaluate: 'reevaluate', reinvite: 'reinvite' };
       try {
         const result = await B.aiInterviewAction(names[action], current.id);
         confirming = '';
         if (action === 'resend') showToast(result.emailSent ? 'E-mail sent again with a new access code.' : 'The e-mail could not be sent right now. Try again in a moment.');
         else if (action === 'cancel-yes') showToast('Invitation cancelled.');
         else if (action === 'retry') showToast('Checking again. The interview goes out in a few seconds if nothing blocks it.');
+        else if (action === 'reinvite') { showToast('Setting up the new interview. The e-mail goes out in a few seconds.'); watchAiInterviewTags(); }
         else if (action === 'reevaluate') { waits = 0; showToast('Writing the evaluation. It can take up to a minute.'); }
         busy = false;
         await load();
@@ -2491,7 +2510,7 @@
       const cardHtml = group => {
         const applicant = group.latest;
         const repeat = group.count > 1 ? `<span class="repeat-chip" title="This candidate applied ${group.count} times">↻ ${group.count} applications</span>` : '';
-        return `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}${group.count > 1 ? `, ${group.count} applications` : ''}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}<div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span>${repeat}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div></article>`;
+        return `<article class="applicant-card" data-applicant="${esc(applicant.id)}" draggable="true" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}${group.count > 1 ? `, ${group.count} applications` : ''}"><h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span>${repeat}</span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}</article>`;
       };
       if (stage.key === 'failed') {
         const head = `<div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div>`;
@@ -2571,6 +2590,7 @@
       const open = modalRoot.querySelector('[data-detail-applicant]');
       if (open && members.some(member => member.id === open.dataset.detailApplicant)) showApplicantDetails(open.dataset.detailApplicant, Number(open.dataset.detailTab) || 0);
       showToast(`Applicant moved to ${applicantStageLabel(status)}.`);
+      if (status === 'ai_interview' || previous.includes('ai_interview')) watchAiInterviewTags();
     } catch (error) {
       members.forEach((member, index) => { member.status = previous[index]; });
       renderApplicantBoard();

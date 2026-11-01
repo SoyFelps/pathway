@@ -4,7 +4,7 @@ import { callWitcher, type WitcherConfig } from "./witcher.ts";
 import { updateFromWitcher, witcherErrorMessage } from "./logic.ts";
 
 // What the signed-in reviewer does with an AI interview: look at it (live from Witcher), re-send the e-mail, cancel the
-// invitation, redo an evaluation the AI could not write, or retry a failed send. The browser never talks to Witcher and
+// invitation, invite again after a cancelled one, redo an evaluation the AI could not write, or retry a failed send. The browser never talks to Witcher and
 // never holds its key. Every action is checked against the person's Candidates permission (and Premium where it costs
 // something) before anything is sent. Sending the first invitation is done by the worker in `ai-interview-webhook`.
 
@@ -169,6 +169,31 @@ async function actionReevaluate(req: Request, userClient: SupabaseClient, body: 
   return response(req, 202, { ok: true, reevaluating: true });
 }
 
+// The only way to invite a candidate again after a cancelled, abandoned or expired interview (the "Invite again" button). It
+// creates a new interview that is sent at once and does not depend on the column the candidate is in. The earlier one stays as history.
+async function actionReinvite(req: Request, userClient: SupabaseClient, body: Record<string, unknown>) {
+  const row = await visibleRow(userClient, body);
+  if (!row) return fail(req, 404, "The interview was not found.");
+  const { data: latest, error: latestError } = await admin!.from("ai_interviews").select("id,state")
+    .eq("flow_id", row.flow_id).eq("candidate_email", row.candidate_email).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (latestError) throw latestError;
+  if (!latest || latest.id !== row.id) return fail(req, 409, "There is already a newer interview for this candidate. Refresh and look at it.");
+  if (!["cancelled", "abandoned", "expired"].includes(row.state)) return fail(req, 409, "A new invitation can only be sent after the earlier one was cancelled, left or expired.");
+  if (!(await premiumActive(row.workspace_id))) return fail(req, 402, "Inviting needs an active Premium plan.");
+  const { data: application, error: applicationError } = await admin!.from("applicants").select("id")
+    .eq("flow_id", row.flow_id).ilike("candidate_email", row.candidate_email.replace(/[\\%_]/g, (character: string) => `\\${character}`))
+    .order("submitted_at", { ascending: false }).limit(1).maybeSingle();
+  if (applicationError) throw applicationError;
+  const { data: created, error } = await admin!.from("ai_interviews")
+    .insert({ workspace_id: row.workspace_id, flow_id: row.flow_id, candidate_email: row.candidate_email, applicant_id: application?.id ?? row.applicant_id, state: "pending", send_at: new Date().toISOString(), manual: true })
+    .select("id").single();
+  if (error) {
+    if (error.code === "23505") return fail(req, 409, "There is already an interview in progress for this candidate. Refresh and look at it.");
+    throw error;
+  }
+  return response(req, 200, { ok: true, id: created.id });
+}
+
 async function actionRetry(req: Request, userClient: SupabaseClient, body: Record<string, unknown>) {
   const row = await visibleRow(userClient, body);
   if (!row) return fail(req, 404, "The interview was not found.");
@@ -200,6 +225,7 @@ Deno.serve(async (req: Request) => {
       case "cancel": return await actionCancel(req, auth.userClient, body);
       case "reevaluate": return await actionReevaluate(req, auth.userClient, body);
       case "retry": return await actionRetry(req, auth.userClient, body);
+      case "reinvite": return await actionReinvite(req, auth.userClient, body);
       default: return fail(req, 400, "Unknown action.");
     }
   } catch (error) {

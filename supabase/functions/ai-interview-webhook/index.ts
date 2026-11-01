@@ -76,7 +76,7 @@ async function leaseDueRows(): Promise<Row[]> {
   const { data: rows, error: leaseError } = await admin!.from("ai_interviews")
     .update({ lease_until: inSeconds(LEASE_SECONDS) })
     .in("id", due.map((row) => row.id)).in("state", ["pending", "blocked"]).lte("send_at", now).or(`lease_until.is.null,lease_until.lt.${now}`)
-    .select("id,workspace_id,flow_id,candidate_email,applicant_id,state,witcher_interview_id,attempts");
+    .select("id,workspace_id,flow_id,candidate_email,applicant_id,state,witcher_interview_id,attempts,manual");
   if (leaseError) throw leaseError;
   return rows ?? [];
 }
@@ -143,7 +143,8 @@ async function sendRow(row: Row): Promise<"sent" | "blocked" | "dropped" | "retr
   const verdict = checkSendable({
     questions: flow.interview_questions,
     premium,
-    stillInColumn: applications.some((application) => application.status === "ai_interview"),
+    // An interview made on purpose with "Invite again" is sent whatever column the card is in.
+    stillInColumn: row.manual === true || applications.some((application) => application.status === "ai_interview"),
     companyName,
   });
   if (!verdict.ok) {

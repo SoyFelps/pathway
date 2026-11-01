@@ -26,7 +26,7 @@ test('the questions of a job are cleaned the way the database wants them and are
 
 test('the card shows the interview tag and badge, and the candidate panel gets an AI Interview tab next to Resume', () => {
   assert.ok(builder.includes('aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))'));
-  for (const label of ['Creating interview…', 'Interview sent', 'Interview completed', 'Interview left', 'Interview expired', 'Interview cancelled', 'Interview not sent', 'Add interview questions', 'Premium needed']) {
+  for (const label of ['Setting up AI Interview', 'Invite sent for AI Interview', 'Interview completed', 'Interview left', 'Interview expired', 'Interview cancelled', 'Interview not sent', 'Add interview questions', 'Premium needed']) {
     assert.ok(builder.includes(label), label);
   }
   assert.ok(builder.includes('data-right-tab="resume"') && builder.includes('data-right-tab="ai"'));
@@ -55,7 +55,33 @@ test('finished interviews ring the bell, and opening one lands on the AI Intervi
 
 test('the new styles use colour tokens only', () => {
   const block = css.slice(css.indexOf('/* AI Interview (Witcher)'));
-  assert.ok(block.includes('.ai-chip{'));
+  assert.ok(block.includes('.applicant-card-ai{'));
   assert.equal(/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(block), false);
   assert.ok(css.includes('--positive-bg:') && css.includes('--positive-text:'));
+});
+
+test('a new invitation after a cancelled, left or expired interview is only sent by the "Invite again" button, in any column', () => {
+  const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
+  assert.ok(panel.includes("button('reinvite', 'Invite again')"));
+  for (const state of ['cancelled', 'abandoned', 'expired']) {
+    const start = panel.indexOf("row.state === '" + state + "'");
+    assert.ok(start > 0, state + ' has its own branch');
+    assert.ok(panel.slice(start, panel.indexOf(';', start + 40)).includes('reinviteBlock(row)'), state + ' offers Invite again');
+  }
+  assert.ok(!panel.includes('move the card out of AI Interview'), 'the old "move the card" advice is gone');
+  assert.ok(panel.includes('Moving the card between columns does not send another invitation.'));
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261029110000_ai_interview_reinvite.sql'), 'utf8');
+  assert.ok(migration.includes('where not exists (select 1 from public.ai_interviews i where i.flow_id = new.flow_id and i.candidate_email = v_email)'), 'moving a card creates an interview only when the candidate has none at all');
+  assert.ok(migration.includes('and not manual'), 'a manual interview is never removed by moving the card');
+  const user = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'ai-interview', 'index.ts'), 'utf8');
+  assert.ok(user.includes('case "reinvite"') && user.includes('manual: true') && user.includes('["cancelled", "abandoned", "expired"]'));
+  const worker = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'ai-interview-webhook', 'index.ts'), 'utf8');
+  assert.ok(worker.includes('row.manual === true ||'), 'a manual interview is sent whatever column the card is in');
+});
+
+test('the card tag follows a move into or out of the AI Interview column without pressing Refresh, and sits at the foot of the card', () => {
+  assert.ok(builder.includes("if (status === 'ai_interview' || previous.includes('ai_interview')) watchAiInterviewTags();"));
+  assert.ok(builder.includes('function watchAiInterviewTags()'));
+  const card = builder.slice(builder.indexOf('const cardHtml = group =>'), builder.indexOf("if (stage.key === 'failed')"));
+  assert.ok(card.indexOf('applicant-card-meta') < card.indexOf('aiInterviewCardHtml('), 'the tag row comes after the date row, as in the first plan');
 });
