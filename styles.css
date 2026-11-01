@@ -783,6 +783,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .btn-danger-ghost{color:var(--red-text);border-color:var(--red-border)}
 .btn-danger-ghost:hover:not(:disabled){background:var(--red-bg);border-color:var(--red-border-strong)}
 .ai-note{margin:12px 0;padding:11px 13px;border-radius:9px;background:var(--tint);color:var(--text-strong);font-size:12px;line-height:1.6}
+.ai-note.is-working{background:var(--node-single-bg);color:var(--ai-ink)}
 .ai-note.is-warn{background:var(--amber-bg);color:var(--amber-dark);border:1px solid var(--amber-border)}
 .ai-evaluation{white-space:pre-wrap;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:var(--bg-page);color:var(--text-strong)}
 .ai-conversation{display:flex;flex-direction:column;gap:10px}

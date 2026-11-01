@@ -114,6 +114,7 @@ async function actionStatus(req: Request, userClient: SupabaseClient, body: Reco
   const live: Record<string, unknown> = {
     status: result.json.status, inviteCount: result.json.inviteCount, resendsLeft: result.json.resendsLeft, lastInviteAt: result.json.lastInviteAt,
     expiresAt: result.json.expiresAt, startedAt: result.json.startedAt, completedAt: result.json.completedAt,
+    evaluating: result.json.evaluating === true, // a re-evaluation is running right now in Witcher
   };
   if (result.json.status === "completed") {
     live.evaluation = result.json.evaluation ?? null;

@@ -138,3 +138,17 @@ test('the title of the AI Interview tab carries no thumb: the impression is show
   assert.ok(!head.includes('aiImpressionBadge') && !head.includes('aiImpressionLabelled'), 'no thumb next to "Completed"');
   assert.equal(panel.split('aiImpressionLabelled(row.impression)').length - 1, 1, 'the impression appears once, in the Impression field');
 });
+
+test('"Write the evaluation again": the button is replaced by a notice at the click, and returns only if the AI really failed', () => {
+  const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
+  const click = panel.slice(panel.indexOf("if (action === 'reevaluate') {"), panel.indexOf('let current;'));
+  assert.ok(click.indexOf("reevaluating = 'sending'; evalPolls = 0; render(lastData);") < click.indexOf('await B.aiInterviewAction'), 'the notice is drawn before the request goes out, so the button cannot be pressed twice');
+  assert.ok(!click.includes('getAiInterviewStatus'), 'no extra round trip between the click and the notice');
+  assert.ok(panel.includes('Writing the evaluation…') && panel.includes('This can take up to a minute.'));
+  assert.ok(panel.includes("reevaluating === 'sending' || live.evaluating === true"), 'shown while sending and while Witcher says it is writing');
+  assert.ok(panel.includes("if (reevaluating === 'running' && live.evaluating !== true) reevaluating = '';"), 'when Witcher stops, the button may come back');
+  assert.ok(panel.includes('could not write it this time either'), 'and it says that the retry failed');
+  assert.ok(!panel.includes("showToast('Writing the evaluation."), 'the notice is on the page, not a toast that is easy to miss');
+  const user = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'ai-interview', 'index.ts'), 'utf8');
+  assert.ok(user.includes('evaluating: result.json.evaluating === true'), 'the server function passes the flag on');
+});

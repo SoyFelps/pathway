@@ -359,6 +359,12 @@
     let busy = false;
     let timer = null;
     let waits = 0;
+    // Redoing an evaluation: '' (nothing), 'sending' (clicked, the request is going out) or 'running' (Witcher is writing it).
+    // The button is replaced by a notice from the moment of the click, and only comes back when the AI really failed.
+    let reevaluating = '';
+    let triedReevaluating = false;
+    let evalPolls = 0;
+    let lastData = null;
     const conversationHtml = messages => {
       const items = (Array.isArray(messages) ? messages : []).filter(message => message.kind !== 'closing').map(message => {
         if (message.role === 'ai') return '<div class="ai-msg is-ai"><span class="ai-msg-who">' + (message.kind === 'followup' ? 'Follow-up' : 'Question') + '</span><p>' + esc(message.body || '') + '</p></div>';
@@ -372,6 +378,7 @@
       ? '<span class="ai-confirm">Cancel this invitation? <button type="button" class="btn btn-sm btn-danger" data-ai-action="cancel-yes">Yes, cancel</button><button type="button" class="btn btn-sm" data-ai-action="cancel-no">Keep it</button></span>'
       : button('cancel', label, 'btn-danger-ghost');
     const render = (data, errorText = '') => {
+      lastData = data;
       const row = data.interview, live = data.live || {};
       const head = '<header class="applicant-ai-head"><div><span class="eyebrow">AI Interview</span><h3>' + esc(row ? STATE_LABEL[row.state] || row.state : 'No interview') + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-ai-close>Close</button></header>';
       let body = '';
@@ -385,9 +392,13 @@
       } else if (row.state === 'in_progress') body = '<p>The candidate is answering the interview right now.</p><div class="applicant-info-grid">' + info('Started', when(live.startedAt)) + '</div><p class="muted">Leaving or refreshing the page cancels the interview automatically.</p>';
       else if (row.state === 'completed') {
         const ready = row.evaluationReady && live.evaluation;
+        const working = !ready && (reevaluating === 'sending' || live.evaluating === true);
+        if (live.evaluating === true) triedReevaluating = true;
+        if (reevaluating === 'running' && live.evaluating !== true) reevaluating = ''; // Witcher stopped: it either wrote the evaluation or failed
         body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt || live.completedAt)) + '<div class="applicant-info-item"><span>Impression</span><strong>' + (aiImpressionLabelled(row.impression) || 'Not available') + '</strong></div></div>'
           + (ready ? '<h4>Evaluation</h4><p class="ai-evaluation">' + esc(live.evaluation) + '</p>'
-            : '<div class="ai-note is-warn"><strong>The evaluation is not ready.</strong> The AI could not write it automatically. Read the conversation below, or ask for a new evaluation.</div><div class="ai-actions">' + button('reevaluate', 'Write the evaluation again') + '</div>')
+            : working ? '<div class="ai-note is-working" role="status"><strong>Writing the evaluation…</strong> This can take up to a minute. This page updates by itself.</div>'
+            : '<div class="ai-note is-warn"><strong>The evaluation is not ready.</strong> ' + (triedReevaluating ? 'The AI could not write it this time either. You can try again, or read the conversation below.' : 'The AI could not write it automatically. Read the conversation below, or ask for a new evaluation.') + '</div><div class="ai-actions">' + button('reevaluate', 'Write the evaluation again') + '</div>')
           + '<p class="muted">The impression and the evaluation are written by an AI to help your team. The AI does not decide who moves forward; your team does.</p><h4>Conversation</h4>' + conversationHtml(live.messages);
       } else if (row.state === 'cancelled') body = '<p>This invitation was cancelled and its link no longer works.</p>' + reinviteBlock(row);
       else if (row.state === 'abandoned') body = '<p>The candidate left the interview before finishing, so it was cancelled and the answers were discarded.</p>' + reinviteBlock(row);
@@ -399,9 +410,11 @@
     const schedule = (row, live) => {
       clearTimeout(timer);
       if (!row) return;
-      const waitingForEvaluation = row.state === 'completed' && !row.evaluationReady && waits < 20;
-      const delay = row.state === 'pending' ? 3000 : row.state === 'in_progress' ? 10000 : waitingForEvaluation ? 8000 : 0;
+      const evaluating = row.state === 'completed' && !row.evaluationReady && live && live.evaluating === true && evalPolls < 60;
+      const waitingForEvaluation = row.state === 'completed' && !row.evaluationReady && !evaluating && waits < 20;
+      const delay = row.state === 'pending' ? 3000 : row.state === 'in_progress' ? 10000 : evaluating ? 4000 : waitingForEvaluation ? 8000 : 0;
       if (!delay) return;
+      if (evaluating) evalPolls += 1;
       if (waitingForEvaluation) waits += 1;
       timer = setTimeout(() => { if (host.isConnected && !busy) void load(); }, delay);
     };
@@ -417,6 +430,23 @@
       if (action === 'reload') { void load(); return; }
       if (action === 'cancel') { confirming = 'cancel'; void load(); return; }
       if (action === 'cancel-no') { confirming = ''; void load(); return; }
+      if (action === 'reevaluate') {
+        // The button is replaced by the "writing" notice at the very moment of the click, before anything goes over the network, so it
+        // cannot be pressed twice. It comes back only if Witcher says the AI stopped without writing the evaluation.
+        const interviewId = lastData && lastData.interview && lastData.interview.id;
+        if (!interviewId) { void load(); return; }
+        busy = true; reevaluating = 'sending'; evalPolls = 0; render(lastData);
+        try {
+          await B.aiInterviewAction('reevaluate', interviewId);
+          reevaluating = 'running'; busy = false;
+          await load();
+        } catch (error) {
+          reevaluating = ''; busy = false;
+          await load(error.message || 'Something went wrong. Try again.');
+        }
+        void refreshAiInterviewTags(true);
+        return;
+      }
       let current;
       try { current = (await B.getAiInterviewStatus(flowId, email)).interview; } catch (error) { showToast(error.message || 'Please try again.'); return; }
       if (!current) { void load(); return; }
@@ -429,7 +459,6 @@
         else if (action === 'cancel-yes') showToast('Invitation cancelled.');
         else if (action === 'retry') showToast('Checking again. The interview goes out in a few seconds if nothing blocks it.');
         else if (action === 'reinvite') { showToast('Setting up the new interview. The e-mail goes out in a few seconds.'); watchAiInterviewTags(); }
-        else if (action === 'reevaluate') { waits = 0; showToast('Writing the evaluation. It can take up to a minute.'); }
         busy = false;
         await load();
         void refreshAiInterviewTags(true);
