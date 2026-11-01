@@ -346,7 +346,9 @@
   }
   // The AI Interview tab of a candidate: what happened, and what the reviewer can still do. Everything shown about a finished
   // interview (evaluation, badge, conversation) is fetched live from Witcher by the checked server function, never stored here.
-  function mountAiInterviewPanel(host, flowId, email) {
+  // `stage` tells the panel where the candidate is on the board: getStage() the current hiring stage, canMove() whether the
+  // AI Interview column is turned on, moveTo() moves the candidate into it.
+  function mountAiInterviewPanel(host, flowId, email, stage = {}) {
     if (!host) return;
     const B = window.PathwayBackend;
     const STATE_LABEL = { pending: 'Being prepared', blocked: 'Waiting', invited: 'Sent', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled', abandoned: 'Left before finishing', expired: 'Expired', failed: 'Not sent' };
@@ -403,6 +405,9 @@
       } else if (row.state === 'cancelled') body = '<p>This invitation was cancelled and its link no longer works.</p>' + reinviteBlock(row);
       else if (row.state === 'abandoned') body = '<p>The candidate left the interview before finishing, so it was cancelled and the answers were discarded.</p>' + reinviteBlock(row);
       else if (row.state === 'expired') body = '<p>The invitation expired before the candidate started.</p>' + reinviteBlock(row);
+      // An interview that is still going on (being prepared, sent, in progress) while the card sits in another column: offer the way back.
+      const away = row && ['pending', 'blocked', 'invited', 'in_progress'].includes(row.state) && stage.getStage && stage.getStage() !== 'ai_interview' && stage.canMove && stage.canMove();
+      if (away) body += '<div class="ai-note is-warn ai-column-note" role="status"><span>This candidate is not in the AI Interview column of the Kanban.</span><div class="ai-actions">' + button('move-stage', 'Move to AI Interview column') + '</div></div>';
       host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + (data.liveError ? '<div class="ai-note is-warn">' + esc(data.liveError) + '</div>' : '') + body + '</div>';
       schedule(row, live);
     };
@@ -430,6 +435,13 @@
       if (action === 'reload') { void load(); return; }
       if (action === 'cancel') { confirming = 'cancel'; void load(); return; }
       if (action === 'cancel-no') { confirming = ''; void load(); return; }
+      if (action === 'move-stage') {
+        // Moving rebuilds the candidate view; asking for the AI Interview tab keeps the person where they were.
+        busy = true; trigger.disabled = true; pendingOpenAiTab = true;
+        try { await stage.moveTo(); } finally { pendingOpenAiTab = false; busy = false; }
+        if (host.isConnected) void load();
+        return;
+      }
       if (action === 'reevaluate') {
         // The button is replaced by the "writing" notice at the very moment of the click, before anything goes over the network, so it
         // cannot be pressed twice. It comes back only if Witcher says the AI stopped without writing the evaluation.
@@ -2938,7 +2950,11 @@
       aiPanelMounted = true;
       const notice = aiNotifs.find(item => item.flowId === applicant.flow_id && String(item.candidateEmail || '').trim().toLowerCase() === String(person.candidate_email || '').trim().toLowerCase());
       if (notice) { aiNotifs = aiNotifs.filter(item => item !== notice); paintNotifications(); window.PathwayBackend.markAiInterviewNoticeSeen(notice.id).catch(() => {}); }
-      mountAiInterviewPanel(modalRoot.querySelector('#applicant-ai-panel'), applicant.flow_id, person.candidate_email);
+      mountAiInterviewPanel(modalRoot.querySelector('#applicant-ai-panel'), applicant.flow_id, person.candidate_email, {
+        getStage: () => (C.groupApplicants(applicants).find(item => item.items.some(member => member.id === applicant.id)) || {}).status,
+        canMove: () => visibleApplicantStages().some(item => item.key === 'ai_interview'),
+        moveTo: () => moveApplicant(applicant.id, 'ai_interview')
+      });
     };
     modalRoot.querySelectorAll('[data-right-tab]').forEach(button => button.addEventListener('click', () => { if (button.dataset.rightTab === 'ai') openAiTab(); else showRightPane('resume'); }));
     modalRoot.querySelector('#mobile-open-ai')?.addEventListener('click', openAiTab);

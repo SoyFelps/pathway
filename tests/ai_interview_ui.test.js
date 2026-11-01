@@ -152,3 +152,12 @@ test('"Write the evaluation again": the button is replaced by a notice at the cl
   const user = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'ai-interview', 'index.ts'), 'utf8');
   assert.ok(user.includes('evaluating: result.json.evaluating === true'), 'the server function passes the flag on');
 });
+
+test('an interview still going on while the candidate sits in another column shows a notice with a button that moves the card into AI Interview', () => {
+  const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
+  assert.ok(panel.includes("['pending', 'blocked', 'invited', 'in_progress'].includes(row.state)"), 'only for an interview that is not finished and not cancelled');
+  assert.ok(panel.includes("stage.getStage() !== 'ai_interview'") && panel.includes('stage.canMove()'), 'only when the card is elsewhere and the AI Interview column is turned on');
+  assert.ok(panel.includes('This candidate is not in the AI Interview column of the Kanban.') && panel.includes("button('move-stage', 'Move to AI Interview column')"));
+  assert.ok(panel.includes('await stage.moveTo()') && panel.includes('pendingOpenAiTab = true'), 'the move keeps the person on the AI Interview tab');
+  assert.ok(builder.includes("moveTo: () => moveApplicant(applicant.id, 'ai_interview')"), 'the button uses the normal move, so the stage history and the board stay in order');
+});
