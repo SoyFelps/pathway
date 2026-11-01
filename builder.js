@@ -373,7 +373,7 @@
       : button('cancel', label, 'btn-danger-ghost');
     const render = (data, errorText = '') => {
       const row = data.interview, live = data.live || {};
-      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">AI Interview</span><h3>' + esc(row ? STATE_LABEL[row.state] || row.state : 'No interview') + (row && row.state === 'completed' ? ' ' + aiImpressionBadge(row.impression) : '') + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-ai-close>Close</button></header>';
+      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">AI Interview</span><h3>' + esc(row ? STATE_LABEL[row.state] || row.state : 'No interview') + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-ai-close>Close</button></header>';
       let body = '';
       if (!row) body = '<p class="muted">This candidate has no AI interview.</p>';
       else if (row.state === 'pending') body = '<p>The interview is being prepared. It will be e-mailed to the candidate in a few seconds.</p><div class="ai-actions">' + cancelControl('Cancel') + '</div>';

@@ -131,3 +131,10 @@ test('the Impression field of the AI Interview tab writes the words before the t
   const card = builder.slice(builder.indexOf('function aiInterviewCardHtml'), builder.indexOf('let aiWatchTimer'));
   assert.ok(!card.includes('aiImpressionLabelled'), 'the card keeps only the thumb');
 });
+
+test('the title of the AI Interview tab carries no thumb: the impression is shown once, in its own field', () => {
+  const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
+  const head = panel.slice(panel.indexOf("const head = '<header"), panel.indexOf("let body = ''"));
+  assert.ok(!head.includes('aiImpressionBadge') && !head.includes('aiImpressionLabelled'), 'no thumb next to "Completed"');
+  assert.equal(panel.split('aiImpressionLabelled(row.impression)').length - 1, 1, 'the impression appears once, in the Impression field');
+});
