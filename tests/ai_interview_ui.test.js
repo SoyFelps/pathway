@@ -85,3 +85,12 @@ test('the card tag follows a move into or out of the AI Interview column without
   const card = builder.slice(builder.indexOf('const cardHtml = group =>'), builder.indexOf("if (stage.key === 'failed')"));
   assert.ok(card.indexOf('applicant-card-meta') < card.indexOf('aiInterviewCardHtml('), 'the tag row comes after the date row, as in the first plan');
 });
+
+test('the impression is a thumb, green up for positive and red down for negative, never a word', () => {
+  const badge = builder.slice(builder.indexOf('function aiImpressionBadge'), builder.indexOf('function aiInterviewCardHtml'));
+  assert.ok(badge.includes('THUMB_PATHS[impression]') && badge.includes('<svg'));
+  assert.ok(badge.includes("'Positive impression'") && badge.includes("'Negative impression'"), 'the meaning stays available to screen readers and as a tooltip');
+  assert.ok(!badge.includes(">Positive<") && !badge.includes(">Negative<"), 'no visible word');
+  assert.ok(css.includes('.ai-impression.is-positive{background:var(--positive-bg);color:var(--positive-text)}'), 'positive is green');
+  assert.ok(css.includes('.ai-impression.is-negative{background:var(--red-bg);color:var(--red-text)}'), 'negative is red');
+});

@@ -306,9 +306,15 @@
       default: return null;
     }
   }
+  // The impression is shown as a thumb, never as a word: green thumbs up (positive) or red thumbs down (negative).
+  const THUMB_PATHS = {
+    positive: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
+    negative: '<path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/>'
+  };
   function aiImpressionBadge(impression) {
     if (impression !== 'positive' && impression !== 'negative') return '';
-    return '<span class="ai-impression is-' + impression + '">' + (impression === 'positive' ? 'Positive' : 'Negative') + '</span>';
+    const label = impression === 'positive' ? 'Positive impression' : 'Negative impression';
+    return '<span class="ai-impression is-' + impression + '" role="img" aria-label="' + label + '" title="' + label + '"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + THUMB_PATHS[impression] + '</svg></span>';
   }
   // Small sparkle in a lilac circle, as in the first plan of the card
   const AI_SPARKLE_ICON = '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.9 4.6 11 8l3.4 1.1L11 10.2 9.9 13.6 8.8 10.2 5.4 9.1 8.8 8z"/><path d="M17 12.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>';
