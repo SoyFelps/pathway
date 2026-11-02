@@ -763,8 +763,10 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .applicant-info-item .ai-impression-text{display:inline;margin-bottom:0;font-size:12px;font-weight:700}
 .ai-impression-line.is-negative .ai-impression-text{color:var(--red)}
 .ai-impression-line.is-positive .ai-impression-text{color:var(--positive-text)}
+.ai-impression-line.is-mixed .ai-impression-text{color:var(--amber-text)}
 .ai-impression.is-positive{background:var(--positive-bg);color:var(--positive-text)}
 .ai-impression.is-negative{background:var(--red-bg);color:var(--red-text)}
+.ai-impression.is-mixed{background:var(--amber-bg);color:var(--amber-text)}
 .ai-impression.is-none{background:var(--border-subtle);color:var(--text-subtle)}
 .applicant-right-tabs{display:flex;gap:4px;flex:0 0 auto;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--border-subtle)}
 .applicant-right-body{position:relative;flex:1 1 auto;min-height:0;min-width:0;display:flex}

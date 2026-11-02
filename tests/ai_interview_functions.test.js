@@ -80,6 +80,9 @@ test('a notice from Witcher moves a row forward only, and keeps the impression a
   assert.equal(updateFromWitcher({ state: 'invited' }, { status: 'weird' }), null);
   assert.equal(updateFromWitcher({ state: 'invited' }, { status: 'created' }), null, 'created means the e-mail has not left yet');
   assert.ok(updateFromWitcher({ state: 'completed' }, { status: 'completed', impression: 'negative', evaluationReady: true }), 'a re-evaluation refreshes a completed row');
+  const mixed = updateFromWitcher({ state: 'invited' }, { status: 'completed', impression: 'mixed', evaluationReady: true });
+  assert.equal(mixed.impression, 'mixed', 'the third level is stored');
+  assert.equal(updateFromWitcher({ state: 'invited' }, { status: 'completed', impression: 'maybe', evaluationReady: true }).impression, null, 'an unknown value is never stored');
   assert.equal(updateFromWitcher({ state: 'invited' }, { status: 'abandoned' }).state, 'abandoned');
   assert.equal(canAdvance('in_progress', 'expired'), false);
 });

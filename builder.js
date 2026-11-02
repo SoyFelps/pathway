@@ -205,7 +205,7 @@
     badge.hidden = !total;
     button.setAttribute('aria-label', total ? 'Notifications, ' + total + ' unread' : 'Notifications');
     const mentionItems = mentionNotifs.map(item => '<button type="button" class="notif-item" data-notif-mention-flow="' + esc(item.flowId) + '" data-notif-mention-email="' + esc(item.candidateEmail) + '"><span class="notif-text"><strong>' + esc(item.authorName) + '</strong> mentioned you in a comment</span><span class="notif-sub">' + esc(item.candidateName) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
-    const aiItems = aiNotifs.map(item => '<button type="button" class="notif-item" data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"><span class="notif-text"><strong>' + esc(item.candidateName) + '</strong> finished the AI interview</span><span class="notif-sub">' + (item.impression ? (item.impression === 'positive' ? 'Positive' : 'Negative') + ' impression' : 'Evaluation pending') + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
+    const aiItems = aiNotifs.map(item => '<button type="button" class="notif-item" data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"><span class="notif-text"><strong>' + esc(item.candidateName) + '</strong> finished the AI interview</span><span class="notif-sub">' + (item.impression ? (item.impression === 'positive' ? 'Positive' : item.impression === 'mixed' ? 'Mixed' : 'Negative') + ' impression' : 'Evaluation pending') + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
     menu.innerHTML = total
       ? aiItems + mentionItems + notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">There are new applications for <strong>' + esc(item.jobTitle || 'Untitled role') + '</strong></span><span class="notif-sub">' + item.newCount + (item.newCount === 1 ? ' new candidate' : ' new candidates') + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
       : '<div class="notif-empty">You are all caught up.</div>';
@@ -279,7 +279,7 @@
   const workspaceIsFree = () => { const item = workspace && myWorkspaces.find(entry => entry.id === workspace.id); return Boolean(item) && !item.premiumActive; };
   const FREE_MOVE_NOTE = 'This workspace is on the free plan. Upgrade to Premium to move candidates between stages.';
   const aiPurgedText = impression => 'This interview is more than 12 months old, so its transcript and written evaluation were deleted from the interview service to save space.'
-    + (impression === 'positive' || impression === 'negative' ? ' Even though they were deleted, the system recorded that the impression was ' + impression + '.' : '');
+    + (impression === 'positive' || impression === 'mixed' || impression === 'negative' ? ' Even though they were deleted, the system recorded that the impression was ' + impression + '.' : '');
   // rows arrive newest first: the first one of a candidate is the interview in play, older cancelled ones are history
   function setAiInterviews(rows) {
     const next = new Map();
@@ -316,14 +316,16 @@
       default: return null;
     }
   }
-  // The impression is shown as a thumb, never as a word: green thumbs up (positive) or red thumbs down (negative).
+  // The impression is shown as a thumb, never as a word on the card: green thumbs up (positive), amber dash (mixed) or red thumbs down (negative).
   const THUMB_PATHS = {
     positive: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
+    mixed: '<path d="M5 12h14"/>',
     negative: '<path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/>'
   };
+  const AI_IMPRESSION_LABELS = { positive: 'Positive impression', mixed: 'Mixed impression', negative: 'Negative impression' };
   function aiImpressionBadge(impression) {
-    if (impression !== 'positive' && impression !== 'negative') return '';
-    const label = impression === 'positive' ? 'Positive impression' : 'Negative impression';
+    if (!AI_IMPRESSION_LABELS[impression]) return '';
+    const label = AI_IMPRESSION_LABELS[impression];
     return '<span class="ai-impression is-' + impression + '" role="img" aria-label="' + label + '" title="' + label + '"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + THUMB_PATHS[impression] + '</svg></span>';
   }
   // Small sparkle in a lilac circle, as in the first plan of the card
@@ -332,7 +334,7 @@
   function aiImpressionLabelled(impression) {
     const badge = aiImpressionBadge(impression);
     if (!badge) return '';
-    return '<span class="ai-impression-line is-' + impression + '"><span class="ai-impression-text">' + (impression === 'positive' ? 'Positive impression' : 'Negative impression') + '</span>' + badge + '</span>';
+    return '<span class="ai-impression-line is-' + impression + '"><span class="ai-impression-text">' + AI_IMPRESSION_LABELS[impression] + '</span>' + badge + '</span>';
   }
   function aiInterviewCardHtml(row) {
     const tag = row && aiInterviewTag(row);

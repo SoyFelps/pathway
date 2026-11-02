@@ -115,7 +115,7 @@ export interface WitcherInterviewView {
 
 export interface RowUpdate {
   state: InterviewState;
-  impression: "positive" | "negative" | null;
+  impression: "positive" | "mixed" | "negative" | null;
   evaluation_ready: boolean;
   completed_at: string | null;
   lease_until: null;
@@ -130,7 +130,7 @@ export function updateFromWitcher(current: { state: string; completed_at?: strin
   const completed = next === "completed";
   return {
     state: next,
-    impression: completed && (view.impression === "positive" || view.impression === "negative") ? view.impression : null,
+    impression: completed && (view.impression === "positive" || view.impression === "mixed" || view.impression === "negative") ? view.impression : null,
     evaluation_ready: completed && view.evaluationReady === true,
     completed_at: completed ? (typeof view.completedAt === "string" ? view.completedAt : current.completed_at ?? new Date().toISOString()) : null,
     lease_until: null,
