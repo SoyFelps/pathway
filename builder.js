@@ -1724,6 +1724,44 @@
   const DIVERSITY_TITLES = { genderIdentity: 'Gender identity', transgender: 'Transgender', sexualOrientation: 'Sexual orientation', raceEthnicity: 'Race and ethnicity', disability: 'Disability or chronic condition', disabilityType: 'Type of disability or condition' };
   let diversityFlow = '';
   let diversityRequestId = 0;
+  let diversityData = null; // the report on screen (only whole percentages); null while loading or when there is nothing to show
+
+  function setDiversityExport(data) {
+    diversityData = data && data.enough ? data : null;
+    const button = root.querySelector('#diversity-export');
+    if (button) button.disabled = !diversityData;
+  }
+
+  // "Export CSV": the same whole percentages the page shows, nothing more (no head counts, names or e-mail addresses).
+  function diversityToCsv(data, jobLabel) {
+    const PNTS = 'Prefer not to say';
+    const SIZES = { '10-29': '10 to 29', '30-99': '30 to 99', '100-199': '100 to 199', '200-399': '200 to 399', '400-999': '400 to 999', '1000+': '1,000 or more' };
+    const coverage = Number.isFinite(Number(data.coverage)) && data.coverage !== null ? Math.round(Number(data.coverage)) : '';
+    // The table comes first (percentage right after the question); the long note goes last, in the third column, so it never widens the percentage column.
+    const rows = [['question', 'percentage', 'answer']];
+    (data.questions || []).forEach(question => {
+      const title = DIVERSITY_TITLES[question.key] || String(question.key);
+      if (!question.enough) { rows.push([title, '', 'Not enough answers to show this question privately']); return; }
+      const items = [...(question.items || [])].sort((a, b) => (a.answer === PNTS) - (b.answer === PNTS) || b.pct - a.pct);
+      if (question.other) items.push({ answer: 'Other groups (small groups combined)', pct: question.other.pct });
+      items.forEach(item => rows.push([title, Math.max(0, Math.min(100, Math.round(Number(item.pct) || 0))), item.answer]));
+    });
+    rows.push([], ['Pathway diversity report'], ['job', '', jobLabel], ['based on', '', SIZES[data.size] || ''], ['answer rate (%)', '', coverage], ['report updated at', '', data.generatedAt || ''], ['exported at', '', new Date().toISOString()],
+      ['note', '', 'Percentages are rounded to whole numbers, so they may not add up to exactly 100%. Groups of fewer than 5 people are combined under "Other groups". Candidates count once their application is at least 7 days old and the numbers refresh once a day. Use these numbers to understand your hiring process, not to make decisions about individual people.']);
+    return rowsToCsv(rows);
+  }
+
+  function exportDiversityCsv() {
+    if (!diversityData) return;
+    const select = root.querySelector('#diversity-job');
+    const label = select && select.selectedOptions[0] ? select.selectedOptions[0].textContent : '';
+    try {
+      downloadTextFile('pathway-diversity-' + new Date().toISOString().slice(0, 10) + '.csv', diversityToCsv(diversityData, label));
+      showToast('Diversity report downloaded.');
+    } catch (error) {
+      showToast('Could not prepare the report. Please try again.');
+    }
+  }
 
   function diversityQuestionHtml(question) {
     const title = DIVERSITY_TITLES[question.key] || String(question.key);
@@ -1742,6 +1780,7 @@
     const content = root.querySelector('#diversity-content');
     if (!content) return;
     content.setAttribute('aria-busy', 'false');
+    setDiversityExport(data);
     if (!data.enough) {
       content.innerHTML = '<section class="rpt-card"><p class="rpt-empty">There are not enough answers for this job to show results privately yet. Candidates count once their application is at least 7 days old, and results appear once at least 10 candidates have answered.</p></section>';
       return;
@@ -1759,6 +1798,7 @@
     const content = root.querySelector('#diversity-content');
     if (!content || !diversityFlow) return;
     const requestId = ++diversityRequestId;
+    setDiversityExport(null);
     content.setAttribute('aria-busy', 'true');
     content.innerHTML = '<p class="rpt-empty">Loading…</p>';
     try {
@@ -1777,12 +1817,14 @@
     if (!hasPermission('diversity')) return renderAccessMessage('diversity');
     setRoute('diversity');
     currentId = null; selectedId = null;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('diversity')}<main class="diversity-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Diversity</h1><p>Combined percentages from candidates’ voluntary self-identification answers, one job at a time.</p></div><div class="reports-tools"><select id="diversity-job" class="applicants-filter" aria-label="Choose a job" hidden></select></div></div><div id="diversity-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('diversity')}<main class="diversity-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Diversity</h1><p>Combined percentages from candidates’ voluntary self-identification answers, one job at a time.</p></div><div class="reports-tools"><select id="diversity-job" class="applicants-filter" aria-label="Choose a job" hidden></select><button class="btn btn-sm" id="diversity-export" type="button" disabled>↓ Export CSV</button></div></div><div id="diversity-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
     
     const content = root.querySelector('#diversity-content');
     const select = root.querySelector('#diversity-job');
+    diversityData = null;
+    root.querySelector('#diversity-export')?.addEventListener('click', exportDiversityCsv);
     const requestId = ++diversityRequestId;
     let jobs = [];
     try {

@@ -132,3 +132,17 @@ test('the transgender question: a separate, voluntary question with "Prefer not 
   assert.match(read('supabase/functions/applications/geo.ts'), /"transgender": \[/);
   assert.match(read('legal.html'), /whether the candidate identifies as transgender/);
 });
+
+test('the Diversity page can export a CSV of the same whole percentages, and nothing else', () => {
+  const builder = read('builder.js');
+  assert.match(builder, /id="diversity-export" type="button" disabled>↓ Export CSV/);
+  const start = builder.indexOf('function diversityToCsv');
+  const end = builder.indexOf('function diversityQuestionHtml');
+  assert.ok(start > 0 && end > start);
+  const code = builder.slice(start, end);
+  assert.match(code, /Math\.round\(Number\(item\.pct\) \|\| 0\)/, 'whole numbers only');
+  assert.match(code, /return rowsToCsv\(rows\)/, 'same safe CSV writer as the other exports');
+  assert.doesNotMatch(code, /email|candidate_name|toFixed|headcount|\.n\b/i, 'no names, e-mail addresses or head counts');
+  assert.match(builder, /diversityData = data && data\.enough \? data : null/, 'the button is only enabled when a report is shown');
+  assert.doesNotMatch(read('backend.js'), /from\('applicant_diversity'\)/, 'the CSV uses the same private report function, no new data access');
+});
