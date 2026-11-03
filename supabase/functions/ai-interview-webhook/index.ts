@@ -135,7 +135,7 @@ async function sendRow(row: Row): Promise<"sent" | "blocked" | "dropped" | "retr
   if (workspaceError) throw workspaceError;
   let company: Row | null = null;
   if (flow.company_id) {
-    const { data, error } = await admin!.from("workspace_companies").select("name,logo_path").eq("id", flow.company_id).maybeSingle();
+    const { data, error } = await admin!.from("workspace_companies").select("name,logo_path,primary_color").eq("id", flow.company_id).maybeSingle();
     if (error) throw error;
     company = data;
   }
@@ -168,6 +168,7 @@ async function sendRow(row: Row): Promise<"sent" | "blocked" | "dropped" | "retr
       jobTitle: flow.job_title,
       companyName,
       logoUrl: companyLogoUrl(projectUrl, company?.logo_path),
+      color: company?.primary_color ?? null,
       questions: flow.interview_questions,
     }));
 

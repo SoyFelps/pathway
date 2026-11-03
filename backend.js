@@ -493,15 +493,23 @@
 
   function companyRecord(row) {
     const logoUrl = row.logo_path ? client.storage.from('company-logos').getPublicUrl(row.logo_path).data?.publicUrl || '' : '';
-    return { id: row.id, workspaceId: row.workspace_id, name: row.name, description: row.description || '', logoPath: row.logo_path || null, logoUrl, createdAt: row.created_at };
+    return { id: row.id, workspaceId: row.workspace_id, name: row.name, description: row.description || '', logoPath: row.logo_path || null, logoUrl, primaryColor: row.primary_color || '', createdAt: row.created_at };
   }
 
   async function listCompanies(workspaceId) {
     await requireSession();
-    const { data, error } = await client.from('workspace_companies').select('id,workspace_id,name,description,logo_path,created_at')
+    const { data, error } = await client.from('workspace_companies').select('id,workspace_id,name,description,logo_path,primary_color,created_at')
       .eq('workspace_id', workspaceId).order('created_at', { ascending: true }).limit(3);
     if (error) throw error;
     return (data || []).map(companyRecord);
+  }
+
+  // The company's primary colour: '#rrggbb' in lower case, or null for "use the default".
+  function companyColor(value) {
+    const text = String(value || '').trim().toLowerCase();
+    if (!text) return null;
+    if (!/^#[0-9a-f]{6}$/.test(text)) throw new Error('Choose a valid primary colour.');
+    return text;
   }
 
   async function createCompany(input, workspace) {
@@ -509,6 +517,7 @@
     const name = String(input?.name || '').trim();
     const description = String(input?.description || '').trim();
     const logoFile = input?.logoFile || null;
+    const primaryColor = companyColor(input?.primaryColor);
     if (!name || name.length > 120) throw new Error('Enter a company name (up to 120 characters).');
     if (!description || description.length > 3000) throw new Error('Enter a company description (up to 3,000 characters).');
     const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -517,8 +526,8 @@
     }
     const id = crypto.randomUUID();
     let logoPath = null;
-    const { data, error } = await client.from('workspace_companies').insert({ id, workspace_id: workspace.id, created_by: session.user.id, name, description })
-      .select('id,workspace_id,name,description,logo_path,created_at').single();
+    const { data, error } = await client.from('workspace_companies').insert({ id, workspace_id: workspace.id, created_by: session.user.id, name, description, primary_color: primaryColor })
+      .select('id,workspace_id,name,description,logo_path,primary_color,created_at').single();
     if (error) throw error;
     if (logoFile) {
       const extension = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' })[logoFile.type];
@@ -544,6 +553,7 @@
     const name = String(input?.name || '').trim();
     const description = String(input?.description || '').trim();
     const logoFile = input?.logoFile || null;
+    const primaryColor = companyColor(input?.primaryColor);
     if (!name || name.length > 120) throw new Error('Enter a company name (up to 120 characters).');
     if (!description || description.length > 3000) throw new Error('Enter a company description (up to 3,000 characters).');
     const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -569,7 +579,8 @@
         p_company_id: company.id,
         p_name: name,
         p_description: description,
-        p_logo_path: nextLogoPath
+        p_logo_path: nextLogoPath,
+        p_primary_color: primaryColor
       });
       if (result.error) throw result.error;
     } catch (error) {

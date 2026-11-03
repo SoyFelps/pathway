@@ -855,10 +855,27 @@
     }));
   }
 
+  // Primary colour of a company (optional): painted on the AI interview page and its invitation e-mail. Empty = Witcher's default.
+  const COMPANY_DEFAULT_COLOR = '#315f4a';
+  function companyColorFieldHtml(value) {
+    const color = /^#[0-9a-f]{6}$/i.test(value || '') ? String(value).toLowerCase() : '';
+    return `<div class="field-group"><label for="company-color">Primary color <span class="muted">(optional)</span></label><div class="company-color-row"><input class="company-color-input" id="company-color" type="color" value="${color || COMPANY_DEFAULT_COLOR}" aria-label="Choose the primary color"><span class="company-color-hex" id="company-color-hex">${color ? color.toUpperCase() : 'Default'}</span><button class="btn btn-sm" type="button" id="company-color-reset" ${color ? '' : 'hidden'}>Use default</button></div><input type="hidden" name="primaryColor" value="${color}"><small class="field-help">Candidates see this color on their AI interview page and in the interview invitation e-mail.</small></div>`;
+  }
+  function wireCompanyColor(form) {
+    const picker = form.querySelector('#company-color');
+    const label = form.querySelector('#company-color-hex');
+    const reset = form.querySelector('#company-color-reset');
+    const field = form.elements.primaryColor;
+    if (!picker || !field) return;
+    picker.addEventListener('input', () => { field.value = picker.value.toLowerCase(); label.textContent = picker.value.toUpperCase(); reset.hidden = false; });
+    reset.addEventListener('click', () => { field.value = ''; picker.value = COMPANY_DEFAULT_COLOR; label.textContent = 'Default'; reset.hidden = true; });
+  }
+
   function showNewCompany() {
     if (!hasPermission('flows')) return renderAccessMessage('flows');
     if (companies.length >= 3) { showToast('You can add up to three companies to your workspace.'); return; }
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Company profile</div><h2>New company</h2><p>Details are shown to candidates when this company is selected for a job.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-company-form"><div class="field-group"><label for="company-name">Company name</label><input class="text-input" id="company-name" name="name" maxlength="120" required placeholder="e.g. Northstar Studio"></div><div class="field-group"><label for="company-logo">Logo <span class="muted">(optional)</span></label><input class="text-input company-logo-upload" id="company-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"><small class="field-help">PNG, JPG, or WebP · Maximum 2 MB</small></div><div class="field-group"><label for="company-description">Company description</label><textarea class="text-area" id="company-description" name="description" maxlength="3000" required placeholder="Tell candidates about the company…"></textarea><small class="field-help">Up to 3,000 characters</small></div><div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit" id="create-company-submit">Save company</button></div></form>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Company profile</div><h2>New company</h2><p>Details are shown to candidates when this company is selected for a job.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-company-form"><div class="field-group"><label for="company-name">Company name</label><input class="text-input" id="company-name" name="name" maxlength="120" required placeholder="e.g. Northstar Studio"></div><div class="field-group"><label for="company-logo">Logo <span class="muted">(optional)</span></label><input class="text-input company-logo-upload" id="company-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"><small class="field-help">PNG, JPG, or WebP · Maximum 2 MB</small></div>${companyColorFieldHtml('')}<div class="field-group"><label for="company-description">Company description</label><textarea class="text-area" id="company-description" name="description" maxlength="3000" required placeholder="Tell candidates about the company…"></textarea><small class="field-help">Up to 3,000 characters</small></div><div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit" id="create-company-submit">Save company</button></div></form>`);
+    wireCompanyColor(modalRoot.querySelector('#new-company-form'));
     modalRoot.querySelector('#new-company-form').addEventListener('submit', async event => {
       event.preventDefault();
       const form = event.currentTarget; const button = form.querySelector('#create-company-submit'); const errorBox = form.querySelector('#company-form-error');
@@ -868,7 +885,7 @@
       }
       button.disabled = true; button.textContent = 'Saving…'; errorBox.classList.remove('show');
       try {
-        const company = await window.PathwayBackend.createCompany({ name: form.elements.name.value, description: form.elements.description.value, logoFile: file }, workspace);
+        const company = await window.PathwayBackend.createCompany({ name: form.elements.name.value, description: form.elements.description.value, logoFile: file, primaryColor: form.elements.primaryColor.value }, workspace);
         companies.push(company); closeModal(); renderMyCompanies(); showToast('Company added.');
       } catch (error) {
         errorBox.textContent = error.message || 'The company could not be saved.'; errorBox.classList.add('show'); button.disabled = false; button.textContent = 'Save company';
@@ -883,7 +900,7 @@
       ? `<div class="company-logo-current" id="company-logo-current"><img src="${esc(company.logoUrl)}" alt="Current ${esc(company.name)} logo"><button class="icon-btn company-logo-remove" id="remove-company-logo" type="button" aria-label="Remove current logo" title="Remove current logo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg></button></div><div class="company-logo-removal-pending" id="company-logo-removal-pending" hidden><span id="company-logo-removal-message">Logo will be removed when you save.</span><button class="btn btn-sm" id="restore-company-logo" type="button">Undo</button></div><input type="hidden" name="removeLogo" value="false">`
       : '';
     const deleteButton = editing ? '<button class="btn btn-danger company-delete-from-edit" id="delete-company-from-edit" type="button">Delete</button>' : '';
-    return `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Company profile</div><h2>${title}</h2><p>Details are shown to candidates when this company is selected for a job.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="company-profile-form"><div class="field-group"><label for="company-name">Company name</label><input class="text-input" id="company-name" name="name" maxlength="120" required value="${editing ? esc(company.name) : ''}" placeholder="e.g. Northstar Studio"></div><div class="field-group"><label for="company-logo">${editing ? 'Replace logo' : 'Logo'} <span class="muted">(optional)</span></label>${existingLogo}<input class="text-input company-logo-upload" id="company-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"><small class="field-help">PNG, JPG, or WebP · Maximum 2 MB</small></div><div class="field-group"><label for="company-description">Company description</label><textarea class="text-area" id="company-description" name="description" maxlength="3000" required placeholder="Tell candidates about the company…">${editing ? esc(company.description) : ''}</textarea><small class="field-help">Up to 3,000 characters</small></div><div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions company-edit-actions">${deleteButton}<button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit" id="company-profile-submit">${action}</button></div></form>`;
+    return `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Company profile</div><h2>${title}</h2><p>Details are shown to candidates when this company is selected for a job.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="company-profile-form"><div class="field-group"><label for="company-name">Company name</label><input class="text-input" id="company-name" name="name" maxlength="120" required value="${editing ? esc(company.name) : ''}" placeholder="e.g. Northstar Studio"></div><div class="field-group"><label for="company-logo">${editing ? 'Replace logo' : 'Logo'} <span class="muted">(optional)</span></label>${existingLogo}<input class="text-input company-logo-upload" id="company-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"><small class="field-help">PNG, JPG, or WebP · Maximum 2 MB</small></div>${companyColorFieldHtml(editing ? company.primaryColor : '')}<div class="field-group"><label for="company-description">Company description</label><textarea class="text-area" id="company-description" name="description" maxlength="3000" required placeholder="Tell candidates about the company…">${editing ? esc(company.description) : ''}</textarea><small class="field-help">Up to 3,000 characters</small></div><div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions company-edit-actions">${deleteButton}<button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit" id="company-profile-submit">${action}</button></div></form>`;
   }
 
   function validateCompanyLogo(file, errorBox) {
@@ -903,6 +920,7 @@
     const removalPending = form.querySelector('#company-logo-removal-pending');
     const removalMessage = form.querySelector('#company-logo-removal-message');
     const removeLogoInput = form.elements.removeLogo;
+    wireCompanyColor(form);
     form.querySelector('#remove-company-logo')?.addEventListener('click', () => {
       logoPreview.hidden = true;
       removalPending.hidden = false;
@@ -933,6 +951,7 @@
           name: form.elements.name.value,
           description: form.elements.description.value,
           logoFile: file,
+          primaryColor: form.elements.primaryColor.value,
           removeLogo: form.elements.removeLogo?.value === 'true'
         }, company, workspace);
         companies = companies.map(item => item.id === result.company.id ? result.company : item);

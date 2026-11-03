@@ -54,6 +54,9 @@ test('the create call carries the row id as externalId and only the data Witcher
   assert.deepEqual(body.questions, ['Tell us about you.', 'Why this role?']);
   assert.deepEqual(body.company, { name: 'CoreFront', logoUrl: 'https://x.supabase.co/storage/v1/object/public/company-logos/a.png' });
   assert.ok(!('logoUrl' in buildCreateBody({ id: 'a', candidateName: 'a', candidateEmail: 'a@b.co', jobTitle: 'j', companyName: 'c', logoUrl: null, questions: ['abc'] }).company));
+  const withColor = buildCreateBody({ id: 'a', candidateName: 'a', candidateEmail: 'a@b.co', jobTitle: 'j', companyName: 'c', logoUrl: null, color: '#AA3355', questions: ['abc'] });
+  assert.deepEqual(withColor.company, { name: 'c', color: '#aa3355' }, 'the primary colour travels in lower case');
+  for (const bad of [null, '', 'red', '#fff', 'javascript:alert(1)']) assert.ok(!('color' in buildCreateBody({ id: 'a', candidateName: 'a', candidateEmail: 'a@b.co', jobTitle: 'j', companyName: 'c', logoUrl: null, color: bad, questions: ['abc'] }).company), 'no colour is sent for ' + bad);
   assert.equal(companyLogoUrl('https://x.supabase.co/', 'ws id/logo 1.png'), 'https://x.supabase.co/storage/v1/object/public/company-logos/ws%20id/logo%201.png');
   assert.equal(companyLogoUrl('https://x.supabase.co', null), null);
 });

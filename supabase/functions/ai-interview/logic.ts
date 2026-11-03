@@ -55,6 +55,7 @@ export interface CreateInput {
   jobTitle: string;
   companyName: string;
   logoUrl: string | null;
+  color?: string | null; // the company's primary colour (#rrggbb); Witcher paints the interview page and e-mail with it
   questions: unknown;
 }
 
@@ -63,7 +64,11 @@ export function buildCreateBody(input: CreateInput): Record<string, unknown> {
     externalId: input.id,
     candidate: { name: input.candidateName, email: input.candidateEmail },
     jobTitle: input.jobTitle,
-    company: { name: input.companyName, ...(input.logoUrl ? { logoUrl: input.logoUrl } : {}) },
+    company: {
+      name: input.companyName,
+      ...(input.logoUrl ? { logoUrl: input.logoUrl } : {}),
+      ...(/^#[0-9a-fA-F]{6}$/.test(input.color || "") ? { color: String(input.color).toLowerCase() } : {}),
+    },
     questions: cleanQuestions(input.questions),
   };
 }

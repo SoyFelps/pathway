@@ -342,6 +342,9 @@
 .companies-empty h2{font:700 20px var(--display);margin:13px 0 7px}
 .companies-empty p{max-width:430px;color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 19px}
 .company-logo-upload{padding:9px}
+.company-color-row{display:flex;align-items:center;gap:10px}
+.company-color-input{width:44px;height:36px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
+.company-color-hex{font:600 13px var(--sans);color:var(--text-strong);min-width:64px}
 .field-help{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:6px}
 .company-form-error:not(.show){display:none}
 .company-avatar.has-logo{overflow:hidden;background:var(--surface);border:1px solid var(--line)}

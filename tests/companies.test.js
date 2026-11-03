@@ -103,8 +103,8 @@ test('company edits propagate atomically to linked drafts and active published s
   assert.match(builder, /window\.PathwayBackend\.updateCompany/);
   assert.match(builder, /Company updated in its linked flows/);
   assert.match(styles, /\.company-card-actions/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261103b/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261103b/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261103c/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261103c/);
 });
 
 test('company deletion requires all linked flows removed first and the UI confirms candidate-data loss', () => {
@@ -150,4 +150,27 @@ test('candidate page shows the selected company logo and description below vacan
   assert.match(candidate, /profile\?\.logoPath/);
   assert.match(styles, /\.company-avatar\{width:68px;height:68px;flex:0 0 68px;border-radius:16px\}/);
   assert.match(styles, /@media\(max-width:760px\)\{\.company-avatar\{width:58px;height:58px;flex-basis:58px\}\}/);
+});
+
+test('a company can have an optional primary colour that is stored, edited and sent to Witcher', () => {
+  const migration = read('supabase/migrations/20261103100000_company_primary_color.sql');
+  assert.match(migration, /add column if not exists primary_color text/i);
+  assert.match(migration, /primary_color is null or primary_color ~ '\^#\[0-9a-f\]\{6\}\$'/i, 'only #rrggbb or nothing');
+  assert.match(migration, /p_primary_color text/i);
+  assert.match(migration, /revoke all on function public\.update_workspace_company_profile\(uuid, text, text, text, text\) from public, anon;/i);
+  assert.match(migration, /grant execute on function public\.update_workspace_company_profile\(uuid, text, text, text, text\) to authenticated;/i);
+  assert.doesNotMatch(migration, /drop function/i, 'the 4-argument function stays so the live site keeps working until the new site is published');
+  const backend = read('backend.js');
+  assert.match(backend, /function companyColor\(value\)/);
+  assert.match(backend, /primary_color: primaryColor/);
+  assert.match(backend, /p_primary_color: primaryColor/);
+  assert.match(backend, /primaryColor: row\.primary_color \|\| ''/);
+  const builder = read('builder.js');
+  assert.match(builder, /type="color"/);
+  assert.match(builder, /name="primaryColor"/);
+  assert.equal((builder.match(/\$\{companyColorFieldHtml\(/g) || []).length, 2, 'both the new and the edit form have the field');
+  assert.match(builder, /primaryColor: form\.elements\.primaryColor\.value/);
+  const webhook = read('supabase/functions/ai-interview-webhook/index.ts');
+  assert.match(webhook, /select\("name,logo_path,primary_color"\)/);
+  assert.match(webhook, /color: company\?\.primary_color \?\? null/);
 });
