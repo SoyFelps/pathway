@@ -343,8 +343,37 @@
 .companies-empty p{max-width:430px;color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 19px}
 .company-logo-upload{padding:9px}
 .company-color-row{display:flex;align-items:center;gap:10px}
-.company-color-input{width:44px;height:36px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
-.company-color-hex{font:600 13px var(--sans);color:var(--text-strong);min-width:64px}
+.company-color-input{-webkit-appearance:none;appearance:none;width:36px;height:36px;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer}
+.company-color-input::-webkit-color-swatch-wrapper{padding:3px}
+.company-color-input::-webkit-color-swatch{border:none;border-radius:7px}
+.company-color-input::-moz-color-swatch{border:none;border-radius:7px}
+.company-color-hex{font:600 13px var(--sans);color:var(--text-strong);min-width:62px}
+.company-link-btn{border:0;background:none;padding:4px 2px;font:600 12px var(--sans);color:var(--green);cursor:pointer;border-radius:6px}
+.company-link-btn:hover{text-decoration:underline}
+.company-link-btn[hidden]{display:none}
+.company-link-btn:focus-visible{outline:2px solid var(--green-focus);outline-offset:2px}
+/* Company form (new and edit): a wider modal, a "Branding" panel for logo and colour, a roomy description */
+.modal:has(.company-form){width:min(100%,560px);max-height:94vh;padding-bottom:20px}
+.company-form .modal-head,.modal:has(.company-form) .modal-head{margin-bottom:14px}
+.company-form .field-group{max-width:none}
+.company-brand-title{font:700 11px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+.company-brand-title .muted{text-transform:none;letter-spacing:0;font-weight:500}
+.company-brand{border:1px solid var(--line);border-radius:12px;background:var(--bg-page);margin:0 0 16px}
+.company-brand-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px}
+.company-brand-row+.company-brand-row{border-top:1px solid var(--line)}
+.company-brand-label{min-width:0;flex:1}
+.company-brand-label strong{display:block;font-size:13px;font-weight:600;color:var(--text-strong)}
+.company-brand-label small{display:block;margin-top:2px;font-size:11px;line-height:1.45;color:var(--muted)}
+.company-brand-control{flex:0 0 auto;min-height:48px;justify-content:center;display:flex;flex-direction:column;align-items:flex-end;gap:8px;max-width:58%}
+.company-logo-picker{position:relative;display:flex;align-items:center;gap:10px;min-width:0}
+.company-logo-picker[hidden]{display:none}
+.company-file-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.company-file-input:focus-visible+.company-file-btn{outline:2px solid var(--green-focus);outline-offset:2px}
+.company-file-btn{cursor:pointer;white-space:nowrap}
+.company-logo-picker.has-file .company-file-btn{display:none}
+.company-description-field .text-area{min-height:140px}
+.company-form .modal-actions{margin-top:16px;padding-top:16px;border-top:1px solid var(--border-subtle)}
+@media(max-width:520px){.company-brand-row{flex-direction:column;align-items:flex-start}.company-brand-control{max-width:none;align-items:flex-start}}
 .field-help{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:6px}
 .company-form-error:not(.show){display:none}
 .company-avatar.has-logo{overflow:hidden;background:var(--surface);border:1px solid var(--line)}
@@ -358,12 +387,12 @@
 
 /* Company profile edit and removal controls */
 .company-card-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:auto;padding-top:14px;border-top:1px solid var(--border-subtle)}
-.company-logo-current{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;color:var(--muted);font-size:11px}
-.company-logo-current[hidden],.company-logo-removal-pending[hidden]{display:none}
-.company-logo-current img{width:38px;height:38px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.company-logo-current,.company-logo-chosen{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:0;color:var(--muted);font-size:11px}
+.company-logo-current[hidden],.company-logo-chosen[hidden],.company-logo-removal-pending[hidden]{display:none}
+.company-logo-current img,.company-logo-chosen img{width:48px;height:48px;object-fit:contain;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 .company-logo-remove{color:var(--red);border-color:transparent;background:transparent}
 .company-logo-remove:hover{color:var(--red);background:var(--red-bg);border-color:var(--red-border)}
-.company-logo-removal-pending{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;color:var(--muted);font-size:11px}
+.company-logo-removal-pending{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:0;color:var(--muted);font-size:11px}
 .company-edit-actions .company-delete-from-edit{margin-right:auto;border-color:transparent}
 .company-edit-actions .company-delete-from-edit:hover{color:var(--red);background:var(--red-bg);border-color:var(--red-border)}
 .company-delete-flow-list{max-height:130px;overflow:auto;margin:10px 0 0;padding-left:22px;color:var(--muted);font-size:12px;line-height:1.7}

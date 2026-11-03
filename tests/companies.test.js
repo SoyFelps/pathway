@@ -103,8 +103,8 @@ test('company edits propagate atomically to linked drafts and active published s
   assert.match(builder, /window\.PathwayBackend\.updateCompany/);
   assert.match(builder, /Company updated in its linked flows/);
   assert.match(styles, /\.company-card-actions/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261103c/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261103c/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261103f/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261103f/);
 });
 
 test('company deletion requires all linked flows removed first and the UI confirms candidate-data loss', () => {
@@ -168,9 +168,23 @@ test('a company can have an optional primary colour that is stored, edited and s
   const builder = read('builder.js');
   assert.match(builder, /type="color"/);
   assert.match(builder, /name="primaryColor"/);
-  assert.equal((builder.match(/\$\{companyColorFieldHtml\(/g) || []).length, 2, 'both the new and the edit form have the field');
+  assert.equal((builder.match(/\$\{companyFieldsHtml\(/g) || []).length, 2, 'the new and the edit form share the same fields');
+  assert.match(builder, /id="company-logo-picker"\$\{hasLogo \? ' hidden' : ''\}/, 'with a logo, the file chooser stays hidden until the logo is removed');
+  assert.match(builder, /logoPicker\.hidden = false;/);
+  assert.match(builder, /class="company-link-btn" type="button" id="company-color-reset"/, 'Use default is plain text, not a bordered button');
   assert.match(builder, /primaryColor: form\.elements\.primaryColor\.value/);
   const webhook = read('supabase/functions/ai-interview-webhook/index.ts');
   assert.match(webhook, /select\("name,logo_path,primary_color"\)/);
   assert.match(webhook, /color: company\?\.primary_color \?\? null/);
+});
+
+test('a chosen logo file shows a preview with a remove button instead of the file name, and only then can another be chosen', () => {
+  const builder = read('builder.js');
+  assert.match(builder, /id="company-logo-chosen" hidden/);
+  assert.match(builder, /id="clear-company-logo" type="button" aria-label="Remove selected logo"/);
+  assert.match(builder, /URL\.createObjectURL\(file\)/);
+  assert.match(builder, /URL\.revokeObjectURL\(previewUrl\)/, 'the preview address is released');
+  assert.match(builder, /picker\.classList\.toggle\('has-file', Boolean\(file\)\)/);
+  assert.doesNotMatch(builder, /company-file-name|No file chosen/, 'no file name is shown any more');
+  assert.match(read('styles.css'), /\.company-logo-picker\.has-file \.company-file-btn\{display:none\}/, 'the chooser is hidden while a file is chosen');
 });
