@@ -3436,11 +3436,20 @@
     });
   }
 
+  // Applies the fixed ending to every end step of a journey; true when something was different (older jobs).
+  function lockEndSteps(flow) {
+    let changed = false;
+    for (const node of (flow && flow.nodes) || []) {
+      if (node.type === 'end' && (node.label !== C.END_LABEL || node.subtype !== 'submitted')) { node.label = C.END_LABEL; node.subtype = 'submitted'; changed = true; }
+    }
+    return changed;
+  }
+
   function openFlow(id) {
     if (!hasPermission('flows')) return renderAccessMessage('flows');
     const flow = flows.find(item => item.id === id);
     if (flow && flowIsDamaged(flow)) return showFlowMenu(id);
-    currentId = id; selectedId = currentFlow().nodes.find(node => node.type === 'candidateInfo').id; renderEditor();
+    currentId = id; lockEndSteps(currentFlow()); selectedId = currentFlow().nodes.find(node => node.type === 'candidateInfo').id; renderEditor();
   }
 
   function renderEditor() {
@@ -3545,7 +3554,7 @@
           return `<div class="node-option">${esc(port.label || 'Option')}${node.type === 'singleChoice' && (node.autoFailOptions || []).includes(port.optionValue) ? '<span class="node-autofail" title="Auto-fail">Auto-fail</span>' : ''}<span class="node-detail" style="margin-left:auto;margin-right:5px;font-size:8px">${target ? esc(target.label.slice(0, 16)) : 'Connect'}</span><span class="port" data-from="${esc(node.id)}" data-option="${esc(port.optionValue)}" title="Drag to branch: ${esc(port.label)}"></span></div>`;
         }).join('')}</div>${node.type === 'multiChoice' && (node.autoFailOptions || []).length ? `<div class="node-detail">${node.autoFailOptions.length} auto-fail ${node.autoFailOptions.length === 1 ? 'option' : 'options'}</div>` : ''}`;
       } else if (node.type === 'end') {
-        detail = `<div class="node-detail">${node.subtype === 'disqualified' ? 'Polite disqualification' : 'Application confirmation'}</div>`;
+        detail = '<div class="node-detail">Application confirmation</div>';
       } else {
         const edge = flow.edges.find(item => item.fromNodeId === node.id); const target = edge && flow.nodes.find(item => item.id === edge.toNodeId);
         detail = `<div class="node-detail">${node.type === 'shortText' ? (node.numericOnly ? 'Number response' + (Number.isInteger(node.autoFailBelow) ? ' · auto-fail below ' + node.autoFailBelow : '') : 'Open-ended response') : `${(node.options || []).length} choices`}${target ? ` · → ${esc(target.label.slice(0, 19))}` : ' · Not connected'}</div>`;
@@ -3689,9 +3698,7 @@
       editor.innerHTML = `<div class="inspector-note">This is the fixed first step. Name, email, and resume are always included. Every detail you tick is required: candidates must fill it in to continue (where a list offers “Prefer not to say”, that counts as an answer).</div><div class="section-small">Always included</div>${[['name', 'Full name'], ['email', 'Email address'], ['resume', 'Resume link']].map(([key, label]) => `<label class="locked-field"><input type="checkbox" class="check" checked disabled><span>${label}</span><small>Required</small></label>`).join('')}<div class="section-small">Optional details</div>${C.OPTIONAL_FIELDS.map(field => `<label class="toggle-field"><span>${esc(field.label)}${field.hint ? `<small>${esc(field.hint)}</small>` : ''}</span><input type="checkbox" class="check optional-field" data-field="${esc(field.key)}" ${flow.candidateInfoFields[field.key] ? 'checked' : ''}></label>`).join('')}<p class="connection-help">The selected details appear directly on the public job application page.</p>`;
       editor.querySelectorAll('.optional-field').forEach(input => input.addEventListener('change', event => { flow.candidateInfoFields[event.target.dataset.field] = event.target.checked; save(); drawCanvas(); }));
     } else if (selected.type === 'end') {
-      editor.innerHTML = `<div class="field-group"><label for="node-label">Candidate-facing completion title</label><input class="text-input" id="node-label" value="${esc(selected.label)}"></div><div class="field-group"><label for="end-subtype">Result</label><select class="select-input end-select" id="end-subtype"><option value="submitted" ${selected.subtype !== 'disqualified' ? 'selected' : ''}>Application received</option><option value="disqualified" ${selected.subtype === 'disqualified' ? 'selected' : ''}>Not a match this time</option></select></div><div class="inspector-note">This ending appears only to candidates who reach this step. You can create more than one ending.</div><button class="btn btn-sm btn-danger" id="remove-step" style="margin-top:14px">Delete end step</button>`;
-      editor.querySelector('#node-label').addEventListener('input', event => { selected.label = event.target.value; save(); updateNodeLabel(selected); });
-      editor.querySelector('#end-subtype').addEventListener('change', event => { selected.subtype = event.target.value; save(); drawCanvas(); });
+      editor.innerHTML = `<div class="field-group"><label for="end-title">Completion title</label><input class="text-input locked-input" id="end-title" value="${esc(C.END_LABEL)}" disabled readonly aria-describedby="end-title-help"><small class="field-help" id="end-title-help">Fixed text. Every candidate sees the standard confirmation screen.</small></div><div class="inspector-note">This is the last step of the journey. Candidates who reach it are saved in New, unless an Auto-fail answer on the way sends them to Failed. You can create more than one ending.</div><button class="btn btn-sm btn-danger" id="remove-step" style="margin-top:14px">Delete end step</button>`;
       editor.querySelector('#remove-step').addEventListener('click', () => deleteNode(selected.id));
     } else {
       editor.innerHTML = `<div class="field-group"><label for="node-label">Question</label><textarea class="text-area" id="node-label" style="min-height:76px">${esc(selected.label)}</textarea></div>${selected.type === 'shortText' ? `<label class="numeric-only-toggle"><span>Numbers only</span><span class="numeric-only-switch"><input id="numeric-only" type="checkbox" role="switch" ${selected.numericOnly ? 'checked' : ''}><span class="numeric-only-track" aria-hidden="true"></span></span></label>` : ''}${selected.type === 'singleChoice' || selected.type === 'multiChoice' ? `<div class="section-small">Answer options</div><div id="options-editor">${selected.options.map((option, index) => `<div class="option-edit has-autofail"><input class="text-input option-value" data-index="${index}" value="${esc(option)}" aria-label="Answer option ${index + 1}"><label class="option-autofail" title="Candidates who give this answer still finish the questions, then land in Failed."><input type="checkbox" class="check option-autofail-check" data-index="${index}" ${(selected.autoFailOptions || []).includes(option) ? 'checked' : ''}><span>Auto-fail</span></label><button class="icon-btn delete-option" data-index="${index}" aria-label="Remove option">×</button></div>`).join('')}</div><button class="add-option" id="add-option">＋ Add an option</button><p class="connection-help autofail-help">Auto-fail: candidates who give that answer still finish all the questions, then land in Failed. The option does not need to connect to an ending.</p>` : ''}${selected.type === 'shortText' && selected.numericOnly ? `<div class="field-group autofail-below"><label for="autofail-below">Auto-fail if below</label><input class="text-input" id="autofail-below" type="number" inputmode="numeric" min="0" step="1" placeholder="e.g. 4" value="${selected.autoFailBelow ?? ''}"><p class="connection-help">Candidates who enter a smaller number still finish the questions, then land in Failed.</p></div>` : ''}<div class="inspector-note">${selected.type === 'singleChoice' ? 'Each option needs its own connection. Drag a port from an answer row to the step that should follow it.' : selected.type === 'multiChoice' ? 'Candidates can select multiple answers. Connect this question to one next step.' : selected.numericOnly ? 'Candidates must enter a number. Connect this question to its next step.' : 'Candidates can enter a free-text answer. Connect this question to its next step.'}</div><button class="btn btn-sm btn-danger" id="remove-step" style="margin-top:14px">Delete step</button>`;
@@ -3747,7 +3754,6 @@
   }
   function addNode(type) {
     const flow = currentFlow(); const spot = newNodeSpot(flow); const newNode = C.createNode(type, spot.x, spot.y);
-    if (type === 'end') { newNode.label = 'Application received'; newNode.subtype = 'submitted'; }
     flow.nodes.push(newNode);
     selectedId = newNode.id; save(); drawCanvas(); drawInspector();
   }
@@ -3815,6 +3821,7 @@
   async function publishFlow() {
     if (!subscription?.active) { openSubscriptionPage(); return; }
     const flow = currentFlow();
+    lockEndSteps(flow);
     try { C.normalizeFlow(flow); }
     catch (error) {
       setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Before you publish</div><h2>Your journey needs one more pass.</h2><p>${esc(error.message)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn btn-primary" data-close>Back to the builder</button></div>`); return;
@@ -3835,6 +3842,7 @@
   async function publishFlowChanges(event) {
     const flow = currentFlow();
     if (!flow || !event?.currentTarget || publishingFlows.has(flow)) return;
+    lockEndSteps(flow);
     try { C.normalizeFlow(flow); }
     catch (error) { showToast(error.message || 'This flow needs a fix before it can be published.'); return; }
     const editRevision = flowEditRevisions.get(flow) || 0;

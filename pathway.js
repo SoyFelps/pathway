@@ -30,13 +30,17 @@
     return /^[0-9]+$/.test(value);
   }
 
+  // The last step of every journey is the same: a fixed title and no "result". Candidates who reach it are saved in New, unless an
+  // Auto-fail answer on the way sent them to Failed. (Older jobs may still carry another title or the old "Not a match this time" result.)
+  const END_LABEL = 'Application received';
+
   function createNode(type, x, y) {
     const base = { id: uid(type), type, x: Math.max(24, x || 0), y: Math.max(24, y || 0), label: '', options: [] };
     if (type === 'candidateInfo') base.label = 'Your details';
     if (type === 'shortText') { base.label = 'A question for your candidate'; base.numericOnly = false; }
     if (type === 'singleChoice') { base.label = 'Choose one option'; base.options = ['Option one', 'Option two']; }
     if (type === 'multiChoice') { base.label = 'Select all that apply'; base.options = ['Option one', 'Option two']; }
-    if (type === 'end') { base.label = 'Application received'; base.subtype = 'submitted'; }
+    if (type === 'end') { base.label = END_LABEL; base.subtype = 'submitted'; }
     return base;
   }
 
@@ -90,7 +94,6 @@
     const curious = createNode('shortText', 1090, 495);
     curious.label = 'What are you most curious about in AI?';
     const endAlt = createNode('end', 1435, 535);
-    endAlt.label = 'Thanks for sharing'; endAlt.subtype = 'submitted';
     flow.nodes.push(why, ai, craft, curious, endAlt);
     flow.edges = [
       { id: uid('edge'), fromNodeId: candidate.id, toNodeId: why.id },
@@ -124,6 +127,7 @@
     normalized.nodes = Array.isArray(normalized.nodes) ? normalized.nodes : [];
     normalized.edges = Array.isArray(normalized.edges) ? normalized.edges : [];
     normalized.nodes.forEach(node => { if (node.type === 'shortText') node.numericOnly = Boolean(node.numericOnly); });
+    normalized.nodes.forEach(node => { if (node.type === 'end') { node.label = END_LABEL; node.subtype = 'submitted'; } });
     // Auto-fail rules (the employer's private screening): only well-formed ones are kept.
     normalized.nodes.forEach(node => {
       if (node.type === 'singleChoice' || node.type === 'multiChoice') {
@@ -271,5 +275,5 @@
     return [example];
   }
 
-  window.PathwayCore = { infoFieldLabel, candidateKey, groupApplicants, STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, flowIsUsable, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
+  window.PathwayCore = { END_LABEL, infoFieldLabel, candidateKey, groupApplicants, STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, flowIsUsable, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
 })();

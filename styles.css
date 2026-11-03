@@ -350,6 +350,7 @@
 .companies-empty h2{font:700 20px var(--display);margin:13px 0 7px}
 .companies-empty p{max-width:430px;color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 19px}
 .company-logo-upload{padding:9px}
+.text-input.locked-input:disabled{background:var(--bg-page);color:var(--muted);-webkit-text-fill-color:var(--muted);cursor:not-allowed;opacity:1}
 .company-color-row{display:flex;align-items:center;gap:10px}
 .company-color-input{-webkit-appearance:none;appearance:none;width:36px;height:36px;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer}
 .company-color-input::-webkit-color-swatch-wrapper{padding:3px}

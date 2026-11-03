@@ -11,10 +11,47 @@ function loadCore() {
   return sandbox.window.PathwayCore;
 }
 
-test('the final step is called "Result"', () => {
+test('the final step has no Result: it is a fixed ending, and the old "Not a match this time" choice is gone from the editor', () => {
   const builder = read('builder.js');
-  assert.ok(builder.includes('<label for="end-subtype">Result</label>'));
+  assert.equal(builder.includes('end-subtype'), false, 'no Result select');
+  assert.equal(builder.includes('Not a match this time'), false, 'the polite-disqualification choice is not offered any more');
+  assert.equal(builder.includes('Polite disqualification'), false);
   assert.equal(builder.includes('End screen'), false);
+  assert.match(builder, /<label for="end-title">Completion title<\/label><input class="text-input locked-input" id="end-title" value="\$\{esc\(C\.END_LABEL\)\}" disabled readonly/, 'the title is shown but locked');
+  assert.equal(/<input[^>]*id="node-label"[^>]*>/.test(builder.slice(builder.indexOf("selected.type === 'end'"), builder.indexOf("selected.type === 'end'") + 1200)), false, 'the end step has no editable title field');
+  assert.match(builder, /Candidates who reach it are saved in New, unless an Auto-fail answer on the way sends them to Failed/);
+  assert.match(builder, /detail = '<div class="node-detail">Application confirmation<\/div>';/, 'the card always says it is the confirmation');
+});
+
+test('older jobs get the fixed ending when they are opened (in memory) and when they are published; new end steps start fixed', () => {
+  const builder = read('builder.js');
+  assert.match(builder, /function lockEndSteps\(flow\)/);
+  assert.match(builder, /currentId = id; lockEndSteps\(currentFlow\(\)\);/, 'when a job is opened');
+  assert.match(builder, /const flow = currentFlow\(\);\n\s+lockEndSteps\(flow\);\n\s+try \{ C\.normalizeFlow\(flow\); \}/, 'before the first publication');
+  assert.match(builder, /publishingFlows\.has\(flow\)\) return;\n\s+lockEndSteps\(flow\);/, 'before publishing changes');
+  const opened = builder.slice(builder.indexOf('function openFlow(id)'), builder.indexOf('function renderEditor()'));
+  assert.equal(/\bsave\(\)/.test(opened), false, 'opening a job does not save it, so it never creates an "unpublished changes" notice');
+});
+
+test('the normalizer forces the fixed ending on every end step, whatever an older job carried', () => {
+  const vm = require('node:vm');
+  const sandbox = { window: {}, localStorage: { getItem() { return null; }, setItem() {} }, console };
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'pathway.js'), 'utf8'), sandbox);
+  const Core = sandbox.window.PathwayCore;
+  assert.equal(Core.END_LABEL, 'Application received');
+  assert.deepEqual({ label: Core.createNode('end', 0, 0).label, subtype: Core.createNode('end', 0, 0).subtype }, { label: 'Application received', subtype: 'submitted' });
+  const flow = JSON.parse(JSON.stringify(Core.createSampleFlow()));
+  const ends = flow.nodes.filter(node => node.type === 'end');
+  assert.ok(ends.length >= 1);
+  ends[0].label = 'The end LOL'; ends[0].subtype = 'disqualified';
+  if (ends[1]) { ends[1].label = ''; ends[1].subtype = 'submitted'; }
+  const normalized = Core.normalizeFlow(flow);
+  for (const node of normalized.nodes.filter(item => item.type === 'end')) {
+    assert.equal(node.label, 'Application received');
+    assert.equal(node.subtype, 'submitted');
+  }
+  assert.equal(Core.createSampleFlow().nodes.some(node => node.type === 'end' && node.label !== 'Application received'), false, 'the sample job uses the fixed title too');
 });
 
 test('choice questions can mark options as auto-fail, and a number question can set a minimum', () => {
