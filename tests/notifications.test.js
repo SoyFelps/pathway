@@ -37,7 +37,7 @@ test('the bell shows one entry per job, refreshes every minute and clears when t
   assert.ok(builder.includes("document.visibilityState === 'visible'"), 'no checks while the tab is hidden');
   assert.ok(builder.includes('notifObserver.observe(root, { childList: true })'), 'the bell is added to every page header');
   assert.match(builder, /renderApplicantBoard\(\);[\s\S]*?if \(applicantFilter\) markFlowSeen\(applicantFilter\);/, 'opening a job board clears its notification');
-  assert.ok(builder.includes("setOpen(false); applicantFilter = item.dataset.notifFlow; applicantSearch = ''; void renderApplicants();"), 'the notification opens that job\'s board');
+  assert.ok(builder.includes("applicantFilter = item.dataset.notifFlow; applicantSearch = ''; void renderApplicants(); return true;"), 'the notification opens that job\'s board (the bell and the notifications page share this function)');
   assert.ok(backend.includes("client.rpc('get_flow_notifications', { p_workspace_id: workspaceId })"));
   assert.ok(backend.includes("client.rpc('mark_flow_notification_seen', { p_flow_id: flowId })"));
 });

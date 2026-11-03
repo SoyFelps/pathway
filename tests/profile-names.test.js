@@ -102,7 +102,7 @@ test('the header shows the person\'s name, with the e-mail as tooltip, on every 
   assert.ok(builder.includes('function headerUserHtml()'));
   assert.ok(builder.includes("esc(name || user.email || '—')") && builder.includes('title="${esc(user.email || \'\')}"'));
   const headers = (builder.match(/\$\{headerUserHtml\(\)\}/g) || []).length;
-  assert.equal(headers, 13, 'every header with a workspace uses it (one shared account menu)');
+  assert.equal(headers, 14, 'every header with a workspace uses it (one shared account menu); the notifications page is one of them');
   assert.equal((builder.match(/\$\{workspaceSwitcherHtml\(\)\}/g) || []).length, headers + 0, 'and the same headers show the workspace selector');
   assert.equal(/class="workspace-name"/.test(builder), false, 'the old plain workspace name is gone from every header');
   assert.equal(/<span class="auth-user"[^>]*>\$\{esc\(user\.email/.test(builder), false, 'no header prints the e-mail directly');

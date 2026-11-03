@@ -442,7 +442,11 @@
 /* Multi-select used for the job's responsible people */
 .multi-select{position:relative}.multi-select-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;cursor:pointer}.multi-select-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.multi-select-caret{color:var(--text-subtle);flex-shrink:0}.multi-select-menu{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px var(--shadow-md);padding:6px;max-height:240px;overflow-y:auto}.multi-select-menu[hidden]{display:none}.multi-select .multi-select-option{display:flex;align-items:center;gap:9px;padding:8px;margin:0;border-radius:6px;font-size:12px;font-weight:500;color:var(--text-body);cursor:pointer}.multi-select .multi-select-option:hover{background:var(--tint)}.multi-select-option span{min-width:0;overflow:hidden;text-overflow:ellipsis}.multi-select-option small{margin-left:auto;color:var(--soft);font-size:10px}
 /* In-app notifications bell */
-.notif{position:relative}.notif-btn{position:relative;display:grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text-body);cursor:pointer}.notif-btn:hover{border-color:var(--green-hover);color:var(--green)}.notif-badge{position:absolute;top:-6px;right:-6px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:var(--red);color:var(--surface);font-size:10px;font-weight:700;line-height:17px;text-align:center}.notif-badge[hidden]{display:none}.notif-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:60;width:320px;max-width:calc(100vw - 32px);max-height:380px;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px var(--shadow-md);padding:6px}.notif-menu[hidden]{display:none}.notif-item{display:flex;flex-direction:column;gap:3px;width:100%;padding:11px 12px;border:0;border-radius:8px;background:transparent;text-align:left;cursor:pointer;color:var(--text-body)}.notif-item:hover{background:var(--tint)}.notif-text{font-size:12px;line-height:1.45}.notif-sub{font-size:11px;color:var(--text-subtle)}.notif-empty{padding:16px 12px;font-size:12px;color:var(--text-subtle);text-align:center}
+.notif{position:relative}.notif-btn{position:relative;display:grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text-body);cursor:pointer}.notif-btn:hover{border-color:var(--green-hover);color:var(--green)}.notif-badge{position:absolute;top:-6px;right:-6px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:var(--red);color:var(--surface);font-size:10px;font-weight:700;line-height:17px;text-align:center}.notif-badge[hidden]{display:none}.notif-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:60;width:320px;max-width:calc(100vw - 32px);max-height:380px;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px var(--shadow-md);padding:6px}.notif-menu[hidden]{display:none}
+.notif-footer{position:sticky;bottom:-6px;margin:6px -6px -6px;padding:6px;border-top:1px solid var(--border-subtle);background:var(--surface);border-radius:0 0 10px 10px}
+.notif-see-all{display:block;width:100%;padding:8px 10px;border:0;border-radius:7px;background:none;color:var(--green);font:600 12px var(--sans);text-align:center;cursor:pointer}
+.notif-see-all:hover{background:var(--tint)}
+.notif-see-all:focus-visible{outline:2px solid var(--green-focus);outline-offset:-2px}.notif-item{display:flex;flex-direction:column;gap:3px;width:100%;padding:11px 12px;border:0;border-radius:8px;background:transparent;text-align:left;cursor:pointer;color:var(--text-body)}.notif-item:hover{background:var(--tint)}.notif-text{font-size:12px;line-height:1.45}.notif-sub{font-size:11px;color:var(--text-subtle)}.notif-empty{padding:16px 12px;font-size:12px;color:var(--text-subtle);text-align:center}
 /* Decorative flow drawing on the dashboard cards */
 .mini-svg{position:absolute;inset:0;width:100%;height:100%}.mini-svg .mn{fill:var(--surface);stroke:var(--line);stroke-width:1}.mini-svg .mb{fill:var(--mint-strong)}.mini-svg .ms{fill:var(--tint)}.mini-svg .mp{fill:var(--surface);stroke:var(--green-line);stroke-width:1.5}.mini-svg .mw{fill:none;stroke:var(--green-hover);stroke-width:1.2}
 /* Dashboard filters */
@@ -521,6 +525,32 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .applicant-row-actions{display:flex;align-items:center;gap:20px;flex-wrap:wrap}.applicant-export-link{border:0;background:transparent;padding:0;font:inherit;font-size:12px;color:var(--green);text-decoration:underline;text-underline-offset:2px;cursor:pointer}.applicant-export-link:hover{color:var(--green-hover)}.applicant-export-link:disabled{color:var(--text-subtle);cursor:default;text-decoration:none}
 /* Reports page: aggregated hiring numbers (colours come only from the :root tokens). */
 .reports-page,.diversity-page{flex:1;min-width:0;max-width:1180px;margin:0 auto;padding:42px clamp(18px,3vw,44px) 72px}
+/* All notifications page */
+.notifications-page{flex:1;min-width:0;max-width:820px;margin:0 auto;padding:42px clamp(18px,3vw,44px) 72px}
+.notif-section{margin:0 0 26px}
+.notif-section-title{display:inline;font:700 17px var(--display);letter-spacing:-.3px;color:var(--ink);margin:0}
+.notif-section>.notif-section-title{display:block;margin:0 0 10px}
+.notif-section-count{margin-left:6px;color:var(--muted);font:500 12px var(--sans);letter-spacing:0}
+.notif-section-toggle{display:flex;align-items:center;gap:8px;width:100%;margin:0 0 10px;padding:0;border:0;background:none;text-align:left;cursor:pointer;color:var(--ink)}
+.notif-section-toggle:focus-visible{outline:2px solid var(--green-focus);outline-offset:3px;border-radius:6px}
+.notif-chevron{display:inline-block;width:14px;color:var(--muted);font-size:12px;transition:transform .15s}
+.notif-section-toggle[aria-expanded="true"] .notif-chevron{transform:rotate(90deg)}
+.notif-list{display:flex;flex-direction:column;gap:8px}.notif-list[hidden]{display:none}
+.notif-section-empty{margin:0;padding:14px 16px;border:1px dashed var(--line);border-radius:11px;color:var(--text-subtle);font-size:13px}
+.notif-row{position:relative;display:flex;align-items:center;gap:13px;width:100%;padding:13px 16px;border:1px solid var(--line);border-radius:11px;background:var(--surface);text-align:left;cursor:pointer;box-shadow:0 1px 2px var(--shadow-xs);transition:border-color .15s,box-shadow .15s}
+.notif-row:hover{border-color:var(--green-hover);box-shadow:0 4px 14px var(--shadow-sm)}
+.notif-row:focus-visible{outline:2px solid var(--green-focus);outline-offset:2px}
+.notif-row.is-unread{background:var(--tint);border-color:var(--mint-strong)}
+.notif-row-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:10px;background:var(--bg-page);color:var(--text-body);font:700 15px var(--sans)}
+.notif-row-icon.is-candidates{background:var(--tint);color:var(--green)}
+.notif-row-icon.is-mention{background:var(--amber-bg);color:var(--amber-text)}
+.notif-row-icon.is-ai{background:var(--tint);color:var(--green-deep)}
+.notif-row-body{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.notif-row .notif-text{font-size:13px;color:var(--ink);line-height:1.4}
+.notif-row .notif-sub{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.notif-row-time{flex:0 0 auto;font-size:11px;color:var(--text-subtle);white-space:nowrap}
+.notif-unread-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--green)}
+@media(max-width:760px){.notifications-page{padding:28px 16px 48px}.notif-row{align-items:flex-start}.notif-row-time{order:3}}
 .reports-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:22px}
 .reports-heading h1{font:700 clamp(30px,3.5vw,40px)/1.1 var(--display);letter-spacing:-1.3px;margin:7px 0 8px}
 .reports-heading p{margin:0;color:var(--muted);font-size:14px;max-width:520px}

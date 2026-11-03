@@ -206,9 +206,28 @@
     button.setAttribute('aria-label', total ? 'Notifications, ' + total + ' unread' : 'Notifications');
     const mentionItems = mentionNotifs.map(item => '<button type="button" class="notif-item" data-notif-mention-flow="' + esc(item.flowId) + '" data-notif-mention-email="' + esc(item.candidateEmail) + '"><span class="notif-text"><strong>' + esc(item.authorName) + '</strong> mentioned you in a comment</span><span class="notif-sub">' + esc(item.candidateName) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
     const aiItems = aiNotifs.map(item => '<button type="button" class="notif-item" data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"><span class="notif-text"><strong>' + esc(item.candidateName) + '</strong> finished the AI interview</span><span class="notif-sub">' + (item.impression ? (item.impression === 'positive' ? 'Positive' : item.impression === 'mixed' ? 'Mixed' : 'Negative') + ' impression' : 'Evaluation pending') + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
-    menu.innerHTML = total
+    menu.innerHTML = (total
       ? aiItems + mentionItems + notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">There are new applications for <strong>' + esc(item.jobTitle || 'Untitled role') + '</strong></span><span class="notif-sub">' + item.newCount + (item.newCount === 1 ? ' new candidate' : ' new candidates') + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
-      : '<div class="notif-empty">You are all caught up.</div>';
+      : '<div class="notif-empty">You are all caught up.</div>') + '<div class="notif-footer"><button type="button" class="notif-see-all" data-notif-all>See all</button></div>';
+  }
+  // Opens what a notification is about (the bell and the notifications page share this): a finished AI interview, a mention, or a job's new candidates.
+  function openNotificationTarget(target) {
+    const aiNotice = target.closest('[data-notif-ai]');
+    if (aiNotice) {
+      const noticeId = aiNotice.dataset.notifAi;
+      aiNotifs = aiNotifs.filter(item => item.id !== noticeId); paintNotifications();
+      window.PathwayBackend.markAiInterviewNoticeSeen(noticeId).catch(() => {});
+      pendingCandidateOpen = { flowId: aiNotice.dataset.notifAiFlow, email: String(aiNotice.dataset.notifAiEmail || '').trim().toLowerCase() };
+      pendingOpenAiTab = true; applicantFilter = pendingCandidateOpen.flowId; applicantSearch = ''; void renderApplicants(); return true;
+    }
+    const mention = target.closest('[data-notif-mention-flow]');
+    if (mention) {
+      pendingCandidateOpen = { flowId: mention.dataset.notifMentionFlow, email: String(mention.dataset.notifMentionEmail || '').trim().toLowerCase() };
+      applicantFilter = pendingCandidateOpen.flowId; applicantSearch = ''; void renderApplicants(); return true;
+    }
+    const item = target.closest('[data-notif-flow]');
+    if (!item) return false;
+    applicantFilter = item.dataset.notifFlow; applicantSearch = ''; void renderApplicants(); return true;
   }
   function mountNotificationBell() {
     const actions = root.querySelector('.top-actions');
@@ -218,22 +237,8 @@
     const setOpen = open => { menu.hidden = !open; button.setAttribute('aria-expanded', String(open)); };
     button.addEventListener('click', () => { setOpen(menu.hidden); if (!menu.hidden) void refreshNotifications(true); });
     menu.addEventListener('click', event => {
-      const aiNotice = event.target.closest('[data-notif-ai]');
-      if (aiNotice) {
-        setOpen(false);
-        const noticeId = aiNotice.dataset.notifAi;
-        aiNotifs = aiNotifs.filter(item => item.id !== noticeId); paintNotifications();
-        window.PathwayBackend.markAiInterviewNoticeSeen(noticeId).catch(() => {});
-        pendingCandidateOpen = { flowId: aiNotice.dataset.notifAiFlow, email: String(aiNotice.dataset.notifAiEmail || '').trim().toLowerCase() };
-        pendingOpenAiTab = true; applicantFilter = pendingCandidateOpen.flowId; applicantSearch = ''; void renderApplicants(); return;
-      }
-      const mention = event.target.closest('[data-notif-mention-flow]');
-      if (mention) {
-        setOpen(false); pendingCandidateOpen = { flowId: mention.dataset.notifMentionFlow, email: String(mention.dataset.notifMentionEmail || '').trim().toLowerCase() };
-        applicantFilter = pendingCandidateOpen.flowId; applicantSearch = ''; void renderApplicants(); return;
-      }
-      const item = event.target.closest('[data-notif-flow]'); if (!item) return;
-      setOpen(false); applicantFilter = item.dataset.notifFlow; applicantSearch = ''; void renderApplicants();
+      if (event.target.closest('[data-notif-all]')) { setOpen(false); void renderNotifications(); return; }
+      if (openNotificationTarget(event.target)) setOpen(false);
     });
     host.addEventListener('keydown', event => { if (event.key === 'Escape' && !menu.hidden) { setOpen(false); button.focus(); } });
     const closeOnOutside = event => {
@@ -258,6 +263,89 @@
     if (!flowIds.length) return;
     notifications = []; paintNotifications();
     flowIds.forEach(flowId => window.PathwayBackend.markFlowNotificationSeen(flowId).catch(() => {}));
+  }
+  // ---- All notifications (page): the last 30 days, seen or not -------------------------------------------------------------------
+  // "Today" and "This week" (the previous six days) are open; "Last 30 days" (the rest) is folded until the person opens it.
+  let notificationPageRequestId = 0;
+  let notificationMonthOpen = false;
+  const NOTIF_IMPRESSION = { positive: 'Positive', mixed: 'Mixed', negative: 'Negative' };
+  function notificationTimeLabel(value, section) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    if (section === 'today') return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    if (section === 'week') return date.toLocaleDateString('en-US', { weekday: 'short' }) + ', ' + date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  function notificationRowHtml(item, section) {
+    let attrs = '', icon = '', text = '', sub = '';
+    if (item.kind === 'mention') {
+      attrs = 'data-notif-mention-flow="' + esc(item.flowId) + '" data-notif-mention-email="' + esc(item.candidateEmail) + '"';
+      icon = '<span class="notif-row-icon is-mention" aria-hidden="true">@</span>';
+      text = '<strong>' + esc(item.authorName || 'A teammate') + '</strong> mentioned you in a comment';
+      sub = esc(item.candidateName) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '');
+    } else if (item.kind === 'ai_interview') {
+      attrs = 'data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"';
+      icon = '<span class="notif-row-icon is-ai" aria-hidden="true">✦</span>';
+      text = '<strong>' + esc(item.candidateName) + '</strong> finished the AI interview';
+      sub = (item.impression ? (NOTIF_IMPRESSION[item.impression] || 'Negative') + ' impression' : 'Evaluation pending') + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '');
+    } else {
+      attrs = 'data-notif-flow="' + esc(item.flowId) + '"';
+      icon = '<span class="notif-row-icon is-candidates" aria-hidden="true">' + ICONS.applicants + '</span>';
+      text = 'There are new applications for <strong>' + esc(item.jobTitle || 'Untitled role') + '</strong>';
+      sub = item.newCount + (item.newCount === 1 ? ' new candidate' : ' new candidates') + (item.companyName ? ' · ' + esc(item.companyName) : '');
+    }
+    return '<button type="button" class="notif-row' + (item.seen ? '' : ' is-unread') + '" ' + attrs + '>' + icon + '<span class="notif-row-body"><span class="notif-text">' + text + '</span><span class="notif-sub">' + sub + '</span></span><span class="notif-row-time">' + esc(notificationTimeLabel(item.at, section)) + '</span>' + (item.seen ? '' : '<span class="notif-unread-dot" role="img" aria-label="Unread"></span>') + '</button>';
+  }
+  function paintNotificationPage(items) {
+    const content = root.querySelector('#notifications-content');
+    if (!content) return;
+    content.setAttribute('aria-busy', 'false');
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const startOfWeek = new Date(startOfToday); startOfWeek.setDate(startOfWeek.getDate() - 6);
+    const today = [], week = [], month = [];
+    for (const item of items) {
+      const at = new Date(item.at);
+      if (Number.isNaN(at.getTime())) continue;
+      (at >= startOfToday ? today : at >= startOfWeek ? week : month).push(item);
+    }
+    const unread = list => list.filter(item => !item.seen).length;
+    const count = list => '<span class="notif-section-count">' + list.length + (unread(list) ? ' · ' + unread(list) + ' unread' : '') + '</span>';
+    const open = (title, list, section, empty) => '<section class="notif-section"><h2 class="notif-section-title">' + title + ' ' + count(list) + '</h2><div class="notif-list">' + (list.length ? list.map(item => notificationRowHtml(item, section)).join('') : '<p class="notif-section-empty">' + empty + '</p>') + '</div></section>';
+    content.innerHTML = open('Today', today, 'today', 'Nothing new today.') + open('This week', week, 'week', 'Nothing else this week.') +
+      '<section class="notif-section"><button type="button" class="notif-section-toggle" id="notif-month-toggle" aria-expanded="' + notificationMonthOpen + '" aria-controls="notif-month-list"><span class="notif-chevron" aria-hidden="true">▸</span><span class="notif-section-title">Last 30 days</span> ' + count(month) + '</button>' +
+      '<div class="notif-list" id="notif-month-list"' + (notificationMonthOpen ? '' : ' hidden') + '>' + (month.length ? month.map(item => notificationRowHtml(item, 'month')).join('') : '<p class="notif-section-empty">Nothing older than this week.</p>') + '</div></section>';
+  }
+  async function renderNotifications() {
+    if (!workspace || !hasPermission('applicants')) return renderAccessMessage('applicants');
+    setRoute('notifications');
+    currentId = null; selectedId = null;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('')}<main class="notifications-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Notifications</h1><p>Everything you were notified about in the last 30 days, including what you have already seen.</p></div></div><div id="notifications-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
+    bindSidebar(); bindPlanControl();
+    root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
+    const content = root.querySelector('#notifications-content');
+    content.addEventListener('click', event => {
+      const toggle = event.target.closest('#notif-month-toggle');
+      if (toggle) {
+        notificationMonthOpen = !notificationMonthOpen;
+        toggle.setAttribute('aria-expanded', String(notificationMonthOpen));
+        content.querySelector('#notif-month-list').hidden = !notificationMonthOpen;
+        return;
+      }
+      const row = event.target.closest('.notif-row');
+      if (row) openNotificationTarget(row);
+    });
+    const requestId = ++notificationPageRequestId;
+    content.innerHTML = '<p class="rpt-empty">Loading…</p>';
+    try {
+      const items = await window.PathwayBackend.listNotificationHistory(workspace.id);
+      if (requestId !== notificationPageRequestId || !root.querySelector('.notifications-page')) return;
+      paintNotificationPage(items);
+    } catch (error) {
+      if (requestId !== notificationPageRequestId || !root.querySelector('.notifications-page')) return;
+      content.setAttribute('aria-busy', 'false');
+      content.innerHTML = '<div class="auth-error show" role="alert">' + esc('Could not load the notifications: ' + (error.message || 'check your connection and try again')) + '</div><button class="btn" id="notifications-retry" style="margin-top:12px">Try again</button>';
+      content.querySelector('#notifications-retry')?.addEventListener('click', () => { void renderNotifications(); });
+    }
   }
   function startNotifications() {
     if (!notifObserver) { notifObserver = new MutationObserver(() => mountNotificationBell()); notifObserver.observe(root, { childList: true }); }
@@ -3797,6 +3885,7 @@
     else if (requestedPage === 'applicants') void renderApplicants();
     else if (requestedPage === 'reports') void renderReports();
     else if (requestedPage === 'diversity') void renderDiversity();
+    else if (requestedPage === 'notifications') void renderNotifications();
     else if (requestedPage === 'my-plan') renderMyPlan();
     else if (requestedPage === 'my-team') void renderMyTeam();
     else if (requestedPage === 'settings') renderSettings();

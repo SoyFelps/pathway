@@ -139,6 +139,17 @@
     const { error } = await client.rpc('mark_ai_interview_notice_seen', { p_ai_interview_id: aiInterviewId });
     if (error) throw error;
   }
+  // Everything the person was notified about in the last 30 days, seen or not (the "All notifications" page). The day boundaries are the person's own.
+  async function listNotificationHistory(workspaceId) {
+    await requireSession();
+    const { data, error } = await client.rpc('get_notification_history', { p_workspace_id: workspaceId, p_utc_offset_minutes: -new Date().getTimezoneOffset() });
+    if (error) throw error;
+    return (data || []).map(row => ({
+      kind: row.kind, at: row.event_at, seen: Boolean(row.seen), flowId: row.flow_id, jobTitle: row.job_title || '', companyName: row.company_name || '',
+      candidateName: row.candidate_name || '', candidateEmail: row.candidate_email || '', newCount: Number(row.new_count) || 0, authorName: row.author_name || '',
+      impression: row.impression || null, id: row.ref_id || null
+    }));
+  }
   async function listFlowNotifications(workspaceId) {
     await requireSession();
     const { data, error } = await client.rpc('get_flow_notifications', { p_workspace_id: workspaceId });
@@ -1083,6 +1094,7 @@
     saveBoardSettings,
     listWorkspacePeople,
     listFlowNotifications,
+    listNotificationHistory,
     markFlowNotificationSeen,
     cleanInterviewQuestions,
     listAiInterviews,
