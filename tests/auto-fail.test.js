@@ -25,10 +25,10 @@ test('the final step has no Result: it is a fixed ending, and the old "Not a mat
 
 test('older jobs get the fixed ending when they are opened (in memory) and when they are published; new end steps start fixed', () => {
   const builder = read('builder.js');
-  assert.match(builder, /function lockEndSteps\(flow\)/);
-  assert.match(builder, /currentId = id; lockEndSteps\(currentFlow\(\)\);/, 'when a job is opened');
-  assert.match(builder, /const flow = currentFlow\(\);\n\s+lockEndSteps\(flow\);\n\s+try \{ C\.normalizeFlow\(flow\); \}/, 'before the first publication');
-  assert.match(builder, /publishingFlows\.has\(flow\)\) return;\n\s+lockEndSteps\(flow\);/, 'before publishing changes');
+  assert.match(builder, /currentId = id; C\.lockEndSteps\(currentFlow\(\)\);/, 'when a job is opened');
+  assert.match(builder, /const flow = currentFlow\(\);\n\s+C\.lockEndSteps\(flow\);\n\s+try \{ C\.normalizeFlow\(flow\); \}/, 'before the first publication');
+  assert.match(builder, /publishingFlows\.has\(flow\)\) return;\n\s+C\.lockEndSteps\(flow\);/, 'before publishing changes');
+  assert.equal(builder.includes('function lockEndSteps'), false, 'the rule lives in pathway.js, where it is tested');
   const opened = builder.slice(builder.indexOf('function openFlow(id)'), builder.indexOf('function renderEditor()'));
   assert.equal(/\bsave\(\)/.test(opened), false, 'opening a job does not save it, so it never creates an "unpublished changes" notice');
 });
@@ -126,4 +126,48 @@ test('the legal page explains answer-based auto-fail and keeps human responsibil
   assert.ok(html.includes('automatically place an application in a “Failed” list'));
   assert.ok(html.includes('LGPD art. 20 and GDPR art. 22'));
   assert.ok(html.includes('Version 2026-10-26-v9'));
+});
+
+test('an older job whose "Not a match this time" ending hung on an answer keeps rejecting: the rejection moves to Auto-fail on that answer', () => {
+  const Core = loadCore();
+  const flow = {
+    id: 'f', jobTitle: 'Designer', companyName: 'Acme', candidateInfoFields: {},
+    nodes: [
+      { id: 'info', type: 'candidateInfo', label: 'Your details', options: [] },
+      { id: 'q1', type: 'singleChoice', label: 'Portfolio?', options: ['Yes', 'No'] },
+      { id: 'q2', type: 'singleChoice', label: 'Tools?', options: ['Figma', 'Other'], autoFailOptions: ['Other'] },
+      { id: 'endOk', type: 'end', label: 'Thanks!', subtype: 'submitted', options: [] },
+      { id: 'endNo', type: 'end', label: 'Not a match this time', subtype: 'disqualified', options: [] }
+    ],
+    edges: [
+      { id: 'e0', fromNodeId: 'info', toNodeId: 'q1' },
+      { id: 'e1', fromNodeId: 'q1', toNodeId: 'q2', optionValue: 'Yes' },
+      { id: 'e2', fromNodeId: 'q1', toNodeId: 'endNo', optionValue: 'No' },
+      { id: 'e3', fromNodeId: 'q2', toNodeId: 'endOk', optionValue: 'Figma' },
+      { id: 'e4', fromNodeId: 'q2', toNodeId: 'endOk', optionValue: 'Other' }
+    ]
+  };
+  assert.equal(Core.lockEndSteps(flow), true, 'something changed');
+  const q1 = flow.nodes.find(node => node.id === 'q1');
+  assert.deepEqual(Array.from(q1.autoFailOptions), ['No'], 'the answer that led to the rejecting ending now auto-fails');
+  assert.deepEqual(Array.from(flow.nodes.find(node => node.id === 'q2').autoFailOptions), ['Other'], 'other rules are untouched');
+  for (const end of flow.nodes.filter(node => node.type === 'end')) {
+    assert.equal(end.label, 'Application received');
+    assert.equal(end.subtype, 'submitted');
+  }
+  // the journey is still valid and the rule survives the normalizer
+  const normalized = Core.normalizeFlow(flow);
+  assert.deepEqual(Array.from(normalized.nodes.find(node => node.id === 'q1').autoFailOptions), ['No']);
+  // running it again changes nothing
+  assert.equal(Core.lockEndSteps(flow), false);
+  assert.deepEqual(Array.from(q1.autoFailOptions), ['No']);
+});
+
+test('lockEndSteps leaves a job without old endings alone, and never adds a rule for an ending that was already normal', () => {
+  const Core = loadCore();
+  const flow = JSON.parse(JSON.stringify(Core.createSampleFlow()));
+  const before = JSON.stringify(flow);
+  assert.equal(Core.lockEndSteps(flow), false);
+  assert.equal(JSON.stringify(flow), before);
+  assert.equal(Core.lockEndSteps(null), false);
 });

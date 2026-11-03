@@ -34,6 +34,30 @@
   // Auto-fail answer on the way sent them to Failed. (Older jobs may still carry another title or the old "Not a match this time" result.)
   const END_LABEL = 'Application received';
 
+  // Applies the fixed ending to every end step of a journey (true when something changed, i.e. older jobs).
+  // The old "Not a match this time" ending rejected whoever reached it. That rejection is not lost: it moves to the answer that led there
+  // (Auto-fail on that option), which does exactly the same thing: the candidate finishes and lands in Failed.
+  function lockEndSteps(flow) {
+    const nodes = (flow && Array.isArray(flow.nodes)) ? flow.nodes : [];
+    const edges = (flow && Array.isArray(flow.edges)) ? flow.edges : [];
+    let changed = false;
+    for (const end of nodes) {
+      if (end.type !== 'end') continue;
+      if (end.subtype === 'disqualified') {
+        for (const edge of edges) {
+          if (edge.toNodeId !== end.id) continue;
+          const source = nodes.find(node => node.id === edge.fromNodeId);
+          if (source && source.type === 'singleChoice' && typeof edge.optionValue === 'string' && edge.optionValue) {
+            const flagged = Array.isArray(source.autoFailOptions) ? source.autoFailOptions : [];
+            if (!flagged.includes(edge.optionValue)) source.autoFailOptions = [...flagged, edge.optionValue];
+          }
+        }
+      }
+      if (end.label !== END_LABEL || end.subtype !== 'submitted') { end.label = END_LABEL; end.subtype = 'submitted'; changed = true; }
+    }
+    return changed;
+  }
+
   function createNode(type, x, y) {
     const base = { id: uid(type), type, x: Math.max(24, x || 0), y: Math.max(24, y || 0), label: '', options: [] };
     if (type === 'candidateInfo') base.label = 'Your details';
@@ -275,5 +299,5 @@
     return [example];
   }
 
-  window.PathwayCore = { END_LABEL, infoFieldLabel, candidateKey, groupApplicants, STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, flowIsUsable, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
+  window.PathwayCore = { END_LABEL, lockEndSteps, infoFieldLabel, candidateKey, groupApplicants, STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, flowIsUsable, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
 })();

@@ -3436,20 +3436,11 @@
     });
   }
 
-  // Applies the fixed ending to every end step of a journey; true when something was different (older jobs).
-  function lockEndSteps(flow) {
-    let changed = false;
-    for (const node of (flow && flow.nodes) || []) {
-      if (node.type === 'end' && (node.label !== C.END_LABEL || node.subtype !== 'submitted')) { node.label = C.END_LABEL; node.subtype = 'submitted'; changed = true; }
-    }
-    return changed;
-  }
-
   function openFlow(id) {
     if (!hasPermission('flows')) return renderAccessMessage('flows');
     const flow = flows.find(item => item.id === id);
     if (flow && flowIsDamaged(flow)) return showFlowMenu(id);
-    currentId = id; lockEndSteps(currentFlow()); selectedId = currentFlow().nodes.find(node => node.type === 'candidateInfo').id; renderEditor();
+    currentId = id; C.lockEndSteps(currentFlow()); selectedId = currentFlow().nodes.find(node => node.type === 'candidateInfo').id; renderEditor();
   }
 
   function renderEditor() {
@@ -3821,7 +3812,7 @@
   async function publishFlow() {
     if (!subscription?.active) { openSubscriptionPage(); return; }
     const flow = currentFlow();
-    lockEndSteps(flow);
+    C.lockEndSteps(flow);
     try { C.normalizeFlow(flow); }
     catch (error) {
       setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Before you publish</div><h2>Your journey needs one more pass.</h2><p>${esc(error.message)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn btn-primary" data-close>Back to the builder</button></div>`); return;
@@ -3842,7 +3833,7 @@
   async function publishFlowChanges(event) {
     const flow = currentFlow();
     if (!flow || !event?.currentTarget || publishingFlows.has(flow)) return;
-    lockEndSteps(flow);
+    C.lockEndSteps(flow);
     try { C.normalizeFlow(flow); }
     catch (error) { showToast(error.message || 'This flow needs a fix before it can be published.'); return; }
     const editRevision = flowEditRevisions.get(flow) || 0;
