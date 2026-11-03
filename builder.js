@@ -188,6 +188,8 @@
     } catch (error) { return; /* keep what we had; the next check tries again */ }
     try { mentionNotifs = await window.PathwayBackend.listCommentMentions(workspace.id); } catch (error) { /* keep what we had */ }
     try { aiNotifs = await window.PathwayBackend.listAiInterviewNotices(workspace.id); } catch (error) { /* keep what we had */ }
+    // The notifications page, when open, follows the bell: it is redrawn only if something changed.
+    if (root.querySelector('.notifications-page')) void refreshNotificationPage();
     // On the board, the interview tags (sent, completed, badge) follow what happened since the board was loaded.
     if (root.querySelector('.applicants-page') && !modalRoot.innerHTML) void refreshAiInterviewTags();
     // Already looking at that job's board: show the new candidates there instead of lighting the bell.
@@ -268,6 +270,7 @@
   // "Today" and "This week" (the previous six days) are open; "Last 30 days" (the rest) is folded until the person opens it.
   let notificationPageRequestId = 0;
   let notificationMonthOpen = false;
+  let notificationPageSignature = '';
   const NOTIF_IMPRESSION = { positive: 'Positive', mixed: 'Mixed', negative: 'Negative' };
   function notificationTimeLabel(value, section) {
     const date = new Date(value);
@@ -308,17 +311,32 @@
       if (Number.isNaN(at.getTime())) continue;
       (at >= startOfToday ? today : at >= startOfWeek ? week : month).push(item);
     }
+    notificationPageSignature = startOfToday.getTime() + '|' + JSON.stringify(items); // the day matters too: at midnight things move from Today to This week
     const unread = list => list.filter(item => !item.seen).length;
     const count = list => '<span class="notif-section-count">' + list.length + (unread(list) ? ' · ' + unread(list) + ' unread' : '') + '</span>';
     const open = (title, list, section, empty) => '<section class="notif-section"><h2 class="notif-section-title">' + title + ' ' + count(list) + '</h2><div class="notif-list">' + (list.length ? list.map(item => notificationRowHtml(item, section)).join('') : '<p class="notif-section-empty">' + empty + '</p>') + '</div></section>';
     content.innerHTML = open('Today', today, 'today', 'Nothing new today.') + open('This week', week, 'week', 'Nothing else this week.') +
-      '<section class="notif-section"><button type="button" class="notif-section-toggle" id="notif-month-toggle" aria-expanded="' + notificationMonthOpen + '" aria-controls="notif-month-list"><span class="notif-chevron" aria-hidden="true">▸</span><span class="notif-section-title">Last 30 days</span> ' + count(month) + '</button>' +
+      '<section class="notif-section"><h2 class="notif-section-heading"><button type="button" class="notif-section-toggle" id="notif-month-toggle" aria-expanded="' + notificationMonthOpen + '" aria-controls="notif-month-list"><span class="notif-chevron" aria-hidden="true">▸</span><span class="notif-section-title">Last 30 days</span> ' + count(month) + '</button></h2>' +
       '<div class="notif-list" id="notif-month-list"' + (notificationMonthOpen ? '' : ' hidden') + '>' + (month.length ? month.map(item => notificationRowHtml(item, 'month')).join('') : '<p class="notif-section-empty">Nothing older than this week.</p>') + '</div></section>';
+  }
+  // Asks again while the page is open (the bell's check calls this); nothing is redrawn unless the list or the day changed.
+  async function refreshNotificationPage() {
+    if (!workspace || !hasPermission('applicants') || !notificationPageSignature) return; // the first load has not finished (or failed): it paints by itself
+    const requestId = ++notificationPageRequestId;
+    try {
+      const items = await window.PathwayBackend.listNotificationHistory(workspace.id);
+      if (requestId !== notificationPageRequestId || !root.querySelector('.notifications-page')) return;
+      const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+      if (startOfToday.getTime() + '|' + JSON.stringify(items) === notificationPageSignature) return;
+      paintNotificationPage(items);
+    } catch (error) { /* keep what is on the screen; the next check tries again */ }
   }
   async function renderNotifications() {
     if (!workspace || !hasPermission('applicants')) return renderAccessMessage('applicants');
     setRoute('notifications');
     currentId = null; selectedId = null;
+    notificationMonthOpen = false; // every visit starts with "Last 30 days" folded
+    notificationPageSignature = '';
     root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('')}<main class="notifications-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Notifications</h1><p>Everything you were notified about in the last 30 days, including what you have already seen.</p></div></div><div id="notifications-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });

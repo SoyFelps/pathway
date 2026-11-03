@@ -531,6 +531,7 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .notif-section-title{display:inline;font:700 17px var(--display);letter-spacing:-.3px;color:var(--ink);margin:0}
 .notif-section>.notif-section-title{display:block;margin:0 0 10px}
 .notif-section-count{margin-left:6px;color:var(--muted);font:500 12px var(--sans);letter-spacing:0}
+.notif-section-heading{margin:0;font:inherit;line-height:inherit}
 .notif-section-toggle{display:flex;align-items:center;gap:8px;width:100%;margin:0 0 10px;padding:0;border:0;background:none;text-align:left;cursor:pointer;color:var(--ink)}
 .notif-section-toggle:focus-visible{outline:2px solid var(--green-focus);outline-offset:3px;border-radius:6px}
 .notif-chevron{display:inline-block;width:14px;color:var(--muted);font-size:12px;transition:transform .15s}

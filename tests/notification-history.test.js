@@ -58,3 +58,33 @@ test('a notification opens the same thing from the bell and from the page', () =
     assert.ok(builder.split(attr).length >= 3, attr + ' is written for the bell and for the page');
   }
 });
+
+test('"X new candidates" counts only candidates still in the New column, in the bell and in the page, whether or not the notification was opened', () => {
+  const sql = read('supabase/migrations/20261103160000_notification_counts_new_only.sql');
+  const bell = sql.slice(sql.indexOf('function public.get_flow_notifications'), sql.indexOf('function public.get_notification_history'));
+  const page = sql.slice(sql.indexOf('function public.get_notification_history'));
+  for (const [name, body] of [['bell', bell], ['page', page]]) {
+    assert.match(body, /current_status = 'new' and cand\.first_fail is null/, name + ': only candidates still in New, never the ones failed automatically');
+    assert.doesNotMatch(body, /current_status <> 'failed'/, name + ': the old rule (only Failed left out) is gone');
+    assert.match(body, /\(array_agg\(a\.status order by a\.submitted_at desc\)\)\[1\] as current_status/, name + ': the stage of the candidate is the latest application\'s');
+    assert.match(body, /coalesce\(wc\.name, w\.name\)/, name + ': the same company label');
+  }
+  // the seen state must not keep a candidate who left New: the stage filter is in the same WHERE as the date rule, not behind the seen flag
+  assert.match(page, /where cand\.first_at > mine\.base and cand\.first_at >= v_since\s+and cand\.current_status = 'new' and cand\.first_fail is null/);
+});
+
+test('the days of the person are cut on a timestamp without time zone, so the database session time zone does not matter', () => {
+  const sql = read('supabase/migrations/20261103160000_notification_counts_new_only.sql');
+  assert.match(sql, /date_trunc\('day', \(cand\.first_at at time zone 'UTC'\) \+ v_offset\)/);
+  assert.doesNotMatch(sql, /date_trunc\('day', cand\.first_at \+ v_offset\)/);
+});
+
+test('the page follows the bell while it is open, starts folded on every visit and has a real heading for Last 30 days', () => {
+  const builder = read('builder.js');
+  assert.match(builder, /if \(root\.querySelector\('\.notifications-page'\)\) void refreshNotificationPage\(\);/, 'the bell\'s check refreshes the open page');
+  assert.match(builder, /async function refreshNotificationPage\(\)/);
+  assert.match(builder, /=== notificationPageSignature\) return;/, 'nothing is redrawn when nothing changed');
+  assert.match(builder, /notificationMonthOpen = false; \/\/ every visit starts with "Last 30 days" folded/);
+  assert.match(builder, /<h2 class="notif-section-heading"><button type="button" class="notif-section-toggle" id="notif-month-toggle"/);
+  assert.match(read('styles.css'), /\.notif-section-heading\{margin:0;font:inherit;line-height:inherit\}/);
+});
