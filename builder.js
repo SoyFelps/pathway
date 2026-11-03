@@ -1305,7 +1305,7 @@
     root.querySelector('#applicant-flow-filter').addEventListener('change', event => { applicantFilter = event.target.value; void renderApplicants(); });
     root.querySelector('#applicant-search').addEventListener('input', event => {
       applicantSearch = event.target.value;
-      renderApplicantBoard();
+      renderApplicantBoard({ resetScroll: true });
     });
     root.querySelector('#refresh-applicants').addEventListener('click', () => { void renderApplicants(); });
     try {
@@ -2699,9 +2699,14 @@
     if (creating) modalRoot.querySelector('#stage-create-name')?.focus();
   }
 
-  function renderApplicantBoard() {
+  // Redraws the board. The board is rebuilt every time, so where the person was (the board's own scroll, the page scroll) is saved and put back:
+  // moving a card, opening or closing Failed or a background update must not send them back to the top left. Only a new search starts from the top.
+  function renderApplicantBoard({ resetScroll = false } = {}) {
     const content = root.querySelector('#applicants-content');
     if (!content) return;
+    const oldBoard = content.querySelector('.kanban-board');
+    const oldPage = root.querySelector('.applicants-page');
+    const saved = resetScroll ? null : { top: oldBoard ? oldBoard.scrollTop : 0, left: oldBoard ? oldBoard.scrollLeft : 0, pageTop: oldPage ? oldPage.scrollTop : 0, windowTop: window.scrollY };
     root.querySelector('#customize-stages')?.addEventListener('click', () => openCustomizeStages());
     const term = applicantSearch.trim().toLowerCase();
     const allGroups = C.groupApplicants(applicants);
@@ -2731,32 +2736,79 @@
       };
       if (stage.key === 'failed') {
         const head = `<div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div>`;
-        if (!failedColumnOpen) return `<section class="kanban-column failed-column is-collapsed" data-stage="failed" aria-label="Failed">${head}<button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="false">Open &gt;</button><div class="failed-drop">Drag here</div></section>`;
+        if (!failedColumnOpen) return `<section class="kanban-column failed-column is-collapsed" data-stage="failed" aria-label="Failed">${head}<div class="kanban-column-body"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="false">Open &gt;</button><div class="failed-drop">Drag here</div></div></section>`;
         const hasFailed = allGroups.some(group => group.status === 'failed');
-        return `<section class="kanban-column failed-column is-open" data-stage="failed" aria-label="Failed">${head}<div class="failed-actions"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="true">&lt; Collapse</button>${hasFailed ? '<button class="btn btn-sm failed-clear" type="button" data-failed-clear>Clear all failed</button>' : ''}</div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
+        return `<section class="kanban-column failed-column is-open" data-stage="failed" aria-label="Failed">${head}<div class="kanban-column-body"><div class="failed-actions"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="true">&lt; Collapse</button>${hasFailed ? '<button class="btn btn-sm failed-clear" type="button" data-failed-clear>Clear all failed</button>' : ''}</div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></div></section>`;
       }
-      return `<section class="kanban-column" data-stage="${esc(stage.key)}" aria-label="${esc(stage.label)}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></section>`;
+      return `<section class="kanban-column" data-stage="${esc(stage.key)}" aria-label="${esc(stage.label)}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div><div class="kanban-column-body"><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></div></section>`;
     }).join('')}</section>`;
+    if (saved) {
+      const board = content.querySelector('.kanban-board');
+      if (board) { board.scrollTop = saved.top; board.scrollLeft = saved.left; }
+      const page = root.querySelector('.applicants-page');
+      if (page && saved.pageTop) page.scrollTop = saved.pageTop;
+      if (saved.windowTop && Math.abs(window.scrollY - saved.windowTop) > 1) window.scrollTo(window.scrollX, saved.windowTop);
+    }
     content.querySelector('[data-open-plan]')?.addEventListener('click', renderMyPlan);
     content.querySelectorAll('[data-failed-toggle]').forEach(button => button.addEventListener('click', () => { failedColumnOpen = !failedColumnOpen; renderApplicantBoard(); }));
     content.querySelector('[data-failed-clear]')?.addEventListener('click', confirmClearFailedApplicants);
+    // Dragging: a green line shows where the card will land among the cards of the column under the pointer.
+    let draggedId = '';
+    const clearDropMarker = () => content.querySelectorAll('.drop-before, .drop-after').forEach(card => card.classList.remove('drop-before', 'drop-after'));
+    const dropIndex = (column, clientY) => {
+      const cards = [...column.querySelectorAll('.applicant-card')].filter(card => card.dataset.applicant !== draggedId);
+      let index = cards.length;
+      for (let position = 0; position < cards.length; position++) {
+        const rect = cards[position].getBoundingClientRect();
+        if (clientY < rect.top + rect.height / 2) { index = position; break; }
+      }
+      return { cards, index };
+    };
+    const showDropMarker = (column, clientY) => {
+      clearDropMarker();
+      const { cards, index } = dropIndex(column, clientY);
+      if (!cards.length) return;
+      cards[Math.min(index, cards.length - 1)].classList.add(index < cards.length ? 'drop-before' : 'drop-after');
+    };
     content.querySelectorAll('.applicant-card').forEach(card => {
       card.addEventListener('click', () => showApplicantDetails(card.dataset.applicant));
       card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showApplicantDetails(card.dataset.applicant); } });
       card.addEventListener('dragstart', event => {
         card.classList.add('dragging');
+        draggedId = card.dataset.applicant;
         event.dataTransfer.setData('text/plain', card.dataset.applicant);
         event.dataTransfer.effectAllowed = 'move';
       });
-      card.addEventListener('dragend', () => card.classList.remove('dragging'));
+      card.addEventListener('dragend', () => { card.classList.remove('dragging'); draggedId = ''; clearDropMarker(); });
     });
+    // Every column is as tall as the board so its title can stay at the top; once the box of its cards has scrolled away, only the title is left (a standalone title box).
+    const kanbanBoard = content.querySelector('.kanban-board');
+    if (kanbanBoard) {
+      const markTitleOnly = () => kanbanBoard.querySelectorAll('.kanban-column').forEach(column => {
+        const head = column.querySelector('.kanban-column-head');
+        const body = column.querySelector('.kanban-column-body');
+        if (head && body) column.classList.toggle('is-title-only', body.getBoundingClientRect().bottom <= head.getBoundingClientRect().bottom);
+      });
+      let titleFrame = 0;
+      kanbanBoard.addEventListener('scroll', () => { if (!titleFrame) titleFrame = requestAnimationFrame(() => { titleFrame = 0; markTitleOnly(); }); }, { passive: true });
+      markTitleOnly();
+    }
     content.querySelectorAll('.kanban-column').forEach(column => {
-      column.addEventListener('dragover', event => { event.preventDefault(); column.classList.add('drag-over'); event.dataTransfer.dropEffect = 'move'; });
-      column.addEventListener('dragleave', event => { if (!column.contains(event.relatedTarget)) column.classList.remove('drag-over'); });
+      column.addEventListener('dragover', event => { event.preventDefault(); column.classList.add('drag-over'); event.dataTransfer.dropEffect = 'move'; showDropMarker(column, event.clientY); });
+      column.addEventListener('dragleave', event => { if (!column.contains(event.relatedTarget)) { column.classList.remove('drag-over'); clearDropMarker(); } });
       column.addEventListener('drop', event => {
         event.preventDefault(); column.classList.remove('drag-over');
         const applicantId = event.dataTransfer.getData('text/plain');
-        if (applicantId) void moveApplicant(applicantId, column.dataset.stage);
+        const { cards, index } = dropIndex(column, event.clientY);
+        clearDropMarker();
+        if (!applicantId) return;
+        // A column that lists cards also gets their new order (the collapsed Failed column only receives the card).
+        const hasList = Boolean(column.querySelector('.applicant-list'));
+        const order = cards.map(card => card.dataset.applicant);
+        order.splice(index, 0, applicantId);
+        const current = [...column.querySelectorAll('.applicant-card')].map(card => card.dataset.applicant);
+        if (current.includes(applicantId) && current.join() === order.join()) return; // dropped where it already was
+        void moveApplicant(applicantId, column.dataset.stage, hasList ? order : null);
       });
     });
   }
@@ -2788,30 +2840,53 @@
     return Number.isNaN(date.getTime()) ? 'Just now' : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
   }
 
-  async function moveApplicant(id, status) {
-    const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
-    if (!group || group.status === status || !allApplicantStages().some(stage => stage.key === status)) return;
+  // Moves a candidate to a stage and/or puts the cards of that column in a new order.
+  // `orderIds` (optional) lists the cards of the target column in their new order, as the id of each candidate's latest application.
+  async function moveApplicant(id, status, orderIds = null) {
+    const groups = C.groupApplicants(applicants);
+    const group = groups.find(item => item.items.some(member => member.id === id));
+    if (!group || !allApplicantStages().some(stage => stage.key === status)) return;
+    const sameColumn = group.status === status;
+    if (sameColumn && !orderIds) return;
     if (workspaceIsFree()) { showToast(FREE_MOVE_NOTE, 6000); return; }
     // The stage belongs to the candidate: every application from the same address to the same job moves together.
     const members = group.items;
+    const ordered = orderIds ? orderIds.map(latestId => groups.find(item => item.latest.id === latestId)).filter(Boolean) : null;
+    const positionOf = new Map((ordered || []).map((item, index) => [item, (index + 1) * 1000]));
+    const touched = [...new Set([...members, ...(ordered || []).flatMap(item => item.items)])];
+    const before = new Map(touched.map(member => [member, { status: member.status, position: member.board_position ?? null }]));
     const previous = members.map(member => member.status);
-    members.forEach(member => { member.status = status; });
+    members.forEach(member => { member.status = status; member.board_position = null; });
+    positionOf.forEach((position, item) => item.items.forEach(member => { member.board_position = position; }));
     renderApplicantBoard();
     let boardOutOfDate = false;
+    let orderError = null;
     try {
-      const updated = await window.PathwayBackend.updateApplicantStatuses(members.map(member => member.id), status);
-      if (updated.length !== members.length) { boardOutOfDate = true; throw new Error('some applications could not be updated'); }
-      updated.forEach(row => {
-        const member = members.find(item => item.id === row.id);
-        if (member) { member.status = row.status; member.updated_at = row.updated_at; }
-      });
+      if (!sameColumn) {
+        const updated = await window.PathwayBackend.updateApplicantStatuses(members.map(member => member.id), status);
+        if (updated.length !== members.length) { boardOutOfDate = true; throw new Error('some applications could not be updated'); }
+        updated.forEach(row => {
+          const member = members.find(item => item.id === row.id);
+          if (member) { member.status = row.status; member.updated_at = row.updated_at; }
+        });
+      }
+      if (positionOf.size) {
+        // The stage is already saved here; if only the order fails, the card stays in its new stage and the order goes back to what it was.
+        try {
+          await window.PathwayBackend.setApplicantOrder([...positionOf].flatMap(([item, position]) => item.items.map(member => ({ id: member.id, position }))));
+        } catch (error) {
+          orderError = error;
+          touched.forEach(member => { member.board_position = !sameColumn && members.includes(member) ? null : before.get(member).position; });
+        }
+      }
       renderApplicantBoard();
       const open = modalRoot.querySelector('[data-detail-applicant]');
       if (open && members.some(member => member.id === open.dataset.detailApplicant)) showApplicantDetails(open.dataset.detailApplicant, Number(open.dataset.detailTab) || 0);
-      showToast(`Applicant moved to ${applicantStageLabel(status)}.`);
-      if (status === 'ai_interview' || previous.includes('ai_interview')) watchAiInterviewTags();
+      if (orderError) showToast(sameColumn ? `Could not save the new order: ${orderError.message || 'please retry'}` : `Applicant moved to ${applicantStageLabel(status)}, but its place in the column could not be saved.`, 6000);
+      else if (!sameColumn) showToast(`Applicant moved to ${applicantStageLabel(status)}.`);
+      if (!sameColumn && (status === 'ai_interview' || previous.includes('ai_interview'))) watchAiInterviewTags();
     } catch (error) {
-      members.forEach((member, index) => { member.status = previous[index]; });
+      before.forEach((state, member) => { member.status = state.status; member.board_position = state.position; });
       renderApplicantBoard();
       // The board is not refreshed for the person: they press Refresh when they are ready.
       if (boardOutOfDate) showToast('This candidate was removed or changed by someone else, so the stage was not updated. Press Refresh to update the board.', 7000);

@@ -784,7 +784,7 @@
   async function listApplicants(workspaceId, flowId = '') {
     await requireSession();
     let query = client.from('applicants')
-      .select('id,workspace_id,flow_id,published_flow_id,candidate_name,candidate_email,candidate_info,responses,resume_path,resume_filename,resume_content_type,status,submitted_at,updated_at,privacy_notice_version,privacy_acknowledged_at,auto_fail_reason')
+      .select('id,workspace_id,flow_id,published_flow_id,candidate_name,candidate_email,candidate_info,responses,resume_path,resume_filename,resume_content_type,status,submitted_at,updated_at,privacy_notice_version,privacy_acknowledged_at,auto_fail_reason,board_position')
       .eq('workspace_id', workspaceId)
       .order('submitted_at', { ascending: false })
       .limit(1000);
@@ -924,9 +924,21 @@
       throw new Error('The applicant could not be updated.');
     }
     await requireSession();
-    const { data, error } = await client.from('applicants').update({ status }).in('id', applicantIds).select('id,status,updated_at');
+    // A card that changes stage loses its manual place (it is shown at the top of the new column, or placed again by the caller).
+    const { data, error } = await client.from('applicants').update({ status, board_position: null }).in('id', applicantIds).select('id,status,updated_at');
     if (error) throw error;
     return data || [];
+  }
+
+  // Saves the manual order of the cards of a column: one { id, position } per application (the applications of one candidate share a position).
+  async function setApplicantOrder(items) {
+    if (!Array.isArray(items) || !items.length || items.length > 2000 || items.some(item => !item || typeof item.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(item.id) || typeof item.position !== 'number' || !Number.isFinite(item.position))) {
+      throw new Error('The new order could not be saved.');
+    }
+    await requireSession();
+    const { data, error } = await client.rpc('set_applicant_order', { p_items: items.map(item => ({ id: item.id, position: item.position })) });
+    if (error) throw error;
+    return Number(data) || 0;
   }
 
   async function deleteFailedApplicants(flowId = '') {
@@ -1112,6 +1124,7 @@
     listApplicantFlowLabels,
     updateApplicantStatus,
     updateApplicantStatuses,
+    setApplicantOrder,
     deleteFailedApplicants,
     deleteCandidate,
     getApplicantResumeUrl,

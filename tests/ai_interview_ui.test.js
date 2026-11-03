@@ -82,7 +82,7 @@ test('a new invitation after a cancelled, left or expired interview is only sent
 });
 
 test('the card tag follows a move into or out of the AI Interview column without pressing Refresh, and sits at the foot of the card', () => {
-  assert.ok(builder.includes("if (status === 'ai_interview' || previous.includes('ai_interview')) watchAiInterviewTags();"));
+  assert.ok(builder.includes("if (!sameColumn && (status === 'ai_interview' || previous.includes('ai_interview'))) watchAiInterviewTags();"), 'only a real change of stage starts watching; a new order inside a column does not');
   assert.ok(builder.includes('function watchAiInterviewTags()'));
   const card = builder.slice(builder.indexOf('const cardHtml = group =>'), builder.indexOf("if (stage.key === 'failed')"));
   assert.ok(card.indexOf('applicant-card-meta') < card.indexOf('aiInterviewCardHtml('), 'the tag row comes after the date row, as in the first plan');

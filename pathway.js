@@ -248,8 +248,17 @@
       group.latest = group.items[0];
       group.status = group.latest.status;
       group.count = group.items.length;
+      // Manual order inside a column (a number, smaller = higher up); every application of the candidate carries the same one.
+      const positions = group.items.map(item => item.board_position).filter(value => typeof value === 'number' && Number.isFinite(value));
+      group.position = positions.length ? Math.min(...positions) : null;
     }
-    return result.sort((a, b) => time(b.latest) - time(a.latest) || a.key.localeCompare(b.key));
+    // Candidates nobody has placed by hand come first, newest first (so a new candidate is always at the top); then the ones placed by hand, in their order.
+    return result.sort((a, b) => {
+      if (a.position === null && b.position === null) return time(b.latest) - time(a.latest) || a.key.localeCompare(b.key);
+      if (a.position === null) return -1;
+      if (b.position === null) return 1;
+      return a.position - b.position || time(b.latest) - time(a.latest) || a.key.localeCompare(b.key);
+    });
   }
 
   function loadFlows() {

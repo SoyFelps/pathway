@@ -83,7 +83,7 @@ test('a Customize button opens a modal that turns stages on and off; Failed, New
   assert.match(migration, /check \(status in \('failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'\)\)/);
   assert.match(migration, /public\.workspace_user_has_permission\(workspace_id, 'applicants'\)/);
   assert.match(read('styles.css'), /\.stage-option\.is-locked\{cursor:not-allowed\}/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261103g/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261103n/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -158,13 +158,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=mw3-20261103g/);
-  assert.match(read('index.html'), /pathway\.js\?v=mw3-20261103g/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261103g/);
-  assert.match(read('index.html'), /candidate\.js\?v=mw3-20261103g/);
-  assert.match(read('apply.html'), /styles\.css\?v=mw3-20261103g/);
-  assert.match(read('index.html'), /styles\.css\?v=mw3-20261103g/);
-  assert.match(read('apply.html'), /backend\.js\?v=mw3-20261103g/);
+  assert.match(read('apply.html'), /pathway\.js\?v=mw3-20261103n/);
+  assert.match(read('index.html'), /pathway\.js\?v=mw3-20261103n/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261103n/);
+  assert.match(read('index.html'), /candidate\.js\?v=mw3-20261103n/);
+  assert.match(read('apply.html'), /styles\.css\?v=mw3-20261103n/);
+  assert.match(read('index.html'), /styles\.css\?v=mw3-20261103n/);
+  assert.match(read('apply.html'), /backend\.js\?v=mw3-20261103n/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
@@ -275,4 +275,34 @@ test('dashboard shows new applicant and published-flow counts without loading ap
   assert.doesNotMatch(dashboard, /Steps in your journeys|Saved to Supabase/);
   assert.ok(css.includes('.draft-tag{color:var(--slate-text)}.draft-tag .status-dot{background:var(--slate)'));
   assert.ok(css.includes('.published-tag .status-dot{background:var(--published-dot)'));
+});
+
+test('the column title stays at the top of the kanban board, alone once its cards have ended, and the box is unchanged before scrolling', () => {
+  const styles = read('styles.css');
+  const builder = read('builder.js');
+  // the column is a transparent, full-height holder: its sticky title can stay after the box of its cards has ended
+  assert.match(styles, /\.kanban-column\{min-width:0\}/);
+  assert.match(styles, /\.kanban-board\{display:grid;[^}]*align-items:stretch;grid-auto-rows:max-content;align-content:start;/, 'every column is as tall as the tallest, the row following its content and not the board');
+  const head = styles.match(/\.kanban-column-head\{position:sticky;[^}]*\}/);
+  assert.ok(head, 'the column head is sticky');
+  assert.match(head[0], /top:0/);
+  assert.match(head[0], /z-index:3/, 'above the cards');
+  assert.match(head[0], /padding:14px 14px 12px/);
+  assert.match(head[0], /background:var\(--surface\)/, 'the cards scrolling under it are hidden');
+  assert.match(head[0], /border:1px solid var\(--border-subtle\);border-bottom-width:0;border-radius:11px 11px 0 0/, 'the top of the old column box');
+  assert.match(styles, /\.kanban-column-body\{min-height:322px;padding:0 12px 12px;background:var\(--surface\);border:1px solid var\(--border-subtle\);border-top-width:0;border-radius:0 0 11px 11px\}/, 'the rest of the old column box, ending with the last card');
+  assert.match(styles, /\.kanban-column\.is-title-only \.kanban-column-head\{border-bottom-width:1px;border-radius:11px\}/, 'a title left alone is a whole rounded box');
+  assert.match(styles, /\.kanban-column\.drag-over \.kanban-column-head,\.kanban-column\.drag-over \.kanban-column-body\{background:var\(--tint\);border-color:var\(--green-hover\)\}/, 'the drop highlight follows the visible box');
+  assert.equal((builder.match(/class="kanban-column-body"/g) || []).length, 3, 'every kind of column has its body (collapsed Failed, open Failed, normal)');
+  assert.match(builder, /column\.classList\.toggle\('is-title-only', body\.getBoundingClientRect\(\)\.bottom <= head\.getBoundingClientRect\(\)\.bottom\)/);
+  assert.match(builder, /kanbanBoard\.addEventListener\('scroll', [\s\S]*\{ passive: true \}\)/, 'the scroll handler is passive and throttled by the browser frame');});
+
+test('redrawing the board (moving a card, opening Failed, background updates) keeps the scroll where it was; only a new search starts from the top', () => {
+  const builder = read('builder.js');
+  assert.match(builder, /function renderApplicantBoard\(\{ resetScroll = false \} = \{\}\)/);
+  assert.match(builder, /const saved = resetScroll \? null : \{ top: oldBoard \? oldBoard\.scrollTop : 0, left: oldBoard \? oldBoard\.scrollLeft : 0, pageTop: oldPage \? oldPage\.scrollTop : 0, windowTop: window\.scrollY \};/);
+  assert.match(builder, /board\.scrollTop = saved\.top; board\.scrollLeft = saved\.left;/);
+  // the scroll is put back before the title-only state is measured
+  assert.ok(builder.indexOf('board.scrollTop = saved.top') < builder.indexOf('const markTitleOnly'), 'scroll restored before the titles are measured');
+  assert.match(builder, /applicantSearch = event\.target\.value;\s*renderApplicantBoard\(\{ resetScroll: true \}\);/, 'a new search starts from the top');
 });

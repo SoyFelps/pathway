@@ -81,7 +81,7 @@ test('moving a card moves every application of that candidate in one request', (
   assert.ok(move.includes('members.map(member => member.id)'));
   assert.ok(move.includes('window.PathwayBackend.updateApplicantStatuses('));
   assert.ok(move.includes('if (updated.length !== members.length)'), 'a partial update is treated as a failure');
-  assert.ok(move.includes('members.forEach((member, index) => { member.status = previous[index]; });'), 'a failure restores every application');
+  assert.ok(move.includes('before.forEach((state, member) => { member.status = state.status; member.board_position = state.position; });'), 'a failure restores the stage and the place of every application');
   assert.match(backend, /async function updateApplicantStatuses\(applicantIds, status\)[\s\S]*\.in\('id', applicantIds\)[\s\S]*\.select\('id,status,updated_at'\)/);
   assert.match(backend, /updateApplicantStatuses,\n/);
 });

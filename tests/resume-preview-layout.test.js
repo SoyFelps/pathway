@@ -70,7 +70,7 @@ test('moving a candidate that no longer exists tells the person to press Refresh
   const move = builder.slice(builder.indexOf('async function moveApplicant('), builder.indexOf('function showApplicantDetails('));
   assert.ok(move.includes("if (updated.length !== members.length) { boardOutOfDate = true; throw new Error('some applications could not be updated'); }"));
   assert.ok(move.includes('This candidate was removed or changed by someone else, so the stage was not updated. Press Refresh to update the board.'));
-  assert.ok(move.includes('members.forEach((member, index) => { member.status = previous[index]; });'), 'the card goes back to where it was');
+  assert.ok(move.includes('before.forEach((state, member) => { member.status = state.status; member.board_position = state.position; });'), 'the card goes back to where it was (stage and place)');
   assert.equal(/renderApplicants\(\)|listApplicants\(/.test(move), false, 'no automatic reload of the board');
   assert.ok(move.includes("else showToast(`Could not update applicant stage:"), 'other failures keep the generic message');
   assert.ok(builder.includes('function showToast(message, duration = 2400)'), 'a message that asks for an action stays longer on screen');
