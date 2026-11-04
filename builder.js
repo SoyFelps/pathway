@@ -783,7 +783,8 @@
   }
   function setModal(html) {
     const applicantReview = html.includes('applicant-review-layout');
-    modalRoot.innerHTML = `<div class="modal-backdrop${applicantReview ? ' applicant-review-backdrop' : ''}" role="presentation"><section class="modal${applicantReview ? ' applicant-review-shell' : ''}" role="dialog" aria-modal="true">${html}</section></div>`;
+    const wideModal = html.includes('id="job-description-modal"');
+    modalRoot.innerHTML = `<div class="modal-backdrop${applicantReview ? ' applicant-review-backdrop' : ''}" role="presentation"><section class="modal${applicantReview ? ' applicant-review-shell' : ''}${wideModal ? ' modal-wide' : ''}" role="dialog" aria-modal="true">${html}</section></div>`;
     modalRoot.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) closeModal(); });
     modalRoot.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', closeModal));
   }
@@ -3898,12 +3899,22 @@
     connectFrom = null; window.pendingPointer = null; save(); selectedId = source.id; drawCanvas(); drawInspector();
   }
 
+  // Job description in a larger window (desktop only: the button is hidden on phones). It edits the SAME text: every key updates the job like the small field does.
+  function openJobDescriptionEditor(initial, onChange) {
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Job details</div><h2>Job description</h2></div><button class="modal-x" data-close aria-label="Close">×</button></div><div id="job-description-modal"><textarea class="text-area job-description-large" id="job-description-large" aria-label="Job description">${esc(initial)}</textarea></div><div class="modal-actions"><button class="btn btn-primary" data-close type="button">Done</button></div>`);
+    const area = modalRoot.querySelector('#job-description-large');
+    if (!area) return;
+    area.addEventListener('input', event => onChange(event.target.value));
+    area.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
+    area.focus(); area.setSelectionRange(area.value.length, area.value.length);
+  }
+
   function drawInspector() {
     const flow = currentFlow(), panel = document.getElementById('inspector'); if (!flow || !panel) return;
     const selected = flow.nodes.find(node => node.id === selectedId) || flow.nodes[0];
     const [title] = typeInfo(selected);
     const roleSettings = selected.type === 'candidateInfo'
-      ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><label for="role-description">Job description</label><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">Responsible</span><div id="role-responsible"></div></div><hr class="inspector-divider">`
+      ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><div class="field-label-row"><label for="role-description">Job description</label><button type="button" class="icon-btn expand-btn" id="expand-description" aria-label="Open the job description in a larger window" title="Larger window"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">Responsible</span><div id="role-responsible"></div></div><hr class="inspector-divider">`
       : '';
     // The AI interview questions are part of the job details but come LAST, below the candidate-details step.
     const aiSection = selected.type === 'candidateInfo' ? '<hr class="inspector-divider"><div class="field-group"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><div id="role-ai-questions"></div></div>' : '';
@@ -3913,6 +3924,7 @@
     panel.querySelector('#role-company-profile')?.addEventListener('change', event => { const company = companies.find(item => item.id === event.target.value) || null; flow.companyId = company?.id || null; flow.companyProfile = companySnapshot(company); flow.companyName = company?.name || workspace.name; save(); });
     panel.querySelector('#role-title')?.addEventListener('input', event => syncRole('jobTitle', event.target.value));
     panel.querySelector('#role-description')?.addEventListener('input', event => syncRole('jobDescription', event.target.value));
+    panel.querySelector('#expand-description')?.addEventListener('click', () => openJobDescriptionEditor(flow.jobDescription || '', value => { syncRole('jobDescription', value); const small = panel.querySelector('#role-description'); if (small) small.value = value; }));
     const responsibleHost = panel.querySelector('#role-responsible');
     if (responsibleHost) mountResponsibleField(responsibleHost, 'role-responsible-label', () => flow.responsibleIds || [], ids => { flow.responsibleIds = ids; save({ internal: true }); });
     // Like the responsible people, the questions are never shown to candidates, so editing them does not count as an unpublished change.

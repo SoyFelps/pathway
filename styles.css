@@ -929,3 +929,10 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .ai-questions-help{margin:0 0 10px}
 #inspector .field-group.has-unsaved{outline:1px solid var(--amber-border);outline-offset:8px;border-radius:10px}
 #inspector .field-group.has-unsaved .ai-questions-status{color:var(--amber-dark);font-weight:700}
+/* Job description: a larger writing window (desktop only). */
+.field-label-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.field-label-row label{margin:0}
+.expand-btn{width:26px;height:26px;border-radius:7px}
+.modal.modal-wide{width:min(100%,820px)}
+.job-description-large{display:block;width:100%;min-height:min(60vh,520px);font-size:14px;line-height:1.65;resize:vertical}
+@media(max-width:760px){.expand-btn{display:none}}
