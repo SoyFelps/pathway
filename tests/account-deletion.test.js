@@ -99,8 +99,8 @@ test('delete-account Edge Function is explicitly JWT-protected and frontend asse
   const config = read('supabase/config.toml');
   const html = read('index.html');
   assert.match(config, /\[functions\.delete-account\]\s*\nverify_jwt = true/);
-  assert.match(html, /styles\.css\?v=mw3-20261105n/);
-  assert.match(html, /backend\.js\?v=mw3-20261105n/);
-  assert.match(html, /auth\.js\?v=mw3-20261105n/);
-  assert.match(html, /builder\.js\?v=mw3-20261105n/);
+  assert.match(html, /styles\.css\?v=mw3-20261105o/);
+  assert.match(html, /backend\.js\?v=mw3-20261105o/);
+  assert.match(html, /auth\.js\?v=mw3-20261105o/);
+  assert.match(html, /builder\.js\?v=mw3-20261105o/);
 });
