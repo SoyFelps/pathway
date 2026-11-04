@@ -103,8 +103,8 @@ test('company edits propagate atomically to linked drafts and active published s
   assert.match(builder, /window\.PathwayBackend\.updateCompany/);
   assert.match(builder, /Company updated in its linked flows/);
   assert.match(styles, /\.company-card-actions/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261103r/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261103r/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261104a/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261104a/);
 });
 
 test('company deletion requires all linked flows removed first and the UI confirms candidate-data loss', () => {
@@ -134,7 +134,7 @@ test('company Storage policies qualify the outer object path instead of shadowed
   assert.doesNotMatch(migration, /storage\.foldername\(name\)/);
 });
 
-test('candidate page shows the selected company logo and description below vacancy details', () => {
+test('candidate page shows the selected company logo in the header and the description below vacancy details', () => {
   const candidate = read('candidate.js');
   const styles = read('styles.css');
   const lockup = candidate.indexOf('class="company-lockup"');
@@ -142,14 +142,15 @@ test('candidate page shows the selected company logo and description below vacan
   const apply = candidate.indexOf('class="job-about"');
   assert.ok(lockup >= 0 && about > lockup && apply > about);
   assert.match(candidate, /safeCompanyLogoUrl\(profile\?\.logoUrl/);
-  assert.match(candidate, /class="company-avatar\$\{logoUrl \? ' has-logo'/);
+  assert.match(candidate, /\$\{logoUrl \? `<span class="candidate-header-divider" aria-hidden="true"><\/span><img class="candidate-header-logo"/, 'logo in the header, after the Pathway brand, only when there is one');
+  assert.equal(candidate.includes('company-avatar'), false, 'no logo box in the job details any more');
+  assert.equal(candidate.includes('Careers'), false);
   assert.match(candidate, /<h2>About \$\{C\.esc\(brandName\)}<\/h2>/);
   assert.match(candidate, /PATHWAY_SUPABASE_CONFIG\?\.url/);
   assert.match(candidate, /company-logos/);
   assert.match(candidate, /function companyLogoUrl\(profile\)/);
   assert.match(candidate, /profile\?\.logoPath/);
-  assert.match(styles, /\.company-avatar\{width:68px;height:68px;flex:0 0 68px;border-radius:16px\}/);
-  assert.match(styles, /@media\(max-width:760px\)\{\.company-avatar\{width:58px;height:58px;flex-basis:58px\}\}/);
+  assert.match(styles, /\.candidate-header-logo\{height:36px;/);
 });
 
 test('a company can have an optional primary colour that is stored, edited and sent to Witcher', () => {
