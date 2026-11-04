@@ -1,13 +1,15 @@
 import { buildQuestionRequest, cleanDescription, cleanExisting, descriptionIsEnough, isTooLongToUse, isTooSimilar, oneLine, parseModelAnswer } from "./logic.ts";
 
-// Calls Google Gemini to write ONE interview question. Same pinned models as the Witcher (never the moving "latest" alias), tried in order when
-// Google says one is busy or slow. Text only, so it is quick and cheap; "thinking" stays low because the person is waiting for the answer.
+// Calls Google Gemini to write ONE interview question. Pinned models (never the moving "latest" alias), tried in order when Google says one is busy or slow.
+// The small, cheap Flash-Lite goes first: on 2026-11-05 it was tested in staging against the same cases as 3.5 Flash (good questions, refuses vague or
+// empty descriptions, ignores instructions hidden in the description, right language) and answers in about 3 s instead of 6 s. The bigger models are the reserve.
+// "Thinking" stays minimal because the person is waiting for the answer.
 
 export interface ModelChoice { name: string; thinkingLevel: string; timeoutMs: number }
 export const MODEL_CHAIN: ModelChoice[] = [
-  { name: "gemini-3.5-flash", thinkingLevel: "minimal", timeoutMs: 15_000 },
-  { name: "gemini-3.8-flash", thinkingLevel: "low", timeoutMs: 20_000 },
-  { name: "gemini-3.5-flash-lite", thinkingLevel: "minimal", timeoutMs: 20_000 },
+  { name: "gemini-3.5-flash-lite", thinkingLevel: "minimal", timeoutMs: 15_000 },
+  { name: "gemini-3.5-flash", thinkingLevel: "minimal", timeoutMs: 20_000 },
+  { name: "gemini-3.8-flash", thinkingLevel: "low", timeoutMs: 25_000 },
 ];
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);

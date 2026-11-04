@@ -29,7 +29,7 @@ test('with a real description the model is asked for one question and the key tr
   const result = await createQuestion({ jobTitle: 'Legal Assistant', description: GOOD, existing: [] }, { apiKey: 'secret-key', fetchFn: spy });
   assert.deepEqual(result, { generated: true, question: 'Describe how you keep track of contract renewals and deadlines.' });
   assert.equal(spy.calls.length, 1);
-  assert.match(spy.calls[0].url, /gemini-3\.5-flash:generateContent$/);
+  assert.match(spy.calls[0].url, /gemini-3\.5-flash-lite:generateContent$/, 'the small cheap model goes first');
   assert.equal(spy.calls[0].init.headers['x-goog-api-key'], 'secret-key');
   assert.equal(spy.calls[0].url.includes('secret-key'), false, 'never in the address');
   const sent = JSON.parse(spy.calls[0].init.body);
@@ -130,4 +130,10 @@ test('a question the AI writes is never longer than 300 characters: one shorter 
   const { SYSTEM_PROMPT, MAX_GENERATED_QUESTION_CHARS } = await logic();
   assert.equal(MAX_GENERATED_QUESTION_CHARS, 300);
   assert.match(SYSTEM_PROMPT, /never more than 300 characters/);
+});
+
+test('the model order: Flash-Lite first, then 3.5 Flash, then 3.8 Flash; each one only when the one before is busy or slow', async () => {
+  const { MODEL_CHAIN } = await gemini();
+  assert.deepEqual(MODEL_CHAIN.map(model => model.name), ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash']);
+  assert.equal(MODEL_CHAIN.every(model => !/latest/.test(model.name)), true, 'pinned names only');
 });
