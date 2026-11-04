@@ -1398,17 +1398,67 @@
     }
   }
 
+  // Job filter of the Applicants page: a select you can type in (the list narrows as you type; arrows + Enter also work).
+  function applicantJobOptions() {
+    return [{ value: '', label: 'All jobs' }, ...applicantFlowLabels.filter(flow => flow.cloudId).map(flow => ({ value: flow.cloudId, label: flow.jobTitle || 'Untitled role' }))];
+  }
+  function applicantJobLabel() {
+    const found = applicantJobOptions().find(option => option.value === applicantFilter);
+    return found ? found.label : (applicantFilter ? 'Untitled role' : 'All jobs');
+  }
+  function mountApplicantJobCombobox(scope, onPick) {
+    const input = scope.querySelector('#applicant-flow-filter');
+    const list = scope.querySelector('#applicant-job-list');
+    if (!input || !list) return { sync() {} };
+    let shown = [];
+    let active = -1;
+    const isOpen = () => !list.hidden;
+    const highlight = () => {
+      list.querySelectorAll('.job-combobox-option').forEach((node, index) => node.classList.toggle('is-active', index === active));
+      const node = list.querySelector('.job-combobox-option.is-active');
+      if (node) { input.setAttribute('aria-activedescendant', node.id); node.scrollIntoView({ block: 'nearest' }); } else input.removeAttribute('aria-activedescendant');
+    };
+    const paint = query => {
+      const needle = query.trim().toLowerCase();
+      shown = applicantJobOptions().filter(option => !needle || option.label.toLowerCase().includes(needle));
+      active = needle ? (shown.length ? 0 : -1) : shown.findIndex(option => option.value === applicantFilter);
+      list.innerHTML = shown.length
+        ? shown.map((option, index) => `<li role="option" id="applicant-job-opt-${index}" class="job-combobox-option" data-index="${index}" aria-selected="${option.value === applicantFilter}">${esc(option.label)}</li>`).join('')
+        : '<li class="job-combobox-empty">No jobs match</li>';
+      highlight();
+    };
+    const show = () => { list.hidden = false; input.setAttribute('aria-expanded', 'true'); };
+    const open = () => { if (isOpen()) return; show(); input.select(); paint(''); };
+    const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); input.value = applicantJobLabel(); };
+    const choose = index => { const option = shown[index]; if (!option) return; const changed = option.value !== applicantFilter; close(); if (changed) onPick(option.value); };
+    const move = step => { if (!shown.length) return; active = (active + step + shown.length) % shown.length; highlight(); };
+    input.addEventListener('focus', open);
+    input.addEventListener('click', open);
+    input.addEventListener('input', () => { if (!isOpen()) show(); paint(input.value); });
+    input.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown') { event.preventDefault(); if (isOpen()) move(1); else open(); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); if (isOpen()) move(-1); else open(); }
+      else if (event.key === 'Enter') { if (isOpen()) { event.preventDefault(); choose(active >= 0 ? active : 0); } }
+      else if (event.key === 'Escape') { if (isOpen()) { event.preventDefault(); close(); } }
+      else if (event.key === 'Tab') { if (isOpen()) close(); }
+    });
+    input.addEventListener('blur', close);
+    // mousedown (not click) so the input keeps focus and does not close the list before the choice is made
+    list.addEventListener('mousedown', event => { event.preventDefault(); const node = event.target.closest('[data-index]'); if (node) choose(Number(node.dataset.index)); });
+    return { sync() { if (document.activeElement !== input) input.value = applicantJobLabel(); } };
+  }
+
   async function renderApplicants() {
     if (!hasPermission('applicants')) return renderAccessMessage('applicants');
     setRoute('applicants');
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
     flowResponsiblesCache.clear();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body is-board">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><select id="applicant-flow-filter" class="applicants-filter" aria-label="Filter applicants by job"><option value="">All jobs</option>${applicantFlowLabels.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join('')}</select><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button></div></div><div class="applicant-stage-toggle-wrap" id="applicant-stage-toggle-wrap">${hasPermission('customize_stages') ? '<button class="btn btn-sm" type="button" id="customize-stages">Customize</button>' : ''}</div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body is-board">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><div class="job-combobox"><input id="applicant-flow-filter" class="applicants-filter" type="text" role="combobox" aria-expanded="false" aria-controls="applicant-job-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="Filter applicants by job" placeholder="Search jobs" value="${esc(applicantJobLabel())}"><ul class="job-combobox-list" id="applicant-job-list" role="listbox" aria-label="Jobs" hidden></ul></div><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button>${hasPermission('customize_stages') ? '<button class="btn btn-sm" type="button" id="customize-stages">Customize</button>' : ''}</div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
     bindSidebar();
     bindPlanControl();
     
-    root.querySelector('#applicant-flow-filter').addEventListener('change', event => { applicantFilter = event.target.value; void renderApplicants(); });
+    const jobCombobox = mountApplicantJobCombobox(root, value => { applicantFilter = value; void renderApplicants(); });
     root.querySelector('#applicant-search').addEventListener('input', event => {
       applicantSearch = event.target.value;
       renderApplicantBoard({ resetScroll: true });
@@ -1418,8 +1468,7 @@
       if (!hasPermission('flows')) {
         applicantFlowLabels = await window.PathwayBackend.listApplicantFlowLabels();
         if (!root.querySelector('.applicants-page')) return;
-        const filter = root.querySelector('#applicant-flow-filter');
-        if (filter) filter.insertAdjacentHTML('beforeend', applicantFlowLabels.filter(flow => flow.cloudId).map(flow => `<option value="${esc(flow.cloudId)}" ${applicantFilter === flow.cloudId ? 'selected' : ''}>${esc(flow.jobTitle || 'Untitled role')}</option>`).join(''));
+        jobCombobox.sync();
       }
       const [loadedApplicants, loadedBoardConfig, loadedInterviews] = await Promise.all([
         window.PathwayBackend.listApplicants(workspace.id, applicantFilter),

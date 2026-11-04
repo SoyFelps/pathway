@@ -282,7 +282,6 @@
 
 
 /* Optional Team Fit and Skill Fit applicant stages */
-.applicant-stage-toggle-wrap{display:flex;align-items:center;justify-content:flex-end;gap:20px;flex-wrap:wrap;margin:0 0 14px}
 .applicant-stage-toggle{display:inline-flex;align-items:center;gap:7px;color:var(--text-strong);font-size:12px;font-weight:600;cursor:pointer}
 .stage-options{display:flex;flex-direction:column;margin:6px 0 4px;border-top:1px solid var(--line)}
 .stage-option{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line);cursor:pointer;color:var(--text-strong);font-size:14px;font-weight:600}
@@ -885,8 +884,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
   .workspace-body.is-board{height:calc(100vh - 70px);height:calc(100dvh - 70px);min-height:0;overflow:hidden}
   .workspace-body.is-board .applicants-page{display:flex;flex-direction:column;align-self:stretch;height:100%;min-height:0;padding-top:28px;padding-bottom:14px;overflow-y:auto}
   .workspace-body.is-board .applicants-heading{flex:0 0 auto;margin-bottom:16px}
-  .workspace-body.is-board .applicant-stage-toggle-wrap{flex:0 0 auto}
-  .workspace-body.is-board #applicants-content{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+  .workspace-body.is-board   .workspace-body.is-board #applicants-content{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
   .workspace-body.is-board .kanban-summary{flex:0 0 auto}
   .workspace-body.is-board .kanban-board{flex:1 1 auto;min-height:300px;overflow:auto;padding-bottom:0;scrollbar-color:var(--green-hover) var(--border-subtle)}
 }
@@ -894,3 +892,15 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .applicants-free-note{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}
 
 .reports-tools .btn-sm{height:39px;padding:0 14px;border-radius:8px;font-size:12px;font-weight:600}
+/* Applicants toolbar: job filter, search, Refresh and Customize share one row and one height. */
+.applicants-tools{flex-wrap:nowrap;align-items:center}
+.applicants-tools .btn{height:39px;padding:0 16px;font-size:12px;white-space:nowrap;flex:0 0 auto}
+.job-combobox{position:relative;flex:1 1 190px;min-width:160px}
+.job-combobox .applicants-filter{width:100%;min-width:0;flex:none;text-overflow:ellipsis}
+.job-combobox-list{position:absolute;z-index:40;top:calc(100% + 6px);left:0;min-width:100%;width:max-content;max-width:min(420px,90vw);max-height:288px;overflow:auto;margin:0;padding:5px;list-style:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 40px var(--shadow-lg)}
+.job-combobox-list[hidden]{display:none}
+.job-combobox-option{padding:9px 12px;border-radius:7px;font-size:12px;color:var(--text-strong);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.job-combobox-option.is-active{background:var(--tint)}
+.job-combobox-option[aria-selected="true"]{font-weight:700}
+.job-combobox-empty{padding:10px 12px;font-size:12px;color:var(--text-subtle)}
+@media(max-width:760px){.applicants-tools{flex-wrap:wrap}.job-combobox{flex:1 1 100%}.applicants-tools .applicants-search{flex:1 1 140px}}

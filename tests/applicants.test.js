@@ -70,7 +70,7 @@ test('a Customize button opens a modal that turns stages on and off; Failed, New
   const templateStart = builder.indexOf('async function renderApplicants()');
   const templateEnd = builder.indexOf('function formatPlanDate()', templateStart);
   const template = builder.slice(templateStart, templateEnd);
-  assert.ok(template.indexOf('id="customize-stages"') > 0 && template.indexOf('applicant-stage-toggle-wrap') < template.indexOf('id="applicants-content"'));
+  assert.ok(template.indexOf('id="customize-stages"') > template.indexOf('id="refresh-applicants"') && template.indexOf('id="customize-stages"') < template.indexOf('id="applicants-content"'));
   assert.equal(builder.includes('applicant-fit-stage-'), false, 'the old Team Fit / Skill Fit checkboxes are gone');
   assert.match(builder, /\{ key: 'failed', label: 'Failed', color: 'stage-failed', locked: true \}/);
   assert.match(builder, /\{ key: 'new', label: 'New', color: 'stage-new', locked: true \}/);
@@ -83,7 +83,7 @@ test('a Customize button opens a modal that turns stages on and off; Failed, New
   assert.match(migration, /check \(status in \('failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'\)\)/);
   assert.match(migration, /public\.workspace_user_has_permission\(workspace_id, 'applicants'\)/);
   assert.match(read('styles.css'), /\.stage-option\.is-locked\{cursor:not-allowed\}/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261104f/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261104g/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -158,13 +158,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=mw3-20261104f/);
-  assert.match(read('index.html'), /pathway\.js\?v=mw3-20261104f/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261104f/);
-  assert.match(read('index.html'), /candidate\.js\?v=mw3-20261104f/);
-  assert.match(read('apply.html'), /styles\.css\?v=mw3-20261104f/);
-  assert.match(read('index.html'), /styles\.css\?v=mw3-20261104f/);
-  assert.match(read('apply.html'), /backend\.js\?v=mw3-20261104f/);
+  assert.match(read('apply.html'), /pathway\.js\?v=mw3-20261104g/);
+  assert.match(read('index.html'), /pathway\.js\?v=mw3-20261104g/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261104g/);
+  assert.match(read('index.html'), /candidate\.js\?v=mw3-20261104g/);
+  assert.match(read('apply.html'), /styles\.css\?v=mw3-20261104g/);
+  assert.match(read('index.html'), /styles\.css\?v=mw3-20261104g/);
+  assert.match(read('apply.html'), /backend\.js\?v=mw3-20261104g/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
@@ -305,4 +305,19 @@ test('redrawing the board (moving a card, opening Failed, background updates) ke
   // the scroll is put back before the title-only state is measured
   assert.ok(builder.indexOf('board.scrollTop = saved.top') < builder.indexOf('const markTitleOnly'), 'scroll restored before the titles are measured');
   assert.match(builder, /applicantSearch = event\.target\.value;\s*renderApplicantBoard\(\{ resetScroll: true \}\);/, 'a new search starts from the top');
+});
+
+test('the Applicants toolbar keeps job filter, search, Refresh and Customize in one row, and the job filter can be searched', () => {
+  const builder = read('builder.js');
+  const styles = read('styles.css');
+  const start = builder.indexOf('<div class="applicants-tools">');
+  const tools = builder.slice(start, builder.indexOf('<div id="applicants-content">', start));
+  for (const id of ['applicant-flow-filter', 'applicant-search', 'refresh-applicants', 'customize-stages']) assert.ok(tools.includes(`id="${id}"`), `${id} is inside the toolbar`);
+  assert.match(tools, /<input id="applicant-flow-filter"[^>]*role="combobox"/, 'a text field with a list, not a plain select');
+  assert.equal(builder.includes('applicant-stage-toggle-wrap'), false);
+  assert.match(builder, /function mountApplicantJobCombobox\(scope, onPick\)/);
+  assert.match(builder, /option\.label\.toLowerCase\(\)\.includes\(needle\)/, 'the list narrows as you type');
+  assert.match(builder, /'ArrowDown'[\s\S]*'ArrowUp'[\s\S]*'Enter'[\s\S]*'Escape'/, 'keyboard support');
+  assert.match(styles, /\.applicants-tools \.btn\{height:39px;/, 'buttons are as tall as the fields (39px)');
+  assert.match(styles, /\.applicants-filter,\.applicants-search\{height:39px;/);
 });
