@@ -672,7 +672,7 @@
     });
     void load();
   }
-  // The questions the AI asks out loud (1 to 5, three lines to start with). Empty lines are ignored; with none, the interview is not sent.
+  // The questions the AI asks in the interview (1 to 5, three lines to start with). Empty lines are ignored; with none, the interview is not sent.
   function mountInterviewQuestionsField(host, getList, setList) {
     if (!host) return;
     let list = (getList() || []).map(item => String(item ?? ''));
