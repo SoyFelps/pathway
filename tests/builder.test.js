@@ -189,3 +189,18 @@ test('each AI interview question has a sparkles button next to the remove button
   assert.ok(field.indexOf('ai-question-sparkles') < field.indexOf('ai-question-remove'), 'sparkles come right before the remove button');
   assert.equal(field.includes("querySelectorAll('.ai-question-sparkles')"), false, 'no action yet');
 });
+
+test('AI interview questions in the job editor are a draft: they only reach the job on "Save questions"', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const field = src.slice(src.indexOf('function mountInterviewQuestionsField('), src.indexOf('let myProfile = null;'));
+  assert.match(field, /const draftMode = Boolean\(options && options\.saveButtons\);/);
+  assert.match(field, /if \(draftMode\) syncActions\(\); else setList\(list\.slice\(\)\);/, 'typing does not save in draft mode');
+  assert.match(field, /if \(!draftMode\) setList\(list\.slice\(\)\); paint\(\);/, 'removing a line does not save in draft mode');
+  assert.match(field, /id="ai-questions-save">Save questions<\/button>[\s\S]*id="ai-questions-revert">Revert<\/button>/);
+  assert.match(field, /setList\(kept\); list = padded\(kept\); paint\(\);/, 'saving sends the cleaned list once');
+  assert.match(field, /Lines shorter than 3 characters were left out\./, 'the person is told what was left out');
+  assert.match(field, /list = padded\(clean\(getList\(\) \|\| \[\]\)\); paint\(\);/, 'Revert goes back to the saved list');
+  assert.match(src, /mountInterviewQuestionsField\(panel\.querySelector\('#role-ai-questions'\)[\s\S]*?\{ saveButtons: true \}\);/, 'the job editor uses the draft mode');
+  assert.match(src, /mountInterviewQuestionsField\(modalRoot\.querySelector\('#new-ai-questions'\), [^\n]*\);/, 'the new-job form keeps its own behaviour');
+  assert.equal(/#new-ai-questions[^\n]*saveButtons/.test(src), false);
+});

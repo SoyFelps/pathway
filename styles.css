@@ -921,3 +921,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
   .mobile-details-bar{display:block;position:fixed;top:0;left:0;right:0;z-index:30;margin:0;padding:10px 17px;background:var(--surface);border-bottom:1px solid var(--line)}
   .editor-layout.is-mobile-details .inspector{padding-top:74px}
 }
+/* Job editor: Save / Revert under the AI interview questions (the lines are a draft until saved). */
+.ai-questions-actions{display:flex;align-items:center;gap:8px;margin:12px 0 4px}
+.ai-questions-actions .btn:disabled{opacity:.5;cursor:default}
+.ai-questions-status{font-size:11px;color:var(--text-subtle)}
