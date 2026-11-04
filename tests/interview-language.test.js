@@ -120,7 +120,7 @@ test('the job editor field works end to end in a small browser-like harness', ()
 
   const unsure = make('Cook needed');
   assert.equal(unsure.flow.interviewLanguage, undefined, 'nothing is guessed from a short text');
-  assert.match(unsure.help.textContent, /We could not tell the language of the job description\. Choose it/);
+  assert.equal(unsure.help.textContent, 'We could not tell the language of the job description. Choose it manually. AI interviews are only sent once the language is set.');
   assert.equal(unsure.help.classList.classes.has('is-warning'), true);
   assert.match(unsure.select.innerHTML, /<option value="" selected disabled>Choose the language…<\/option>/);
   assert.equal(unsure.saves.length, 0);

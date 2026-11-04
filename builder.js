@@ -687,10 +687,10 @@
       const chosen = flow.interviewLanguage;
       select.innerHTML = '<option value=""' + (chosen ? '' : ' selected') + ' disabled>Choose the language…</option>' + L.LANGUAGES.map(code => '<option value="' + code + '"' + (chosen === code ? ' selected' : '') + '>' + esc(L.NAMES[code]) + '</option>').join('');
       let note;
-      if (!chosen) note = 'We could not tell the language of the job description. Choose it: AI interviews are only sent once the language is set.';
+      if (!chosen) note = 'We could not tell the language of the job description. Choose it manually. AI interviews are only sent once the language is set.';
       else if (flow.interviewLanguageManual) { const found = L.detect(text()); note = 'Chosen by you.' + (found.code && found.code !== chosen ? ' The description looks like ' + L.NAMES[found.code] + '.' : ''); }
       else note = 'Detected from the job description.';
-      help.textContent = note + ' The AI talks to candidates in this language and expects their answers in it.';
+      help.textContent = chosen ? note + ' The AI talks to candidates in this language and expects their answers in it.' : note;
       help.classList.toggle('is-warning', !chosen);
     };
     const detect = () => {
