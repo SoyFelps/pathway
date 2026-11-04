@@ -103,7 +103,7 @@ test('deleting a step offers an Undo that lasts only until the next action', () 
   assert.match(src, /\['pointerdown', 'keydown', 'wheel'\]\.forEach\(type => document\.addEventListener\(type, event => \{[\s\S]*clearUndoDelete\(\);[\s\S]*\}, true\)\);/, 'any click, key or scroll removes the offer');
   assert.match(src, /closest\('#undo-delete-bar'\)\) return;/, 'using the Undo button itself does not remove it first');
   assert.match(src, /window\.addEventListener\('hashchange', clearUndoDelete\);/);
-  assert.match(src, /function setRoute\(route\) \{\n    clearUndoDelete\(\);/, 'opening another page removes it');
+  assert.match(src, /function setRoute\(route\) \{\n    const hash = `#\$\{route\}`;[\s\S]*?if \(window\.location\.hash !== hash\) clearUndoDelete\(\);/, 'another page removes it, but the automatic save refreshing the SAME address does not (that removed it after about a second)');
   assert.match(src, /clearUndoDelete\(\); currentId = id;/, 'opening a job removes it');
   assert.match(src, /flow\.nodes = state\.snapshot\.nodes; flow\.edges = state\.snapshot\.edges;/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8'), /\.undo-bar\{position:fixed;/);

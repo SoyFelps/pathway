@@ -156,9 +156,10 @@
   };
   // Keep the current page in the URL hash so a browser refresh returns to it. replaceState avoids polluting history.
   function setRoute(route) {
-    clearUndoDelete();
+    const hash = `#${route}`;
+    // Going to another page removes the Undo offer; refreshing the address of the SAME page does not (the automatic save does that about a second after a deletion).
+    if (window.location.hash !== hash) clearUndoDelete();
     try {
-      const hash = `#${route}`;
       if (window.location.hash !== hash) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
     } catch (_) { /* Navigation still works without URL persistence. */ }
   }
