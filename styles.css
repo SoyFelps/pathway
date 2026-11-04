@@ -944,6 +944,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 #ai-questions-modal .add-option{margin-top:6px;font-size:13px}
 #ai-questions-modal .ai-questions-actions{margin-top:18px;gap:12px}
 #ai-questions-modal .ai-questions-status{font-size:12px}
+#ai-questions-modal + .modal-actions{margin-top:20px;padding-top:18px;border-top:1px solid var(--border-subtle)}
 #inspector .field-group.has-unsaved{outline:1px solid var(--amber-border);outline-offset:8px;border-radius:10px}
 #inspector .field-group.has-unsaved .ai-questions-status{color:var(--amber-dark);font-weight:700}
 /* Job description: a larger writing window (desktop only). */

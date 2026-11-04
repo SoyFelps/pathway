@@ -3972,7 +3972,7 @@
   // The AI interview questions in a larger window (desktop only), with everything the field in the panel does: write with AI, add, remove, Revert and
   // Save questions. It starts from the draft in the panel; what is still unsaved when it closes goes back to the panel, so nothing typed here is lost.
   function openInterviewQuestionsEditor(panelField, getList, setList, options) {
-    setModal('<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Job details</div><h2>AI interview questions</h2></div><button class="modal-x" data-close aria-label="Close">×</button></div><div id="ai-questions-modal"><div id="ai-questions-modal-field"></div></div><div class="modal-actions"><button class="btn btn-primary" data-close type="button">Done</button></div>');
+    setModal('<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Job details</div><h2>AI interview questions</h2></div><button class="modal-x" data-close aria-label="Close">×</button></div><div id="ai-questions-modal"><div id="ai-questions-modal-field"></div></div><div class="modal-actions"><button class="btn btn-primary" data-close type="button">Close</button></div>');
     const host = modalRoot.querySelector('#ai-questions-modal-field');
     if (!host) return;
     const bigField = mountInterviewQuestionsField(host, getList, setList, { ...options, large: true, initialDraft: panelField ? panelField.getDraft() : null });

@@ -30,7 +30,9 @@ test('the large window runs the same field with the same options: write with AI,
   const body = builder.slice(start, builder.indexOf('function drawInspector()', start));
   assert.ok(body.includes('<h2>AI interview questions</h2>') && body.includes('id="ai-questions-modal"') && body.includes('id="ai-questions-modal-field"'));
   assert.ok(body.includes('mountInterviewQuestionsField(host, getList, setList, { ...options, large: true, initialDraft: panelField ? panelField.getDraft() : null })'), 'same getList, setList and options (so the sparkles button and the draft mode come along)');
-  assert.ok(body.includes('<button class="btn btn-primary" data-close type="button">Done</button>'));
+  assert.ok(body.includes('<button class="btn btn-primary" data-close type="button">Close</button>'), 'the button says Close');
+  assert.equal(body.includes('>Done<'), false);
+  assert.match(css, /#ai-questions-modal \+ \.modal-actions\{[^}]*border-top:1px solid var\(--border-subtle\)\}/, 'a dividing line above the Close button, like the one in the company form');
   assert.ok(body.includes("if (event.key === 'Escape') closeModal();"));
   assert.ok(builder.includes('const wideModal = html.includes(\'id="job-description-modal"\') || html.includes(\'id="ai-questions-modal"\');'));
 });
