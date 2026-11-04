@@ -3579,18 +3579,15 @@
 
   function showNewFlow() {
     root.querySelector('.app-shell')?.classList.add('is-creating-flow');
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Start with the role</div><h2>Create a new application flow</h2><p>Give candidates a clear picture of the opportunity before they apply.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-flow-form">${companies.length ? `<div class="field-group"><label for="new-company-id">Company</label><select class="select-input" id="new-company-id" name="companyId">${companyOptionsHtml()}</select></div>` : `<p class="field-help">This job will use your workspace name: ${esc(workspace.name)}. Add a company profile from My Companies to choose another.</p>`}<div class="field-group"><label for="new-title">Job title</label><input class="text-input" id="new-title" name="jobTitle" placeholder="e.g. Senior Product Designer" required></div><div class="field-group"><label for="new-description">Job description</label><textarea class="text-area" id="new-description" name="jobDescription" placeholder="A short, welcoming overview of the role and the team…" required></textarea></div><div class="field-group"><span class="form-label" id="new-responsible-label">Responsible</span><div id="new-responsible"></div></div><div class="field-group"><span class="form-label" id="new-ai-questions-label">AI interview questions <small>(optional)</small></span><div id="new-ai-questions"></div></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit">Create flow</button></div></form>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Start with the role</div><h2>Create a new application flow</h2><p>Add the job description and the AI interview questions inside the flow.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-flow-form">${companies.length ? `<div class="field-group"><label for="new-company-id">Company</label><select class="select-input" id="new-company-id" name="companyId">${companyOptionsHtml()}</select></div>` : `<p class="field-help">This job will use your workspace name: ${esc(workspace.name)}. Add a company profile from My Companies to choose another.</p>`}<div class="field-group"><label for="new-title">Job title</label><input class="text-input" id="new-title" name="jobTitle" placeholder="e.g. Senior Product Designer" required></div><div class="field-group"><span class="form-label" id="new-responsible-label">Responsible</span><div id="new-responsible"></div></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit">Create flow</button></div></form>`);
     let newResponsible = [];
     mountResponsibleField(modalRoot.querySelector('#new-responsible'), 'new-responsible-label', () => newResponsible, ids => { newResponsible = ids; });
-    let newInterviewQuestions = [];
-    mountInterviewQuestionsField(modalRoot.querySelector('#new-ai-questions'), () => newInterviewQuestions, list => { newInterviewQuestions = list; });
     modalRoot.querySelector('#new-flow-form').addEventListener('submit', event => {
       event.preventDefault(); const data = new FormData(event.currentTarget);
       const company = companies.find(item => item.id === data.get('companyId')) || null;
-      const flow = C.createFlow(company?.name || workspace.name, data.get('jobTitle').trim(), data.get('jobDescription').trim());
+      const flow = C.createFlow(company?.name || workspace.name, data.get('jobTitle').trim(), '');
       flow.companyId = company?.id || null; flow.companyProfile = companySnapshot(company);
       flow.responsibleIds = currentResponsibleIds(newResponsible);
-      flow.interviewQuestions = window.PathwayBackend.cleanInterviewQuestions(newInterviewQuestions);
       flows.unshift(flow); closeModal(); openFlow(flow.id); save();
     });
   }

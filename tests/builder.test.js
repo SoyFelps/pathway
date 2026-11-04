@@ -206,8 +206,7 @@ test('AI interview questions in the job editor are a draft: they only reach the 
   assert.match(field, /Lines shorter than 3 characters were left out\./, 'the person is told what was left out');
   assert.match(field, /list = padded\(clean\(getList\(\) \|\| \[\]\)\); paint\(\);/, 'Revert goes back to the saved list');
   assert.match(src, /mountInterviewQuestionsField\(panel\.querySelector\('#role-ai-questions'\)[\s\S]*?saveButtons: true,[\s\S]*?generate: others => window\.PathwayBackend\.generateInterviewQuestion\(\{ workspaceId: workspace\.id, jobTitle: flow\.jobTitle, description: panel\.querySelector\('#role-description'\)\?\.value \?\? flow\.jobDescription, existing: others \}\)/, 'the job editor uses the draft mode and the AI');
-  assert.match(src, /mountInterviewQuestionsField\(modalRoot\.querySelector\('#new-ai-questions'\), [^\n]*\);/, 'the new-job form keeps its own behaviour');
-  assert.equal(/#new-ai-questions[^\n]*saveButtons/.test(src), false);
+  assert.equal(src.includes('#new-ai-questions'), false, 'the new-job form has no questions field');
 });
 
 test('the Save questions button is pushed to the right end of the actions row', () => {

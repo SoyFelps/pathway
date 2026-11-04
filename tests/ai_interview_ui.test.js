@@ -19,9 +19,8 @@ test('the browser never holds a Witcher key or talks to Witcher: it only calls t
 test('the questions of a job are cleaned the way the database wants them and are edited from the job details and the new-job form', () => {
   assert.ok(backend.includes('.filter(item => item.length >= 3).slice(0, 5)'));
   assert.ok(builder.includes("mountInterviewQuestionsField(panel.querySelector('#role-ai-questions')"));
-  assert.ok(builder.includes("mountInterviewQuestionsField(modalRoot.querySelector('#new-ai-questions')"));
+  assert.equal(builder.includes('#new-ai-questions'), false, 'the new-job form no longer asks for questions');
   assert.ok(builder.includes('save({ internal: true })'), 'editing the questions does not count as an unpublished change');
-  assert.ok(builder.includes('flow.interviewQuestions = window.PathwayBackend.cleanInterviewQuestions(newInterviewQuestions);'));
 });
 
 test('the card shows the interview tag and badge, and the candidate panel gets an AI Interview tab next to Resume', () => {

@@ -30,7 +30,8 @@ test('the create-flow modal and the first step both offer the multi-select', () 
   const builder = read('builder.js');
   assert.ok(builder.includes('id="new-responsible"') && builder.includes('id="role-responsible"'));
   const modal = builder.slice(builder.indexOf('function showNewFlow('), builder.indexOf('function showFlowMenu('));
-  assert.ok(modal.indexOf('id="new-description"') < modal.indexOf('id="new-responsible"'), 'the field sits below the job description');
+  assert.ok(modal.indexOf('id="new-title"') < modal.indexOf('id="new-responsible"'), 'the field sits below the job title');
+  assert.equal(modal.includes('id="new-description"') || modal.includes('new-ai-questions'), false, 'the new-job form only asks company, title and responsible');
   assert.ok(modal.includes('flow.responsibleIds = currentResponsibleIds(newResponsible);'));
   assert.ok(builder.includes("ids => { flow.responsibleIds = ids; save({ internal: true }); }"), 'editing the first step saves the flow');
   assert.ok(builder.includes("if (input.hasAttribute('data-all-people')) ids = [];"), 'choosing All clears the individual choices');
