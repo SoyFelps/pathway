@@ -839,7 +839,11 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .ai-impression.is-negative{background:var(--red-bg);color:var(--red-text)}
 .ai-impression.is-mixed{background:var(--amber-bg);color:var(--amber-text)}
 .ai-impression.is-none{background:var(--border-subtle);color:var(--text-subtle)}
-.applicant-right-tabs{display:flex;gap:4px;flex:0 0 auto;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--border-subtle)}
+.applicant-right-bar{display:flex;align-items:stretch;justify-content:space-between;gap:12px;flex:0 0 auto;min-height:58px;padding:0 14px 0 18px;background:var(--surface);border-bottom:1px solid var(--border-subtle)}
+.applicant-right-tabs{display:flex;align-items:flex-end;gap:4px;min-width:0}
+.applicant-right-close{align-self:center;flex:0 0 auto;cursor:pointer;line-height:1}
+/* Wide screens: the close button lives in the right panel (where people look for it), so the left one is hidden. */
+.applicant-review-left .applicant-detail-head .modal-x{display:none}
 .applicant-right-body{position:relative;flex:1 1 auto;min-height:0;min-width:0;display:flex}
 .applicant-right-pane{position:absolute;inset:0;display:flex;align-items:stretch;justify-content:stretch;min-width:0;min-height:0}
 .applicant-right-pane.is-hidden{display:none}
@@ -870,7 +874,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .ai-questions{display:flex;flex-direction:column;gap:8px}
 .ai-question-row{display:flex;align-items:center;gap:6px}
 .ai-question-row .text-input{flex:1 1 auto;min-width:0}
-@media(max-width:760px){.applicant-ai-close{display:inline-flex}.applicant-right-tabs{padding:0 10px}}
+@media(max-width:760px){.applicant-ai-close{display:inline-flex}.applicant-right-bar{padding:0 10px}.applicant-right-bar:not(.has-ai){display:none}.applicant-right-close{display:none}.applicant-review-left .applicant-detail-head .modal-x{display:block}}
 
 /* Applicants board: on a computer screen the board is exactly as tall as the window, and it is the thing that scrolls, in both directions.
    So the horizontal scroll bar sits at the bottom edge of the window and the vertical one at its right edge, always in view, however

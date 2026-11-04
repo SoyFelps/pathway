@@ -3253,7 +3253,8 @@
     const statusOptions = visibleApplicantStages().map(stage => `<option value="${esc(stage.key)}" ${group.status === stage.key ? 'selected' : ''}>${esc(stage.label)}</option>`).join('');
     // The AI Interview tab (next to Resume) exists only for a candidate who has an interview.
     const aiRow = aiInterviewFor(applicant.flow_id, person.candidate_email);
-    const rightTabs = aiRow ? '<div class="applicant-right-tabs" role="tablist" aria-label="Resume and AI interview"><button class="applicant-tab" type="button" role="tab" aria-selected="true" data-right-tab="resume">Resume</button><button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="ai">AI Interview</button></div>' : '';
+    // The tab bar is always there (just "Resume" when there is no AI interview), because it also holds the close button of the panel on wide screens.
+    const rightTabs = `<div class="applicant-right-bar${aiRow ? ' has-ai' : ''}"><div class="applicant-right-tabs" role="tablist" aria-label="${aiRow ? 'Resume and AI interview' : 'Resume'}"><button class="applicant-tab" type="button" role="tab" aria-selected="true" data-right-tab="resume">Resume</button>${aiRow ? '<button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="ai">AI Interview</button>' : ''}</div><button class="modal-x applicant-right-close" data-close aria-label="Close applicant details">×</button></div>`;
     const aiPane = aiRow ? '<div class="applicant-right-pane is-hidden" data-right-pane="ai"><section class="applicant-ai-panel" id="applicant-ai-panel" aria-label="AI interview"><div class="applicant-ai-loading">Loading the interview…</div></section></div>' : '';
 
     setModal(`<div class="applicant-review-layout" data-detail-applicant="${esc(person.id)}" data-detail-tab="${tab}">
