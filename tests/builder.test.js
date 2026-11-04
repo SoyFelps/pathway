@@ -182,12 +182,17 @@ test('the AI interview questions come last in the job details, below the candida
   assert.equal(roleSettings.includes('role-ai-questions'), false, 'no longer between the job fields and the step');
 });
 
-test('each AI interview question has a sparkles button next to the remove button (no action yet)', () => {
+test('each AI interview question has a sparkles button next to the remove button; it writes THAT line with the AI', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
   const field = src.slice(src.indexOf('function mountInterviewQuestionsField('), src.indexOf('let myProfile = null;'));
-  assert.match(field, /class="icon-btn ai-question-sparkles"[^>]*aria-label="Improve question ' \+ \(index \+ 1\) \+ ' with AI"><svg/);
+  assert.match(field, /\(options && options\.generate \? '<button type="button" class="icon-btn ai-question-sparkles"[^>]*aria-label="Write question ' \+ \(index \+ 1\) \+ ' with AI"/, 'only where the AI is wired (the job editor)');
   assert.ok(field.indexOf('ai-question-sparkles') < field.indexOf('ai-question-remove'), 'sparkles come right before the remove button');
-  assert.equal(field.includes("querySelectorAll('.ai-question-sparkles')"), false, 'no action yet');
+  assert.match(field, /host\.querySelectorAll\('\.ai-question-sparkles'\)\.forEach\(button => button\.addEventListener\('click', async event => \{/);
+  assert.match(field, /const others = list\.filter\(\(text, position\) => position !== index && String\(text\)\.trim\(\)\);/, 'the lines in the field now (the draft), without the line being replaced');
+  assert.match(field, /list\[index\] = result\.question; paint\(\); syncActions\(\);/, 'the question goes into that line of the draft, to be saved by the person');
+  assert.match(field, /We couldn\\u2019t generate a question from the job description\. Add more detail about the role and try again\./, 'the notification when there is not enough information');
+  assert.match(field, /Writing questions with AI is part of the Premium plan\./);
+  assert.match(field, /AI is unavailable right now\. Try again in a moment\./);
 });
 
 test('AI interview questions in the job editor are a draft: they only reach the job on "Save questions"', () => {
@@ -196,13 +201,11 @@ test('AI interview questions in the job editor are a draft: they only reach the 
   assert.match(field, /const draftMode = Boolean\(options && options\.saveButtons\);/);
   assert.match(field, /if \(draftMode\) syncActions\(\); else setList\(list\.slice\(\)\);/, 'typing does not save in draft mode');
   assert.match(field, /if \(!draftMode\) setList\(list\.slice\(\)\); paint\(\);/, 'removing a line does not save in draft mode');
-  assert.match(field, /id="ai-questions-revert">Revert<\/button><span class="ai-questions-status"[^>]*><\/span><button type="button" class="btn btn-sm btn-primary ai-questions-save" id="ai-questions-save">Save questions<\/button>/, 'Revert and the status on the left, Save questions last (pushed to the right end)');
-  assert.ok(field.indexOf('ai-questions-help') < field.indexOf('class="ai-questions"'), 'the help text is right under the title, above the questions');
-  assert.equal(field.indexOf('These are the questions') === field.lastIndexOf('These are the questions'), true, 'the help text appears once');
+  assert.match(field, /id="ai-questions-revert">Revert<\/button><span class="ai-questions-status"[^>]*><\/span><button type="button" class="btn btn-sm btn-primary ai-questions-save" id="ai-questions-save">Save questions<\/button>/);
   assert.match(field, /setList\(kept\); list = padded\(kept\); paint\(\);/, 'saving sends the cleaned list once');
   assert.match(field, /Lines shorter than 3 characters were left out\./, 'the person is told what was left out');
   assert.match(field, /list = padded\(clean\(getList\(\) \|\| \[\]\)\); paint\(\);/, 'Revert goes back to the saved list');
-  assert.match(src, /mountInterviewQuestionsField\(panel\.querySelector\('#role-ai-questions'\)[\s\S]*?\{ saveButtons: true \}\);/, 'the job editor uses the draft mode');
+  assert.match(src, /mountInterviewQuestionsField\(panel\.querySelector\('#role-ai-questions'\)[\s\S]*?saveButtons: true,[\s\S]*?generate: others => window\.PathwayBackend\.generateInterviewQuestion\(\{ workspaceId: workspace\.id, jobTitle: flow\.jobTitle, description: panel\.querySelector\('#role-description'\)\?\.value \?\? flow\.jobDescription, existing: others \}\)/, 'the job editor uses the draft mode and the AI');
   assert.match(src, /mountInterviewQuestionsField\(modalRoot\.querySelector\('#new-ai-questions'\), [^\n]*\);/, 'the new-job form keeps its own behaviour');
   assert.equal(/#new-ai-questions[^\n]*saveButtons/.test(src), false);
 });

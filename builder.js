@@ -695,9 +695,29 @@
       (host.closest('.field-group') || host).classList.toggle('has-unsaved', changed); // the whole section (title included) is highlighted while the draft differs from what is saved
     };
     const paint = () => {
-      host.innerHTML = '<p class="field-help ai-questions-help">These are the questions the AI asks the candidate in the AI Interview, with one follow-up for each.</p><div class="ai-questions">' + list.map((text, index) => '<div class="ai-question-row"><input class="text-input ai-question-input" data-index="' + index + '" maxlength="500" value="' + esc(text) + '" placeholder="' + (index === 0 ? 'e.g. Tell us about a project you are proud of.' : 'Question ' + (index + 1)) + '" aria-label="Interview question ' + (index + 1) + '">' + '<button type="button" class="icon-btn ai-question-sparkles" data-index="' + index + '" aria-label="Improve question ' + (index + 1) + ' with AI"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 6.5l1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1-5.1-1.9 5.1-1.9 1.9-5.1z"/><path d="M19 3v4M17 5h4"/></svg></button>' + (list.length > (options && options.saveButtons ? 0 : 1) ? '<button type="button" class="icon-btn ai-question-remove" data-index="' + index + '" aria-label="Remove question ' + (index + 1) + '">×</button>' : '') + '</div>').join('') + '</div>' + (list.length < 5 ? '<button type="button" class="add-option" id="ai-question-add">＋ Add a question</button>' : '') + (draftMode ? '<div class="ai-questions-actions"><button type="button" class="btn btn-sm" id="ai-questions-revert">Revert</button><span class="ai-questions-status" id="ai-questions-status" role="status"></span><button type="button" class="btn btn-sm btn-primary ai-questions-save" id="ai-questions-save">Save questions</button></div>' : '');
+      host.innerHTML = '<p class="field-help ai-questions-help">These are the questions the AI asks the candidate in the AI Interview, with one follow-up for each.</p><div class="ai-questions">' + list.map((text, index) => '<div class="ai-question-row"><input class="text-input ai-question-input" data-index="' + index + '" maxlength="500" value="' + esc(text) + '" placeholder="' + (index === 0 ? 'e.g. Tell us about a project you are proud of.' : 'Question ' + (index + 1)) + '" aria-label="Interview question ' + (index + 1) + '">' + (options && options.generate ? '<button type="button" class="icon-btn ai-question-sparkles" data-index="' + index + '" aria-label="Write question ' + (index + 1) + ' with AI" title="Write this question with AI"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 6.5l1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1-5.1-1.9 5.1-1.9 1.9-5.1z"/><path d="M19 3v4M17 5h4"/></svg></button>' : '') + (list.length > (options && options.saveButtons ? 0 : 1) ? '<button type="button" class="icon-btn ai-question-remove" data-index="' + index + '" aria-label="Remove question ' + (index + 1) + '">×</button>' : '') + '</div>').join('') + '</div>' + (list.length < 5 ? '<button type="button" class="add-option" id="ai-question-add">＋ Add a question</button>' : '') + (draftMode ? '<div class="ai-questions-actions"><button type="button" class="btn btn-sm" id="ai-questions-revert">Revert</button><span class="ai-questions-status" id="ai-questions-status" role="status"></span><button type="button" class="btn btn-sm btn-primary ai-questions-save" id="ai-questions-save">Save questions</button></div>' : '');
       host.querySelectorAll('.ai-question-input').forEach(input => input.addEventListener('input', event => { list[Number(event.target.dataset.index)] = event.target.value; if (draftMode) syncActions(); else setList(list.slice()); }));
       host.querySelectorAll('.ai-question-remove').forEach(button => button.addEventListener('click', event => { list.splice(Number(event.currentTarget.dataset.index), 1); if (!draftMode) setList(list.slice()); paint(); }));
+      // The sparkles button writes THAT line with the AI, from the job description and the lines that are in the field right now (the draft, not what is saved).
+      host.querySelectorAll('.ai-question-sparkles').forEach(button => button.addEventListener('click', async event => {
+        const index = Number(event.currentTarget.dataset.index);
+        if (!options || !options.generate || button.disabled) return;
+        button.disabled = true; button.classList.add('is-working'); button.setAttribute('aria-busy', 'true');
+        const others = list.filter((text, position) => position !== index && String(text).trim());
+        try {
+          const result = await options.generate(others);
+          if (result && result.generated && index < list.length && host.isConnected) {
+            list[index] = result.question; paint(); syncActions();
+            showToast('Question written. Review it, then save.');
+          } else if (result && result.reason === 'similar') showToast('We couldn\u2019t come up with a different question. Try again, or edit the existing ones.', 6000);
+          else if (!result || !result.generated) showToast('We couldn\u2019t generate a question from the job description. Add more detail about the role and try again.', 6500);
+        } catch (error) {
+          const code = error && error.code;
+          showToast(code === 'premium_required' ? 'Writing questions with AI is part of the Premium plan.' : code === 'forbidden' ? 'You are not allowed to edit jobs in this workspace.' : code === 'signed_out' ? 'Your session expired. Sign in again.' : 'AI is unavailable right now. Try again in a moment.', 5000);
+        } finally {
+          if (button.isConnected) { button.disabled = false; button.classList.remove('is-working'); button.removeAttribute('aria-busy'); }
+        }
+      }));
       host.querySelector('#ai-question-add')?.addEventListener('click', () => { list.push(''); paint(); host.querySelectorAll('.ai-question-input')[list.length - 1]?.focus(); });
       if (draftMode) {
         host.querySelector('#ai-questions-save')?.addEventListener('click', () => {
@@ -3928,7 +3948,10 @@
     const responsibleHost = panel.querySelector('#role-responsible');
     if (responsibleHost) mountResponsibleField(responsibleHost, 'role-responsible-label', () => flow.responsibleIds || [], ids => { flow.responsibleIds = ids; save({ internal: true }); });
     // Like the responsible people, the questions are never shown to candidates, so editing them does not count as an unpublished change.
-    mountInterviewQuestionsField(panel.querySelector('#role-ai-questions'), () => flow.interviewQuestions || [], list => { flow.interviewQuestions = list; save({ internal: true }); }, { saveButtons: true });
+    mountInterviewQuestionsField(panel.querySelector('#role-ai-questions'), () => flow.interviewQuestions || [], list => { flow.interviewQuestions = list; save({ internal: true }); }, {
+      saveButtons: true,
+      generate: others => window.PathwayBackend.generateInterviewQuestion({ workspaceId: workspace.id, jobTitle: flow.jobTitle, description: panel.querySelector('#role-description')?.value ?? flow.jobDescription, existing: others })
+    });
     const editor = panel.querySelector('#node-editor');
     if (selected.type === 'candidateInfo') {
       editor.innerHTML = `<div class="inspector-note">This is the fixed first step. Name, email, and resume are always included. Every detail you tick is required: candidates must fill it in to continue (where a list offers “Prefer not to say”, that counts as an answer).</div><div class="section-small">Always included</div>${[['name', 'Full name'], ['email', 'Email address'], ['resume', 'Resume link']].map(([key, label]) => `<label class="locked-field"><input type="checkbox" class="check" checked disabled><span>${label}</span><small>Required</small></label>`).join('')}<div class="section-small">Optional details</div>${C.OPTIONAL_FIELDS.map(field => `<label class="toggle-field"><span>${esc(field.label)}${field.hint ? `<small>${esc(field.hint)}</small>` : ''}</span><input type="checkbox" class="check optional-field" data-field="${esc(field.key)}" ${flow.candidateInfoFields[field.key] ? 'checked' : ''}></label>`).join('')}<p class="connection-help">The selected details appear directly on the public job application page.</p>`;

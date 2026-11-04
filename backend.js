@@ -17,6 +17,7 @@
   const BILLING_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/billing`;
   const TEAM_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/team`;
   const AI_INTERVIEW_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/ai-interview`;
+  const AI_QUESTIONS_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/ai-questions`;
   const DELETE_ACCOUNT_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/delete-account`;
   const APPLICANT_STATUSES = new Set(['failed', 'new', 'screening', 'team_fit', 'skill_fit', 'ai_interview', 'interview', 'promising', 'offer', 'withdrawn', 'hired']);
   const CUSTOM_STATUS_PATTERN = /^custom:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -119,6 +120,19 @@
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
     if (!result.ok) { const error = new Error(payload.error || 'The interview service could not complete this request.'); error.code = payload.code || null; error.retryAt = payload.retryAt || null; throw error; }
+    return payload;
+  }
+  // Asks the AI for ONE interview question from the job description, different from the questions already in the field. Resolves to
+  // { generated: true, question } or { generated: false, reason: 'insufficient' | 'similar' }; a real problem rejects with an error whose `code` says which.
+  async function generateInterviewQuestion({ workspaceId, jobTitle, description, existing }) {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(AI_QUESTIONS_FUNCTION, { method: 'POST', headers: { apikey: config.publishableKey, 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ workspaceId, jobTitle: String(jobTitle || ''), description: String(description || ''), existing: Array.isArray(existing) ? existing : [] }) });
+    } catch (_) { const error = new Error('network'); error.code = 'network'; throw error; }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* the code below covers it */ }
+    if (!result.ok) { const error = new Error(payload.error || 'The AI could not answer.'); error.code = payload.code || 'ai_unavailable'; throw error; }
     return payload;
   }
   // `purpose` "export" is the candidate data export, the one place that still reads the transcript on the free plan.
@@ -1097,6 +1111,7 @@
     listNotificationHistory,
     markFlowNotificationSeen,
     cleanInterviewQuestions,
+    generateInterviewQuestion,
     listAiInterviews,
     getAiInterviewStatus,
     aiInterviewAction,
