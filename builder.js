@@ -180,7 +180,7 @@
     undoDelete = { flowId, snapshot, selectedBefore };
     const bar = document.createElement('div');
     bar.id = 'undo-delete-bar'; bar.className = 'undo-bar'; bar.setAttribute('role', 'status');
-    bar.innerHTML = '<span>Step deleted. Reconnect any remaining steps before publishing.</span><button type="button" id="undo-delete-btn">Undo</button>';
+    bar.innerHTML = '<span>Step deleted</span><button type="button" id="undo-delete-btn">Undo</button>';
     document.body.appendChild(bar);
     bar.querySelector('#undo-delete-btn').addEventListener('click', restoreDeletedStep);
   }

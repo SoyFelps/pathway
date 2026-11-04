@@ -103,8 +103,8 @@ test('company edits propagate atomically to linked drafts and active published s
   assert.match(builder, /window\.PathwayBackend\.updateCompany/);
   assert.match(builder, /Company updated in its linked flows/);
   assert.match(styles, /\.company-card-actions/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261104q/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261104q/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261104r/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261104r/);
 });
 
 test('company deletion requires all linked flows removed first and the UI confirms candidate-data loss', () => {

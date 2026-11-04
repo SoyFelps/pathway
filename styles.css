@@ -903,7 +903,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 /* Searchable country and city fields get the same chevron as the Pronouns select, so they read as "pick from a list". */
 .candidate-field.combo input[role="combobox"]{padding-right:38px;background-image:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%278%27 viewBox=%270 0 12 8%27%3E%3Cpath d=%27M1 1.5l5 5 5-5%27 fill=%27none%27 stroke=%27%23748178%27 stroke-width=%271.6%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;background-size:12px 8px}
 /* Undo offer after deleting a step in the job editor (shown only until the next action). */
-.undo-bar{position:fixed;bottom:90px;left:calc((100vw - 340px) / 2);transform:translateX(-50%);z-index:101;display:flex;align-items:center;gap:14px;max-width:min(520px,92vw);padding:10px 12px 10px 16px;border-radius:10px;background:var(--forest);color:white;font-size:12px;line-height:1.4;box-shadow:0 5px 20px var(--shadow-md)}
-.undo-bar button{flex:0 0 auto;padding:6px 14px;border:1px solid currentColor;border-radius:7px;background:transparent;color:white;font:700 12px var(--sans);cursor:pointer}
+.undo-bar{position:fixed;bottom:90px;left:calc((100vw - 340px) / 2);transform:translateX(-50%);z-index:101;display:flex;align-items:center;gap:12px;max-width:min(520px,92vw);padding:7px 8px 7px 14px;border-radius:9px;background:var(--forest);color:white;font-size:12px;line-height:1.4;box-shadow:0 5px 20px var(--shadow-md)}
+.undo-bar button{flex:0 0 auto;padding:4px 12px;border:1px solid currentColor;border-radius:7px;background:transparent;color:white;font:700 12px var(--sans);cursor:pointer}
 .undo-bar button:hover,.undo-bar button:focus-visible{background:var(--green);outline:none}
 @media(max-width:760px){.undo-bar{left:50%;bottom:78px}}
