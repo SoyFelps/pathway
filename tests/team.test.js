@@ -155,10 +155,10 @@ test('My Team shows up to three included seats, defaults permissions on, and sup
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=mw3-20261104y/);
-  assert.match(html, /backend\.js\?v=mw3-20261104y/);
-  assert.match(html, /builder\.js\?v=mw3-20261104y/);
-  assert.match(html, /styles\.css\?v=mw3-20261104y/);
+  assert.match(html, /auth\.js\?v=mw3-20261104z/);
+  assert.match(html, /backend\.js\?v=mw3-20261104z/);
+  assert.match(html, /builder\.js\?v=mw3-20261104z/);
+  assert.match(html, /styles\.css\?v=mw3-20261104z/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });

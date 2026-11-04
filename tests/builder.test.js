@@ -172,3 +172,12 @@ test('the AI interview questions help text is accurate (no "out loud", no "leave
   assert.equal(src.includes('out loud'), false);
   assert.equal(src.includes('Leave them empty'), false);
 });
+
+test('the AI interview questions come last in the job details, below the candidate-details step', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const inspector = src.slice(src.indexOf('function drawInspector()'), src.indexOf('function updateNodeLabel(', src.indexOf('function drawInspector()')));
+  assert.match(inspector, /const aiSection = selected\.type === 'candidateInfo' \? '<hr class="inspector-divider"><div class="field-group"><span class="form-label" id="role-ai-questions-label">AI interview questions<\/span>/);
+  assert.match(inspector, /<div id="node-editor"><\/div>\$\{aiSection\}`;/, 'after the step editor');
+  const roleSettings = inspector.slice(inspector.indexOf('const roleSettings'), inspector.indexOf('const aiSection'));
+  assert.equal(roleSettings.includes('role-ai-questions'), false, 'no longer between the job fields and the step');
+});
