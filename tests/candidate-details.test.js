@@ -374,3 +374,8 @@ test('opening a country list never scrolls the page (only the list scrolls)', ()
   assert.match(geo, /function scrollListTo\(list, item, center\)/);
   assert.match(geo, /search\.focus\(\{ preventScroll: true \}\)/);
 });
+
+test('searchable country and city fields show the same chevron as the Pronouns select', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.match(css, /\.candidate-field\.combo input\[role="combobox"\]\{padding-right:38px;background-image:url\(/);
+});

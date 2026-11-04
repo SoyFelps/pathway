@@ -906,3 +906,6 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .job-combobox-option[aria-selected="true"]{font-weight:700}
 .job-combobox-empty{padding:10px 12px;font-size:12px;color:var(--text-subtle)}
 @media(max-width:760px){.applicants-tools{flex-wrap:wrap}.job-combobox{flex:1 1 100%}.applicants-tools .applicants-search{flex:1 1 140px}}
+
+/* Searchable country and city fields get the same chevron as the Pronouns select, so they read as "pick from a list". */
+.candidate-field.combo input[role="combobox"]{padding-right:38px;background-image:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%278%27 viewBox=%270 0 12 8%27%3E%3Cpath d=%27M1 1.5l5 5 5-5%27 fill=%27none%27 stroke=%27%23748178%27 stroke-width=%271.6%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;background-size:12px 8px}
