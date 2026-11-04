@@ -709,7 +709,11 @@
 
   function mountInterviewQuestionsField(host, getList, setList, options) {
     if (!host) return;
-    let list = (getList() || []).map(item => String(item ?? ''));
+    let list = ((options && Array.isArray(options.initialDraft) ? options.initialDraft : getList()) || []).map(item => String(item ?? ''));
+    // The same field also opens in a large window (options.large): one big, wrapping box per question, easier to read. The window starts from the draft
+    // of the field in the panel and hands its own draft back when it closes (see openInterviewQuestionsEditor).
+    const large = Boolean(options && options.large);
+    const placeholderFor = index => index === 0 ? 'e.g. Tell us about a project you are proud of.' : 'Question ' + (index + 1);
     // The new-job form starts with three empty lines; the job editor shows only the saved questions (even none): no empty lines are added for the person.
     const minRows = options && options.saveButtons ? 0 : 3;
     while (list.length < minRows) list.push('');
@@ -729,8 +733,9 @@
       (host.closest('.field-group') || host).classList.toggle('has-unsaved', changed); // the whole section (title included) is highlighted while the draft differs from what is saved
     };
     const paint = () => {
-      host.innerHTML = '<p class="field-help ai-questions-help">These are the questions the AI asks the candidate in the AI Interview, with one follow-up for each.</p><div class="ai-questions">' + list.map((text, index) => '<div class="ai-question-row"><input class="text-input ai-question-input" data-index="' + index + '" maxlength="300" value="' + esc(text) + '" placeholder="' + (index === 0 ? 'e.g. Tell us about a project you are proud of.' : 'Question ' + (index + 1)) + '" aria-label="Interview question ' + (index + 1) + '">' + (options && options.generate ? '<button type="button" class="icon-btn ai-question-sparkles" data-index="' + index + '" aria-label="Write question ' + (index + 1) + ' with AI" title="Write this question with AI"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 6.5l1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1-5.1-1.9 5.1-1.9 1.9-5.1z"/><path d="M19 3v4M17 5h4"/></svg></button>' : '') + (list.length > (options && options.saveButtons ? 0 : 1) ? '<button type="button" class="icon-btn ai-question-remove" data-index="' + index + '" aria-label="Remove question ' + (index + 1) + '">×</button>' : '') + '</div>').join('') + '</div>' + (list.length < 5 ? '<button type="button" class="add-option" id="ai-question-add">＋ Add a question</button>' : '') + (draftMode ? '<div class="ai-questions-actions"><button type="button" class="btn btn-sm" id="ai-questions-revert">Revert</button><span class="ai-questions-status" id="ai-questions-status" role="status"></span><button type="button" class="btn btn-sm btn-primary ai-questions-save" id="ai-questions-save">Save questions</button></div>' : '');
-      host.querySelectorAll('.ai-question-input').forEach(input => input.addEventListener('input', event => { list[Number(event.target.dataset.index)] = event.target.value; if (draftMode) syncActions(); else setList(list.slice()); }));
+      host.innerHTML = '<p class="field-help ai-questions-help">These are the questions the AI asks the candidate in the AI Interview, with one follow-up for each.</p><div class="ai-questions">' + list.map((text, index) => '<div class="ai-question-row' + (large ? ' is-large' : '') + '">' + (large ? '<span class="ai-question-number" aria-hidden="true">' + (index + 1) + '</span><textarea class="text-area ai-question-input" data-index="' + index + '" maxlength="300" rows="3" placeholder="' + placeholderFor(index) + '" aria-label="Interview question ' + (index + 1) + '">' + esc(text) + '</textarea>' : '<input class="text-input ai-question-input" data-index="' + index + '" maxlength="300" value="' + esc(text) + '" placeholder="' + placeholderFor(index) + '" aria-label="Interview question ' + (index + 1) + '">') + (options && options.generate ? '<button type="button" class="icon-btn ai-question-sparkles" data-index="' + index + '" aria-label="Write question ' + (index + 1) + ' with AI" title="Write this question with AI"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 6.5l1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1-5.1-1.9 5.1-1.9 1.9-5.1z"/><path d="M19 3v4M17 5h4"/></svg></button>' : '') + (list.length > (options && options.saveButtons ? 0 : 1) ? '<button type="button" class="icon-btn ai-question-remove" data-index="' + index + '" aria-label="Remove question ' + (index + 1) + '">×</button>' : '') + '</div>').join('') + '</div>' + (list.length < 5 ? '<button type="button" class="add-option" id="ai-question-add">＋ Add a question</button>' : '') + (draftMode ? '<div class="ai-questions-actions"><button type="button" class="btn btn-sm" id="ai-questions-revert">Revert</button><span class="ai-questions-status" id="ai-questions-status" role="status"></span><button type="button" class="btn btn-sm btn-primary ai-questions-save" id="ai-questions-save">Save questions</button></div>' : '');
+      const grow = box => { if (large && box && box.style) { box.style.height = 'auto'; box.style.height = Math.max(84, box.scrollHeight + 2) + 'px'; } };
+      host.querySelectorAll('.ai-question-input').forEach(input => { grow(input); input.addEventListener('input', event => { list[Number(event.target.dataset.index)] = event.target.value; grow(event.target); if (draftMode) syncActions(); else setList(list.slice()); }); });
       host.querySelectorAll('.ai-question-remove').forEach(button => button.addEventListener('click', event => { list.splice(Number(event.currentTarget.dataset.index), 1); if (!draftMode) setList(list.slice()); paint(); }));
       // The sparkles button writes THAT line with the AI, from the job description and the lines that are in the field right now (the draft, not what is saved).
       host.querySelectorAll('.ai-question-sparkles').forEach(button => button.addEventListener('click', async event => {
@@ -766,6 +771,7 @@
       }
     };
     paint();
+    return { getDraft: () => list.slice(), setDraft: values => { list = padded((values || []).map(item => String(item ?? ''))); paint(); } };
   }
   let myProfile = null;
   let teamDirectory = [];
@@ -838,12 +844,14 @@
   }
   function setModal(html) {
     const applicantReview = html.includes('applicant-review-layout');
-    const wideModal = html.includes('id="job-description-modal"');
+    const wideModal = html.includes('id="job-description-modal"') || html.includes('id="ai-questions-modal"');
     modalRoot.innerHTML = `<div class="modal-backdrop${applicantReview ? ' applicant-review-backdrop' : ''}" role="presentation"><section class="modal${applicantReview ? ' applicant-review-shell' : ''}${wideModal ? ' modal-wide' : ''}" role="dialog" aria-modal="true">${html}</section></div>`;
     modalRoot.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) closeModal(); });
     modalRoot.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', closeModal));
   }
-  function closeModal() { modalRoot.innerHTML = ''; root.querySelector('.app-shell')?.classList.remove('is-creating-flow'); }
+  // A window can ask to be told when it closes (the interview questions window hands its unsaved draft back to the panel).
+  let modalCloseHook = null;
+  function closeModal() { const hook = modalCloseHook; modalCloseHook = null; modalRoot.innerHTML = ''; root.querySelector('.app-shell')?.classList.remove('is-creating-flow'); if (hook) hook(); }
 
   // ---- Workspaces: a person can own up to 5 and belong to others. The header shows a selector; Settings lists them all. ----
   const MAX_OWNED_WORKSPACES = 5;
@@ -3961,6 +3969,18 @@
     area.focus(); area.setSelectionRange(area.value.length, area.value.length);
   }
 
+  // The AI interview questions in a larger window (desktop only), with everything the field in the panel does: write with AI, add, remove, Revert and
+  // Save questions. It starts from the draft in the panel; what is still unsaved when it closes goes back to the panel, so nothing typed here is lost.
+  function openInterviewQuestionsEditor(panelField, getList, setList, options) {
+    setModal('<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Job details</div><h2>AI interview questions</h2></div><button class="modal-x" data-close aria-label="Close">×</button></div><div id="ai-questions-modal"><div id="ai-questions-modal-field"></div></div><div class="modal-actions"><button class="btn btn-primary" data-close type="button">Done</button></div>');
+    const host = modalRoot.querySelector('#ai-questions-modal-field');
+    if (!host) return;
+    const bigField = mountInterviewQuestionsField(host, getList, setList, { ...options, large: true, initialDraft: panelField ? panelField.getDraft() : null });
+    modalCloseHook = () => { if (panelField && bigField) panelField.setDraft(bigField.getDraft()); };
+    host.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
+    host.querySelector('.ai-question-input')?.focus();
+  }
+
   function drawInspector() {
     const flow = currentFlow(), panel = document.getElementById('inspector'); if (!flow || !panel) return;
     const selected = flow.nodes.find(node => node.id === selectedId) || flow.nodes[0];
@@ -3969,7 +3989,7 @@
       ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><div class="field-label-row"><label for="role-description">Job description</label><button type="button" class="icon-btn expand-btn" id="expand-description" aria-label="Open the job description in a larger window" title="Larger window"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">Responsible</span><div id="role-responsible"></div></div><hr class="inspector-divider">`
       : '';
     // The AI interview questions are part of the job details but come LAST, below the candidate-details step.
-    const aiSection = selected.type === 'candidateInfo' ? '<hr class="inspector-divider"><div class="field-group" id="role-language-group"><label class="form-label" for="role-interview-language">AI interview language</label><select class="select-input" id="role-interview-language"></select><small class="field-help" id="role-language-help"></small></div><div class="field-group"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><div id="role-ai-questions"></div></div>' : '';
+    const aiSection = selected.type === 'candidateInfo' ? '<hr class="inspector-divider"><div class="field-group" id="role-language-group"><label class="form-label" for="role-interview-language">AI interview language</label><select class="select-input" id="role-interview-language"></select><small class="field-help" id="role-language-help"></small></div><div class="field-group"><div class="field-label-row"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><button type="button" class="icon-btn expand-btn" id="expand-ai-questions" aria-label="Open the AI interview questions in a larger window" title="Larger window"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div><div id="role-ai-questions"></div></div>' : '';
     panel.innerHTML = `<div class="mobile-details-bar"><button type="button" class="btn btn-sm" id="close-node-details">← Back to board</button></div>${roleSettings}<div class="inspector-title"><div><div class="inspector-kicker">Selected step</div><h2>${esc(title)}</h2></div>${selected.type === 'candidateInfo' ? '<span class="node-badge">Fixed start</span>' : ''}</div><div id="node-editor"></div>${aiSection}`;
     panel.querySelector('#close-node-details')?.addEventListener('click', closeNodeDetailsOnPhone);
     let refreshLanguage = () => {}; // set below, once the language field exists; the larger description window calls it too
@@ -3981,10 +4001,13 @@
     const responsibleHost = panel.querySelector('#role-responsible');
     if (responsibleHost) mountResponsibleField(responsibleHost, 'role-responsible-label', () => flow.responsibleIds || [], ids => { flow.responsibleIds = ids; save({ internal: true }); });
     // Like the responsible people, the questions are never shown to candidates, so editing them does not count as an unpublished change.
-    mountInterviewQuestionsField(panel.querySelector('#role-ai-questions'), () => flow.interviewQuestions || [], list => { flow.interviewQuestions = list; save({ internal: true }); }, {
+    const questionsOptions = {
       saveButtons: true,
       generate: others => window.PathwayBackend.generateInterviewQuestion({ workspaceId: workspace.id, jobTitle: flow.jobTitle, description: panel.querySelector('#role-description')?.value ?? flow.jobDescription, existing: others })
-    });
+    };
+    const questionsGet = () => flow.interviewQuestions || [], questionsSet = list => { flow.interviewQuestions = list; save({ internal: true }); };
+    const questionsField = mountInterviewQuestionsField(panel.querySelector('#role-ai-questions'), questionsGet, questionsSet, questionsOptions);
+    panel.querySelector('#expand-ai-questions')?.addEventListener('click', () => openInterviewQuestionsEditor(questionsField, questionsGet, questionsSet, questionsOptions));
     refreshLanguage = mountInterviewLanguageField(panel, flow, save);
     const editor = panel.querySelector('#node-editor');
     if (selected.type === 'candidateInfo') {

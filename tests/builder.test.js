@@ -176,7 +176,9 @@ test('the AI interview questions help text is accurate (no "out loud", no "leave
 test('the AI interview questions come last in the job details, below the candidate-details step', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
   const inspector = src.slice(src.indexOf('function drawInspector()'), src.indexOf('function updateNodeLabel(', src.indexOf('function drawInspector()')));
-  assert.match(inspector, /const aiSection = selected\.type === 'candidateInfo' \? '<hr class="inspector-divider"><div class="field-group" id="role-language-group">.*<div class="field-group"><span class="form-label" id="role-ai-questions-label">AI interview questions<\/span>/, 'the language of the interview comes right above the questions');
+  assert.ok(inspector.includes(`const aiSection = selected.type === 'candidateInfo' ? '<hr class="inspector-divider"><div class="field-group" id="role-language-group">`), 'the language of the interview comes first');
+  assert.ok(inspector.includes('<div class="field-group"><div class="field-label-row"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><button type="button" class="icon-btn expand-btn" id="expand-ai-questions"'), 'the questions have an expander next to the title');
+  assert.ok(inspector.indexOf('id="role-language-group"') < inspector.indexOf('id="role-ai-questions-label"'), 'the language comes right above the questions');
   assert.match(inspector, /<div id="node-editor"><\/div>\$\{aiSection\}`;/, 'after the step editor');
   const roleSettings = inspector.slice(inspector.indexOf('const roleSettings'), inspector.indexOf('const aiSection'));
   assert.equal(roleSettings.includes('role-ai-questions'), false, 'no longer between the job fields and the step');
@@ -205,7 +207,9 @@ test('AI interview questions in the job editor are a draft: they only reach the 
   assert.match(field, /setList\(kept\); list = padded\(kept\); paint\(\);/, 'saving sends the cleaned list once');
   assert.match(field, /Lines shorter than 3 characters were left out\./, 'the person is told what was left out');
   assert.match(field, /list = padded\(clean\(getList\(\) \|\| \[\]\)\); paint\(\);/, 'Revert goes back to the saved list');
-  assert.match(src, /mountInterviewQuestionsField\(panel\.querySelector\('#role-ai-questions'\)[\s\S]*?saveButtons: true,[\s\S]*?generate: others => window\.PathwayBackend\.generateInterviewQuestion\(\{ workspaceId: workspace\.id, jobTitle: flow\.jobTitle, description: panel\.querySelector\('#role-description'\)\?\.value \?\? flow\.jobDescription, existing: others \}\)/, 'the job editor uses the draft mode and the AI');
+  const questionsBlock = src.slice(src.indexOf('const questionsOptions = {'), src.indexOf("panel.querySelector('#expand-ai-questions')"));
+  assert.ok(questionsBlock.includes('saveButtons: true,') && questionsBlock.includes("generate: others => window.PathwayBackend.generateInterviewQuestion({ workspaceId: workspace.id, jobTitle: flow.jobTitle, description: panel.querySelector('#role-description')?.value ?? flow.jobDescription, existing: others })"));
+  assert.ok(questionsBlock.includes("mountInterviewQuestionsField(panel.querySelector('#role-ai-questions'), questionsGet, questionsSet, questionsOptions)"), 'the panel field and the large window share the same options');
   assert.equal(src.includes('#new-ai-questions'), false, 'the new-job form has no questions field');
 });
 
@@ -239,7 +243,7 @@ test('the job description can be opened in a larger window (desktop only) that e
   assert.match(src, /function openJobDescriptionEditor\(initial, onChange\) \{/);
   assert.match(src, /area\.addEventListener\('input', event => onChange\(event\.target\.value\)\);/, 'every key updates the job, like the small field');
   assert.match(src, /openJobDescriptionEditor\(flow\.jobDescription \|\| '', value => \{ syncRole\('jobDescription', value\); const small = panel\.querySelector\('#role-description'\); if \(small\) small\.value = value; refreshLanguage\(\); \}\)/, 'the small field follows the large one, and the language is detected again');
-  assert.match(src, /const wideModal = html\.includes\('id="job-description-modal"'\);/);
+  assert.ok(src.includes(`const wideModal = html.includes('id="job-description-modal"') || html.includes('id="ai-questions-modal"');`), 'the interview questions window is as wide as the description window');
   assert.match(css, /@media\(max-width:760px\)\{\.expand-btn\{display:none\}\}/, 'not on phones');
   assert.match(css, /\.modal\.modal-wide\{width:min\(100%,820px\)\}/);
 });
