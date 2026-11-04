@@ -917,5 +917,6 @@ body:has(#canvas-stage) .toast{bottom:80px}
   .editor-layout.is-mobile-details .inspector{border-top:0}
   .app-shell.is-mobile-details .topbar,.editor-main.is-mobile-details .editor-top{display:none}
   .editor-main .editor-layout.is-mobile-details{height:auto;min-height:100dvh}
-  .mobile-details-bar{display:block;position:sticky;top:0;z-index:5;margin:-17px -17px 18px;padding:10px 17px;background:var(--surface);border-bottom:1px solid var(--line)}
+  .mobile-details-bar{display:block;position:fixed;top:0;left:0;right:0;z-index:30;margin:0;padding:10px 17px;background:var(--surface);border-bottom:1px solid var(--line)}
+  .editor-layout.is-mobile-details .inspector{padding-top:74px}
 }

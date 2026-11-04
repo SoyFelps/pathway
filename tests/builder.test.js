@@ -159,3 +159,9 @@ test('phone editor: inside a step only "Back to board" is left at the top (the j
   assert.match(src, /document\.querySelector\('\.app-shell'\)\?\.classList\.toggle\('is-mobile-details', details\);/);
   assert.match(css, /\.app-shell\.is-mobile-details \.topbar,\.editor-main\.is-mobile-details \.editor-top\{display:none\}/);
 });
+
+test('phone editor: the "Back to board" bar stays fixed at the top while the details scroll', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.match(css, /\.mobile-details-bar\{display:block;position:fixed;top:0;left:0;right:0;/);
+  assert.match(css, /\.editor-layout\.is-mobile-details \.inspector\{padding-top:74px\}/);
+});
