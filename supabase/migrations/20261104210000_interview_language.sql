@@ -11,7 +11,7 @@
 --    questions) and goes out by itself once a person chooses the language. Nothing is sent in a language that nobody decided.
 --
 -- Additive: no existing row changes. The privileges of application_flows are table-wide for the signed-in role, as before, so the new columns
--- need no new grant. After applying this, existing jobs get their language with tools\backfill-interview-language.js (detected from
+-- need no new grant. After applying this, a job that already has interview questions needs its language set ONCE (detected from
 -- the description and checked by a person), so interviews that work today keep working (production had one: Cook, English).
 --
 -- To undo (only while no interview waits for a language):
