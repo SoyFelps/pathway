@@ -100,7 +100,10 @@ test('deleting a step offers an Undo that lasts only until the next action', () 
   assert.match(del, /const snapshot = JSON\.parse\(JSON\.stringify\(\{ nodes: flow\.nodes, edges: flow\.edges \}\)\)/, 'the flow is saved before the step goes away');
   assert.match(del, /offerUndoDelete\(currentId, snapshot, selectedBefore\)/);
   assert.equal(del.includes("showToast('Step deleted."), false, 'the old toast is replaced by the Undo bar');
-  assert.match(src, /\['pointerdown', 'keydown', 'wheel'\]\.forEach\(type => document\.addEventListener\(type, event => \{[\s\S]*clearUndoDelete\(\);[\s\S]*\}, true\)\);/, 'any click, key or scroll removes the offer');
+  assert.match(src, /\['pointerdown', 'keydown'\]\.forEach\(type => document\.addEventListener\(type, event => \{[\s\S]*clearUndoDelete\(\);[\s\S]*\}, true\)\);/, 'a click on something else or a key removes the offer');
+  const undoBlock = src.slice(src.indexOf('let undoDelete = null;'), src.indexOf("window.addEventListener('hashchange', clearUndoDelete);"));
+  assert.equal(undoBlock.includes('wheel'), false, 'scrolling does not remove the offer');
+  assert.match(src, /type === 'pointerdown' && target && target\.closest\('#workspace'\) && !target\.closest\(CANVAS_THINGS\)\) return;/, 'dragging the empty canvas background does not remove it');
   assert.match(src, /closest\('#undo-delete-bar'\)\) return;/, 'using the Undo button itself does not remove it first');
   assert.match(src, /window\.addEventListener\('hashchange', clearUndoDelete\);/);
   assert.match(src, /function setRoute\(route\) \{\n    const hash = `#\$\{route\}`;[\s\S]*?if \(window\.location\.hash !== hash\) clearUndoDelete\(\);/, 'another page removes it, but the automatic save refreshing the SAME address does not (that removed it after about a second)');

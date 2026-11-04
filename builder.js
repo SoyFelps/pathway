@@ -168,8 +168,8 @@
     toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove('show'), duration);
   }
-  // Undo for a deleted step. It is offered ONLY right after the deletion: any other action (a click, a key, scrolling or zooming the canvas,
-  // adding or moving a step, opening another page) removes the offer for good.
+  // Undo for a deleted step. It is offered ONLY right after the deletion: any other action (a click on something else, a key, adding or moving a step,
+  // opening another page) removes the offer for good. Scrolling and dragging the empty canvas background (to look around) do not.
   let undoDelete = null;
   function clearUndoDelete() {
     undoDelete = null;
@@ -193,9 +193,12 @@
     clearUndoDelete();
     save(); renderEditor(); showToast('Step restored.');
   }
-  ['pointerdown', 'keydown', 'wheel'].forEach(type => document.addEventListener(type, event => {
+  const CANVAS_THINGS = '.node, .port, .target-port, .edge-path, .edge-hit, .canvas-toolbar, button, input, textarea, select'; // same list the canvas uses to tell the background from a step
+  ['pointerdown', 'keydown'].forEach(type => document.addEventListener(type, event => {
     if (!undoDelete) return;
-    if (event.target && event.target.closest && event.target.closest('#undo-delete-bar')) return; // using the Undo button itself
+    const target = event.target && event.target.closest ? event.target : null;
+    if (target && target.closest('#undo-delete-bar')) return; // using the Undo button itself
+    if (type === 'pointerdown' && target && target.closest('#workspace') && !target.closest(CANVAS_THINGS)) return; // dragging the empty background only moves the view
     if (type === 'keydown' && (event.key === 'Tab' || event.key === 'Shift')) return; // only moving the focus (keyboard users must be able to reach Undo)
     clearUndoDelete();
   }, true));
