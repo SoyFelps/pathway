@@ -181,3 +181,11 @@ test('the AI interview questions come last in the job details, below the candida
   const roleSettings = inspector.slice(inspector.indexOf('const roleSettings'), inspector.indexOf('const aiSection'));
   assert.equal(roleSettings.includes('role-ai-questions'), false, 'no longer between the job fields and the step');
 });
+
+test('each AI interview question has a sparkles button next to the remove button (no action yet)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const field = src.slice(src.indexOf('function mountInterviewQuestionsField('), src.indexOf('let myProfile = null;'));
+  assert.match(field, /class="icon-btn ai-question-sparkles"[^>]*aria-label="Improve question ' \+ \(index \+ 1\) \+ ' with AI"><svg/);
+  assert.ok(field.indexOf('ai-question-sparkles') < field.indexOf('ai-question-remove'), 'sparkles come right before the remove button');
+  assert.equal(field.includes("querySelectorAll('.ai-question-sparkles')"), false, 'no action yet');
+});
