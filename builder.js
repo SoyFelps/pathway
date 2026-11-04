@@ -676,13 +676,15 @@
   function mountInterviewQuestionsField(host, getList, setList, options) {
     if (!host) return;
     let list = (getList() || []).map(item => String(item ?? ''));
-    while (list.length < 3) list.push('');
+    // The new-job form starts with three empty lines; the job editor shows only the saved questions (at least one line): no empty lines are added for the person.
+    const minRows = options && options.saveButtons ? 1 : 3;
+    while (list.length < minRows) list.push('');
     // With saveButtons (the job editor) the lines are a DRAFT: the job only gets them when the person clicks "Save questions" ("Revert" or leaving the
     // page drops the draft). So a half-typed question, or one an AI fills in, can never reach an interview by accident. Without it (the new-job form) every change is kept at once.
     const draftMode = Boolean(options && options.saveButtons);
     const clean = values => window.PathwayBackend.cleanInterviewQuestions(values);
     const isDirty = () => JSON.stringify(clean(list)) !== JSON.stringify(clean(getList() || []));
-    const padded = values => { const copy = values.map(item => String(item ?? '')); while (copy.length < 3) copy.push(''); return copy; };
+    const padded = values => { const copy = values.map(item => String(item ?? '')); while (copy.length < minRows) copy.push(''); return copy; };
     const syncActions = () => {
       if (!draftMode) return;
       const saveButton = host.querySelector('#ai-questions-save'), revertButton = host.querySelector('#ai-questions-revert'), status = host.querySelector('#ai-questions-status');

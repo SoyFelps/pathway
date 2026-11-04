@@ -219,3 +219,12 @@ test('unsaved AI interview questions are highlighted (amber status and a subtle 
   assert.match(css, /#inspector \.field-group\.has-unsaved\{outline:1px solid var\(--amber-border\);outline-offset:8px;/);
   assert.match(css, /#inspector \.field-group\.has-unsaved \.ai-questions-status\{color:var\(--amber-dark\);font-weight:700\}/);
 });
+
+test('the job editor shows only the saved AI interview questions (at least one line), never empty lines added on its own', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const field = src.slice(src.indexOf('function mountInterviewQuestionsField('), src.indexOf('let myProfile = null;'));
+  assert.match(field, /const minRows = options && options\.saveButtons \? 1 : 3;/, 'one line in the editor, three in the new-job form');
+  assert.match(field, /while \(list\.length < minRows\) list\.push\(''\);/);
+  assert.match(field, /while \(copy\.length < minRows\) copy\.push\(''\);/, 'saving or reverting does not add empty lines either');
+  assert.equal(/length < 3\)/.test(field), false, 'no fixed three lines left');
+});
