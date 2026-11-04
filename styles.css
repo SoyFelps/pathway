@@ -874,7 +874,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .ai-questions{display:flex;flex-direction:column;gap:8px}
 .ai-question-row{display:flex;align-items:center;gap:6px}
 .ai-question-row .text-input{flex:1 1 auto;min-width:0}
-@media(max-width:760px){.applicant-ai-close{display:inline-flex}.applicant-right-bar{padding:0 10px}.applicant-right-bar:not(.has-ai){display:none}.applicant-right-close{display:none}.applicant-review-left .applicant-detail-head .modal-x{display:block}}
+@media(max-width:760px){.applicant-ai-close{display:inline-flex;align-items:center;justify-content:center;min-width:84px;min-height:42px;padding:0 20px;font-size:14px}.applicant-right-bar{padding:0 10px}.applicant-right-bar:not(.has-ai){display:none}.applicant-right-close{display:none}.applicant-review-left .applicant-detail-head .modal-x{display:block}}
 
 /* Applicants board: on a computer screen the board is exactly as tall as the window, and it is the thing that scrolls, in both directions.
    So the horizontal scroll bar sits at the bottom edge of the window and the vertical one at its right edge, always in view, however

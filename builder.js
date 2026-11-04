@@ -3338,7 +3338,9 @@
       pdfPages.hidden = true; pdfPages.textContent = '';
     };
     const loadPreview = async (trigger = previewButton) => {
-      if (!trigger || !previewPanel.classList.contains('is-hidden')) return;
+      if (!trigger) return;
+      // The resume may already be open (it stays open while the person looks at the AI interview): just bring it back to the front, on phones too.
+      if (!previewPanel.classList.contains('is-hidden')) { reviewLayout.classList.add('is-previewing'); return; }
       trigger.disabled = true; trigger.textContent = 'Preparing preview…';
       try {
         if (needsDrawnPdf()) {

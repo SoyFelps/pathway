@@ -75,3 +75,10 @@ test('moving a candidate that no longer exists tells the person to press Refresh
   assert.ok(move.includes("else showToast(`Could not update applicant stage:"), 'other failures keep the generic message');
   assert.ok(builder.includes('function showToast(message, duration = 2400)'), 'a message that asks for an action stays longer on screen');
 });
+
+test('on phones: Preview resume works again after closing the AI interview, and the AI Close button is easy to tap', () => {
+  const src = details();
+  assert.match(src, /if \(!previewPanel\.classList\.contains\('is-hidden'\)\) \{ reviewLayout\.classList\.add\('is-previewing'\); return; \}/, 'an already open resume is brought back to the front');
+  assert.equal(src.includes("if (!trigger || !previewPanel.classList.contains('is-hidden')) return;"), false);
+  assert.match(read('styles.css'), /@media\(max-width:760px\)\{\.applicant-ai-close\{display:inline-flex;[^}]*min-height:42px;/);
+});
