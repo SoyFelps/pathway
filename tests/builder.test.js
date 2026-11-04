@@ -165,3 +165,10 @@ test('phone editor: the "Back to board" bar stays fixed at the top while the det
   assert.match(css, /\.mobile-details-bar\{display:block;position:fixed;top:0;left:0;right:0;/);
   assert.match(css, /\.editor-layout\.is-mobile-details \.inspector\{padding-top:74px\}/);
 });
+
+test('the AI interview questions help text is accurate (no "out loud", no "leave them empty")', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  assert.ok(src.includes('These are the questions the AI asks the candidate in the AI Interview, with one follow-up for each.'));
+  assert.equal(src.includes('out loud'), false);
+  assert.equal(src.includes('Leave them empty'), false);
+});
