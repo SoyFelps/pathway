@@ -176,7 +176,7 @@ test('the AI interview questions help text is accurate (no "out loud", no "leave
 test('the AI interview questions come last in the job details, below the candidate-details step', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
   const inspector = src.slice(src.indexOf('function drawInspector()'), src.indexOf('function updateNodeLabel(', src.indexOf('function drawInspector()')));
-  assert.match(inspector, /const aiSection = selected\.type === 'candidateInfo' \? '<hr class="inspector-divider"><div class="field-group"><span class="form-label" id="role-ai-questions-label">AI interview questions<\/span>/);
+  assert.match(inspector, /const aiSection = selected\.type === 'candidateInfo' \? '<hr class="inspector-divider"><div class="field-group" id="role-language-group">.*<div class="field-group"><span class="form-label" id="role-ai-questions-label">AI interview questions<\/span>/, 'the language of the interview comes right above the questions');
   assert.match(inspector, /<div id="node-editor"><\/div>\$\{aiSection\}`;/, 'after the step editor');
   const roleSettings = inspector.slice(inspector.indexOf('const roleSettings'), inspector.indexOf('const aiSection'));
   assert.equal(roleSettings.includes('role-ai-questions'), false, 'no longer between the job fields and the step');
@@ -238,7 +238,7 @@ test('the job description can be opened in a larger window (desktop only) that e
   assert.match(src, /id="expand-description" aria-label="Open the job description in a larger window"/);
   assert.match(src, /function openJobDescriptionEditor\(initial, onChange\) \{/);
   assert.match(src, /area\.addEventListener\('input', event => onChange\(event\.target\.value\)\);/, 'every key updates the job, like the small field');
-  assert.match(src, /openJobDescriptionEditor\(flow\.jobDescription \|\| '', value => \{ syncRole\('jobDescription', value\); const small = panel\.querySelector\('#role-description'\); if \(small\) small\.value = value; \}\)/, 'the small field follows the large one');
+  assert.match(src, /openJobDescriptionEditor\(flow\.jobDescription \|\| '', value => \{ syncRole\('jobDescription', value\); const small = panel\.querySelector\('#role-description'\); if \(small\) small\.value = value; refreshLanguage\(\); \}\)/, 'the small field follows the large one, and the language is detected again');
   assert.match(src, /const wideModal = html\.includes\('id="job-description-modal"'\);/);
   assert.match(css, /@media\(max-width:760px\)\{\.expand-btn\{display:none\}\}/, 'not on phones');
   assert.match(css, /\.modal\.modal-wide\{width:min\(100%,820px\)\}/);

@@ -22,19 +22,26 @@ export function deletionRetryDelaySeconds(attempts: number): number {
   return Math.min(3600, 60 * 2 ** Math.min(Math.max(attempts, 1) - 1, 6));
 }
 
-export type BlockReason = "no_questions" | "no_plan" | "no_company_name";
+export type BlockReason = "no_questions" | "no_plan" | "no_company_name" | "no_language";
+
+/** The languages an AI interview can be held in (Witcher supports exactly these). */
+export const INTERVIEW_LANGUAGES = ["en", "pt", "es"] as const;
+export type InterviewLanguage = typeof INTERVIEW_LANGUAGES[number];
+export const isInterviewLanguage = (value: unknown): value is InterviewLanguage => (INTERVIEW_LANGUAGES as readonly string[]).includes(String(value));
 export type SendVerdict = { ok: true } | { ok: false; action: "drop" } | { ok: false; action: "block"; reason: BlockReason };
 
 /**
  * Whether a waiting interview may be created now. The card must still be in the AI Interview column (otherwise the row is
- * dropped), the job needs its questions, and the workspace needs an active Premium plan.
+ * dropped), the job needs its questions, the workspace needs an active Premium plan, and the job needs a language (the one of the job
+ * description, detected or chosen in the job editor): nothing is sent in a language nobody decided.
  */
-export function checkSendable(input: { questions: unknown; premium: boolean; stillInColumn: boolean; companyName: string }): SendVerdict {
+export function checkSendable(input: { questions: unknown; premium: boolean; stillInColumn: boolean; companyName: string; language: unknown }): SendVerdict {
   if (!input.stillInColumn) return { ok: false, action: "drop" };
   const questions = cleanQuestions(input.questions);
   if (questions.length === 0) return { ok: false, action: "block", reason: "no_questions" };
   if (!input.premium) return { ok: false, action: "block", reason: "no_plan" };
   if (!input.companyName.trim()) return { ok: false, action: "block", reason: "no_company_name" };
+  if (!isInterviewLanguage(input.language)) return { ok: false, action: "block", reason: "no_language" };
   return { ok: true };
 }
 
@@ -57,6 +64,7 @@ export interface CreateInput {
   logoUrl: string | null;
   color?: string | null; // the company's primary colour (#rrggbb); Witcher paints the interview page and e-mail with it
   questions: unknown;
+  language: InterviewLanguage; // the language of the job description: Witcher talks, expects the answers and writes in it
 }
 
 export function buildCreateBody(input: CreateInput): Record<string, unknown> {
@@ -70,6 +78,7 @@ export function buildCreateBody(input: CreateInput): Record<string, unknown> {
       ...(/^#[0-9a-fA-F]{6}$/.test(input.color || "") ? { color: String(input.color).toLowerCase() } : {}),
     },
     questions: cleanQuestions(input.questions),
+    language: input.language,
   };
 }
 

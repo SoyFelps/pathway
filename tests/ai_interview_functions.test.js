@@ -32,15 +32,20 @@ test('a Witcher signature is checked the same way Witcher makes it, and stale or
   assert.equal(await verifyWebhook('s3cret', 'abc', sign('s3cret', now, body), body, now), false);
 });
 
-test('only a candidate still in the column, with questions and a Premium plan, is sent', async () => {
+test('only a candidate still in the column, with questions, a Premium plan and a language for the job, is sent', async () => {
   const { checkSendable } = await logic();
-  const ok = { questions: ['Tell us about yourself.'], premium: true, stillInColumn: true, companyName: 'CoreFront' };
+  const ok = { questions: ['Tell us about yourself.'], premium: true, stillInColumn: true, companyName: 'CoreFront', language: 'en' };
   assert.deepEqual(checkSendable(ok), { ok: true });
   assert.deepEqual(checkSendable({ ...ok, stillInColumn: false }), { ok: false, action: 'drop' });
   assert.deepEqual(checkSendable({ ...ok, questions: [] }), { ok: false, action: 'block', reason: 'no_questions' });
   assert.deepEqual(checkSendable({ ...ok, questions: ['hi', 12, null] }), { ok: false, action: 'block', reason: 'no_questions' }, 'too short or not text');
   assert.deepEqual(checkSendable({ ...ok, premium: false }), { ok: false, action: 'block', reason: 'no_plan' });
   assert.deepEqual(checkSendable({ ...ok, companyName: '  ' }), { ok: false, action: 'block', reason: 'no_company_name' });
+  assert.deepEqual(checkSendable({ ...ok, language: null }), { ok: false, action: 'block', reason: 'no_language' }, 'nothing is sent in a language nobody decided');
+  assert.deepEqual(checkSendable({ ...ok, language: undefined }), { ok: false, action: 'block', reason: 'no_language' });
+  assert.deepEqual(checkSendable({ ...ok, language: 'fr' }), { ok: false, action: 'block', reason: 'no_language' }, 'only the three languages of the interview');
+  assert.deepEqual(checkSendable({ ...ok, language: 'pt' }), { ok: true });
+  assert.deepEqual(checkSendable({ ...ok, language: 'es' }), { ok: true });
   assert.deepEqual(checkSendable({ ...ok, stillInColumn: false, premium: false }), { ok: false, action: 'drop' }, 'a card that left is dropped before anything else');
 });
 

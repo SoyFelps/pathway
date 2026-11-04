@@ -383,6 +383,7 @@
 .company-form .modal-actions{margin-top:16px;padding-top:16px;border-top:1px solid var(--border-subtle)}
 @media(max-width:520px){.company-brand-row{flex-direction:column;align-items:flex-start}.company-brand-control{max-width:none;align-items:flex-start}}
 .field-help{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:6px}
+.field-help.is-warning{color:var(--amber-text)}
 .company-form-error:not(.show){display:none}
 /* Public job page header: the Pathway mark, then (only when the company has a logo) a thin divider and that logo. */
 .candidate-header-brands{display:flex;align-items:center;gap:16px;min-width:0}

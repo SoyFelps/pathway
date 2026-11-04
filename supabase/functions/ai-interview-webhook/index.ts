@@ -123,7 +123,7 @@ async function retryLater(row: Row, code: string, extra: Record<string, unknown>
 
 async function sendRow(row: Row): Promise<"sent" | "blocked" | "dropped" | "retry" | "failed"> {
   const { data: flow, error: flowError } = await admin!.from("application_flows")
-    .select("id,job_title,interview_questions,company_id,workspace_id").eq("id", row.flow_id).maybeSingle();
+    .select("id,job_title,interview_questions,interview_language,company_id,workspace_id").eq("id", row.flow_id).maybeSingle();
   if (flowError) throw flowError;
   if (!flow) { await admin!.from("ai_interviews").delete().eq("id", row.id).in("state", ["pending", "blocked"]); return "dropped"; }
 
@@ -146,6 +146,7 @@ async function sendRow(row: Row): Promise<"sent" | "blocked" | "dropped" | "retr
     // An interview made on purpose with "Invite again" is sent whatever column the card is in.
     stillInColumn: row.manual === true || applications.some((application) => application.status === "ai_interview"),
     companyName,
+    language: flow.interview_language,
   });
   if (!verdict.ok) {
     if (verdict.action === "drop") {
@@ -170,6 +171,7 @@ async function sendRow(row: Row): Promise<"sent" | "blocked" | "dropped" | "retr
       logoUrl: companyLogoUrl(projectUrl, company?.logo_path),
       color: company?.primary_color ?? null,
       questions: flow.interview_questions,
+      language: flow.interview_language,
     }));
 
   if (!result.ok) {

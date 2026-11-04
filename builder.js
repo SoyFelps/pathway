@@ -453,7 +453,8 @@
   const AI_BLOCK_TEXT = {
     no_questions: ['Add interview questions', 'This job has no AI interview questions yet. Add them in the job details (first step); the interview goes out by itself once they are there.'],
     no_plan: ['Premium needed', 'AI interviews are part of the Premium plan. The interview goes out by itself once the workspace has an active plan.'],
-    no_company_name: ['Company name missing', 'The company needs a name before the interview can be sent.']
+    no_company_name: ['Company name missing', 'The company needs a name before the interview can be sent.'],
+    no_language: ['Choose the interview language', 'Choose the language of this job in the job details (first step). The interview goes out by itself once it is set.']
   };
   // [label, tone] of the small tag on a candidate's card
   function aiInterviewTag(row) {
@@ -673,6 +674,39 @@
     void load();
   }
   // The questions the AI asks in the interview (1 to 5, three lines to start with). Empty lines are ignored; with none, the interview is not sent.
+  // The language of the AI interview is the language of the job description (owner decision, 2026-11-04). It is detected while the employer
+  // types and shown here; choosing another one is always possible, and a language chosen on purpose is never changed by later edits of
+  // the description. Without a language the interview waits (see AI_BLOCK_TEXT.no_language). Returns a function that runs the detection again.
+  function mountInterviewLanguageField(panel, flow, saveFlow) {
+    const select = panel.querySelector('#role-interview-language'), help = panel.querySelector('#role-language-help');
+    const description = panel.querySelector('#role-description');
+    const L = window.PathwayLanguage;
+    if (!select || !help || !L) return () => {};
+    const text = () => (description ? description.value : flow.jobDescription || '');
+    const paint = () => {
+      const chosen = flow.interviewLanguage;
+      select.innerHTML = '<option value=""' + (chosen ? '' : ' selected') + ' disabled>Choose the language…</option>' + L.LANGUAGES.map(code => '<option value="' + code + '"' + (chosen === code ? ' selected' : '') + '>' + esc(L.NAMES[code]) + '</option>').join('');
+      let note;
+      if (!chosen) note = 'We could not tell the language of the job description. Choose it: AI interviews are only sent once the language is set.';
+      else if (flow.interviewLanguageManual) { const found = L.detect(text()); note = 'Chosen by you.' + (found.code && found.code !== chosen ? ' The description looks like ' + L.NAMES[found.code] + '.' : ''); }
+      else note = 'Detected from the job description.';
+      help.textContent = note + ' The AI talks to candidates in this language and expects their answers in it.';
+      help.classList.toggle('is-warning', !chosen);
+    };
+    const detect = () => {
+      if (!flow.interviewLanguageManual) {
+        const found = L.detect(text());
+        if (found.code && found.code !== flow.interviewLanguage) { flow.interviewLanguage = found.code; saveFlow({ internal: true }); }
+      }
+      paint();
+    };
+    select.addEventListener('change', () => { flow.interviewLanguage = select.value || null; flow.interviewLanguageManual = true; saveFlow({ internal: true }); paint(); });
+    let timer = 0;
+    if (description) description.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(detect, 400); });
+    detect();
+    return detect;
+  }
+
   function mountInterviewQuestionsField(host, getList, setList, options) {
     if (!host) return;
     let list = (getList() || []).map(item => String(item ?? ''));
@@ -2492,7 +2526,7 @@
       const live = interview.live;
       if (aiInterviewPurged(interview.rows[0])) add('aiInterviewResult', '', { impression: interview.rows[0].impression, note: aiPurgedText(interview.rows[0].impression) });
       else if (live && live.status === 'completed') {
-        add('aiInterviewResult', '', { impression: live.impression, evaluation: live.evaluation, answeredInEnglishOnly: live.languageFlag ? 'no (an answer in another language sets the impression to negative)' : 'yes' });
+        add('aiInterviewResult', '', { impression: live.impression, evaluation: live.evaluation, answeredInJobLanguage: live.languageFlag ? 'no (an answer in another language than the one of the job sets the impression to negative)' : 'yes' });
         (live.messages || []).filter(message => message.kind !== 'closing').forEach(message => add('aiInterviewTranscript', String(message.seq), {
           speaker: message.role === 'ai' ? 'AI interviewer' : 'Candidate',
           type: message.kind,
@@ -3935,14 +3969,15 @@
       ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><div class="field-label-row"><label for="role-description">Job description</label><button type="button" class="icon-btn expand-btn" id="expand-description" aria-label="Open the job description in a larger window" title="Larger window"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">Responsible</span><div id="role-responsible"></div></div><hr class="inspector-divider">`
       : '';
     // The AI interview questions are part of the job details but come LAST, below the candidate-details step.
-    const aiSection = selected.type === 'candidateInfo' ? '<hr class="inspector-divider"><div class="field-group"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><div id="role-ai-questions"></div></div>' : '';
+    const aiSection = selected.type === 'candidateInfo' ? '<hr class="inspector-divider"><div class="field-group" id="role-language-group"><label class="form-label" for="role-interview-language">AI interview language</label><select class="select-input" id="role-interview-language"></select><small class="field-help" id="role-language-help"></small></div><div class="field-group"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><div id="role-ai-questions"></div></div>' : '';
     panel.innerHTML = `<div class="mobile-details-bar"><button type="button" class="btn btn-sm" id="close-node-details">← Back to board</button></div>${roleSettings}<div class="inspector-title"><div><div class="inspector-kicker">Selected step</div><h2>${esc(title)}</h2></div>${selected.type === 'candidateInfo' ? '<span class="node-badge">Fixed start</span>' : ''}</div><div id="node-editor"></div>${aiSection}`;
     panel.querySelector('#close-node-details')?.addEventListener('click', closeNodeDetailsOnPhone);
+    let refreshLanguage = () => {}; // set below, once the language field exists; the larger description window calls it too
     const syncRole = (key, value) => { flow[key] = value; const crumb = document.querySelector('.crumb-title'); if (crumb && key === 'jobTitle') crumb.textContent = value || 'Untitled role'; save(); };
     panel.querySelector('#role-company-profile')?.addEventListener('change', event => { const company = companies.find(item => item.id === event.target.value) || null; flow.companyId = company?.id || null; flow.companyProfile = companySnapshot(company); flow.companyName = company?.name || workspace.name; save(); });
     panel.querySelector('#role-title')?.addEventListener('input', event => syncRole('jobTitle', event.target.value));
     panel.querySelector('#role-description')?.addEventListener('input', event => syncRole('jobDescription', event.target.value));
-    panel.querySelector('#expand-description')?.addEventListener('click', () => openJobDescriptionEditor(flow.jobDescription || '', value => { syncRole('jobDescription', value); const small = panel.querySelector('#role-description'); if (small) small.value = value; }));
+    panel.querySelector('#expand-description')?.addEventListener('click', () => openJobDescriptionEditor(flow.jobDescription || '', value => { syncRole('jobDescription', value); const small = panel.querySelector('#role-description'); if (small) small.value = value; refreshLanguage(); }));
     const responsibleHost = panel.querySelector('#role-responsible');
     if (responsibleHost) mountResponsibleField(responsibleHost, 'role-responsible-label', () => flow.responsibleIds || [], ids => { flow.responsibleIds = ids; save({ internal: true }); });
     // Like the responsible people, the questions are never shown to candidates, so editing them does not count as an unpublished change.
@@ -3950,6 +3985,7 @@
       saveButtons: true,
       generate: others => window.PathwayBackend.generateInterviewQuestion({ workspaceId: workspace.id, jobTitle: flow.jobTitle, description: panel.querySelector('#role-description')?.value ?? flow.jobDescription, existing: others })
     });
+    refreshLanguage = mountInterviewLanguageField(panel, flow, save);
     const editor = panel.querySelector('#node-editor');
     if (selected.type === 'candidateInfo') {
       editor.innerHTML = `<div class="inspector-note">This is the fixed first step. Name, email, and resume are always included. Every detail you tick is required: candidates must fill it in to continue (where a list offers “Prefer not to say”, that counts as an answer).</div><div class="section-small">Always included</div>${[['name', 'Full name'], ['email', 'Email address'], ['resume', 'Resume link']].map(([key, label]) => `<label class="locked-field"><input type="checkbox" class="check" checked disabled><span>${label}</span><small>Required</small></label>`).join('')}<div class="section-small">Optional details</div>${C.OPTIONAL_FIELDS.map(field => `<label class="toggle-field"><span>${esc(field.label)}${field.hint ? `<small>${esc(field.hint)}</small>` : ''}</span><input type="checkbox" class="check optional-field" data-field="${esc(field.key)}" ${flow.candidateInfoFields[field.key] ? 'checked' : ''}></label>`).join('')}<p class="connection-help">The selected details appear directly on the public job application page.</p>`;

@@ -19,10 +19,10 @@ test('migration keeps the responsible list in its own column, cleans it on every
 
 test('the responsible people never travel inside flow_data or the public published snapshot', () => {
   const backend = read('backend.js');
-  const destructures = backend.match(/activePublishedFlowId, publishedAt, responsibleIds, interviewQuestions, \.\.\.flowData \} = flow;/g) || [];
-  assert.equal(destructures.length, 2, 'both the draft save and the publish snapshot strip responsibleIds and the interview questions');
-  assert.ok(backend.includes('responsible_user_ids: Array.isArray(responsibleIds) ? responsibleIds : [], interview_questions: cleanInterviewQuestions(interviewQuestions), flow_data: flowData'));
-  assert.ok(backend.includes("flow_data,responsible_user_ids,interview_questions,publication_status"));
+  const destructures = backend.match(/activePublishedFlowId, publishedAt, responsibleIds, interviewQuestions, interviewLanguage, interviewLanguageManual, \.\.\.flowData \} = flow;/g) || [];
+  assert.equal(destructures.length, 2, 'both the draft save and the publish snapshot strip responsibleIds, the interview questions and the interview language');
+  assert.ok(backend.includes('responsible_user_ids: Array.isArray(responsibleIds) ? responsibleIds : [], interview_questions: cleanInterviewQuestions(interviewQuestions), interview_language: cleanInterviewLanguage(interviewLanguage), interview_language_manual: interviewLanguageManual === true, flow_data: flowData'));
+  assert.ok(backend.includes("flow_data,responsible_user_ids,interview_questions,interview_language,interview_language_manual,publication_status"));
   assert.ok(backend.includes("client.rpc('list_workspace_people', { p_workspace_id: workspaceId })"));
 });
 
