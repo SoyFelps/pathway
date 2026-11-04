@@ -651,7 +651,7 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 /* Reports: job chooser with search, paged jobs list, auto-fail groups. */
 .rpt-picker{position:relative}
 .rpt-picker-field{position:relative}
-.rpt-picker-input{width:330px;max-width:100%;min-width:170px;padding-right:38px;background-image:none;text-overflow:ellipsis}
+.rpt-picker-input{width:240px;max-width:100%;min-width:170px;padding-right:38px;background-image:none;text-overflow:ellipsis}
 .rpt-picker-input[aria-expanded="true"] ~ .job-combobox-chevron{transform:translateY(-50%) rotate(180deg)}
 .rpt-jobs-tools{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
 .rpt-more{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px}
