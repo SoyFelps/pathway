@@ -383,6 +383,8 @@
 @media(max-width:520px){.company-brand-row{flex-direction:column;align-items:flex-start}.company-brand-control{max-width:none;align-items:flex-start}}
 .field-help{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:6px}
 .field-help.is-warning{color:var(--amber-text)}
+/* Job editor on a computer: the board and the details fill what is left under the header (whatever its height, one line or two), so the page itself never scrolls just because the header is a little taller than a fixed number. On a window too short for the board (520px) the page scrolls as before. */
+@media(min-width:761px){.editor-main{height:calc(100vh - 70px)}.editor-main .editor-layout{flex:1 1 auto;height:auto;min-height:520px;grid-template-rows:minmax(0,1fr)}}
 .company-form-error:not(.show){display:none}
 /* Public job page header: the Pathway mark, then (only when the company has a logo) a thin divider and that logo. */
 .candidate-header-brands{display:flex;align-items:center;gap:16px;min-width:0}
