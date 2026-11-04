@@ -3587,6 +3587,21 @@
     clearUndoDelete(); currentId = id; C.lockEndSteps(currentFlow()); selectedId = currentFlow().nodes.find(node => node.type === 'candidateInfo').id; renderEditor();
   }
 
+  // "Add a step" and the zoom controls sit together, centred in the canvas area (not in the whole window: the settings panel is on the right).
+  // On phones the CSS keeps its own layout, so the inline positions are cleared.
+  function placeCanvasControls() {
+    const view = document.getElementById('workspace'), add = document.getElementById('add-node'), zoom = document.getElementById('canvas-zoom-controls'), status = document.getElementById('canvas-status');
+    if (!view || !add || !zoom) return;
+    if (!window.matchMedia('(min-width: 761px)').matches) { [add, zoom, status].forEach(item => { if (item) { item.style.left = ''; item.style.translate = ''; } }); return; }
+    const center = view.getBoundingClientRect().left + view.clientWidth / 2;
+    const gap = 12, total = add.offsetWidth + gap + zoom.offsetWidth;
+    add.style.translate = 'none';
+    add.style.left = (center - total / 2) + 'px';
+    zoom.style.left = (center - total / 2 + add.offsetWidth + gap) + 'px';
+    if (status) status.style.left = center + 'px';
+  }
+  window.addEventListener('resize', placeCanvasControls);
+
   function renderEditor() {
     const flow = currentFlow(); if (!flow) return renderDashboard();
     if (flow.cloudId) setRoute(`flow=${flow.cloudId}`);
@@ -3604,6 +3619,7 @@
     const workspaceElement = document.getElementById('workspace');
     bindCanvasPan(workspaceElement);
     bindCanvasZoom(workspaceElement);
+    placeCanvasControls(); requestAnimationFrame(placeCanvasControls); if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeCanvasControls);
     drawCanvas(); drawInspector();
   }
 

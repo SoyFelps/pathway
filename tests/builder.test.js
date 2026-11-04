@@ -118,3 +118,13 @@ test('the Undo bar is centred in the canvas area, not in the whole window', () =
   assert.match(src, /window\.addEventListener\('resize', place\);/, 'stays centred when the window is resized');
   assert.match(src, /window\.removeEventListener\('resize', undoDelete\.onResize\)/, 'the listener goes away with the bar');
 });
+
+test('"Add a step" and the zoom controls are centred together in the canvas area', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  assert.match(src, /function placeCanvasControls\(\) \{/);
+  assert.match(src, /const center = view\.getBoundingClientRect\(\)\.left \+ view\.clientWidth \/ 2;/);
+  assert.match(src, /add\.style\.left = \(center - total \/ 2\) \+ 'px';/);
+  assert.match(src, /zoom\.style\.left = \(center - total \/ 2 \+ add\.offsetWidth \+ gap\) \+ 'px';/);
+  assert.match(src, /window\.addEventListener\('resize', placeCanvasControls\);/);
+  assert.match(src, /bindCanvasZoom\(workspaceElement\);\n\s+placeCanvasControls\(\);/, 'placed when the editor opens');
+});
