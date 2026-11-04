@@ -196,11 +196,18 @@ test('AI interview questions in the job editor are a draft: they only reach the 
   assert.match(field, /const draftMode = Boolean\(options && options\.saveButtons\);/);
   assert.match(field, /if \(draftMode\) syncActions\(\); else setList\(list\.slice\(\)\);/, 'typing does not save in draft mode');
   assert.match(field, /if \(!draftMode\) setList\(list\.slice\(\)\); paint\(\);/, 'removing a line does not save in draft mode');
-  assert.match(field, /id="ai-questions-save">Save questions<\/button>[\s\S]*id="ai-questions-revert">Revert<\/button>/);
+  assert.match(field, /id="ai-questions-revert">Revert<\/button><span class="ai-questions-status"[^>]*><\/span><button type="button" class="btn btn-sm btn-primary ai-questions-save" id="ai-questions-save">Save questions<\/button>/, 'Revert and the status on the left, Save questions last (pushed to the right end)');
+  assert.ok(field.indexOf('ai-questions-help') < field.indexOf('class="ai-questions"'), 'the help text is right under the title, above the questions');
+  assert.equal(field.indexOf('These are the questions') === field.lastIndexOf('These are the questions'), true, 'the help text appears once');
   assert.match(field, /setList\(kept\); list = padded\(kept\); paint\(\);/, 'saving sends the cleaned list once');
   assert.match(field, /Lines shorter than 3 characters were left out\./, 'the person is told what was left out');
   assert.match(field, /list = padded\(clean\(getList\(\) \|\| \[\]\)\); paint\(\);/, 'Revert goes back to the saved list');
   assert.match(src, /mountInterviewQuestionsField\(panel\.querySelector\('#role-ai-questions'\)[\s\S]*?\{ saveButtons: true \}\);/, 'the job editor uses the draft mode');
   assert.match(src, /mountInterviewQuestionsField\(modalRoot\.querySelector\('#new-ai-questions'\), [^\n]*\);/, 'the new-job form keeps its own behaviour');
   assert.equal(/#new-ai-questions[^\n]*saveButtons/.test(src), false);
+});
+
+test('the Save questions button is pushed to the right end of the actions row', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.match(css, /\.ai-questions-actions \.ai-questions-save\{margin-left:auto\}/);
 });

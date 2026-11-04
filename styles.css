@@ -925,3 +925,5 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .ai-questions-actions{display:flex;align-items:center;gap:8px;margin:12px 0 4px}
 .ai-questions-actions .btn:disabled{opacity:.5;cursor:default}
 .ai-questions-status{font-size:11px;color:var(--text-subtle)}
+.ai-questions-actions .ai-questions-save{margin-left:auto}
+.ai-questions-help{margin:0 0 10px}
