@@ -86,3 +86,10 @@ test('short-answer nodes expose an accessible numeric-only switch', () => {
   assert.match(styles, /\.numeric-only-switch input:checked\+\.numeric-only-track/);
   assert.match(styles, /\.answer-text\[data-numeric-only=true\]/);
 });
+
+test('the job editor has a Back button to the dashboard instead of the "My flows" breadcrumb', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  assert.ok(src.includes('<button class="btn btn-sm crumb-back" id="dashboard-back" type="button" aria-label="Back to the dashboard">← Back</button><span class="crumb-title">'));
+  assert.equal(src.includes('>My flows</button>'), false);
+  assert.equal(src.includes('crumb-chevron'), false);
+});
