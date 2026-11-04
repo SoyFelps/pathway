@@ -896,7 +896,9 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .applicants-tools{flex-wrap:nowrap;align-items:center}
 .applicants-tools .btn{height:39px;padding:0 16px;font-size:12px;white-space:nowrap;flex:0 0 auto}
 .job-combobox{position:relative;flex:1 1 190px;min-width:160px}
-.job-combobox .applicants-filter{width:100%;min-width:0;flex:none;text-overflow:ellipsis}
+.job-combobox .applicants-filter{width:100%;min-width:0;flex:none;text-overflow:ellipsis;padding-right:38px;background-image:none}
+.job-combobox-chevron{position:absolute;top:50%;right:12px;display:flex;color:var(--text-subtle);transform:translateY(-50%);transition:transform .15s;pointer-events:none}
+.job-combobox .applicants-filter[aria-expanded="true"] ~ .job-combobox-chevron{transform:translateY(-50%) rotate(180deg)}
 .job-combobox-list{position:absolute;z-index:40;top:calc(100% + 6px);left:0;min-width:100%;width:max-content;max-width:min(420px,90vw);max-height:288px;overflow:auto;margin:0;padding:5px;list-style:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 40px var(--shadow-lg)}
 .job-combobox-list[hidden]{display:none}
 .job-combobox-option{padding:9px 12px;border-radius:7px;font-size:12px;color:var(--text-strong);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
