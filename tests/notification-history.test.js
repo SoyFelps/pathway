@@ -88,3 +88,11 @@ test('the page follows the bell while it is open, starts folded on every visit a
   assert.match(builder, /<h2 class="notif-section-heading"><button type="button" class="notif-section-toggle" id="notif-month-toggle"/);
   assert.match(read('styles.css'), /\.notif-section-heading\{margin:0;font:inherit;line-height:inherit\}/);
 });
+
+test('the "Last 30 days" toggle uses a drawn chevron icon (not a text glyph) that turns when opened', () => {
+  const src = read('builder.js');
+  assert.match(src, /<span class="notif-chevron" aria-hidden="true"><svg viewBox="0 0 20 20"/);
+  assert.equal(src.includes('▸'), false);
+  const css = read('styles.css');
+  assert.match(css, /\.notif-section-toggle\[aria-expanded="true"\] \.notif-chevron\{transform:rotate\(90deg\)\}/);
+});
