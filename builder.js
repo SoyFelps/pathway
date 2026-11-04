@@ -1854,59 +1854,85 @@
       content.querySelector('#report-retry')?.addEventListener('click', () => { void loadReport(); });
     }
   }
-  // The job chooser in the header: you type in the field itself and a short list follows. The search runs on the server, so it still works with hundreds of jobs.
+  // The job chooser in the header: you type in the field itself and the list follows. The search runs on the server and the list loads 8 more jobs each time you scroll to the end, so it works with hundreds of jobs.
+  const REPORT_PICKER_PAGE = 8;
   function mountReportPicker() {
     const host = root.querySelector('#report-picker');
     if (!host) return;
     const input = host.querySelector('#report-picker-input'), list = host.querySelector('#report-picker-list');
-    let timer = null, requestId = 0, items = [], active = -1;
+    let timer = null, requestId = 0, active = -1, jobs = [], total = 0, query = '', loadingMore = false, failed = false;
     const isOpen = () => !list.hidden;
     const currentLabel = () => input.dataset.label || 'All jobs';
+    const entries = () => [...(query ? [] : [{ value: '', label: 'All jobs', company: '' }]), ...jobs.map(job => ({ value: job.id, label: job.title || 'Untitled role', company: job.company || '' }))];
     const highlight = () => {
       list.querySelectorAll('.job-combobox-option').forEach((node, index) => node.classList.toggle('is-active', index === active));
       const node = list.querySelector('.job-combobox-option.is-active');
       if (node) { input.setAttribute('aria-activedescendant', node.id); node.scrollIntoView({ block: 'nearest' }); } else input.removeAttribute('aria-activedescendant');
     };
-    const paint = (jobs, total, loading, query) => {
-      items = loading ? [] : [...(query ? [] : [{ value: '', label: 'All jobs', company: '' }]), ...jobs.map(job => ({ value: job.id, label: job.title || 'Untitled role', company: job.company || '' }))];
-      active = query ? (items.length ? 0 : -1) : items.findIndex(item => item.value === reportFlow);
-      list.innerHTML = loading ? '<li class="job-combobox-note">Searching…</li>'
+    // Draws what is loaded so far, keeping the scroll position (the next page is added at the end).
+    const render = (loading) => {
+      const top = list.scrollTop;
+      const items = entries();
+      const more = jobs.length < total;
+      list.innerHTML = (loading ? '<li class="job-combobox-note">Searching…</li>'
         : items.map((item, index) => '<li role="option" id="report-job-opt-' + index + '" class="job-combobox-option" data-index="' + index + '" aria-selected="' + (item.value === reportFlow) + '"><span>' + esc(item.label) + '</span>' + (item.company ? '<small>' + esc(item.company) + '</small>' : '') + '</li>').join('')
-          + (total > jobs.length ? '<li class="job-combobox-note">Showing ' + jobs.length + ' of ' + reportNumber(total) + ' jobs. Keep typing to narrow it down.</li>' : (!jobs.length ? '<li class="job-combobox-note">No jobs match.</li>' : ''));
+          + (failed ? '<li class="job-combobox-note">Could not load the jobs.</li>' : more ? '<li class="job-combobox-note">Loading more…</li>' : (!jobs.length ? '<li class="job-combobox-note">No jobs match.</li>' : '')));
+      list.scrollTop = top;
       highlight();
     };
-    const load = async query => {
+    const fetchPage = offset => window.PathwayBackend.getReportJobs(workspace.id, { from: (reportRangeResolved || {}).from, to: (reportRangeResolved || {}).to, company: reportCompany, search: query, sort: 'candidates', limit: REPORT_PICKER_PAGE, offset });
+    const load = async () => {
       const id = ++requestId;
-      paint([], 0, true, query);
+      jobs = []; total = 0; failed = false; loadingMore = false; active = -1;
+      render(true);
       try {
-        const range = reportRangeResolved || {};
-        const page = await window.PathwayBackend.getReportJobs(workspace.id, { from: range.from, to: range.to, company: reportCompany, search: query, sort: 'candidates', limit: 8, offset: 0 });
-        if (id === requestId && isOpen()) paint(page.jobs, page.total, false, query);
-      } catch (error) { if (id === requestId) list.innerHTML = '<li class="job-combobox-note">Could not load the jobs.</li>'; }
+        const page = await fetchPage(0);
+        if (id !== requestId || !isOpen()) return;
+        jobs = page.jobs; total = page.total;
+        active = query ? (entries().length ? 0 : -1) : entries().findIndex(item => item.value === reportFlow);
+        render(false);
+        fillIfShort();
+      } catch (error) { if (id === requestId) { failed = true; render(false); } }
     };
+    const loadMore = async () => {
+      if (loadingMore || failed || jobs.length >= total) return;
+      loadingMore = true;
+      const id = requestId;
+      try {
+        const page = await fetchPage(jobs.length);
+        if (id !== requestId || !isOpen()) return;
+        if (!page.jobs.length) total = jobs.length; else { jobs = jobs.concat(page.jobs); total = page.total; }
+        render(false);
+      } catch (error) { if (id === requestId) { failed = true; render(false); } }
+      finally { loadingMore = false; }
+      fillIfShort();
+    };
+    // If the first page does not fill the list (so there is nothing to scroll), keep loading.
+    const fillIfShort = () => { if (isOpen() && !failed && jobs.length < total && list.scrollHeight <= list.clientHeight + 4) void loadMore(); };
     const show = () => { list.hidden = false; input.setAttribute('aria-expanded', 'true'); };
-    const open = () => { if (isOpen()) return; show(); input.select(); void load(''); };
+    const open = () => { if (isOpen()) return; show(); input.select(); query = ''; void load(); };
     const close = () => { clearTimeout(timer); requestId++; list.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); input.value = currentLabel(); };
     const choose = index => {
-      const item = items[index];
+      const item = entries()[index];
       if (!item) return;
       const changed = item.value !== reportFlow;
       if (changed) { reportFlow = item.value; input.dataset.label = item.label; }
       close();
       if (changed) void loadReport();
     };
-    const move = step => { if (!items.length) return; active = (active + step + items.length) % items.length; highlight(); };
+    const move = step => { const count = entries().length; if (!count) return; active = (active + step + count) % count; highlight(); };
     input.addEventListener('focus', open);
     input.addEventListener('click', open);
-    input.addEventListener('input', () => { if (!isOpen()) show(); clearTimeout(timer); const query = input.value.trim(); timer = setTimeout(() => { void load(query); }, 250); });
+    input.addEventListener('input', () => { if (!isOpen()) show(); clearTimeout(timer); timer = setTimeout(() => { query = input.value.trim(); void load(); }, 250); });
     input.addEventListener('keydown', event => {
-      if (event.key === 'ArrowDown') { event.preventDefault(); if (isOpen()) move(1); else open(); }
+      if (event.key === 'ArrowDown') { event.preventDefault(); if (isOpen()) { move(1); if (active >= entries().length - 2) void loadMore(); } else open(); }
       else if (event.key === 'ArrowUp') { event.preventDefault(); if (isOpen()) move(-1); else open(); }
       else if (event.key === 'Enter') { if (isOpen()) { event.preventDefault(); if (active >= 0) choose(active); } }
       else if (event.key === 'Escape') { if (isOpen()) { event.preventDefault(); event.stopPropagation(); close(); } }
       else if (event.key === 'Tab') { if (isOpen()) close(); }
     });
     input.addEventListener('blur', close);
+    list.addEventListener('scroll', () => { if (list.scrollTop + list.clientHeight >= list.scrollHeight - 48) void loadMore(); });
     // mousedown (not click) so the field keeps focus and the list does not close before the choice is made
     list.addEventListener('mousedown', event => { event.preventDefault(); const node = event.target.closest('[data-index]'); if (node) choose(Number(node.dataset.index)); });
   }

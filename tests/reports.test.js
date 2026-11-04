@@ -108,9 +108,9 @@ test('report text coming from the database is escaped before it reaches the page
 test('the Reports styles exist and the changed files carry a new cache version', () => {
   const css = read('styles.css');
   ['.reports-page', '.rpt-stats', '.rpt-chart', '.rpt-table'].forEach(selector => assert.ok(css.includes(selector), selector));
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261104j/);
-  assert.match(read('index.html'), /backend\.js\?v=mw3-20261104j/);
-  assert.match(read('index.html'), /styles\.css\?v=mw3-20261104j/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261104k/);
+  assert.match(read('index.html'), /backend\.js\?v=mw3-20261104k/);
+  assert.match(read('index.html'), /styles\.css\?v=mw3-20261104k/);
 });
 
 const scaling = read('supabase/migrations/20261020230000_report_scaling_and_step_counts.sql');
@@ -175,7 +175,7 @@ test('the Reports page lists jobs ten at a time with search and sorting, and kee
   assert.match(builder, /id="rpt-jobs-search"/);
   assert.match(builder, /<th scope="col">Auto-fail<\/th>/);
   assert.match(builder, /function mountReportPicker\(\)/);
-  assert.match(builder, /limit: 8, offset: 0/, 'the chooser asks for a short list and a search, never every job');
+  assert.match(builder, /limit: REPORT_PICKER_PAGE, offset/, 'the chooser asks for a page at a time and a search, never every job');
   assert.match(builder, /id="report-company"/);
   assert.match(builder, /for \(let offset = 0; offset < 2000; offset \+= 50\)/, 'the CSV contains every job, not only the page on screen');
 });
@@ -377,7 +377,10 @@ test('the Reports job filter is typed into the field itself (like the other sear
   assert.equal(builder.includes('rpt-picker-btn'), false, 'no button with a search box inside a popover any more');
   assert.equal(builder.includes('rpt-picker-search'), false);
   assert.equal(builder.includes('▾'), false, 'the text arrow is gone');
-  assert.match(builder, /search: query, sort: 'candidates', limit: 8, offset: 0/, 'still a short list searched on the server');
+  assert.match(builder, /search: query, sort: 'candidates', limit: REPORT_PICKER_PAGE, offset/, 'searched on the server, a page at a time');
+  assert.match(builder, /const REPORT_PICKER_PAGE = 8;/);
+  assert.match(builder, /list\.addEventListener\('scroll'[\s\S]*void loadMore\(\)/, 'the next 8 jobs load when the list is scrolled to its end');
+  assert.equal(builder.includes('Keep typing to narrow it down'), false, 'no more "showing 8 of N" limit');
   assert.match(builder, /'ArrowDown'[\s\S]*'ArrowUp'[\s\S]*'Enter'[\s\S]*'Escape'/);
   assert.match(css, /\.rpt-picker-input\[aria-expanded="true"\] ~ \.job-combobox-chevron\{/);
 });

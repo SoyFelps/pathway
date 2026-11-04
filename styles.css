@@ -651,9 +651,8 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 /* Reports: job chooser with search, paged jobs list, auto-fail groups. */
 .rpt-picker{position:relative}
 .rpt-picker-field{position:relative}
-.rpt-picker-input{width:210px;min-width:170px;padding-right:38px;background-image:none;text-overflow:ellipsis}
+.rpt-picker-input{width:330px;max-width:100%;min-width:170px;padding-right:38px;background-image:none;text-overflow:ellipsis}
 .rpt-picker-input[aria-expanded="true"] ~ .job-combobox-chevron{transform:translateY(-50%) rotate(180deg)}
-.rpt-picker .job-combobox-list{left:auto;right:0}
 .rpt-jobs-tools{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
 .rpt-more{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px}
 .rpt-more .rpt-note{margin:0}
@@ -665,7 +664,6 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .reports-tools{position:relative}
 .rpt-picker{position:static;flex:1;min-width:0}
 .rpt-picker-input{max-width:none}
-.rpt-picker .job-combobox-list{left:0;right:0;width:auto;max-width:none}
 .reports-tools #report-company{flex:1;min-width:0}
 .rpt-jobs-tools .applicants-search{flex:1;min-width:0;width:auto}
 .rpt-jobs-tools .applicants-filter{flex:1;min-width:0}
@@ -893,13 +891,13 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .job-combobox .applicants-filter{width:100%;min-width:0;flex:none;text-overflow:ellipsis;padding-right:38px;background-image:none}
 .job-combobox-chevron{position:absolute;top:50%;right:12px;display:flex;color:var(--text-subtle);transform:translateY(-50%);transition:transform .15s;pointer-events:none}
 .job-combobox .applicants-filter[aria-expanded="true"] ~ .job-combobox-chevron{transform:translateY(-50%) rotate(180deg)}
-.job-combobox-list{position:absolute;z-index:40;top:calc(100% + 6px);left:0;min-width:100%;width:max-content;max-width:min(420px,90vw);max-height:288px;overflow:auto;margin:0;padding:5px;list-style:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 40px var(--shadow-lg)}
+.job-combobox-list{position:absolute;z-index:40;top:calc(100% + 6px);left:0;right:0;box-sizing:border-box;max-height:288px;overflow:auto;margin:0;padding:5px;list-style:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 40px var(--shadow-lg)}
 .job-combobox-list[hidden]{display:none}
 .job-combobox-option{padding:9px 12px;border-radius:7px;font-size:12px;color:var(--text-strong);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .job-combobox-option.is-active{background:var(--tint)}
 .job-combobox-option[aria-selected="true"]{font-weight:700}
-.job-combobox-option small{display:block;margin-top:1px;font-weight:400;font-size:11px;color:var(--soft)}
-.job-combobox-note,.job-combobox-empty{padding:10px 12px;font-size:12px;color:var(--text-subtle)}
+.job-combobox-option small{display:block;overflow:hidden;text-overflow:ellipsis;margin-top:1px;font-weight:400;font-size:11px;color:var(--soft)}
+.job-combobox-note,.job-combobox-empty{white-space:normal;padding:10px 12px;font-size:12px;color:var(--text-subtle)}
 @media(max-width:760px){.applicants-tools{flex-wrap:wrap}.job-combobox{flex:1 1 100%}.applicants-tools .applicants-search{flex:1 1 140px}}
 
 /* Searchable country and city fields get the same chevron as the Pronouns select, so they read as "pick from a list". */
