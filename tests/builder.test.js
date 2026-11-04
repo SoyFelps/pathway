@@ -152,3 +152,10 @@ test('phone editor: board OR step details (never both), Back to board, no pencil
   assert.match(css, /\.editor-main\.is-mobile-details \.canvas-add,\.editor-main\.is-mobile-details \.canvas-zoom-controls/);
   assert.match(src, /zoom\.style\.bottom = \(16 \+ add\.offsetHeight \+ 10\) \+ 'px';/, 'too narrow for both side by side: zoom goes above Add a step');
 });
+
+test('phone editor: inside a step only "Back to board" is left at the top (the job header and the app header are hidden)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.match(src, /document\.querySelector\('\.app-shell'\)\?\.classList\.toggle\('is-mobile-details', details\);/);
+  assert.match(css, /\.app-shell\.is-mobile-details \.topbar,\.editor-main\.is-mobile-details \.editor-top\{display:none\}/);
+});

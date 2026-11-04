@@ -3620,6 +3620,7 @@
     if (details && view && !layout.classList.contains('is-mobile-details')) boardScroll = { left: view.scrollLeft, top: view.scrollTop };
     layout.classList.toggle('is-mobile-details', details); layout.classList.toggle('is-mobile-board', !details);
     main.classList.toggle('is-mobile-details', details);
+    document.querySelector('.app-shell')?.classList.toggle('is-mobile-details', details); // inside a step only "Back to board" is left at the top
     if (!details) {
       if (view && boardScroll) { view.scrollLeft = boardScroll.left; view.scrollTop = boardScroll.top; }
       placeCanvasControls(); requestAnimationFrame(placeCanvasControls);
