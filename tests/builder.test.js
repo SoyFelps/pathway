@@ -93,3 +93,18 @@ test('the job editor has a Back button to the dashboard instead of the "My flows
   assert.equal(src.includes('>My flows</button>'), false);
   assert.equal(src.includes('crumb-chevron'), false);
 });
+
+test('deleting a step offers an Undo that lasts only until the next action', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const del = src.slice(src.indexOf('function deleteNode(id) {'), src.indexOf('function openPreview() {'));
+  assert.match(del, /const snapshot = JSON\.parse\(JSON\.stringify\(\{ nodes: flow\.nodes, edges: flow\.edges \}\)\)/, 'the flow is saved before the step goes away');
+  assert.match(del, /offerUndoDelete\(currentId, snapshot, selectedBefore\)/);
+  assert.equal(del.includes("showToast('Step deleted."), false, 'the old toast is replaced by the Undo bar');
+  assert.match(src, /\['pointerdown', 'keydown', 'wheel'\]\.forEach\(type => document\.addEventListener\(type, event => \{[\s\S]*clearUndoDelete\(\);[\s\S]*\}, true\)\);/, 'any click, key or scroll removes the offer');
+  assert.match(src, /closest\('#undo-delete-bar'\)\) return;/, 'using the Undo button itself does not remove it first');
+  assert.match(src, /window\.addEventListener\('hashchange', clearUndoDelete\);/);
+  assert.match(src, /function setRoute\(route\) \{\n    clearUndoDelete\(\);/, 'opening another page removes it');
+  assert.match(src, /clearUndoDelete\(\); currentId = id;/, 'opening a job removes it');
+  assert.match(src, /flow\.nodes = state\.snapshot\.nodes; flow\.edges = state\.snapshot\.edges;/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8'), /\.undo-bar\{position:fixed;/);
+});

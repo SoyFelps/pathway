@@ -156,6 +156,7 @@
   };
   // Keep the current page in the URL hash so a browser refresh returns to it. replaceState avoids polluting history.
   function setRoute(route) {
+    clearUndoDelete();
     try {
       const hash = `#${route}`;
       if (window.location.hash !== hash) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
@@ -166,6 +167,39 @@
     toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove('show'), duration);
   }
+  // Undo for a deleted step. It is offered ONLY right after the deletion: any other action (a click, a key, scrolling or zooming the canvas,
+  // adding or moving a step, opening another page) removes the offer for good.
+  let undoDelete = null;
+  function clearUndoDelete() {
+    undoDelete = null;
+    document.getElementById('undo-delete-bar')?.remove();
+  }
+  function offerUndoDelete(flowId, snapshot, selectedBefore) {
+    clearUndoDelete();
+    undoDelete = { flowId, snapshot, selectedBefore };
+    const bar = document.createElement('div');
+    bar.id = 'undo-delete-bar'; bar.className = 'undo-bar'; bar.setAttribute('role', 'status');
+    bar.innerHTML = '<span>Step deleted. Reconnect any remaining steps before publishing.</span><button type="button" id="undo-delete-btn">Undo</button>';
+    document.body.appendChild(bar);
+    bar.querySelector('#undo-delete-btn').addEventListener('click', restoreDeletedStep);
+  }
+  function restoreDeletedStep() {
+    const state = undoDelete;
+    const flow = state && currentId === state.flowId ? currentFlow() : null;
+    if (!flow) { clearUndoDelete(); return; }
+    flow.nodes = state.snapshot.nodes; flow.edges = state.snapshot.edges;
+    selectedId = flow.nodes.some(node => node.id === state.selectedBefore) ? state.selectedBefore : flow.nodes.find(node => node.type === 'candidateInfo').id;
+    clearUndoDelete();
+    save(); renderEditor(); showToast('Step restored.');
+  }
+  ['pointerdown', 'keydown', 'wheel'].forEach(type => document.addEventListener(type, event => {
+    if (!undoDelete) return;
+    if (event.target && event.target.closest && event.target.closest('#undo-delete-bar')) return; // using the Undo button itself
+    if (type === 'keydown' && (event.key === 'Tab' || event.key === 'Shift')) return; // only moving the focus (keyboard users must be able to reach Undo)
+    clearUndoDelete();
+  }, true));
+  window.addEventListener('hashchange', clearUndoDelete);
+
   function initials(name) { return (name || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
   function companySnapshot(company) { return company ? { id: company.id, name: company.name, description: company.description || '', logoPath: company.logoPath || null, logoUrl: company.logoUrl || '' } : null; }
   // In-app notifications: one entry per job with new candidates; it disappears when this person opens that job's board.
@@ -3540,7 +3574,7 @@
     if (!hasPermission('flows')) return renderAccessMessage('flows');
     const flow = flows.find(item => item.id === id);
     if (flow && flowIsDamaged(flow)) return showFlowMenu(id);
-    currentId = id; C.lockEndSteps(currentFlow()); selectedId = currentFlow().nodes.find(node => node.type === 'candidateInfo').id; renderEditor();
+    clearUndoDelete(); currentId = id; C.lockEndSteps(currentFlow()); selectedId = currentFlow().nodes.find(node => node.type === 'candidateInfo').id; renderEditor();
   }
 
   function renderEditor() {
@@ -3851,6 +3885,7 @@
   function deleteNode(id) {
     const flow = currentFlow(); const doomed = flow.nodes.find(node => node.id === id); if (!doomed || doomed.type === 'candidateInfo') return;
     if (doomed.type === 'end' && flow.nodes.filter(node => node.type === 'end').length === 1) { showToast('Keep at least one ending in the journey.'); return; }
+    const snapshot = JSON.parse(JSON.stringify({ nodes: flow.nodes, edges: flow.edges })); const selectedBefore = selectedId;
     const incoming = flow.edges.filter(edge => edge.toNodeId === id);
     const outgoing = flow.edges.filter(edge => edge.fromNodeId === id);
     let bypass = null;
@@ -3863,7 +3898,7 @@
     if (!flow.edges.some(edge => edge.fromNodeId === info.id)) {
       const end = flow.nodes.find(node => node.type === 'end'); if (end) flow.edges.push({ id: C.uid('edge'), fromNodeId: info.id, toNodeId: end.id });
     }
-    selectedId = info.id; save(); renderEditor(); showToast('Step deleted. Reconnect any remaining steps before publishing.');
+    selectedId = info.id; save(); renderEditor(); offerUndoDelete(currentId, snapshot, selectedBefore);
   }
 
   function openPreview() {
