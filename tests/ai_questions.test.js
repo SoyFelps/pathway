@@ -132,9 +132,9 @@ test('a question the AI writes is never longer than 300 characters: one shorter 
   assert.match(SYSTEM_PROMPT, /never more than 300 characters/);
 });
 
-test('the model order: Flash-Lite first, then 3.8 Flash, then 3.6 Flash (3.5 Flash is retired); each one only when the one before is busy or slow', async () => {
+test('the model order: Flash-Lite first, then 3.6 Flash, then 3.8 Flash last (3.5 Flash is retired); each one only when the one before is busy or slow', async () => {
   const { MODEL_CHAIN } = await gemini();
-  assert.deepEqual(MODEL_CHAIN.map(model => model.name), ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.6-flash']);
+  assert.deepEqual(MODEL_CHAIN.map(model => model.name), ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.8-flash']);
   assert.equal(MODEL_CHAIN.some(model => model.name === 'gemini-3.5-flash'), false, 'the retired model is not named any more');
   assert.equal(MODEL_CHAIN.every(model => !/latest/.test(model.name)), true, 'pinned names only');
 });

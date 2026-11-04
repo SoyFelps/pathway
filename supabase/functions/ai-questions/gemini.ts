@@ -9,8 +9,8 @@ import { buildQuestionRequest, cleanDescription, cleanExisting, descriptionIsEno
 export interface ModelChoice { name: string; thinkingLevel: string; timeoutMs: number }
 export const MODEL_CHAIN: ModelChoice[] = [
   { name: "gemini-3.5-flash-lite", thinkingLevel: "minimal", timeoutMs: 15_000 },
-  { name: "gemini-3.8-flash", thinkingLevel: "low", timeoutMs: 25_000 },
   { name: "gemini-3.6-flash", thinkingLevel: "minimal", timeoutMs: 25_000 },
+  { name: "gemini-3.8-flash", thinkingLevel: "low", timeoutMs: 25_000 },
 ];
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
