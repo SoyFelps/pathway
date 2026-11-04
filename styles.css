@@ -927,3 +927,5 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .ai-questions-status{font-size:11px;color:var(--text-subtle)}
 .ai-questions-actions .ai-questions-save{margin-left:auto}
 .ai-questions-help{margin:0 0 10px}
+#inspector .field-group.has-unsaved{outline:1px solid var(--amber-border);outline-offset:8px;border-radius:10px}
+#inspector .field-group.has-unsaved .ai-questions-status{color:var(--amber-dark);font-weight:700}

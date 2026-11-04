@@ -211,3 +211,11 @@ test('the Save questions button is pushed to the right end of the actions row', 
   const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
   assert.match(css, /\.ai-questions-actions \.ai-questions-save\{margin-left:auto\}/);
 });
+
+test('unsaved AI interview questions are highlighted (amber status and a subtle outline) until saved or reverted', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.match(src, /\(host\.closest\('\.field-group'\) \|\| host\)\.classList\.toggle\('has-unsaved', changed\);/);
+  assert.match(css, /#inspector \.field-group\.has-unsaved\{outline:1px solid var\(--amber-border\);outline-offset:8px;/);
+  assert.match(css, /#inspector \.field-group\.has-unsaved \.ai-questions-status\{color:var\(--amber-dark\);font-weight:700\}/);
+});
