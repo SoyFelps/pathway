@@ -3588,19 +3588,50 @@
   }
 
   // "Add a step" and the zoom controls sit together, centred in the canvas area (not in the whole window: the settings panel is on the right).
-  // On phones the CSS keeps its own layout, so the inline positions are cleared.
+  // On a phone the canvas is the whole width; if both do not fit side by side, the zoom controls go above "Add a step".
   function placeCanvasControls() {
     const view = document.getElementById('workspace'), add = document.getElementById('add-node'), zoom = document.getElementById('canvas-zoom-controls'), status = document.getElementById('canvas-status');
-    if (!view || !add || !zoom) return;
-    if (!window.matchMedia('(min-width: 761px)').matches) { [add, zoom, status].forEach(item => { if (item) { item.style.left = ''; item.style.translate = ''; } }); return; }
+    if (!view || !add || !zoom || !add.offsetWidth) return; // hidden (the node details are showing on a phone): placed again when the board comes back
+    const phone = !window.matchMedia('(min-width: 761px)').matches;
     const center = view.getBoundingClientRect().left + view.clientWidth / 2;
     const gap = 12, total = add.offsetWidth + gap + zoom.offsetWidth;
-    add.style.translate = 'none';
-    add.style.left = (center - total / 2) + 'px';
-    zoom.style.left = (center - total / 2 + add.offsetWidth + gap) + 'px';
-    if (status) status.style.left = center + 'px';
+    add.style.translate = 'none'; add.style.right = 'auto'; zoom.style.right = 'auto';
+    if (phone && total > view.clientWidth - 24) {
+      add.style.left = (center - add.offsetWidth / 2) + 'px';
+      zoom.style.left = (center - zoom.offsetWidth / 2) + 'px';
+      zoom.style.bottom = (16 + add.offsetHeight + 10) + 'px';
+    } else {
+      add.style.left = (center - total / 2) + 'px';
+      zoom.style.left = (center - total / 2 + add.offsetWidth + gap) + 'px';
+      zoom.style.bottom = '';
+    }
+    if (status) { if (phone) status.style.left = ''; else status.style.left = center + 'px'; }
   }
   window.addEventListener('resize', placeCanvasControls);
+
+  // On a phone the editor shows EITHER the board OR the details of one step (never both): opening a step replaces the board, and "Back to board" returns to it.
+  let mobileEditorView = 'board';
+  let boardScroll = null;
+  const isPhoneEditor = () => window.matchMedia('(max-width: 760px)').matches;
+  function applyMobileEditorView() {
+    const layout = document.querySelector('.editor-layout'), main = document.querySelector('.editor-main'), view = document.getElementById('workspace');
+    if (!layout || !main) return;
+    const details = mobileEditorView === 'details';
+    if (details && view && !layout.classList.contains('is-mobile-details')) boardScroll = { left: view.scrollLeft, top: view.scrollTop };
+    layout.classList.toggle('is-mobile-details', details); layout.classList.toggle('is-mobile-board', !details);
+    main.classList.toggle('is-mobile-details', details);
+    if (!details) {
+      if (view && boardScroll) { view.scrollLeft = boardScroll.left; view.scrollTop = boardScroll.top; }
+      placeCanvasControls(); requestAnimationFrame(placeCanvasControls);
+    }
+  }
+  function openNodeDetailsOnPhone() {
+    if (!isPhoneEditor()) return;
+    mobileEditorView = 'details'; applyMobileEditorView();
+    const panel = document.getElementById('inspector'); if (panel) panel.scrollTop = 0;
+    window.scrollTo(0, 0);
+  }
+  function closeNodeDetailsOnPhone() { mobileEditorView = 'board'; applyMobileEditorView(); }
 
   let lastEditorFlowId = null;
   function renderEditor() {
@@ -3608,6 +3639,7 @@
     // Drawing the SAME job again (after deleting a step, undoing it, publishing...) must not throw the person back to the start of the canvas.
     const oldView = document.getElementById('workspace');
     const keepView = oldView && lastEditorFlowId === currentId ? { left: oldView.scrollLeft, top: oldView.scrollTop } : null;
+    if (lastEditorFlowId !== currentId) mobileEditorView = 'board'; // opening a job on a phone starts on the board
     lastEditorFlowId = currentId;
     if (flow.cloudId) setRoute(`flow=${flow.cloudId}`);
     root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body"><main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="btn btn-sm crumb-back" id="dashboard-back" type="button" aria-label="Back to the dashboard">← Back</button><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' || !subscription?.active ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-zoom" id="canvas-zoom"><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-zoom-controls" id="canvas-zoom-controls" role="group" aria-label="Zoom"><button type="button" class="zoom-btn" id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" class="zoom-level" id="zoom-reset" title="Back to 100%">100%</button><button type="button" class="zoom-btn" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button></div><div class="canvas-status" id="canvas-status"></div></main></div></div>`;
@@ -3626,6 +3658,7 @@
     bindCanvasZoom(workspaceElement);
     placeCanvasControls(); requestAnimationFrame(placeCanvasControls); if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeCanvasControls);
     drawCanvas(); drawInspector();
+    applyMobileEditorView();
     if (keepView) {
       const restoreView = () => { workspaceElement.scrollLeft = keepView.left; workspaceElement.scrollTop = keepView.top; };
       restoreView(); requestAnimationFrame(restoreView);
@@ -3725,6 +3758,7 @@
       element.addEventListener('click', event => {
         if (event.target.closest('.port') || event.target.closest('.node-remove') || dragState) return;
         selectedId = element.dataset.node; drawCanvas(); drawInspector();
+        openNodeDetailsOnPhone();
       });
       const head = element.querySelector('.node-head');
       if (!element.classList.contains('fixed')) head.addEventListener('pointerdown', event => startDrag(event, element));
@@ -3841,9 +3875,10 @@
     const selected = flow.nodes.find(node => node.id === selectedId) || flow.nodes[0];
     const [title] = typeInfo(selected);
     const roleSettings = selected.type === 'candidateInfo'
-      ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div><button class="icon-btn" id="edit-role" aria-label="Edit role details">✎</button></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><label for="role-description">Job description</label><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">Responsible</span><div id="role-responsible"></div></div><div class="field-group"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><div id="role-ai-questions"></div></div><hr class="inspector-divider">`
+      ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><label for="role-description">Job description</label><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">Responsible</span><div id="role-responsible"></div></div><div class="field-group"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><div id="role-ai-questions"></div></div><hr class="inspector-divider">`
       : '';
-    panel.innerHTML = `${roleSettings}<div class="inspector-title"><div><div class="inspector-kicker">Selected step</div><h2>${esc(title)}</h2></div>${selected.type === 'candidateInfo' ? '<span class="node-badge">Fixed start</span>' : ''}</div><div id="node-editor"></div>`;
+    panel.innerHTML = `<div class="mobile-details-bar"><button type="button" class="btn btn-sm" id="close-node-details">← Back to board</button></div>${roleSettings}<div class="inspector-title"><div><div class="inspector-kicker">Selected step</div><h2>${esc(title)}</h2></div>${selected.type === 'candidateInfo' ? '<span class="node-badge">Fixed start</span>' : ''}</div><div id="node-editor"></div>`;
+    panel.querySelector('#close-node-details')?.addEventListener('click', closeNodeDetailsOnPhone);
     const syncRole = (key, value) => { flow[key] = value; const crumb = document.querySelector('.crumb-title'); if (crumb && key === 'jobTitle') crumb.textContent = value || 'Untitled role'; save(); };
     panel.querySelector('#role-company-profile')?.addEventListener('change', event => { const company = companies.find(item => item.id === event.target.value) || null; flow.companyId = company?.id || null; flow.companyProfile = companySnapshot(company); flow.companyName = company?.name || workspace.name; save(); });
     panel.querySelector('#role-title')?.addEventListener('input', event => syncRole('jobTitle', event.target.value));
@@ -3852,7 +3887,6 @@
     if (responsibleHost) mountResponsibleField(responsibleHost, 'role-responsible-label', () => flow.responsibleIds || [], ids => { flow.responsibleIds = ids; save({ internal: true }); });
     // Like the responsible people, the questions are never shown to candidates, so editing them does not count as an unpublished change.
     mountInterviewQuestionsField(panel.querySelector('#role-ai-questions'), () => flow.interviewQuestions || [], list => { flow.interviewQuestions = list; save({ internal: true }); });
-    panel.querySelector('#edit-role')?.addEventListener('click', () => { panel.querySelector('#role-title')?.focus(); });
     const editor = panel.querySelector('#node-editor');
     if (selected.type === 'candidateInfo') {
       editor.innerHTML = `<div class="inspector-note">This is the fixed first step. Name, email, and resume are always included. Every detail you tick is required: candidates must fill it in to continue (where a list offers “Prefer not to say”, that counts as an answer).</div><div class="section-small">Always included</div>${[['name', 'Full name'], ['email', 'Email address'], ['resume', 'Resume link']].map(([key, label]) => `<label class="locked-field"><input type="checkbox" class="check" checked disabled><span>${label}</span><small>Required</small></label>`).join('')}<div class="section-small">Optional details</div>${C.OPTIONAL_FIELDS.map(field => `<label class="toggle-field"><span>${esc(field.label)}${field.hint ? `<small>${esc(field.hint)}</small>` : ''}</span><input type="checkbox" class="check optional-field" data-field="${esc(field.key)}" ${flow.candidateInfoFields[field.key] ? 'checked' : ''}></label>`).join('')}<p class="connection-help">The selected details appear directly on the public job application page.</p>`;
@@ -3933,7 +3967,7 @@
     if (!flow.edges.some(edge => edge.fromNodeId === info.id)) {
       const end = flow.nodes.find(node => node.type === 'end'); if (end) flow.edges.push({ id: C.uid('edge'), fromNodeId: info.id, toNodeId: end.id });
     }
-    selectedId = info.id; save(); renderEditor(); offerUndoDelete(currentId, snapshot, selectedBefore);
+    selectedId = info.id; mobileEditorView = 'board'; save(); renderEditor(); offerUndoDelete(currentId, snapshot, selectedBefore);
   }
 
   function openPreview() {

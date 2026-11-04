@@ -58,7 +58,7 @@ test('job details are shown only when the fixed candidate-details node is select
   const inspector = builder.slice(start, end);
   assert.match(inspector, /const roleSettings = selected\.type === 'candidateInfo'/);
   assert.match(inspector, /<h2>Job details<\/h2>/);
-  assert.match(inspector, /panel\.innerHTML = `\$\{roleSettings\}/);
+  assert.match(inspector, /panel\.innerHTML = `<div class="mobile-details-bar">[\s\S]*?<\/div>\$\{roleSettings\}/);
   assert.match(inspector, /<div class="inspector-kicker">Selected step<\/div>/);
   assert.match(inspector, /querySelector\('#role-company-profile'\)\?\./);
   assert.match(inspector, /companyOptionsHtml\(flow\.companyId/);
@@ -135,4 +135,20 @@ test('drawing the same job again keeps the position the person had on the canvas
   assert.match(render, /const keepView = oldView && lastEditorFlowId === currentId \? \{ left: oldView\.scrollLeft, top: oldView\.scrollTop \} : null;/);
   assert.match(render, /workspaceElement\.scrollLeft = keepView\.left; workspaceElement\.scrollTop = keepView\.top;/);
   assert.match(src, /let lastEditorFlowId = null;/);
+});
+
+test('phone editor: board OR step details (never both), Back to board, no pencil button, controls that do not overlap', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.equal(src.includes('id="edit-role"'), false, 'the pencil button is gone');
+  assert.equal(src.includes("querySelector('#edit-role')"), false);
+  assert.match(src, /let mobileEditorView = 'board';/);
+  assert.match(src, /if \(lastEditorFlowId !== currentId\) mobileEditorView = 'board';/, 'opening a job on a phone starts on the board');
+  assert.match(src, /selectedId = element\.dataset\.node; drawCanvas\(\); drawInspector\(\);\n\s+openNodeDetailsOnPhone\(\);/, 'tapping a step opens its details');
+  assert.match(src, /selectedId = info\.id; mobileEditorView = 'board'; save\(\); renderEditor\(\);/, 'after deleting a step the board comes back');
+  assert.match(src, /id="close-node-details">← Back to board<\/button>/);
+  assert.match(css, /\.editor-layout\.is-mobile-board \.inspector\{display:none\}/);
+  assert.match(css, /\.editor-layout\.is-mobile-details \.workspace\{display:none\}/);
+  assert.match(css, /\.editor-main\.is-mobile-details \.canvas-add,\.editor-main\.is-mobile-details \.canvas-zoom-controls/);
+  assert.match(src, /zoom\.style\.bottom = \(16 \+ add\.offsetHeight \+ 10\) \+ 'px';/, 'too narrow for both side by side: zoom goes above Add a step');
 });

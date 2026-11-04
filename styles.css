@@ -907,3 +907,13 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .undo-bar button{flex:0 0 auto;padding:4px 12px;border:1px solid currentColor;border-radius:7px;background:transparent;color:white;font:700 12px var(--sans);cursor:pointer}
 .undo-bar button:hover,.undo-bar button:focus-visible{background:var(--green);outline:none}
 @media(max-width:760px){.undo-bar{left:50%;bottom:78px}}
+/* Phone editor: the board and the details of a step are never on screen together. */
+.mobile-details-bar{display:none}
+@media(max-width:760px){
+  .editor-layout.is-mobile-board .inspector{display:none}
+  .editor-layout.is-mobile-board .workspace{height:calc(100dvh - 235px);min-height:340px}
+  .editor-layout.is-mobile-details .workspace{display:none}
+  .editor-main.is-mobile-details .canvas-add,.editor-main.is-mobile-details .canvas-zoom-controls,.editor-main.is-mobile-details .canvas-status{display:none}
+  .editor-layout.is-mobile-details .inspector{border-top:0}
+  .mobile-details-bar{display:block;position:sticky;top:0;z-index:5;margin:-17px -17px 18px;padding:10px 17px;background:var(--surface);border-bottom:1px solid var(--line)}
+}
