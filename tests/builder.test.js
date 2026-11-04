@@ -128,3 +128,11 @@ test('"Add a step" and the zoom controls are centred together in the canvas area
   assert.match(src, /window\.addEventListener\('resize', placeCanvasControls\);/);
   assert.match(src, /bindCanvasZoom\(workspaceElement\);\n\s+placeCanvasControls\(\);/, 'placed when the editor opens');
 });
+
+test('drawing the same job again keeps the position the person had on the canvas', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const render = src.slice(src.indexOf('function renderEditor() {'), src.indexOf('// Zoom of the flow canvas'));
+  assert.match(render, /const keepView = oldView && lastEditorFlowId === currentId \? \{ left: oldView\.scrollLeft, top: oldView\.scrollTop \} : null;/);
+  assert.match(render, /workspaceElement\.scrollLeft = keepView\.left; workspaceElement\.scrollTop = keepView\.top;/);
+  assert.match(src, /let lastEditorFlowId = null;/);
+});

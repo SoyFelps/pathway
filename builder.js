@@ -3602,8 +3602,13 @@
   }
   window.addEventListener('resize', placeCanvasControls);
 
+  let lastEditorFlowId = null;
   function renderEditor() {
     const flow = currentFlow(); if (!flow) return renderDashboard();
+    // Drawing the SAME job again (after deleting a step, undoing it, publishing...) must not throw the person back to the start of the canvas.
+    const oldView = document.getElementById('workspace');
+    const keepView = oldView && lastEditorFlowId === currentId ? { left: oldView.scrollLeft, top: oldView.scrollTop } : null;
+    lastEditorFlowId = currentId;
     if (flow.cloudId) setRoute(`flow=${flow.cloudId}`);
     root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body"><main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="btn btn-sm crumb-back" id="dashboard-back" type="button" aria-label="Back to the dashboard">← Back</button><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' || !subscription?.active ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-zoom" id="canvas-zoom"><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-zoom-controls" id="canvas-zoom-controls" role="group" aria-label="Zoom"><button type="button" class="zoom-btn" id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" class="zoom-level" id="zoom-reset" title="Back to 100%">100%</button><button type="button" class="zoom-btn" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button></div><div class="canvas-status" id="canvas-status"></div></main></div></div>`;
     bindPlanControl();
@@ -3621,6 +3626,10 @@
     bindCanvasZoom(workspaceElement);
     placeCanvasControls(); requestAnimationFrame(placeCanvasControls); if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeCanvasControls);
     drawCanvas(); drawInspector();
+    if (keepView) {
+      const restoreView = () => { workspaceElement.scrollLeft = keepView.left; workspaceElement.scrollTop = keepView.top; };
+      restoreView(); requestAnimationFrame(restoreView);
+    }
   }
 
   // Zoom of the flow canvas: 100% is the closest view (the original size) and cannot be exceeded; it can be zoomed out to 40% in steps of 20%.
