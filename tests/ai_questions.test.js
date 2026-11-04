@@ -115,3 +115,19 @@ test('the instruction asks for direct, polite questions and forbids yes/no opene
   for (const opener of ['"Can you"', '"Could you"', '"Would you"', '"Do you"', '"Have you"', '"Are you"']) assert.ok(SYSTEM_PROMPT.includes(opener), opener);
   assert.match(SYSTEM_PROMPT, /in the language of the description/, 'the openers follow the language of the job description');
 });
+
+test('a question the AI writes is never longer than 300 characters: one shorter try, then "long"', async () => {
+  const { createQuestion } = await gemini();
+  const long = 'Describe how you keep track of contract deadlines and renewals ' + 'while coordinating with many different people across teams and offices '.repeat(5);
+  assert.ok(long.length > 300);
+  const short = 'Describe how you keep several contract deadlines under control.';
+  const retried = okFetch([modelReply({ can_generate: true, question: long }), modelReply({ can_generate: true, question: short })]);
+  assert.deepEqual(await createQuestion({ jobTitle: 'x', description: GOOD, existing: [] }, { apiKey: 'k', fetchFn: retried }), { generated: true, question: short });
+  assert.match(JSON.parse(retried.calls[1].init.body).contents[0].parts[0].text, /longer than 300 characters\. Write a shorter question/);
+  const stuck = okFetch([modelReply({ can_generate: true, question: long })]);
+  assert.deepEqual(await createQuestion({ jobTitle: 'x', description: GOOD, existing: [] }, { apiKey: 'k', fetchFn: stuck }), { generated: false, reason: 'long' });
+  assert.equal(stuck.calls.length, 2, 'only one extra try');
+  const { SYSTEM_PROMPT, MAX_GENERATED_QUESTION_CHARS } = await logic();
+  assert.equal(MAX_GENERATED_QUESTION_CHARS, 300);
+  assert.match(SYSTEM_PROMPT, /never more than 300 characters/);
+});

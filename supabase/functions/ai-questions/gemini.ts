@@ -1,4 +1,4 @@
-import { buildQuestionRequest, cleanDescription, cleanExisting, descriptionIsEnough, isTooSimilar, oneLine, parseModelAnswer } from "./logic.ts";
+import { buildQuestionRequest, cleanDescription, cleanExisting, descriptionIsEnough, isTooLongToUse, isTooSimilar, oneLine, parseModelAnswer } from "./logic.ts";
 
 // Calls Google Gemini to write ONE interview question. Same pinned models as the Witcher (never the moving "latest" alias), tried in order when
 // Google says one is busy or slow. Text only, so it is quick and cheap; "thinking" stays low because the person is waiting for the answer.
@@ -42,11 +42,11 @@ async function callGemini(request: { generationConfig: Record<string, unknown> }
 
 export type CreateResult =
   | { generated: true; question: string }
-  | { generated: false; reason: "insufficient" | "similar" };
+  | { generated: false; reason: "insufficient" | "similar" | "long" };
 
 /**
  * The whole job: too little description means no call at all; the model may still decline; a question too close to an existing one gets one more try
- * and then "similar". It only ever returns a question the model really wrote.
+ * and then "similar"; a question longer than 300 characters also gets one more try, then "long". It only ever returns a question the model really wrote.
  */
 export async function createQuestion(input: { jobTitle: unknown; description: unknown; existing: unknown }, options: GeminiOptions): Promise<CreateResult> {
   const description = cleanDescription(input.description);
@@ -56,10 +56,12 @@ export async function createQuestion(input: { jobTitle: unknown; description: un
 
   const first = parseModelAnswer(await callGemini(buildQuestionRequest(base), options));
   if (first.kind === "insufficient") return { generated: false, reason: "insufficient" };
-  if (!isTooSimilar(first.question, existing)) return { generated: true, question: first.question };
+  const firstProblem = isTooLongToUse(first.question) ? "long" : isTooSimilar(first.question, existing) ? "similar" : null;
+  if (!firstProblem) return { generated: true, question: first.question };
 
-  const second = parseModelAnswer(await callGemini(buildQuestionRequest({ ...base, avoid: first.question }), options));
+  const second = parseModelAnswer(await callGemini(buildQuestionRequest({ ...base, avoid: first.question, avoidReason: firstProblem }), options));
   if (second.kind === "insufficient") return { generated: false, reason: "insufficient" };
-  if (!isTooSimilar(second.question, existing)) return { generated: true, question: second.question };
-  return { generated: false, reason: "similar" };
+  if (isTooLongToUse(second.question)) return { generated: false, reason: "long" };
+  if (isTooSimilar(second.question, existing)) return { generated: false, reason: "similar" };
+  return { generated: true, question: second.question };
 }

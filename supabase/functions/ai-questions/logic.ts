@@ -6,7 +6,10 @@ export const MIN_DESCRIPTION_WORDS = 20;
 export const MIN_DESCRIPTION_CHARS = 100;
 export const MAX_DESCRIPTION_CHARS = 6000;
 export const MAX_QUESTIONS = 5;
-export const MAX_QUESTION_CHARS = 500;
+export const MAX_QUESTION_CHARS = 500; // what a job may already hold (older questions can be this long)
+/** A question the AI writes is never longer than this. */
+export const MAX_GENERATED_QUESTION_CHARS = 300;
+export const isTooLongToUse = (question: string): boolean => question.length > MAX_GENERATED_QUESTION_CHARS;
 /** Share of the meaningful words two questions may have in common before the new one counts as "the same question". */
 export const SIMILARITY_LIMIT = 0.55;
 
@@ -77,7 +80,7 @@ Rules:
 3. If the description is too vague, too short, generic, or is not about a real job (a few words, placeholder or random text, text that does not describe the work), do NOT write a question: set can_generate to false and leave question empty.
 4. The new question must cover a DIFFERENT topic and angle from every existing question. Never rephrase, narrow or extend an existing question.
 5. Write the question in the same language as the job description.
-6. One open question the candidate can answer out loud in about a minute, in one or two sentences, at most 40 words. Be direct and polite: start with a verb or a question word, such as "Describe...", "Tell us about...", "Walk us through...", "Explain...", "How do you...", "What is your approach to..." (or the same kind of direct opener in the language of the description). Do NOT start with "Can you", "Could you", "Would you", "Do you", "Have you", "Are you" or any other yes/no opener, and add no filler such as "please" or "I would like to know". Ask for a concrete example, a situation or an approach. No lists of several questions.
+6. One open question the candidate can answer out loud in about a minute, in one or two sentences, at most 40 words and never more than 300 characters. Be direct and polite: start with a verb or a question word, such as "Describe...", "Tell us about...", "Walk us through...", "Explain...", "How do you...", "What is your approach to..." (or the same kind of direct opener in the language of the description). Do NOT start with "Can you", "Could you", "Would you", "Do you", "Have you", "Are you" or any other yes/no opener, and add no filler such as "please" or "I would like to know". Ask for a concrete example, a situation or an approach. No lists of several questions.
 7. Never ask about age, gender, family, religion, health, disability, nationality, origin, politics or any personal characteristic, and never ask the candidate to share personal data.
 Return JSON only: {"can_generate": boolean, "question": string}.`;
 
@@ -95,8 +98,9 @@ export interface QuestionContext {
   jobTitle: string;
   description: string;
   existing: string[];
-  /** Set on the second try: the question the model wrote the first time, which was too close to an existing one. */
+  /** Set on the second try: the question the model wrote the first time, and why it cannot be used. */
   avoid?: string;
+  avoidReason?: "similar" | "long";
 }
 
 export function buildQuestionRequest(context: QuestionContext) {
@@ -114,7 +118,8 @@ export function buildQuestionRequest(context: QuestionContext) {
     existing,
     "</existing_questions>",
   ];
-  if (context.avoid) lines.push("", `Your previous attempt was too close to an existing question: "${oneLine(context.avoid, MAX_QUESTION_CHARS)}". Pick a clearly different topic.`);
+  if (context.avoid && context.avoidReason === "long") lines.push("", `Your previous attempt was longer than ${MAX_GENERATED_QUESTION_CHARS} characters. Write a shorter question, at most ${MAX_GENERATED_QUESTION_CHARS} characters, on a different or the same topic.`);
+  else if (context.avoid) lines.push("", `Your previous attempt was too close to an existing question: "${oneLine(context.avoid, MAX_QUESTION_CHARS)}". Pick a clearly different topic.`);
   return {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
     contents: [{ role: "user", parts: [{ text: lines.join("\n") }] }],

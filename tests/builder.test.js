@@ -244,3 +244,11 @@ test('the job description can be opened in a larger window (desktop only) that e
   assert.match(css, /@media\(max-width:760px\)\{\.expand-btn\{display:none\}\}/, 'not on phones');
   assert.match(css, /\.modal\.modal-wide\{width:min\(100%,820px\)\}/);
 });
+
+test('the interview question field accepts at most 300 characters and tells the person when the AI could not stay short', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const field = src.slice(src.indexOf('function mountInterviewQuestionsField('), src.indexOf('let myProfile = null;'));
+  assert.match(field, /class="text-input ai-question-input" data-index="' \+ index \+ '" maxlength="300"/);
+  assert.equal(field.includes('maxlength="500"'), false);
+  assert.match(field, /result\.reason === 'long'\) showToast\('We couldn\\u2019t write a question short enough\. Try again\.'/);
+});
