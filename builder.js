@@ -669,7 +669,7 @@
       if (!names.length) return 'All';
       return names.length > 2 ? names[0] + ', ' + names[1] + ' +' + (names.length - 2) : names.join(', ');
     };
-    const paintTrigger = () => { trigger.innerHTML = '<span class="multi-select-value">' + esc(summary()) + '</span><span class="multi-select-caret" aria-hidden="true">▾</span>'; };
+    const paintTrigger = () => { trigger.innerHTML = '<span class="multi-select-value">' + esc(summary()) + '</span><span class="multi-select-caret" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span>'; };
     const paintMenu = () => {
       const ids = currentResponsibleIds(getIds());
       menu.innerHTML = '<label class="multi-select-option"><input type="checkbox" class="check" data-all-people ' + (ids.length ? '' : 'checked') + '><span>All</span></label>'
@@ -1777,8 +1777,11 @@
     const content = root.querySelector('#reports-content');
     const data = reportData;
     if (!content || !data) return;
-    const label = root.querySelector('#report-picker-label');
-    if (label) label.textContent = data.selectedJob ? (data.selectedJob.title || 'Untitled role') : 'All jobs';
+    const pickerInput = root.querySelector('#report-picker-input');
+    if (pickerInput) {
+      pickerInput.dataset.label = data.selectedJob ? (data.selectedJob.title || 'Untitled role') : 'All jobs';
+      if (document.activeElement !== pickerInput) pickerInput.value = pickerInput.dataset.label;
+    }
     const companySelect = root.querySelector('#report-company');
     if (companySelect) {
       const companies = data.companies || [];
@@ -1851,46 +1854,61 @@
       content.querySelector('#report-retry')?.addEventListener('click', () => { void loadReport(); });
     }
   }
-  // The job chooser in the header: a short list with a search box, so it still works with hundreds of jobs.
+  // The job chooser in the header: you type in the field itself and a short list follows. The search runs on the server, so it still works with hundreds of jobs.
   function mountReportPicker() {
     const host = root.querySelector('#report-picker');
     if (!host) return;
-    const button = host.querySelector('#report-picker-btn'), menu = host.querySelector('.rpt-picker-menu'), search = host.querySelector('.rpt-picker-search'), list = host.querySelector('.rpt-picker-list');
-    let timer = null, requestId = 0;
-    const close = () => { menu.hidden = true; button.setAttribute('aria-expanded', 'false'); };
-    const paint = (jobs, total, loading) => {
-      list.innerHTML = '<li><button type="button" class="rpt-picker-option' + (!reportFlow ? ' is-selected' : '') + '" data-pick="">All jobs</button></li>'
-        + (loading ? '<li class="rpt-picker-note">Searching…</li>' : jobs.map(job => '<li><button type="button" class="rpt-picker-option' + (job.id === reportFlow ? ' is-selected' : '') + '" data-pick="' + esc(job.id) + '"><span>' + esc(job.title || 'Untitled role') + '</span>' + (job.company ? '<small>' + esc(job.company) + '</small>' : '') + '</button></li>').join('')
-          + (total > jobs.length ? '<li class="rpt-picker-note">Showing ' + jobs.length + ' of ' + reportNumber(total) + ' jobs. Type to search.</li>' : (!jobs.length ? '<li class="rpt-picker-note">No jobs match.</li>' : '')));
+    const input = host.querySelector('#report-picker-input'), list = host.querySelector('#report-picker-list');
+    let timer = null, requestId = 0, items = [], active = -1;
+    const isOpen = () => !list.hidden;
+    const currentLabel = () => input.dataset.label || 'All jobs';
+    const highlight = () => {
+      list.querySelectorAll('.job-combobox-option').forEach((node, index) => node.classList.toggle('is-active', index === active));
+      const node = list.querySelector('.job-combobox-option.is-active');
+      if (node) { input.setAttribute('aria-activedescendant', node.id); node.scrollIntoView({ block: 'nearest' }); } else input.removeAttribute('aria-activedescendant');
     };
-    const load = async () => {
+    const paint = (jobs, total, loading, query) => {
+      items = loading ? [] : [...(query ? [] : [{ value: '', label: 'All jobs', company: '' }]), ...jobs.map(job => ({ value: job.id, label: job.title || 'Untitled role', company: job.company || '' }))];
+      active = query ? (items.length ? 0 : -1) : items.findIndex(item => item.value === reportFlow);
+      list.innerHTML = loading ? '<li class="job-combobox-note">Searching…</li>'
+        : items.map((item, index) => '<li role="option" id="report-job-opt-' + index + '" class="job-combobox-option" data-index="' + index + '" aria-selected="' + (item.value === reportFlow) + '"><span>' + esc(item.label) + '</span>' + (item.company ? '<small>' + esc(item.company) + '</small>' : '') + '</li>').join('')
+          + (total > jobs.length ? '<li class="job-combobox-note">Showing ' + jobs.length + ' of ' + reportNumber(total) + ' jobs. Keep typing to narrow it down.</li>' : (!jobs.length ? '<li class="job-combobox-note">No jobs match.</li>' : ''));
+      highlight();
+    };
+    const load = async query => {
       const id = ++requestId;
-      paint([], 0, true);
+      paint([], 0, true, query);
       try {
         const range = reportRangeResolved || {};
-        const page = await window.PathwayBackend.getReportJobs(workspace.id, { from: range.from, to: range.to, company: reportCompany, search: search.value, sort: 'candidates', limit: 8, offset: 0 });
-        if (id === requestId) paint(page.jobs, page.total, false);
-      } catch (error) { if (id === requestId) list.innerHTML = '<li class="rpt-picker-note">Could not load the jobs.</li>'; }
+        const page = await window.PathwayBackend.getReportJobs(workspace.id, { from: range.from, to: range.to, company: reportCompany, search: query, sort: 'candidates', limit: 8, offset: 0 });
+        if (id === requestId && isOpen()) paint(page.jobs, page.total, false, query);
+      } catch (error) { if (id === requestId) list.innerHTML = '<li class="job-combobox-note">Could not load the jobs.</li>'; }
     };
-    button.addEventListener('click', () => {
-      if (!menu.hidden) { close(); return; }
-      menu.hidden = false; button.setAttribute('aria-expanded', 'true'); search.value = '';
-      void load(); search.focus();
-    });
-    search.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { void load(); }, 250); });
-    list.addEventListener('click', event => {
-      const option = event.target.closest('[data-pick]');
-      if (!option) return;
-      reportFlow = option.dataset.pick;
+    const show = () => { list.hidden = false; input.setAttribute('aria-expanded', 'true'); };
+    const open = () => { if (isOpen()) return; show(); input.select(); void load(''); };
+    const close = () => { clearTimeout(timer); requestId++; list.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); input.value = currentLabel(); };
+    const choose = index => {
+      const item = items[index];
+      if (!item) return;
+      const changed = item.value !== reportFlow;
+      if (changed) { reportFlow = item.value; input.dataset.label = item.label; }
       close();
-      void loadReport();
-    });
-    host.addEventListener('keydown', event => { if (event.key === 'Escape' && !menu.hidden) { event.stopPropagation(); close(); button.focus(); } });
-    const closeOnOutside = event => {
-      if (!host.isConnected) { document.removeEventListener('pointerdown', closeOnOutside, true); return; }
-      if (!host.contains(event.target)) close();
+      if (changed) void loadReport();
     };
-    document.addEventListener('pointerdown', closeOnOutside, true);
+    const move = step => { if (!items.length) return; active = (active + step + items.length) % items.length; highlight(); };
+    input.addEventListener('focus', open);
+    input.addEventListener('click', open);
+    input.addEventListener('input', () => { if (!isOpen()) show(); clearTimeout(timer); const query = input.value.trim(); timer = setTimeout(() => { void load(query); }, 250); });
+    input.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown') { event.preventDefault(); if (isOpen()) move(1); else open(); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); if (isOpen()) move(-1); else open(); }
+      else if (event.key === 'Enter') { if (isOpen()) { event.preventDefault(); if (active >= 0) choose(active); } }
+      else if (event.key === 'Escape') { if (isOpen()) { event.preventDefault(); event.stopPropagation(); close(); } }
+      else if (event.key === 'Tab') { if (isOpen()) close(); }
+    });
+    input.addEventListener('blur', close);
+    // mousedown (not click) so the field keeps focus and the list does not close before the choice is made
+    list.addEventListener('mousedown', event => { event.preventDefault(); const node = event.target.closest('[data-index]'); if (node) choose(Number(node.dataset.index)); });
   }
   async function exportReportCsv(button) {
     if (!reportData) return;
@@ -1918,7 +1936,7 @@
     setRoute('reports');
     currentId = null; selectedId = null;
     reportData = null; reportRangeResolved = null;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('reports')}<main class="reports-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Reports</h1><p>See how your jobs are doing: who visits, who applies and where candidates end up.</p></div><div class="reports-tools"><div class="rpt-seg-control" role="group" aria-label="Period">${REPORT_RANGES.map(item => `<button type="button" class="rpt-seg-btn${item.key === reportRange ? ' is-active' : ''}" data-report-range="${item.key}" aria-pressed="${item.key === reportRange}">${item.label}</button>`).join('')}</div><select id="report-company" class="applicants-filter" aria-label="Filter by company" hidden><option value="">All companies</option></select><div class="rpt-picker" id="report-picker"><button type="button" class="applicants-filter rpt-picker-btn" id="report-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Filter by job"><span id="report-picker-label">All jobs</span><span aria-hidden="true">▾</span></button><div class="rpt-picker-menu" hidden><input type="search" class="rpt-picker-search" placeholder="Search jobs" aria-label="Search jobs" maxlength="100"><ul class="rpt-picker-list" role="listbox"></ul></div></div><button class="btn btn-sm" id="report-export" type="button" disabled>↓ Export CSV</button></div></div><div id="reports-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('reports')}<main class="reports-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Reports</h1><p>See how your jobs are doing: who visits, who applies and where candidates end up.</p></div><div class="reports-tools"><div class="rpt-seg-control" role="group" aria-label="Period">${REPORT_RANGES.map(item => `<button type="button" class="rpt-seg-btn${item.key === reportRange ? ' is-active' : ''}" data-report-range="${item.key}" aria-pressed="${item.key === reportRange}">${item.label}</button>`).join('')}</div><select id="report-company" class="applicants-filter" aria-label="Filter by company" hidden><option value="">All companies</option></select><div class="rpt-picker" id="report-picker"><div class="rpt-picker-field"><input type="text" class="applicants-filter rpt-picker-input" id="report-picker-input" role="combobox" aria-expanded="false" aria-controls="report-picker-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="Filter by job" placeholder="Search jobs" maxlength="100" value="All jobs"><span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span></div><ul class="job-combobox-list" id="report-picker-list" role="listbox" aria-label="Jobs" hidden></ul></div><button class="btn btn-sm" id="report-export" type="button" disabled>↓ Export CSV</button></div></div><div id="reports-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
     

@@ -108,9 +108,9 @@ test('report text coming from the database is escaped before it reaches the page
 test('the Reports styles exist and the changed files carry a new cache version', () => {
   const css = read('styles.css');
   ['.reports-page', '.rpt-stats', '.rpt-chart', '.rpt-table'].forEach(selector => assert.ok(css.includes(selector), selector));
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261104i/);
-  assert.match(read('index.html'), /backend\.js\?v=mw3-20261104i/);
-  assert.match(read('index.html'), /styles\.css\?v=mw3-20261104i/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261104j/);
+  assert.match(read('index.html'), /backend\.js\?v=mw3-20261104j/);
+  assert.match(read('index.html'), /styles\.css\?v=mw3-20261104j/);
 });
 
 const scaling = read('supabase/migrations/20261020230000_report_scaling_and_step_counts.sql');
@@ -367,4 +367,17 @@ test('form versions: only the drop-off block is versioned, with a picker shown o
   assert.match(backend, /p_version_id: version/);
   assert.match(builder, /versions\.length < 2\) return ''/);
   assert.match(builder, /id="rpt-steps-version-slot"/);
+});
+
+test('the Reports job filter is typed into the field itself (like the other searchable selects) and has the drawn chevron', () => {
+  const builder = read('builder.js');
+  const css = read('styles.css');
+  assert.match(builder, /<input type="text" class="applicants-filter rpt-picker-input" id="report-picker-input" role="combobox"/);
+  assert.match(builder, /id="report-picker-list" role="listbox"/);
+  assert.equal(builder.includes('rpt-picker-btn'), false, 'no button with a search box inside a popover any more');
+  assert.equal(builder.includes('rpt-picker-search'), false);
+  assert.equal(builder.includes('▾'), false, 'the text arrow is gone');
+  assert.match(builder, /search: query, sort: 'candidates', limit: 8, offset: 0/, 'still a short list searched on the server');
+  assert.match(builder, /'ArrowDown'[\s\S]*'ArrowUp'[\s\S]*'Enter'[\s\S]*'Escape'/);
+  assert.match(css, /\.rpt-picker-input\[aria-expanded="true"\] ~ \.job-combobox-chevron\{/);
 });
