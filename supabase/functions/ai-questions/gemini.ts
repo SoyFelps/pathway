@@ -2,14 +2,15 @@ import { buildQuestionRequest, cleanDescription, cleanExisting, descriptionIsEno
 
 // Calls Google Gemini to write ONE interview question. Pinned models (never the moving "latest" alias), tried in order when Google says one is busy or slow.
 // The small, cheap Flash-Lite goes first: on 2026-11-05 it was tested in staging against the same cases as 3.5 Flash (good questions, refuses vague or
-// empty descriptions, ignores instructions hidden in the description, right language) and answers in about 3 s instead of 6 s. The bigger models are the reserve.
+// empty descriptions, ignores instructions hidden in the description, right language) and answers in about 3 s. The bigger models are the reserve. gemini-3.5-flash is
+// NOT used: Google retired it (calls to it are redirected to 3.6 Flash), so 3.6 is named explicitly. 3.6 accepts "minimal" thinking (checked in staging 2026-11-05).
 // "Thinking" stays minimal because the person is waiting for the answer.
 
 export interface ModelChoice { name: string; thinkingLevel: string; timeoutMs: number }
 export const MODEL_CHAIN: ModelChoice[] = [
   { name: "gemini-3.5-flash-lite", thinkingLevel: "minimal", timeoutMs: 15_000 },
-  { name: "gemini-3.5-flash", thinkingLevel: "minimal", timeoutMs: 20_000 },
   { name: "gemini-3.8-flash", thinkingLevel: "low", timeoutMs: 25_000 },
+  { name: "gemini-3.6-flash", thinkingLevel: "minimal", timeoutMs: 25_000 },
 ];
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
