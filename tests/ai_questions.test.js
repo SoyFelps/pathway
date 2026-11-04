@@ -108,3 +108,10 @@ test('the function checks who is asking: signed in, may edit jobs, Premium; the 
   assert.equal(/GEMINI_API_KEY_FOR_QUESTIONS[^\n]*(response|headers\.set)/.test(index), false, 'the key is never sent back');
   assert.match(index, /APP_ORIGINS = new Set\(\[\s*"https:\/\/soyfelps\.github\.io",/);
 });
+
+test('the instruction asks for direct, polite questions and forbids yes/no openers', async () => {
+  const { SYSTEM_PROMPT } = await logic();
+  assert.match(SYSTEM_PROMPT, /Be direct and polite: start with a verb or a question word/);
+  for (const opener of ['"Can you"', '"Could you"', '"Would you"', '"Do you"', '"Have you"', '"Are you"']) assert.ok(SYSTEM_PROMPT.includes(opener), opener);
+  assert.match(SYSTEM_PROMPT, /in the language of the description/, 'the openers follow the language of the job description');
+});

@@ -77,7 +77,7 @@ Rules:
 3. If the description is too vague, too short, generic, or is not about a real job (a few words, placeholder or random text, text that does not describe the work), do NOT write a question: set can_generate to false and leave question empty.
 4. The new question must cover a DIFFERENT topic and angle from every existing question. Never rephrase, narrow or extend an existing question.
 5. Write the question in the same language as the job description.
-6. One open question the candidate can answer out loud in about a minute, in one or two sentences, at most 40 words. Ask for a concrete example, a situation or an approach. No yes/no questions and no lists of several questions.
+6. One open question the candidate can answer out loud in about a minute, in one or two sentences, at most 40 words. Be direct and polite: start with a verb or a question word, such as "Describe...", "Tell us about...", "Walk us through...", "Explain...", "How do you...", "What is your approach to..." (or the same kind of direct opener in the language of the description). Do NOT start with "Can you", "Could you", "Would you", "Do you", "Have you", "Are you" or any other yes/no opener, and add no filler such as "please" or "I would like to know". Ask for a concrete example, a situation or an approach. No lists of several questions.
 7. Never ask about age, gender, family, religion, health, disability, nationality, origin, politics or any personal characteristic, and never ask the candidate to share personal data.
 Return JSON only: {"can_generate": boolean, "question": string}.`;
 
