@@ -111,3 +111,10 @@ test('deleting a step offers an Undo that lasts only until the next action', () 
   assert.match(src, /flow\.nodes = state\.snapshot\.nodes; flow\.edges = state\.snapshot\.edges;/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8'), /\.undo-bar\{position:fixed;/);
 });
+
+test('the Undo bar is centred in the canvas area, not in the whole window', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  assert.match(src, /const view = document\.getElementById\('workspace'\);[\s\S]*bar\.style\.left = \(box\.left \+ view\.clientWidth \/ 2\) \+ 'px';/);
+  assert.match(src, /window\.addEventListener\('resize', place\);/, 'stays centred when the window is resized');
+  assert.match(src, /window\.removeEventListener\('resize', undoDelete\.onResize\)/, 'the listener goes away with the bar');
+});

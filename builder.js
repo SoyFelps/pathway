@@ -172,6 +172,7 @@
   // opening another page) removes the offer for good. Scrolling and dragging the empty canvas background (to look around) do not.
   let undoDelete = null;
   function clearUndoDelete() {
+    if (undoDelete && undoDelete.onResize) window.removeEventListener('resize', undoDelete.onResize);
     undoDelete = null;
     document.getElementById('undo-delete-bar')?.remove();
   }
@@ -182,6 +183,11 @@
     bar.id = 'undo-delete-bar'; bar.className = 'undo-bar'; bar.setAttribute('role', 'status');
     bar.innerHTML = '<span>Step deleted</span><button type="button" id="undo-delete-btn">Undo</button>';
     document.body.appendChild(bar);
+    // centred in the canvas area (not in the whole window: the settings panel sits on the right)
+    const place = () => { const view = document.getElementById('workspace'); if (!view || !bar.isConnected) return; const box = view.getBoundingClientRect(); bar.style.left = (box.left + view.clientWidth / 2) + 'px'; };
+    place();
+    undoDelete.onResize = place;
+    window.addEventListener('resize', place);
     bar.querySelector('#undo-delete-btn').addEventListener('click', restoreDeletedStep);
   }
   function restoreDeletedStep() {
