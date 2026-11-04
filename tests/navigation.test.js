@@ -31,3 +31,13 @@ test('signing out replaces the old page in the address with #login, so the next 
   const auth = fs.readFileSync(path.join(__dirname, '..', 'auth.js'), 'utf8');
   assert.equal(/setRoute|location\.hash\s*=|replaceState\([^)]*#login/.test(auth), false, 'the sign-in screen itself never rewrites the address, so a bookmarked page still opens after signing in');
 });
+
+test('every sidebar link has a drawn SVG icon (no text symbols)', () => {
+  const b = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const sidebar = b.slice(b.indexOf('function renderSidebar(active)'), b.indexOf('function bindSidebar()'));
+  for (const name of ['dashboard', 'applicants', 'reports', 'diversity', 'team', 'companies', 'plan', 'settings']) {
+    assert.ok(sidebar.includes('${ICONS.' + name + '}'), name + ' icon in the sidebar');
+    assert.match(b, new RegExp("\n    " + name + ": '<svg"), name + ' icon is an SVG');
+  }
+  assert.equal(/class="sidebar-icon" aria-hidden="true">[^$<]/.test(sidebar), false, 'no text glyph used as an icon');
+});

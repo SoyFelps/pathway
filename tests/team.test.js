@@ -155,10 +155,10 @@ test('My Team shows up to three included seats, defaults permissions on, and sup
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=mw3-20261104m/);
-  assert.match(html, /backend\.js\?v=mw3-20261104m/);
-  assert.match(html, /builder\.js\?v=mw3-20261104m/);
-  assert.match(html, /styles\.css\?v=mw3-20261104m/);
+  assert.match(html, /auth\.js\?v=mw3-20261104n/);
+  assert.match(html, /backend\.js\?v=mw3-20261104n/);
+  assert.match(html, /builder\.js\?v=mw3-20261104n/);
+  assert.match(html, /styles\.css\?v=mw3-20261104n/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
@@ -177,15 +177,14 @@ test('My Team renders loading cards before its list request resolves and ignores
   assert.doesNotMatch(edge, /const \{ data: ownMembership, error: ownError \} = await admin\.from\("workspace_members"\)/);
 });
 
-test('My Team sidebar uses a distinct three-person icon from Applicants', () => {
+test('My Team sidebar uses a two-person icon, distinct from the single-person Applicants icon', () => {
   const builder = read('builder.js');
   const applicantsIcon = builder.match(/applicants: '(.*?)',\n\s*team:/s)?.[1];
-  const teamIcon = builder.match(/team: '(.*?)',\n\s*node:/s)?.[1];
+  const teamIcon = builder.match(/team: '(.*?)',\n\s*dashboard:/s)?.[1];
   assert.ok(applicantsIcon && teamIcon, 'both sidebar icons must be defined');
   assert.notEqual(teamIcon, applicantsIcon);
-  assert.match(teamIcon, /cx="6" cy="7\.5"/);
-  assert.match(teamIcon, /cx="12" cy="6\.5"/);
-  assert.match(teamIcon, /cx="18" cy="7\.5"/);
+  assert.equal((teamIcon.match(/<circle/g) || []).length, 2, 'two people');
+  assert.equal((applicantsIcon.match(/<circle/g) || []).length, 1, 'one person');
 });
 
 test('My Companies appears immediately below My Team in the sidebar', () => {
