@@ -99,7 +99,7 @@ test('report text coming from the database is escaped before it reaches the page
   const start = builder.indexOf('// ---- Reports');
   const end = builder.indexOf('function formatPlanDate');
   const code = builder.slice(start, end);
-  assert.match(code, /esc\(item\.reason\)/, 'auto-fail reasons contain text typed by employers');
+  assert.match(code, /esc\(autoFailReasonText\(item\.reason\)\)/, 'auto-fail reasons contain text typed by employers');
   assert.match(code, /esc\(job\.title \|\| t\('Untitled role'\)\)/);
   assert.match(code, /esc\(job\.company \|\| ''\)/);
   assert.match(code, /esc\(reportStageLabel\(item\.status\)\)/, 'custom column names are escaped');
@@ -108,9 +108,9 @@ test('report text coming from the database is escaped before it reaches the page
 test('the Reports styles exist and the changed files carry a new cache version', () => {
   const css = read('styles.css');
   ['.reports-page', '.rpt-stats', '.rpt-chart', '.rpt-table'].forEach(selector => assert.ok(css.includes(selector), selector));
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105z/);
-  assert.match(read('index.html'), /backend\.js\?v=mw3-20261105z/);
-  assert.match(read('index.html'), /styles\.css\?v=mw3-20261105z/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261106a/);
+  assert.match(read('index.html'), /backend\.js\?v=mw3-20261106a/);
+  assert.match(read('index.html'), /styles\.css\?v=mw3-20261106a/);
 });
 
 const scaling = read('supabase/migrations/20261020230000_report_scaling_and_step_counts.sql');
@@ -185,7 +185,7 @@ test('the auto-fail reasons are listed only for one job, grouped by question', (
   assert.match(builder, /if \(!data\.selectedJob\) return lead \+ '<p class="rpt-note">' \+ t\('Every job has its own form/);
   assert.match(builder, /rpt-af-group/);
   assert.match(builder, /esc\(group\.question\)/, 'question labels are typed by employers and must be escaped');
-  assert.match(builder, /esc\(item\.reason\)/);
+  assert.match(builder, /esc\(autoFailReasonText\(item\.reason\)\)/);
 });
 
 const stepsSql = read('supabase/migrations/20261021100000_report_steps.sql');

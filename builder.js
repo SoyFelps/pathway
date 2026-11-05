@@ -614,7 +614,7 @@
       if (working) body = '<div class="ai-note is-working" role="status"><strong>' + esc(working[0]) + '</strong> ' + esc(working[1]) + '</div>' + body;
       const away = !working && row && ['pending', 'blocked', 'invited', 'in_progress'].includes(row.state) && stage.getStage && stage.getStage() !== 'ai_interview' && stage.canMove && stage.canMove();
       if (away) body += '<div class="ai-note is-warn ai-column-note" role="status"><span>' + t('This candidate is not in the AI Interview column of the Kanban.') + '</span><div class="ai-actions">' + button('move-stage', t('Move to AI Interview column')) + '</div></div>';
-      host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + (data.liveError ? '<div class="ai-note is-warn">' + esc(data.liveError) + '</div>' : '') + body + '</div>';
+      host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + (data.liveError ? '<div class="ai-note is-warn">' + esc(t(data.liveError)) + '</div>' : '') + body + '</div>';
       schedule(row, live);
     };
     // Keep it fresh while something is about to happen: the e-mail going out, the candidate answering, the evaluation being written.
@@ -1755,7 +1755,7 @@
     if (!data.selectedJob) return lead + '<p class="rpt-note">' + t('Every job has its own form and its own rules. The Auto-fail column in the table below shows the rate of each job; choose a job to see which questions screened people out.') + '</p>';
     return lead + (data.autoFailGroups || []).map(group => {
       const top = Math.max(1, ...group.reasons.map(item => Number(item.n || 0)));
-      return '<div class="rpt-af-group"><div class="rpt-af-head"><strong>' + esc(group.question) + '</strong><span>' + tn('{count} candidate', '{count} candidates', Number(group.n), { count: reportNumber(group.n) }) + '</span></div><ul class="rpt-reasons">' + group.reasons.map(item => '<li><span class="rpt-reason-text">' + esc(item.reason) + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (Number(item.n) / top * 100) + '%"></span></span><strong>' + reportNumber(item.n) + '</strong></li>').join('') + '</ul></div>';
+      return '<div class="rpt-af-group"><div class="rpt-af-head"><strong>' + esc(group.question) + '</strong><span>' + tn('{count} candidate', '{count} candidates', Number(group.n), { count: reportNumber(group.n) }) + '</span></div><ul class="rpt-reasons">' + group.reasons.map(item => '<li><span class="rpt-reason-text">' + esc(autoFailReasonText(item.reason)) + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (Number(item.n) / top * 100) + '%"></span></span><strong>' + reportNumber(item.n) + '</strong></li>').join('') + '</ul></div>';
     }).join('');
   }
   const REPORT_JOB_SORTS = [['candidates', 'Most candidates'], ['visits', 'Most visits'], ['completion', 'Best completion rate'], ['autofail', 'Highest auto-fail rate']];
@@ -1807,6 +1807,20 @@
   // ---- Where candidates drop off (one job) ----------------------------------------------------------------------------
   // The database returns the steps of the published form and how many visits reached each one; here the order of the
   // questions is worked out (the form can branch) and, for every step, how many people got there and how many stopped.
+  // The server writes why a candidate was moved to Failed in English, and that text is stored as is. The screen translates
+  // its fixed words; the question and the answer stay as the employer and the candidate wrote them.
+  function autoFailReasonText(reason) {
+    return String(reason || '').split('; ').map(part => {
+      let match = part.match(/^Answered (.*) to "(.*)" \(minimum (.*)\)$/);
+      if (match && !match[1].startsWith('"')) return t('Answered {answer} to “{question}” (minimum {minimum})', { answer: match[1], question: match[2], minimum: match[3] });
+      match = part.match(/^Answered "(.*)" to "(.*)"$/);
+      if (match) return t('Answered “{answer}” to “{question}”', { answer: match[1], question: match[2] });
+      match = part.match(/^Selected (.*) for "(.*)"$/);
+      if (match) return t('Selected {answers} for “{question}”', { answers: match[1].replace(/"([^"]*)"/g, '“$1”'), question: match[2] });
+      if (part === 'Reached the "Not a match this time" result') return t('Reached the “Not a match this time” result');
+      return part;
+    }).join('; ');
+  }
   const REPORT_STEP_MIN_SAMPLE = 20;
   function reportStepsModel(raw) {
     const nodes = new Map((raw.nodes || []).map(node => [node.id, node]));
@@ -1929,7 +1943,7 @@
     block(t('Where candidates are now'), [t('stage'), t('candidates')], data.stages.map(s => [reportStageLabel(s.status), s.n]));
     if (data.selectedJob) {
       if (reportSteps && reportSteps.hasData) block(t('Where candidates drop off') + (reportSteps.version && reportSteps.versions.length > 1 ? ' (' + t('form version {number}', { number: reportSteps.version.number }) + ')' : ''), [t('step'), t('people who reached it'), t('stopped here'), t('share who stopped')], reportStepsModel(reportSteps).rows.map(row => [(row.kind === 'question' ? t('Question {number}', { number: row.number }) + ': ' : '') + row.label, row.reached, row.left === null ? '' : row.left, row.share === null ? '' : Math.round(row.share * 100) + '%']));
-      block(t('Auto-fail reasons'), [t('question'), t('reason'), t('candidates')], (data.autoFailGroups || []).flatMap(group => group.reasons.map(item => [group.question, item.reason, item.n])));
+      block(t('Auto-fail reasons'), [t('question'), t('reason'), t('candidates')], (data.autoFailGroups || []).flatMap(group => group.reasons.map(item => [group.question, autoFailReasonText(item.reason), item.n])));
     } else block(t('Jobs'), [t('job'), t('company'), t('status'), t('visits'), t('form starts'), t('candidates'), t('applications'), t('completion rate'), t('moved to Failed automatically')], jobRows.map(j => [j.title, j.company, j.status === 'published' ? t('Published') : j.status === 'draft' ? t('Draft') : j.status, j.views, j.starts, j.candidates, j.applications, reportPercentText(Number(j.funnelApplications || 0), Number(j.starts || 0)), j.autoFailed]));
     return rowsToCsv(rows);
   }
@@ -2008,7 +2022,7 @@
       paintReport();
     } catch (error) {
       if (requestId !== reportRequestId || !root.querySelector('.reports-page')) return;
-      if (reportFlow && /could not be found/i.test(error.message || '')) { reportFlow = ''; void loadReport(); return; }
+      if (reportFlow && /could not be found/i.test(error.englishMessage || error.message || '')) { reportFlow = ''; void loadReport(); return; }
       content.setAttribute('aria-busy', 'false');
       content.innerHTML = '<div class="auth-error show" role="alert">' + esc(t('Could not load the report: {reason}', { reason: error.message || t('check your connection and try again') })) + '</div><button class="btn" id="report-retry" style="margin-top:12px">' + t('Try again') + '</button>';
       content.querySelector('#report-retry')?.addEventListener('click', () => { void loadReport(); });
@@ -3578,7 +3592,7 @@
         ${tabs}
         <div class="applicant-review-content">
           <section class="applicant-detail-section applicant-detail-actions-section"><div class="applicant-detail-actions">
-            <label class="applicant-info-item"><span>${t('Hiring stage')}</span><select class="applicant-status-select" id="applicant-status-select"${workspaceIsFree() ? ` disabled title="${t('Upgrade to Premium to move candidates between stages.')}"` : ''}>${statusOptions}</select>${group.count > 1 ? `<small class="applicant-stage-note">${t('Applies to all {count} applications', { count: group.count })}</small>` : ''}</label>${autoFailReason ? `<p class="applicant-autofail-note"><strong>${t('Moved to Failed automatically:')}</strong> ${esc(autoFailReason)}</p>` : ''}
+            <label class="applicant-info-item"><span>${t('Hiring stage')}</span><select class="applicant-status-select" id="applicant-status-select"${workspaceIsFree() ? ` disabled title="${t('Upgrade to Premium to move candidates between stages.')}"` : ''}>${statusOptions}</select>${group.count > 1 ? `<small class="applicant-stage-note">${t('Applies to all {count} applications', { count: group.count })}</small>` : ''}</label>${autoFailReason ? `<p class="applicant-autofail-note"><strong>${t('Moved to Failed automatically:')}</strong> ${esc(autoFailReasonText(autoFailReason))}</p>` : ''}
           </div></section>
           <section class="applicant-detail-section"><h3>${t('Candidate details')}</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>${t('Full name')}</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>${t('Email address')}</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(t(C.infoFieldLabel(key)))}</span><strong>${esc(infoValue(key, value))}</strong></div>`).join('')}</div></section>
           <section class="applicant-detail-section"><h3>${t('Application answers')} · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || t('Application question'))}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : `<div class="board-empty">${t('No written answers were submitted for this flow.')}</div>`}</section>

@@ -89,7 +89,7 @@ test('Keep Premium adapter sends an authenticated request to remove scheduled ca
 test('payment-method adapter accepts only HTTPS Stripe Billing Portal session URLs', () => {
   const backend = read('backend.js');
   assert.match(backend, /async function createPaymentMethodUpdateSession\(\)/);
-  assert.match(backend, /billingBody\(\{ action: 'createPaymentMethodUpdateSession' \}\)/);
+  assert.match(backend, /billingBody\(\{ action: 'createPaymentMethodUpdateSession', locale: /);
   assert.match(backend, /Authorization: `Bearer \$\{session\.access_token\}`/);
   assert.match(backend, /portalUrl\.protocol !== 'https:'/);
   assert.match(backend, /portalUrl\.hostname !== 'billing\.stripe\.com'/);
@@ -154,9 +154,9 @@ test('payment history is authenticated, paginated, and restricted to verified Pa
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=mw3-20261105z/);
-  assert.match(html, /builder\.js\?v=mw3-20261105z/);
-  assert.match(html, /styles\.css\?v=mw3-20261105z/);
+  assert.match(html, /backend\.js\?v=mw3-20261106a/);
+  assert.match(html, /builder\.js\?v=mw3-20261106a/);
+  assert.match(html, /styles\.css\?v=mw3-20261106a/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);

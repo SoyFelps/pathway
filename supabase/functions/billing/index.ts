@@ -137,11 +137,14 @@ Deno.serve(async (req: Request) => {
   let action = "checkout";
   let startingAfter = "";
   let requestedWorkspaceId = "";
+  // The language of Stripe's page for updating the card: the person's interface language (Stripe's own choice otherwise).
+  let portalLocale: "en" | "pt-BR" | "es" | "auto" = "auto";
   try {
     const body = await req.json();
     if (body && typeof body.action === "string") action = body.action;
     if (body && typeof body.starting_after === "string") startingAfter = body.starting_after;
     if (body && typeof body.workspaceId === "string") requestedWorkspaceId = body.workspaceId.trim();
+    if (body && (body.locale === "en" || body.locale === "pt-BR" || body.locale === "es")) portalLocale = body.locale;
   } catch {
     return fail(req, 400, "The request body must be valid JSON.");
   }
@@ -456,6 +459,7 @@ Deno.serve(async (req: Request) => {
       const portalSession = await stripe.billingPortal.sessions.create({
         customer: existing.stripe_customer_id,
         return_url: returnUrl.href,
+        locale: portalLocale,
         flow_data: {
           type: "payment_method_update",
           after_completion: {

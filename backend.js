@@ -11,6 +11,10 @@
   client.auth.onAuthStateChange(event => { if (event === 'PASSWORD_RECOVERY') passwordRecoveryPending = true; });
   // Messages shown to the signed-in person follow the interface language (i18n.js); English when it is not loaded.
   const t = (text, vars) => (window.PathwayI18n ? window.PathwayI18n.t(text, vars) : String(text).replace(/\{(\w+)\}/g, (all, name) => (vars && name in vars ? vars[name] : all)));
+  const translatedError = error => {
+    if (error && typeof error.message === 'string' && !error.englishMessage) { try { error.englishMessage = error.message; error.message = t(error.message); } catch (_) { /* a frozen error keeps its English text */ } }
+    return error;
+  };
   const saveQueues = new Map();
   // The workspace this tab is working in (a person can belong to several). Set by bootstrap and added to every call that needs it.
   let currentWorkspaceId = '';
@@ -25,7 +29,7 @@
   const CUSTOM_STATUS_PATTERN = /^custom:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   const isApplicantStatus = status => APPLICANT_STATUSES.has(status) || CUSTOM_STATUS_PATTERN.test(String(status));
 
-  async function callApplications(body, accessToken = '') {
+  async function callApplications(body, accessToken = '', translate = false) {
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
     const headers = { apikey: config.publishableKey };
     if (!isFormData && accessToken && currentWorkspaceId && !body.workspaceId && (body.action === 'listApplicantFlowLabels' || body.action === 'deleteFailedApplicants' || body.action === 'deleteFlow')) body = { ...body, workspaceId: currentWorkspaceId };
@@ -36,7 +40,7 @@
     catch (_) { throw new Error('Could not reach the application service. Check your connection and try again.'); }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || 'The application service could not complete this request.');
+    if (!result.ok) { const message = payload.error || 'The application service could not complete this request.'; throw new Error(translate ? t(message) : message); }
     return payload;
   }
 
@@ -47,7 +51,7 @@
 
   async function requireSession() {
     const { data, error } = await client.auth.getSession();
-    if (error) throw error;
+    if (error) throw translatedError(error);
     if (!data.session) throw new Error(t('Your session expired. Sign in again to continue.'));
     return data.session;
   }
@@ -72,7 +76,7 @@
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
     if (result.status === 403 && /do not belong to this workspace/i.test(String(payload.error || '')) && body.workspaceId && body.workspaceId === currentWorkspaceId) announceWorkspaceLost();
-    if (!result.ok) throw new Error(payload.error || t('The team service could not complete this request.'));
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('The team service could not complete this request.'));
     return payload;
   }
 
@@ -88,7 +92,7 @@
   async function listWorkspacePeople(workspaceId) {
     await requireSession();
     const { data, error } = await client.rpc('list_workspace_people', { p_workspace_id: workspaceId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return (data || []).map(person => ({ userId: person.user_id, email: person.email, isOwner: Boolean(person.is_owner), firstName: person.first_name || '', lastName: person.last_name || '' }));
   }
   // AI interview (Witcher). The questions of a job are a column of their own, never part of flow_data. The database accepts 1 to 5
@@ -114,7 +118,7 @@
       .eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(2000);
     if (flowId) query = query.eq('flow_id', flowId);
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return (data || []).map(mapAiInterview);
   }
   // One call to the checked server function: status (live from Witcher), resend, cancel, reevaluate, retry. The browser never talks to Witcher.
@@ -126,7 +130,7 @@
     } catch (_) { throw new Error(t('Could not reach the interview service. Check your connection and try again.')); }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) { const error = new Error(payload.error || t('The interview service could not complete this request.')); error.code = payload.code || null; error.retryAt = payload.retryAt || null; throw error; }
+    if (!result.ok) { const error = new Error(payload.error ? t(payload.error) : t('The interview service could not complete this request.')); error.code = payload.code || null; error.retryAt = payload.retryAt || null; throw translatedError(error); }
     return payload;
   }
   // Asks the AI for ONE interview question from the job description, different from the questions already in the field. Resolves to
@@ -136,10 +140,10 @@
     let result;
     try {
       result = await fetch(AI_QUESTIONS_FUNCTION, { method: 'POST', headers: { apikey: config.publishableKey, 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ workspaceId, jobTitle: String(jobTitle || ''), description: String(description || ''), existing: Array.isArray(existing) ? existing : [] }) });
-    } catch (_) { const error = new Error('network'); error.code = 'network'; throw error; }
+    } catch (_) { const error = new Error('network'); error.code = 'network'; throw translatedError(error); }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* the code below covers it */ }
-    if (!result.ok) { const error = new Error(payload.error || t('The AI could not answer.')); error.code = payload.code || 'ai_unavailable'; throw error; }
+    if (!result.ok) { const error = new Error(payload.error ? t(payload.error) : t('The AI could not answer.')); error.code = payload.code || 'ai_unavailable'; throw translatedError(error); }
     return payload;
   }
   // `purpose` "export" is the candidate data export, the one place that still reads the transcript on the free plan.
@@ -152,19 +156,19 @@
   async function listAiInterviewNotices(workspaceId) {
     await requireSession();
     const { data, error } = await client.rpc('get_ai_interview_notices', { p_workspace_id: workspaceId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return (data || []).map(row => ({ id: row.ai_interview_id, flowId: row.flow_id, jobTitle: row.job_title, companyName: row.company_name, candidateName: row.candidate_name, candidateEmail: row.candidate_email, impression: row.impression || null, completedAt: row.completed_at }));
   }
   async function markAiInterviewNoticeSeen(aiInterviewId) {
     await requireSession();
     const { error } = await client.rpc('mark_ai_interview_notice_seen', { p_ai_interview_id: aiInterviewId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
   }
   // Everything the person was notified about in the last 30 days, seen or not (the "All notifications" page). The day boundaries are the person's own.
   async function listNotificationHistory(workspaceId) {
     await requireSession();
     const { data, error } = await client.rpc('get_notification_history', { p_workspace_id: workspaceId, p_utc_offset_minutes: -new Date().getTimezoneOffset() });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return (data || []).map(row => ({
       kind: row.kind, at: row.event_at, seen: Boolean(row.seen), flowId: row.flow_id, jobTitle: row.job_title || '', companyName: row.company_name || '',
       candidateName: row.candidate_name || '', candidateEmail: row.candidate_email || '', newCount: Number(row.new_count) || 0, authorName: row.author_name || '',
@@ -174,18 +178,18 @@
   async function listFlowNotifications(workspaceId) {
     await requireSession();
     const { data, error } = await client.rpc('get_flow_notifications', { p_workspace_id: workspaceId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return (data || []).map(row => ({ flowId: row.flow_id, jobTitle: row.job_title, companyName: row.company_name, newCount: row.new_count, latestAt: row.latest_at }));
   }
   async function markFlowNotificationSeen(flowId) {
     await requireSession();
     const { error } = await client.rpc('mark_flow_notification_seen', { p_flow_id: flowId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
   }
   async function listTeamOverview(workspaceId) {
     await requireSession();
     const { data, error } = await client.rpc('list_team_overview', { p_workspace_id: workspaceId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return (data || []).map(row => ({ userId: row.user_id, email: row.email, isOwner: Boolean(row.is_owner), can_flows: row.can_flows, can_applicants: row.can_applicants, can_manage_team: row.can_manage_team, can_customize_stages: row.can_customize_stages, can_view_reports: row.can_view_reports, can_diversity: row.can_diversity, memberSince: row.member_since, firstName: row.first_name || '', lastName: row.last_name || '' }));
   }
   // Internal team comments: one list per candidate (same job + same e-mail address, so repeat applications share it).
@@ -194,7 +198,7 @@
     await requireSession();
     const { data, error } = await client.from('applicant_comments').select('id,author_id,author_name,body,created_at,mentions')
       .eq('flow_id', flowId).eq('candidate_email', String(email || '').trim().toLowerCase()).order('created_at', { ascending: true }).limit(500);
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return (data || []).map(mapComment);
   }
   async function addApplicantComment(flowId, email, body, mentionedUserIds = []) {
@@ -203,32 +207,32 @@
     if (!text) throw new Error(t('Write a comment first.'));
     if (text.length > 2000) throw new Error(t('A comment can have at most 2000 characters.'));
     const { data, error } = await client.rpc('add_applicant_comment', { p_flow_id: flowId, p_candidate_email: email, p_body: text, p_mentions: mentionedUserIds });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return mapComment(data);
   }
   // In-app notifications for @mentions: unseen mentions of the signed-in person, and "seen" when they open that candidate.
   async function listCommentMentions(workspaceId) {
     await requireSession();
     const { data, error } = await client.rpc('get_comment_mentions', { p_workspace_id: workspaceId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return (data || []).map(row => ({ commentId: row.comment_id, flowId: row.flow_id, candidateEmail: row.candidate_email, candidateName: row.candidate_name, jobTitle: row.job_title, authorName: row.author_name, createdAt: row.created_at }));
   }
   async function markCommentMentionsSeen(flowId, email) {
     await requireSession();
     const { error } = await client.rpc('mark_comment_mentions_seen', { p_flow_id: flowId, p_candidate_email: email });
-    if (error) throw error;
+    if (error) throw translatedError(error);
   }
   // Only the author or the workspace owner may delete; the database enforces it.
   async function deleteApplicantComment(commentId) {
     await requireSession();
     const { error } = await client.rpc('delete_applicant_comment', { p_comment_id: commentId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
   }
   // Everything Pathway holds about the signed-in person (read by one checked database function).
   async function exportMyData() {
     await requireSession();
     const { data, error } = await client.rpc('export_my_data');
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return data;
   }
   async function getMyProfile() {
@@ -237,7 +241,7 @@
     const userId = authData?.session?.user?.id;
     if (!userId) return null;
     const { data, error } = await client.from('profiles').select('first_name,last_name,ui_language').eq('user_id', userId).maybeSingle();
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return data ? { firstName: data.first_name, lastName: data.last_name, uiLanguage: data.ui_language || null } : null;
   }
   // Interface language of the signed-in person: 'en', 'pt-BR', 'es', or null (follow the browser).
@@ -248,7 +252,7 @@
     const { data: authData } = await client.auth.getSession();
     const userId = authData?.session?.user?.id;
     const { data, error } = await client.from('profiles').update({ ui_language: value }).eq('user_id', userId).select('ui_language').maybeSingle();
-    if (error) throw error;
+    if (error) throw translatedError(error);
     if (!data) throw new Error(t('Could not save your language. Please refresh and try again.'));
     return data.ui_language || null;
   }
@@ -261,14 +265,14 @@
     const { data: authData } = await client.auth.getSession();
     const userId = authData?.session?.user?.id;
     const { data, error } = await client.from('profiles').update({ first_name: first, last_name: last }).eq('user_id', userId).select('first_name,last_name,ui_language').maybeSingle();
-    if (error) throw error;
+    if (error) throw translatedError(error);
     if (!data) throw new Error(t('Could not save your name. Please refresh and try again.'));
     return { firstName: data.first_name, lastName: data.last_name, uiLanguage: data.ui_language || null };
   }
   async function getFlowResponsibles(flowId) {
     await requireSession();
     const { data, error } = await client.rpc('get_flow_responsibles', { p_flow_id: flowId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return { everyone: Boolean(data?.everyone), people: Array.isArray(data?.people) ? data.people.map(person => ({ email: String(person.email || ''), isOwner: Boolean(person.isOwner), firstName: String(person.firstName || ''), lastName: String(person.lastName || '') })) : [] };
   }
   async function listTeam() { return callTeam({ action: 'listTeam' }); }
@@ -295,7 +299,7 @@
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || t('The workspace could not be deleted.'));
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('The workspace could not be deleted.'));
     if (!payload.deleted) throw new Error(t('The workspace deletion was not confirmed. Refresh the page before retrying.'));
     return payload;
   }
@@ -315,7 +319,7 @@
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || t('Your account could not be deleted.'));
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('Your account could not be deleted.'));
     if (!payload.deleted) throw new Error(t('The account deletion was not confirmed. Refresh the page before retrying.'));
     try { await client.auth.signOut({ scope: 'local' }); } catch (_) { /* the Auth user and refresh sessions were already deleted server-side */ }
     return payload;
@@ -326,7 +330,7 @@
     const cleanName = String(name || '').trim().slice(0, 120);
     if (!cleanName) throw new Error(t('Enter a name for your workspace.'));
     const { data, error } = await client.rpc('create_workspace', { p_name: cleanName });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return data;
   }
 
@@ -335,7 +339,7 @@
     const { data, error } = await client.from('workspace_subscriptions')
       .select('status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id')
       .eq('workspace_id', workspaceId).maybeSingle();
-    if (error) throw error;
+    if (error) throw translatedError(error);
     const currentPeriodEnd = data?.current_period_end ? Date.parse(data.current_period_end) : 0;
     if (!data) {
       const { data: membership, error: membershipError } = await client.from('workspace_members').select('id').eq('workspace_id', workspaceId).eq('user_id', session.user.id).maybeSingle();
@@ -372,7 +376,7 @@
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || t('The subscription checkout could not be started.'));
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('The subscription checkout could not be started.'));
     if (!payload.client_secret) throw new Error(t('Stripe did not return a checkout form.'));
     return payload.client_secret;
   }
@@ -384,14 +388,14 @@
       result = await fetch(BILLING_FUNCTION, {
         method: 'POST',
         headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: billingBody({ action: 'createPaymentMethodUpdateSession' })
+        body: billingBody({ action: 'createPaymentMethodUpdateSession', locale: window.PathwayI18n ? window.PathwayI18n.language : 'en' })
       });
     } catch (_) {
       throw new Error(t('Could not reach the billing service. Check your connection and try again.'));
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || t('The secure payment method update could not be opened.'));
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('The secure payment method update could not be opened.'));
     if (typeof payload.url !== 'string') throw new Error(t('Stripe did not return a secure payment method update link.'));
     let portalUrl;
     try { portalUrl = new URL(payload.url); } catch (_) { throw new Error(t('Stripe returned an invalid billing portal link.')); }
@@ -415,7 +419,7 @@
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || t('The current payment method could not be loaded.'));
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('The current payment method could not be loaded.'));
     if (payload.payment_method == null) return null;
     const card = payload.payment_method;
     if (typeof card.brand !== 'string' || !/^\d{4}$/.test(card.last4) || !Number.isInteger(card.exp_month) || card.exp_month < 1 || card.exp_month > 12 || !Number.isInteger(card.exp_year) || card.exp_year < 2000) {
@@ -441,7 +445,7 @@
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || t('Payment history could not be loaded.'));
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('Payment history could not be loaded.'));
     if (!Array.isArray(payload.invoices) || payload.invoices.length > 10 || typeof payload.has_more !== 'boolean') {
       throw new Error(t('Stripe returned an invalid invoice history page.'));
     }
@@ -492,7 +496,7 @@
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || t('The updated payment method could not be applied to this subscription.'));
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('The updated payment method could not be applied to this subscription.'));
     if (payload.payment_method == null) throw new Error(t('Stripe did not confirm a card for this subscription.'));
     return payload.payment_method;
   }
@@ -511,7 +515,7 @@
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || t('The cancellation request could not be completed.'));
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('The cancellation request could not be completed.'));
     if (!payload.cancel_at_period_end) throw new Error(t('Stripe did not confirm the scheduled cancellation.'));
     return payload;
   }
@@ -530,7 +534,7 @@
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || t('The subscription renewal could not be restored.'));
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('The subscription renewal could not be restored.'));
     if (payload.cancel_at_period_end !== false) throw new Error(t('Stripe did not confirm that cancellation was removed.'));
     return payload;
   }
@@ -544,7 +548,7 @@
     await requireSession();
     const { data, error } = await client.from('workspace_companies').select('id,workspace_id,name,description,logo_path,primary_color,created_at')
       .eq('workspace_id', workspaceId).order('created_at', { ascending: true }).limit(3);
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return (data || []).map(companyRecord);
   }
 
@@ -572,7 +576,7 @@
     let logoPath = null;
     const { data, error } = await client.from('workspace_companies').insert({ id, workspace_id: workspace.id, created_by: session.user.id, name, description, primary_color: primaryColor })
       .select('id,workspace_id,name,description,logo_path,primary_color,created_at').single();
-    if (error) throw error;
+    if (error) throw translatedError(error);
     if (logoFile) {
       const extension = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' })[logoFile.type];
       logoPath = `${workspace.id}/${id}/logo.${extension}`;
@@ -631,7 +635,7 @@
       if (uploadedLogoPath) {
         try { await bucket.remove([uploadedLogoPath]); } catch (_) { /* best-effort cleanup after failed profile update */ }
       }
-      throw error;
+      throw translatedError(error);
     }
 
     const updatedCompany = companyRecord(result.data);
@@ -658,7 +662,7 @@
         if (logoError) throw logoError;
       }
       const { data, error } = await client.rpc('delete_workspace_company', { p_company_id: company.id });
-      if (error) throw error;
+      if (error) throw translatedError(error);
       if (data !== true) throw new Error(t('The company deletion was not confirmed. Refresh the page before retrying.'));
       return { deletedFlowIds };
     } catch (error) {
@@ -718,7 +722,7 @@
   async function listFlows(workspaceId) {
     await requireSession();
     const { data, error } = await client.from('application_flows').select('id,workspace_id,created_by,company_id,company_name,job_title,flow_data,responsible_user_ids,interview_questions,interview_language,interview_language_manual,publication_status,active_published_flow_id,published_at,created_at,updated_at').eq('workspace_id', workspaceId).order('updated_at', { ascending: false });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return (data || []).map(row => ({ ...row.flow_data, id: row.flow_data.id || row.id, cloudId: row.id, workspaceId: row.workspace_id, createdBy: row.created_by, companyId: row.company_id || null, companyProfile: row.company_id ? row.flow_data.companyProfile || null : null, companyName: row.company_name, jobTitle: row.job_title, responsibleIds: Array.isArray(row.responsible_user_ids) ? row.responsible_user_ids : [], interviewQuestions: Array.isArray(row.interview_questions) ? row.interview_questions : [], interviewLanguage: cleanInterviewLanguage(row.interview_language), interviewLanguageManual: row.interview_language_manual === true, publicationStatus: row.publication_status || 'draft', activePublishedFlowId: row.active_published_flow_id || null, publishedAt: row.published_at || null, updatedAt: row.updated_at }));
   }
 
@@ -748,7 +752,7 @@
     await saveQueues.get(flow.id)?.catch(() => {});
     if (!flow.cloudId) return;
     const session = await requireSession();
-    const cleanup = await callApplications({ action: 'deleteFlow', flowId: flow.cloudId }, session.access_token);
+    const cleanup = await callApplications({ action: 'deleteFlow', flowId: flow.cloudId }, session.access_token, true);
     if (!cleanup.deleted) throw new Error(t('The flow could not be deleted.'));
     return cleanup;
   }
@@ -766,7 +770,7 @@
       created_by: session.user.id,
       snapshot: flowData
     }).select('id').single();
-    if (error) throw error;
+    if (error) throw translatedError(error);
     const { data: activeFlow, error: stateError } = await client.from('application_flows')
       .update({ publication_status: 'published', active_published_flow_id: data.id })
       .eq('id', flow.cloudId).eq('workspace_id', workspace.id).select('id,published_at,updated_at').single();
@@ -790,7 +794,7 @@
     }
     await requireSession();
     const { data, error } = await client.rpc('update_published_flow_snapshot', { p_flow_id: flow.cloudId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     if (!data) throw new Error(t('The published form could not be updated.'));
     flow.publishedAt = data;
     flow.updatedAt = data;
@@ -804,7 +808,7 @@
     const { error } = await client.from('application_flows')
       .update({ publication_status: 'draft', active_published_flow_id: null })
       .eq('id', flow.cloudId).eq('workspace_id', workspace.id).select('id').single();
-    if (error) throw error;
+    if (error) throw translatedError(error);
     flow.publicationStatus = 'draft';
     flow.activePublishedFlowId = null;
   }
@@ -834,7 +838,7 @@
       .limit(1000);
     if (flowId) query = query.eq('flow_id', flowId);
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return data || [];
   }
 
@@ -848,13 +852,13 @@
       .eq('workspace_id', workspaceId)
       .eq('status', 'new')
       .limit(1000);
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return new Set((data || []).map(row => `${row.flow_id}|${String(row.candidate_email || '').trim().toLowerCase()}`)).size;
   }
 
   async function listApplicantFlowLabels() {
     const session = await requireSession();
-    const payload = await callApplications({ action: 'listApplicantFlowLabels' }, session.access_token);
+    const payload = await callApplications({ action: 'listApplicantFlowLabels' }, session.access_token, true);
     if (!Array.isArray(payload.flows) || payload.flows.length > 1000) throw new Error(t('The applicant job filters could not be validated.'));
     return payload.flows.map(flow => {
       if (!flow || typeof flow.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(flow.id) || typeof flow.jobTitle !== 'string' || typeof flow.companyName !== 'string') {
@@ -870,7 +874,7 @@
     await requireSession();
     const day = value => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
     const { data, error } = await client.rpc('get_workspace_report', { p_workspace_id: workspaceId, p_from: day(from), p_to: day(to), p_flow_id: flowId || null, p_company: company || null });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     if (!data || typeof data !== 'object' || !Array.isArray(data.daily) || !data.totals) throw new Error(t('The report could not be read. Please try again.'));
     return data;
   }
@@ -881,7 +885,7 @@
     const day = value => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
     const version = typeof versionId === 'string' && /^[0-9a-f-]{36}$/i.test(versionId) ? versionId : null;
     const { data, error } = await client.rpc('get_report_steps', { p_workspace_id: workspaceId, p_flow_id: flowId, p_from: day(from), p_to: day(to), p_version_id: version });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     if (!data || typeof data !== 'object' || typeof data.hasData !== 'boolean') throw new Error(t('The steps could not be read. Please try again.'));
     if (data.hasData && (!Array.isArray(data.nodes) || !Array.isArray(data.edges) || !data.transitions || !data.completions)) throw new Error(t('The steps could not be read. Please try again.'));
     return data;
@@ -891,7 +895,7 @@
     await requireSession();
     const day = value => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
     const { data, error } = await client.rpc('get_report_jobs', { p_workspace_id: workspaceId, p_from: day(from), p_to: day(to), p_company: company || null, p_search: String(search || '').slice(0, 100), p_sort: sort, p_limit: limit, p_offset: offset });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     if (!data || typeof data !== 'object' || !Array.isArray(data.jobs) || !Number.isFinite(Number(data.total))) throw new Error(t('The list of jobs could not be read. Please try again.'));
     return { total: Number(data.total), jobs: data.jobs };
   }
@@ -900,7 +904,7 @@
   async function getDiversityJobs(workspaceId) {
     await requireSession();
     const { data, error } = await client.rpc('get_diversity_jobs', { p_workspace_id: workspaceId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     if (!Array.isArray(data)) throw new Error(t('The list of jobs could not be read. Please try again.'));
     return data;
   }
@@ -908,7 +912,7 @@
     await requireSession();
     if (typeof flowId !== 'string' || !/^[0-9a-f-]{36}$/i.test(flowId)) throw new Error(t('Choose a job to see its diversity report.'));
     const { data, error } = await client.rpc('get_diversity_report', { p_workspace_id: workspaceId, p_flow_id: flowId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     if (!data || typeof data !== 'object' || typeof data.enough !== 'boolean' || !Array.isArray(data.questions)) throw new Error(t('The report could not be read. Please try again.'));
     return data;
   }
@@ -931,25 +935,25 @@
   async function createCustomStage(workspaceId, name) {
     await requireSession();
     const { data, error } = await client.rpc('create_custom_stage', { p_workspace_id: workspaceId, p_name: name });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return data;
   }
   async function renameCustomStage(workspaceId, stageId, name) {
     await requireSession();
     const { data, error } = await client.rpc('rename_custom_stage', { p_workspace_id: workspaceId, p_stage_id: stageId, p_name: name });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return data;
   }
   async function deleteCustomStage(workspaceId, stageId) {
     await requireSession();
     const { error } = await client.rpc('delete_custom_stage', { p_workspace_id: workspaceId, p_stage_id: stageId });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return true;
   }
   async function saveBoardSettings(workspaceId, order, enabled) {
     await requireSession();
     const { data, error } = await client.rpc('save_board_settings', { p_workspace_id: workspaceId, p_order: order, p_enabled: enabled });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return data;
   }
 
@@ -957,7 +961,7 @@
     if (!isApplicantStatus(status)) throw new Error(t('Choose a valid applicant stage.'));
     await requireSession();
     const { data, error } = await client.from('applicants').update({ status }).eq('id', applicantId).select('id,status,updated_at').single();
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return data;
   }
 
@@ -970,7 +974,7 @@
     await requireSession();
     // A card that changes stage loses its manual place (it is shown at the top of the new column, or placed again by the caller).
     const { data, error } = await client.from('applicants').update({ status, board_position: null }).in('id', applicantIds).select('id,status,updated_at');
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return data || [];
   }
 
@@ -981,7 +985,7 @@
     }
     await requireSession();
     const { data, error } = await client.rpc('set_applicant_order', { p_items: items.map(item => ({ id: item.id, position: item.position })) });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return Number(data) || 0;
   }
 
@@ -989,7 +993,7 @@
     const session = await requireSession();
     const body = { action: 'deleteFailedApplicants' };
     if (flowId) body.flowId = flowId;
-    const result = await callApplications(body, session.access_token);
+    const result = await callApplications(body, session.access_token, true);
     if (typeof result.deleted !== 'number') throw new Error(t('The failed applicants could not be deleted.'));
     return result;
   }
@@ -997,7 +1001,7 @@
   // Deletes one candidate (all of their applications to that job), their resume files and the team's comments about them.
   async function deleteCandidate(flowId, email) {
     const session = await requireSession();
-    const result = await callApplications({ action: 'deleteCandidate', flowId, email: String(email || '').trim().toLowerCase() }, session.access_token);
+    const result = await callApplications({ action: 'deleteCandidate', flowId, email: String(email || '').trim().toLowerCase() }, session.access_token, true);
     if (typeof result.deleted !== 'number') throw new Error(t('The candidate could not be deleted.'));
     return result;
   }
@@ -1006,7 +1010,7 @@
     await requireSession();
     if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('..')) throw new Error(t('This resume link is not valid.'));
     const { data, error } = await client.storage.from('applicant-resumes').download(path);
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return data;
   }
   async function getApplicantResumeUrl(path, download = false, filename = '') {
@@ -1058,7 +1062,7 @@
 
   async function signOut() {
     const { error } = await client.auth.signOut();
-    if (error) throw error;
+    if (error) throw translatedError(error);
   }
 
   async function sendPasswordReset(email) {
@@ -1067,19 +1071,19 @@
     const { error } = await client.auth.resetPasswordForEmail(cleanEmail, {
       redirectTo: window.location.origin + window.location.pathname
     });
-    if (error) throw error;
+    if (error) throw translatedError(error);
   }
 
   async function updatePassword(password) {
     if (typeof password !== 'string' || password.length < 8) throw new Error(t('Choose a password with at least 8 characters.'));
     const { data, error } = await client.auth.updateUser({ password });
-    if (error) throw error;
+    if (error) throw translatedError(error);
     return data;
   }
 
   async function signOutLocal() {
     const { error } = await client.auth.signOut({ scope: 'local' });
-    if (error) throw error;
+    if (error) throw translatedError(error);
   }
 
   function consumePasswordRecovery() {

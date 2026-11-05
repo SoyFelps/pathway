@@ -24,7 +24,11 @@ function loadI18n({ languages = ['en-US'], stored = null } = {}) {
 const TRANSLATED_FILES = ['builder.js', 'candidate.js', 'geo.js', 'auth.js', 'backend.js'];
 // Where a dictionary key may come from: t() calls, but also English texts passed to t() as values (field labels, list options,
 // server messages shown through t(error.message)). A key that appears in none of these files is an old, unused translation.
-const SOURCE_FILES = ['builder.js', 'candidate.js', 'geo.js', 'auth.js', 'pathway.js', 'backend.js', 'apply.html', 'supabase/functions/applications/index.ts', 'supabase/functions/billing/index.ts'];
+const SERVER_FILES = ['applications/index.ts', 'billing/index.ts', 'team/index.ts', 'delete-account/index.ts', 'ai-interview/index.ts', 'ai-interview/logic.ts', 'ai-questions/index.ts'].map(file => 'supabase/functions/' + file);
+const MIGRATION_FILES = fs.readdirSync(path.join(root, 'supabase/migrations')).filter(name => name.endsWith('.sql')).map(name => 'supabase/migrations/' + name);
+const SOURCE_FILES = ['builder.js', 'candidate.js', 'geo.js', 'auth.js', 'pathway.js', 'backend.js', 'apply.html', ...SERVER_FILES, ...MIGRATION_FILES];
+// The messages the server and the database send (English); the browser translates them by their text (phase 4).
+const SERVER_MESSAGES = require('./server-messages.js');
 function keysUsed(source) {
   const keys = new Set();
   const literal = String.raw`'((?:[^'\\]|\\.)*)'`;
@@ -114,6 +118,43 @@ test('every text the translated screens send through t()/tn() exists in both dic
   }
 });
 
+test('every message the server or the database can send has a translation, and the browser shows them through t()', () => {
+  const { locales } = loadI18n();
+  assert.ok(SERVER_MESSAGES.length > 200, 'the scan finds the messages');
+  for (const code of LOCALES) {
+    const missing = SERVER_MESSAGES.filter(text => !(text in locales[code]));
+    assert.deepEqual(missing, [], `${code} is missing server messages (add them in the same change as the server text)`);
+  }
+  const backend = read('backend.js');
+  assert.ok(backend.includes("new Error(payload.error ? t(payload.error) : t("), 'messages of the team, billing, account and AI functions');
+  assert.ok(backend.includes('throw translatedError(error);'), 'database messages');
+  assert.ok(backend.includes("throw new Error(translate ? t(message) : message);"), 'the applications function: only the recruiter\'s calls translate here');
+  assert.ok(backend.includes('return await callApplications(form);'), 'the candidate page keeps the English text and translates it in the job\'s language');
+  assert.ok(read('builder.js').includes('error.englishMessage || error.message'), 'code that checks a message reads the English one');
+});
+
+test('the auto-fail reason written by the server is translated on screen, never the question or the answer', () => {
+  const builder = read('builder.js');
+  const start = builder.indexOf('function autoFailReasonText(');
+  const end = builder.indexOf('const REPORT_STEP_MIN_SAMPLE');
+  const { i18n } = loadI18n({ languages: ['pt-BR'] });
+  const translate = new Function('t', builder.slice(start, end) + '\nreturn autoFailReasonText;')(i18n.t);
+  assert.equal(translate('Answered "No" to "Can you travel?"'), 'Respondeu “No” em “Can you travel?”');
+  assert.equal(translate('Answered 2 to "Years of experience" (minimum 4)'), 'Respondeu 2 em “Years of experience” (mínimo 4)');
+  assert.equal(translate('Selected "A", "B" for "Skills"; Answered "No" to "Q"'), 'Escolheu “A”, “B” em “Skills”; Respondeu “No” em “Q”');
+  assert.equal(translate('Something new'), 'Something new', 'an unknown text is shown as it is');
+  const server = read('supabase/functions/applications/index.ts');
+  ['autoFailReasons.push(`Answered "${cleanName(answer, 80)}" to "${questionLabel}"`)', 'autoFailReasons.push(`Selected ${hits', 'to "${questionLabel}" (minimum ${current.autoFailBelow})`', 'Reached the "Not a match this time" result', 'autoFailReasons.join("; ")'].forEach(piece => assert.ok(server.includes(piece), 'the server still writes: ' + piece));
+  assert.ok(builder.includes('esc(autoFailReasonText(autoFailReason))') && builder.includes('esc(autoFailReasonText(item.reason))'), 'candidate panel and Reports');
+});
+
+test('Stripe pages follow the interface language', () => {
+  assert.ok(read('backend.js').includes("action: 'createPaymentMethodUpdateSession', locale: window.PathwayI18n ? window.PathwayI18n.language : 'en'"));
+  const billing = read('supabase/functions/billing/index.ts');
+  assert.ok(billing.includes('if (body && (body.locale === "en" || body.locale === "pt-BR" || body.locale === "es")) portalLocale = body.locale;'), 'only the three languages, Stripe chooses otherwise');
+  assert.ok(billing.includes('locale: portalLocale,'));
+});
+
 test('the candidate page translates every field label, list option and candidate-facing server message', () => {
   const { locales } = loadI18n();
   const sandbox = { window: {}, document: {}, fetch() {}, Intl };
@@ -174,7 +215,7 @@ test('the public page and the editor preview follow the job language, never the 
   assert.match(candidate, /G\.enhanceForm\(form, tr\)/);
   assert.ok(read('builder.js').includes("{ preview: true, onFinish: finish, language: flow.interviewLanguage || null }"), 'the editor preview uses the job language');
   const html = read('apply.html');
-  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261105z"></script>`);
+  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261106a"></script>`);
   for (const file of ['locales/pt-BR.js', 'locales/es.js', 'i18n.js']) assert.ok(at(file) > 0 && at(file) < at('candidate.js'), `${file} loads before candidate.js`);
 });
 
@@ -201,7 +242,7 @@ test('the confirmation e-mail is written in the job language; English stays exac
 
 test('the hiring app loads the dictionaries and i18n.js before the app code, and Settings saves the language in the profile', () => {
   const html = read('index.html');
-  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261105z"></script>`);
+  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261106a"></script>`);
   for (const file of ['locales/pt-BR.js', 'locales/es.js', 'i18n.js']) assert.ok(at(file) > 0, `${file} is loaded`);
   assert.ok(at('i18n.js') < at('backend.js') && at('i18n.js') < at('auth.js') && at('i18n.js') < at('builder.js'));
   const builder = read('builder.js');

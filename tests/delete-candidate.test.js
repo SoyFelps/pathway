@@ -21,7 +21,7 @@ test('the server deletes one candidate: files first, then records, then comments
 
 test('the candidate panel has a Delete candidate button at the bottom that asks for a second click', () => {
   const backend = read('backend.js');
-  assert.ok(backend.includes("callApplications({ action: 'deleteCandidate', flowId, email: String(email || '').trim().toLowerCase() }, session.access_token)"));
+  assert.ok(backend.includes("callApplications({ action: 'deleteCandidate', flowId, email: String(email || '').trim().toLowerCase() }, session.access_token, true)"));
   assert.ok(backend.includes('deleteCandidate,'));
   assert.ok(builder.indexOf('id="applicant-comments-heading"') < builder.indexOf('id="applicant-delete-row"') && builder.indexOf('id="applicant-delete-row"') < builder.indexOf('class="applicant-mobile-bar"'), 'below the comments, at the end of the panel');
   assert.ok(builder.includes("mountCandidateDeletion(modalRoot, applicant.flow_id, person, group, flow?.jobTitle || '');"));

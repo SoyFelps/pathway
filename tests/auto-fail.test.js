@@ -14,7 +14,8 @@ function loadCore() {
 test('the final step has no Result: it is a fixed ending, and the old "Not a match this time" choice is gone from the editor', () => {
   const builder = read('builder.js');
   assert.equal(builder.includes('end-subtype'), false, 'no Result select');
-  assert.equal(builder.includes('Not a match this time'), false, 'the polite-disqualification choice is not offered any more');
+  const withoutOldReasons = builder.slice(0, builder.indexOf('function autoFailReasonText(')) + builder.slice(builder.indexOf('const REPORT_STEP_MIN_SAMPLE'));
+  assert.equal(withoutOldReasons.includes('Not a match this time'), false, 'the polite-disqualification choice is not offered any more (old reasons are only translated for display)');
   assert.equal(builder.includes('Polite disqualification'), false);
   assert.equal(builder.includes('End screen'), false);
   assert.match(builder, /<label for="end-title">\$\{t\('Completion title'\)\}<\/label><input class="text-input locked-input" id="end-title" value="\$\{esc\(t\(C\.END_LABEL\)\)\}" disabled readonly/, 'the title is shown but locked');
