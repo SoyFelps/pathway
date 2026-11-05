@@ -1351,14 +1351,14 @@
   }
 
   async function refreshSubscriptionAfterCheckout() {
-    showToast('Checkout received. Activating your Premium plan…');
+    showToast(t('Checkout received. Activating your Premium plan…'));
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
         subscription = await window.PathwayBackend.getSubscriptionState(workspace.id);
         if (subscription.active) {
           if (subscriptionReturnPage === 'my-plan') renderMyPlan();
           else renderDashboard();
-          showToast('Premium is active. You can now publish job flows.');
+          showToast(t('Premium is active. You can now publish job flows.'));
           return;
         }
       } catch (_) {
@@ -1366,14 +1366,14 @@
       }
       await new Promise(resolve => setTimeout(resolve, 1500));
     }
-    showToast('Payment received, but plan activation is still syncing. Refresh this page in a moment.');
+    showToast(t('Payment received, but plan activation is still syncing. Refresh this page in a moment.'));
   }
 
   function renderSubscriptionPage() {
     const stripeConfig = window.PATHWAY_STRIPE_CONFIG || {};
     const configuredKey = typeof stripeConfig.publishableKey === 'string' && /^pk_(test|live)_/.test(stripeConfig.publishableKey) && !stripeConfig.publishableKey.includes('REPLACE_');
     const isTestMode = stripeConfig.publishableKey?.startsWith('pk_test_');
-    root.innerHTML = `<main class="subscription-page"><header class="subscription-topbar"><div class="subscription-topbar-left"><button class="subscription-back" id="subscription-back">← <span>Back to workspace</span></button><a class="brand" href="#" id="subscription-brand"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a></div><div class="subscription-identity"><span>${esc(user.email)}</span><button class="btn btn-sm" id="subscription-signout">Sign out</button></div></header><div class="subscription-layout"><section class="subscription-story"><div class="subscription-eyebrow"><span class="subscription-eyebrow-dot"></span>Pathway for hiring teams</div><h1>Make every application feel like the start of a good conversation.</h1><p class="subscription-lead">Create thoughtful job journeys, collect complete applications, and keep every candidate moving through one clear hiring workspace.</p><div class="subscription-benefits"><div class="subscription-benefit"><span>01</span><div><strong>Build better application journeys</strong><p>Use clear, branching flows that fit each role and respect candidates' time.</p></div></div><div class="subscription-benefit"><span>02</span><div><strong>Keep applicants organized</strong><p>Review answers and resumes together, then move candidates through your pipeline.</p></div></div><div class="subscription-benefit"><span>03</span><div><strong>Publish when you're ready</strong><p>Share a dedicated job link and receive applications directly in Pathway.</p></div></div></div><div class="subscription-price-card"><div><span class="subscription-price-label">Pathway subscription</span><div class="subscription-price"><strong>${esc(stripeConfig.priceLabel || 'US$ 24.90')}</strong><span>/ month</span></div></div><span class="subscription-recurring">Recurring billing</span><p>The final amount and billing details are shown by Stripe before you confirm.</p></div>${isTestMode ? '<div class="subscription-test-note"><span>TEST MODE</span> Payments are simulated; no real charge will be made.</div>' : ''}<p class="subscription-trust">Secure payment processing by Stripe. Your card details are handled by Stripe and are not stored by Pathway.</p></section><section class="subscription-checkout-panel" aria-label="Stripe subscription checkout"><div class="checkout-panel-heading"><span class="checkout-panel-kicker">Secure checkout</span><h2>Subscribe to Pathway</h2><p>Enter your payment details below to unlock job publishing.</p></div>${configuredKey ? '<div class="checkout-status" id="checkout-status" aria-live="polite">Connecting securely to Stripe…</div><div class="subscription-checkout-form" id="subscription-checkout-form"></div>' : '<div class="subscription-setup-note">Checkout is not configured yet. Add the Stripe publishable key and server-side Stripe secrets listed in <strong>STRIPE_INTEGRATION_TODO.md</strong> before using this page.</div>'}<div class="subscription-error" id="checkout-error" role="alert" hidden></div><div class="checkout-panel-footer"><span>Encrypted, secure checkout</span><button class="btn btn-primary" id="retry-checkout" hidden>Try again</button></div></section></div></main>`;
+    root.innerHTML = `<main class="subscription-page"><header class="subscription-topbar"><div class="subscription-topbar-left"><button class="subscription-back" id="subscription-back">← <span>${t('Back to workspace')}</span></button><a class="brand" href="#" id="subscription-brand"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a></div><div class="subscription-identity"><span>${esc(user.email)}</span><button class="btn btn-sm" id="subscription-signout">${t('Sign out')}</button></div></header><div class="subscription-layout"><section class="subscription-story"><div class="subscription-eyebrow"><span class="subscription-eyebrow-dot"></span>${t('Pathway for hiring teams')}</div><h1>${t('Make every application feel like the start of a good conversation.')}</h1><p class="subscription-lead">${t('Create thoughtful job journeys, collect complete applications, and keep every candidate moving through one clear hiring workspace.')}</p><div class="subscription-benefits"><div class="subscription-benefit"><span>01</span><div><strong>${t('Build better application journeys')}</strong><p>${t('Use clear, branching flows that fit each role and respect candidates’ time.')}</p></div></div><div class="subscription-benefit"><span>02</span><div><strong>${t('Keep applicants organized')}</strong><p>${t('Review answers and resumes together, then move candidates through your pipeline.')}</p></div></div><div class="subscription-benefit"><span>03</span><div><strong>${t('Publish when you’re ready')}</strong><p>${t('Share a dedicated job link and receive applications directly in Pathway.')}</p></div></div></div><div class="subscription-price-card"><div><span class="subscription-price-label">${t('Pathway subscription')}</span><div class="subscription-price"><strong>${esc(stripeConfig.priceLabel || 'US$ 24.90')}</strong><span>${t('/ month')}</span></div></div><span class="subscription-recurring">${t('Recurring billing')}</span><p>${t('The final amount and billing details are shown by Stripe before you confirm.')}</p></div>${isTestMode ? `<div class="subscription-test-note"><span>${t('TEST MODE')}</span> ${t('Payments are simulated; no real charge will be made.')}</div>` : ''}<p class="subscription-trust">${t('Secure payment processing by Stripe. Your card details are handled by Stripe and are not stored by Pathway.')}</p></section><section class="subscription-checkout-panel" aria-label="${t('Stripe subscription checkout')}"><div class="checkout-panel-heading"><span class="checkout-panel-kicker">${t('Secure checkout')}</span><h2>${t('Subscribe to Pathway')}</h2><p>${t('Enter your payment details below to unlock job publishing.')}</p></div>${configuredKey ? `<div class="checkout-status" id="checkout-status" aria-live="polite">${t('Connecting securely to Stripe…')}</div><div class="subscription-checkout-form" id="subscription-checkout-form"></div>` : '<div class="subscription-setup-note">Checkout is not configured yet. Add the Stripe publishable key and server-side Stripe secrets listed in <strong>STRIPE_INTEGRATION_TODO.md</strong> before using this page.</div>'}<div class="subscription-error" id="checkout-error" role="alert" hidden></div><div class="checkout-panel-footer"><span>${t('Encrypted, secure checkout')}</span><button class="btn btn-primary" id="retry-checkout" hidden>${t('Try again')}</button></div></section></div></main>`;
     root.querySelector('#subscription-back')?.addEventListener('click', returnFromSubscriptionPage);
     root.querySelector('#subscription-brand')?.addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
     root.querySelector('#subscription-signout')?.addEventListener('click', doSignOut);
@@ -1393,10 +1393,11 @@
 
     void (async () => {
       try {
-        if (!window.Stripe) throw new Error('Stripe.js did not load. Refresh the page and try again.');
+        if (!window.Stripe) throw new Error(t('Stripe.js did not load. Refresh the page and try again.'));
         const clientSecret = await window.PathwayBackend.createCheckoutSession();
         if (!root.querySelector('#subscription-checkout-form')) return;
-        const stripe = window.Stripe(stripeConfig.publishableKey, { betas: ['custom_checkout_payment_form_1'] });
+        // The Stripe form speaks the interface language too ('auto' would follow the browser instead).
+        const stripe = window.Stripe(stripeConfig.publishableKey, { betas: ['custom_checkout_payment_form_1'], locale: window.PathwayI18n.language === 'pt-BR' ? 'pt-BR' : window.PathwayI18n.language });
         const checkout = stripe.initCheckoutFormSdk({
           clientSecret,
           appearance: {
@@ -1413,7 +1414,7 @@
         form.mount('#subscription-checkout-form');
         const loadActionsResult = await checkout.loadActions();
         if (loadActionsResult.type !== 'success') {
-          throw new Error(loadActionsResult.error?.message || 'The secure checkout form could not be loaded.');
+          throw new Error(loadActionsResult.error?.message || t('The secure checkout form could not be loaded.'));
         }
         const status = root.querySelector('#checkout-status');
         if (status) status.hidden = true;
@@ -1421,10 +1422,10 @@
           const errorBox = root.querySelector('#checkout-error');
           if (errorBox) errorBox.hidden = true;
           try { await loadActionsResult.actions.confirm({ formConfirmEvent: event }); }
-          catch (error) { showError(error.message || 'Payment could not be confirmed. Please try again.'); }
+          catch (error) { showError(error.message || t('Payment could not be confirmed. Please try again.')); }
         });
       } catch (error) {
-        showError(error.message || 'The subscription checkout could not be started.');
+        showError(error.message || t('The subscription checkout could not be started.'));
       }
     })();
   }
@@ -2261,11 +2262,11 @@
   function formatPlanDate(value) {
     if (!value) return '';
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    return Number.isNaN(date.getTime()) ? '' : window.PathwayI18n.formatDate(date, { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
   function paymentHistoryPanelMarkup() {
-    return `<section class="payment-history-panel" id="payment-history-panel" ${paymentHistoryOpen ? '' : 'hidden'} aria-live="polite"><p class="payment-history-message" id="payment-history-message">Your invoices will appear here.</p><div class="payment-history-list" id="payment-history-list"></div><div class="payment-history-more-wrap" id="payment-history-more-wrap" hidden><button class="btn" id="load-more-payment-history">Load older invoices</button></div></section>`;
+    return `<section class="payment-history-panel" id="payment-history-panel" ${paymentHistoryOpen ? '' : 'hidden'} aria-live="polite"><p class="payment-history-message" id="payment-history-message">${t('Your invoices will appear here.')}</p><div class="payment-history-list" id="payment-history-list"></div><div class="payment-history-more-wrap" id="payment-history-more-wrap" hidden><button class="btn" id="load-more-payment-history">${t('Load older invoices')}</button></div></section>`;
   }
 
   function renderAccessMessage(section) {
@@ -2697,23 +2698,23 @@
 
   function formatInvoiceAmount(invoice) {
     try {
-      const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: invoice.currency.toUpperCase() });
+      const formatter = new Intl.NumberFormat(window.PathwayI18n.language, { style: 'currency', currency: invoice.currency.toUpperCase() });
       const divisor = 10 ** formatter.resolvedOptions().maximumFractionDigits;
       return formatter.format(invoice.amountMinor / divisor);
     } catch (_) { return `${invoice.currency.toUpperCase()} ${(invoice.amountMinor / 100).toFixed(2)}`; }
   }
 
   function paymentHistoryRowsMarkup() {
-    const labels = { draft: 'Draft', open: 'Payment due', paid: 'Paid', uncollectible: 'Uncollectible', void: 'Voided' };
-    const reasons = { subscription_create: 'Subscription started', subscription_cycle: 'Subscription renewal', subscription_update: 'Subscription updated', manual: 'Invoice' };
+    const labels = { draft: t('Draft'), open: t('Payment due'), paid: t('Paid'), uncollectible: t('Uncollectible'), void: t('Voided') };
+    const reasons = { subscription_create: t('Subscription started'), subscription_cycle: t('Subscription renewal'), subscription_update: t('Subscription updated'), manual: t('Invoice') };
     return paymentHistoryInvoices.map(invoice => {
       const timestamp = invoice.paidAt || invoice.createdAt;
-      const date = timestamp ? new Date(timestamp * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Date unavailable';
+      const date = timestamp ? window.PathwayI18n.formatDate(timestamp * 1000, { year: 'numeric', month: 'short', day: 'numeric' }) : t('Date unavailable');
       const links = [
-        invoice.hostedInvoiceUrl ? `<a href="${esc(invoice.hostedInvoiceUrl)}" target="_blank" rel="noopener noreferrer">View invoice</a>` : '',
+        invoice.hostedInvoiceUrl ? `<a href="${esc(invoice.hostedInvoiceUrl)}" target="_blank" rel="noopener noreferrer">${t('View invoice')}</a>` : '',
         invoice.invoicePdf ? `<a href="${esc(invoice.invoicePdf)}" target="_blank" rel="noopener noreferrer">PDF</a>` : ''
       ].filter(Boolean).join('');
-      return `<article class="payment-history-item"><div class="payment-history-main"><strong>${esc(invoice.number || reasons[invoice.billingReason] || 'Invoice')}</strong><span>${esc(date)}</span></div><div class="payment-history-total"><strong>${esc(formatInvoiceAmount(invoice))}</strong><span class="payment-status is-${esc(invoice.status)}">${esc(labels[invoice.status] || 'Invoice')}</span></div><div class="payment-history-links">${links || '<span class="payment-history-no-link">No invoice link available</span>'}</div></article>`;
+      return `<article class="payment-history-item"><div class="payment-history-main"><strong>${esc(invoice.number || reasons[invoice.billingReason] || t('Invoice'))}</strong><span>${esc(date)}</span></div><div class="payment-history-total"><strong>${esc(formatInvoiceAmount(invoice))}</strong><span class="payment-status is-${esc(invoice.status)}">${esc(labels[invoice.status] || t('Invoice'))}</span></div><div class="payment-history-links">${links || `<span class="payment-history-no-link">${t('No invoice link available')}</span>`}</div></article>`;
     }).join('');
   }
 
@@ -2727,27 +2728,28 @@
     const premium = Boolean(subscription?.active);
     const periodEnd = formatPlanDate(subscription?.currentPeriodEnd);
     const statusText = premium
-      ? subscription.cancelAtPeriodEnd && periodEnd ? `Scheduled to end on ${periodEnd}` : periodEnd ? `Renews on ${periodEnd}` : 'Your Premium subscription is active.'
-      : 'You are currently on the Free plan.';
+      ? subscription.cancelAtPeriodEnd && periodEnd ? t('Scheduled to end on {date}', { date: periodEnd }) : periodEnd ? t('Renews on {date}', { date: periodEnd }) : t('Your Premium subscription is active.')
+      : t('You are currently on the Free plan.');
+    // The rows are found by data-plan-row (never by their text, which changes with the language).
     const management = premium
-      ? `<section class="plan-management-card"><div class="plan-section-heading"><div><div class="eyebrow">Subscription management</div><h2>Billing details</h2><p>Manage the payment method and history for this workspace.</p></div></div><div class="plan-action-list"><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment history</strong><span>View invoices and previous payments.</span></div><button class="btn plan-placeholder" disabled>Loading history</button></div><div class="plan-action-row"><div class="plan-action-copy"><strong>Payment method</strong><span>Change the card used for your subscription.</span></div><button class="btn plan-placeholder" disabled>Coming soon</button></div><div class="plan-action-row plan-cancel-row"><div class="plan-action-copy"><strong>Cancel subscription</strong><span>${subscription.cancelAtPeriodEnd && periodEnd ? `Premium will remain active until ${esc(periodEnd)}.` : `Schedule cancellation for the end of your paid period${periodEnd ? ` (${esc(periodEnd)})` : ''}.`}</span></div><button class="btn btn-danger" id="cancel-subscription" ${subscription.cancelAtPeriodEnd ? 'disabled' : ''}>${subscription.cancelAtPeriodEnd ? 'Cancellation scheduled' : 'Cancel subscription'}</button></div></div><p class="plan-placeholder-note">Invoices and receipts are retrieved securely from Stripe. Card details are managed there; Pathway never stores your card number. If you cancel, Premium and published jobs remain active through the date shown above.</p></section>`
-      : `<section class="plan-free-note"><div class="plan-free-mark" aria-hidden="true">↗</div><div><strong>Build and preview for free</strong><p>Create and refine application flows at no cost. Upgrade when you are ready to publish a job.</p></div></section>`;
+      ? `<section class="plan-management-card"><div class="plan-section-heading"><div><div class="eyebrow">${t('Subscription management')}</div><h2>${t('Billing details')}</h2><p>${t('Manage the payment method and history for this workspace.')}</p></div></div><div class="plan-action-list"><div class="plan-action-row" data-plan-row="history"><div class="plan-action-copy"><strong>${t('Payment history')}</strong><span>${t('View invoices and previous payments.')}</span></div><button class="btn plan-placeholder" disabled>${t('Loading history')}</button></div><div class="plan-action-row" data-plan-row="method"><div class="plan-action-copy"><strong>${t('Payment method')}</strong><span>${t('Change the card used for your subscription.')}</span></div><button class="btn plan-placeholder" disabled>${t('Coming soon')}</button></div><div class="plan-action-row plan-cancel-row"><div class="plan-action-copy"><strong>${t('Cancel subscription')}</strong><span>${subscription.cancelAtPeriodEnd && periodEnd ? t('Premium will remain active until {date}.', { date: esc(periodEnd) }) : periodEnd ? t('Schedule cancellation for the end of your paid period ({date}).', { date: esc(periodEnd) }) : t('Schedule cancellation for the end of your paid period.')}</span></div><button class="btn btn-danger" id="cancel-subscription" ${subscription.cancelAtPeriodEnd ? 'disabled' : ''}>${subscription.cancelAtPeriodEnd ? t('Cancellation scheduled') : t('Cancel subscription')}</button></div></div><p class="plan-placeholder-note">${t('Invoices and receipts are retrieved securely from Stripe. Card details are managed there; Pathway never stores your card number. If you cancel, Premium and published jobs remain active through the date shown above.')}</p></section>`
+      : `<section class="plan-free-note"><div class="plan-free-mark" aria-hidden="true">↗</div><div><strong>${t('Build and preview for free')}</strong><p>${t('Create and refine application flows at no cost. Upgrade when you are ready to publish a job.')}</p></div></section>`;
     const freeBenefits = !premium
-      ? `<section class="premium-benefits-card"><div class="premium-benefits-heading"><span class="premium-benefits-mark" aria-hidden="true">✦</span><div><div class="eyebrow">Premium plan</div><h2>Everything you need to move from job post to decision</h2><p>Publish a role and manage the full applicant journey in Pathway.</p></div></div><ul class="premium-benefits-list"><li><span aria-hidden="true">↗</span><div><strong>Publish your job flow</strong><p>Turn your application journey into a live job posting.</p></div></li><li><span aria-hidden="true">⤴</span><div><strong>Share a public job link</strong><p>Send one simple link to candidates wherever you recruit.</p></div></li><li><span aria-hidden="true">＋</span><div><strong>Receive applications in Pathway</strong><p>Collect candidate details and answers in your workspace.</p></div></li><li><span aria-hidden="true">▤</span><div><strong>Review candidates and resumes</strong><p>See application responses and preview or download resumes.</p></div></li><li><span aria-hidden="true">✓</span><div><strong>Approve or reject candidates</strong><p>Organize your pipeline and make hiring decisions as applications come in.</p></div></li></ul><button class="btn btn-primary" id="my-plan-benefits-upgrade">Upgrade to Premium</button></section>`
+      ? `<section class="premium-benefits-card"><div class="premium-benefits-heading"><span class="premium-benefits-mark" aria-hidden="true">✦</span><div><div class="eyebrow">${t('Premium plan')}</div><h2>${t('Everything you need to move from job post to decision')}</h2><p>${t('Publish a role and manage the full applicant journey in Pathway.')}</p></div></div><ul class="premium-benefits-list"><li><span aria-hidden="true">↗</span><div><strong>${t('Publish your job flow')}</strong><p>${t('Turn your application journey into a live job posting.')}</p></div></li><li><span aria-hidden="true">⤴</span><div><strong>${t('Share a public job link')}</strong><p>${t('Send one simple link to candidates wherever you recruit.')}</p></div></li><li><span aria-hidden="true">＋</span><div><strong>${t('Receive applications in Pathway')}</strong><p>${t('Collect candidate details and answers in your workspace.')}</p></div></li><li><span aria-hidden="true">▤</span><div><strong>${t('Review candidates and resumes')}</strong><p>${t('See application responses and preview or download resumes.')}</p></div></li><li><span aria-hidden="true">✓</span><div><strong>${t('Approve or reject candidates')}</strong><p>${t('Organize your pipeline and make hiring decisions as applications come in.')}</p></div></li></ul><button class="btn btn-primary" id="my-plan-benefits-upgrade">${t('Upgrade to Premium')}</button></section>`
       : '';
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-plan')}<main class="my-plan-page"><div class="my-plan-heading"><div class="eyebrow">Workspace billing</div><h1>My Plan</h1><p>View your plan and manage billing for ${esc(workspace.name)}.</p></div><section class="plan-overview-card ${premium ? 'is-premium' : 'is-free'}"><div class="plan-overview-copy"><h2>${premium ? 'Premium' : 'Free'}</h2><p>${statusText}</p></div>${premium ? `<div class="plan-overview-price"><strong>US$ 24.90</strong><span>per month</span></div>` : '<button class="btn btn-primary" id="my-plan-upgrade">Upgrade to Premium</button>'}</section>${premium ? '<section class="plan-benefit-strip"><span class="plan-benefit-icon">✓</span><div><strong>Job publishing is enabled</strong><p>You can publish and manage job application links while your subscription is active.</p></div></section>' : ''}${freeBenefits}${management}</main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-plan')}<main class="my-plan-page"><div class="my-plan-heading"><div class="eyebrow">${t('Workspace billing')}</div><h1>${t('My Plan')}</h1><p>${t('View your plan and manage billing for {workspace}.', { workspace: esc(workspace.name) })}</p></div><section class="plan-overview-card ${premium ? 'is-premium' : 'is-free'}"><div class="plan-overview-copy"><h2>${premium ? 'Premium' : t('Free')}</h2><p>${statusText}</p></div>${premium ? `<div class="plan-overview-price"><strong>US$ 24.90</strong><span>${t('per month')}</span></div>` : `<button class="btn btn-primary" id="my-plan-upgrade">${t('Upgrade to Premium')}</button>`}</section>${premium ? `<section class="plan-benefit-strip"><span class="plan-benefit-icon">✓</span><div><strong>${t('Job publishing is enabled')}</strong><p>${t('You can publish and manage job application links while your subscription is active.')}</p></div></section>` : ''}${freeBenefits}${management}</main></div></div>`;
     if (premium) {
-      const historyRow = [...root.querySelectorAll('.plan-action-row')].find(row => row.querySelector('strong')?.textContent === 'Payment history');
+      const historyRow = root.querySelector('[data-plan-row="history"]');
       const historyButton = historyRow?.querySelector('button');
       if (historyRow && historyButton) {
         historyButton.className = 'btn'; historyButton.disabled = false; historyButton.id = 'payment-history-toggle';
-        historyButton.textContent = 'View history'; historyButton.setAttribute('aria-expanded', 'false');
+        historyButton.textContent = t('View history'); historyButton.setAttribute('aria-expanded', 'false');
         historyRow.insertAdjacentHTML('afterend', paymentHistoryPanelMarkup());
       }
       const note = root.querySelector('.plan-placeholder-note');
-      if (note) note.textContent = 'Invoices and receipts are retrieved securely from Stripe. Card details are managed there; Pathway never stores your card number.';
+      if (note) note.textContent = t('Invoices and receipts are retrieved securely from Stripe. Card details are managed there; Pathway never stores your card number.');
     } else if (subscription?.hasBillingHistory) {
-      root.querySelector('.my-plan-page')?.insertAdjacentHTML('beforeend', `<section class="plan-management-card payment-history-standalone"><div class="plan-section-heading"><div class="eyebrow">Billing records</div><h2>Payment history</h2><p>Invoices for this workspace’s previous subscription.</p></div><button class="btn payment-history-free-toggle" id="payment-history-toggle-free" data-closed-label="View history" aria-expanded="false">View history</button>${paymentHistoryPanelMarkup()}</section>`);
+      root.querySelector('.my-plan-page')?.insertAdjacentHTML('beforeend', `<section class="plan-management-card payment-history-standalone"><div class="plan-section-heading"><div class="eyebrow">${t('Billing records')}</div><h2>${t('Payment history')}</h2><p>${t('Invoices for this workspace’s previous subscription.')}</p></div><button class="btn payment-history-free-toggle" id="payment-history-toggle-free" data-closed-label="${t('View history')}" aria-expanded="false">${t('View history')}</button>${paymentHistoryPanelMarkup()}</section>`);
     }
     bindSidebar();
     bindPlanControl();
@@ -2757,20 +2759,20 @@
     root.querySelector('#my-plan-benefits-upgrade')?.addEventListener('click', openSubscriptionPage);
     root.querySelector('#cancel-subscription')?.addEventListener('click', showCancelSubscriptionConfirmation);
     bindPaymentHistory();
-    const paymentMethodRow = [...root.querySelectorAll('.plan-action-row')].find(row => row.querySelector('strong')?.textContent === 'Payment method');
+    const paymentMethodRow = root.querySelector('[data-plan-row="method"]');
     const paymentMethodButton = paymentMethodRow?.querySelector('button');
     if (premium && paymentMethodButton) {
       paymentMethodButton.disabled = false;
       paymentMethodButton.className = 'btn';
       paymentMethodButton.id = 'update-payment-method';
-      paymentMethodButton.textContent = 'Update payment method';
-      paymentMethodRow.querySelector('.plan-action-copy span').textContent = 'Update your card securely through Stripe. Pathway never stores your card details.';
-      paymentMethodRow.querySelector('.plan-action-copy').insertAdjacentHTML('beforeend', '<small class="plan-card-summary" id="current-payment-method" aria-live="polite">Loading current card…</small>');
+      paymentMethodButton.textContent = t('Update payment method');
+      paymentMethodRow.querySelector('.plan-action-copy span').textContent = t('Update your card securely through Stripe. Pathway never stores your card details.');
+      paymentMethodRow.querySelector('.plan-action-copy').insertAdjacentHTML('beforeend', `<small class="plan-card-summary" id="current-payment-method" aria-live="polite">${t('Loading current card…')}</small>`);
       paymentMethodButton.addEventListener('click', openPaymentMethodPortal);
       void loadCurrentCardSummary();
     }
     if (premium && subscription.cancelAtPeriodEnd) {
-      root.querySelector('.plan-action-list')?.insertAdjacentHTML('beforeend', '<div class="plan-action-row plan-keep-row"><div class="plan-action-copy"><strong>Keep Premium</strong><span>Remove the scheduled cancellation and restore automatic renewal at US$ 24.90 per month.</span></div><button class="btn" id="keep-premium">Keep Premium</button></div>');
+      root.querySelector('.plan-action-list')?.insertAdjacentHTML('beforeend', `<div class="plan-action-row plan-keep-row"><div class="plan-action-copy"><strong>${t('Keep Premium')}</strong><span>${t('Remove the scheduled cancellation and restore automatic renewal at US$ 24.90 per month.')}</span></div><button class="btn" id="keep-premium">${t('Keep Premium')}</button></div>`);
       root.querySelector('#keep-premium')?.addEventListener('click', showKeepPremiumConfirmation);
     }
   }
@@ -2782,7 +2784,7 @@
       paymentHistoryOpen = !paymentHistoryOpen;
       panel.hidden = !paymentHistoryOpen;
       toggle.setAttribute('aria-expanded', String(paymentHistoryOpen));
-      toggle.textContent = paymentHistoryOpen ? 'Hide history' : (toggle.dataset.closedLabel || 'View history');
+      toggle.textContent = paymentHistoryOpen ? t('Hide history') : (toggle.dataset.closedLabel || t('View history'));
       if (paymentHistoryOpen && !paymentHistoryLoaded) void loadPaymentHistory(false);
     });
     root.querySelector('#load-more-payment-history')?.addEventListener('click', () => void loadPaymentHistory(true));
@@ -2799,9 +2801,9 @@
     if (!message || !list) { paymentHistoryLoading = false; return; }
     if (!append) {
       paymentHistoryInvoices = []; paymentHistoryNextAfter = null; paymentHistoryHasMore = false;
-      list.innerHTML = ''; message.hidden = false; message.textContent = 'Loading invoices…';
+      list.innerHTML = ''; message.hidden = false; message.textContent = t('Loading invoices…');
     }
-    if (moreButton) { moreButton.disabled = true; moreButton.textContent = 'Loading…'; }
+    if (moreButton) { moreButton.disabled = true; moreButton.textContent = t('Loading…'); }
     try {
       const page = await window.PathwayBackend.listPaymentHistory(append ? paymentHistoryNextAfter : null);
       if (requestId !== paymentHistoryRequestId) return;
@@ -2810,15 +2812,15 @@
       list.innerHTML = paymentHistoryRowsMarkup();
       message.hidden = paymentHistoryInvoices.length > 0;
       message.textContent = paymentHistoryHasMore
-        ? 'No invoices on this page belong to Pathway. Load older invoices to continue.'
-        : 'No invoices have been created for this subscription yet.';
+        ? t('No invoices on this page belong to Pathway. Load older invoices to continue.')
+        : t('No invoices have been created for this subscription yet.');
       if (moreWrap) moreWrap.hidden = !paymentHistoryHasMore;
-      if (moreButton) { moreButton.disabled = false; moreButton.textContent = 'Load older invoices'; }
+      if (moreButton) { moreButton.disabled = false; moreButton.textContent = t('Load older invoices'); }
     } catch (error) {
       if (requestId !== paymentHistoryRequestId) return;
       message.hidden = false;
-      message.textContent = error.message || 'Payment history could not be loaded. Please try again.';
-      if (moreButton) { moreButton.disabled = false; moreButton.textContent = 'Retry'; }
+      message.textContent = t(error.message || 'Payment history could not be loaded. Please try again.'); // known server messages are translated
+      if (moreButton) { moreButton.disabled = false; moreButton.textContent = t('Retry'); }
       if (moreWrap) moreWrap.hidden = false;
     } finally {
       if (requestId === paymentHistoryRequestId) paymentHistoryLoading = false;
@@ -2833,12 +2835,12 @@
       const card = await window.PathwayBackend.getCurrentPaymentMethodSummary();
       if (!summary.isConnected || requestId !== currentCardSummaryRequest) return;
       summary.textContent = card
-        ? `${card.brand} ending in ${card.last4} · Expires ${String(card.expMonth).padStart(2, '0')}/${card.expYear}`
-        : 'Stripe does not report a default card for this subscription.';
+        ? t('{brand} ending in {last4} · Expires {month}/{year}', { brand: card.brand, last4: card.last4, month: String(card.expMonth).padStart(2, '0'), year: card.expYear })
+        : t('Stripe does not report a default card for this subscription.');
       summary.classList.toggle('is-unavailable', !card);
     } catch (_) {
       if (summary.isConnected && requestId === currentCardSummaryRequest) {
-        summary.textContent = 'Card details could not be loaded. You can still update your payment method.';
+        summary.textContent = t('Card details could not be loaded. You can still update your payment method.');
         summary.classList.add('is-unavailable');
       }
     }
@@ -2847,25 +2849,25 @@
   async function openPaymentMethodPortal(event) {
     const button = event.currentTarget;
     button.disabled = true;
-    button.textContent = 'Opening Stripe…';
+    button.textContent = t('Opening Stripe…');
     try {
       const portalUrl = await window.PathwayBackend.createPaymentMethodUpdateSession();
       window.location.assign(portalUrl);
     } catch (error) {
       button.disabled = false;
-      button.textContent = 'Update payment method';
-      showToast(error.message || 'Could not open Stripe. Please try again.');
+      button.textContent = t('Update payment method');
+      showToast(error.message || t('Could not open Stripe. Please try again.'));
     }
   }
 
   function showCancelSubscriptionConfirmation() {
     if (!subscription?.active || subscription.cancelAtPeriodEnd) return;
     const periodEnd = formatPlanDate(subscription.currentPeriodEnd);
-    setModal(`<div class="modal-head"><div><h2>Schedule subscription cancellation?</h2><p>Your Premium plan will remain active through the end of the paid period.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="danger-confirm"><strong>What happens next:</strong> Pathway will turn off renewal with Stripe. You will keep Premium access and published job links until ${esc(periodEnd || 'the end of your current billing period')}. After that date, the subscription ends and published jobs are automatically unpublished.</div><div class="modal-actions"><button class="btn" data-close>Keep Premium</button><button class="btn btn-danger" id="confirm-subscription-cancel">Schedule cancellation</button></div>`);
+    setModal(`<div class="modal-head"><div><h2>${t('Schedule subscription cancellation?')}</h2><p>${t('Your Premium plan will remain active through the end of the paid period.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="danger-confirm"><strong>${t('What happens next:')}</strong> ${t('Pathway will turn off renewal with Stripe. You will keep Premium access and published job links until {date}. After that date, the subscription ends and published jobs are automatically unpublished.', { date: esc(periodEnd || t('the end of your current billing period')) })}</div><div class="modal-actions"><button class="btn" data-close>${t('Keep Premium')}</button><button class="btn btn-danger" id="confirm-subscription-cancel">${t('Schedule cancellation')}</button></div>`);
     const confirmButton = modalRoot.querySelector('#confirm-subscription-cancel');
     confirmButton.addEventListener('click', async () => {
       confirmButton.disabled = true;
-      confirmButton.textContent = 'Scheduling…';
+      confirmButton.textContent = t('Scheduling…');
       try {
         const result = await window.PathwayBackend.cancelSubscriptionAtPeriodEnd();
         subscription = {
@@ -2877,13 +2879,13 @@
         };
         closeModal();
         renderMyPlan();
-        showToast(`Cancellation scheduled. Premium remains active until ${formatPlanDate(subscription.currentPeriodEnd)}.`);
+        showToast(t('Cancellation scheduled. Premium remains active until {date}.', { date: formatPlanDate(subscription.currentPeriodEnd) }));
       } catch (error) {
         confirmButton.disabled = false;
-        confirmButton.textContent = 'Schedule cancellation';
+        confirmButton.textContent = t('Schedule cancellation');
         const message = modalRoot.querySelector('.cancellation-error');
-        if (message) message.textContent = error.message || 'Could not schedule cancellation. Try again.';
-        else confirmButton.closest('.modal').insertAdjacentHTML('beforeend', `<div class="auth-error show cancellation-error" role="alert">${esc(error.message || 'Could not schedule cancellation. Try again.')}</div>`);
+        if (message) message.textContent = error.message || t('Could not schedule cancellation. Try again.');
+        else confirmButton.closest('.modal').insertAdjacentHTML('beforeend', `<div class="auth-error show cancellation-error" role="alert">${esc(error.message || t('Could not schedule cancellation. Try again.'))}</div>`);
       }
     });
   }
@@ -2891,11 +2893,11 @@
   function showKeepPremiumConfirmation() {
     if (!subscription?.active || !subscription.cancelAtPeriodEnd) return;
     const periodEnd = formatPlanDate(subscription.currentPeriodEnd);
-    setModal(`<div class="modal-head"><div><h2>Keep your Premium plan?</h2><p>Your cancellation is scheduled${periodEnd ? ` for ${esc(periodEnd)}` : ' for the end of your paid period'}.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="renewal-confirm"><strong>Automatic renewal will resume:</strong> The cancellation will be removed, your Premium access will continue, and your subscription will renew at US$ 24.90 per month. There is no immediate charge.</div><div class="modal-actions"><button class="btn" data-close>Not now</button><button class="btn btn-primary" id="confirm-keep-premium">Keep Premium</button></div>`);
+    setModal(`<div class="modal-head"><div><h2>${t('Keep your Premium plan?')}</h2><p>${periodEnd ? t('Your cancellation is scheduled for {date}.', { date: esc(periodEnd) }) : t('Your cancellation is scheduled for the end of your paid period.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="renewal-confirm"><strong>${t('Automatic renewal will resume:')}</strong> ${t('The cancellation will be removed, your Premium access will continue, and your subscription will renew at US$ 24.90 per month. There is no immediate charge.')}</div><div class="modal-actions"><button class="btn" data-close>${t('Not now')}</button><button class="btn btn-primary" id="confirm-keep-premium">${t('Keep Premium')}</button></div>`);
     const confirmButton = modalRoot.querySelector('#confirm-keep-premium');
     confirmButton.addEventListener('click', async () => {
       confirmButton.disabled = true;
-      confirmButton.textContent = 'Updating…';
+      confirmButton.textContent = t('Updating…');
       try {
         const result = await window.PathwayBackend.keepPremiumSubscription();
         subscription = {
@@ -2907,13 +2909,13 @@
         };
         closeModal();
         renderMyPlan();
-        showToast('Cancellation removed. Your Premium plan will renew at US$ 24.90 per month.');
+        showToast(t('Cancellation removed. Your Premium plan will renew at US$ 24.90 per month.'));
       } catch (error) {
         confirmButton.disabled = false;
-        confirmButton.textContent = 'Keep Premium';
+        confirmButton.textContent = t('Keep Premium');
         const message = modalRoot.querySelector('.renewal-error');
-        if (message) message.textContent = error.message || 'Could not restore automatic renewal. Try again.';
-        else confirmButton.closest('.modal').insertAdjacentHTML('beforeend', `<div class="auth-error show renewal-error" role="alert">${esc(error.message || 'Could not restore automatic renewal. Try again.')}</div>`);
+        if (message) message.textContent = error.message || t('Could not restore automatic renewal. Try again.');
+        else confirmButton.closest('.modal').insertAdjacentHTML('beforeend', `<div class="auth-error show renewal-error" role="alert">${esc(error.message || t('Could not restore automatic renewal. Try again.'))}</div>`);
       }
     });
   }

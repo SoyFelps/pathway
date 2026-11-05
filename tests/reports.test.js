@@ -108,9 +108,9 @@ test('report text coming from the database is escaped before it reaches the page
 test('the Reports styles exist and the changed files carry a new cache version', () => {
   const css = read('styles.css');
   ['.reports-page', '.rpt-stats', '.rpt-chart', '.rpt-table'].forEach(selector => assert.ok(css.includes(selector), selector));
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105u/);
-  assert.match(read('index.html'), /backend\.js\?v=mw3-20261105u/);
-  assert.match(read('index.html'), /styles\.css\?v=mw3-20261105u/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105v/);
+  assert.match(read('index.html'), /backend\.js\?v=mw3-20261105v/);
+  assert.match(read('index.html'), /styles\.css\?v=mw3-20261105v/);
 });
 
 const scaling = read('supabase/migrations/20261020230000_report_scaling_and_step_counts.sql');

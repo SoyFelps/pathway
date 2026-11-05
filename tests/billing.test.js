@@ -116,7 +116,7 @@ test('payment-method summary is authenticated, uses Stripe default-method preced
   assert.match(backend, /getCurrentPaymentMethodSummary,/);
   assert.match(builder, /id="current-payment-method"/);
   assert.match(builder, /getCurrentPaymentMethodSummary\(\)/);
-  assert.match(builder, /ending in \$\{card\.last4\}/);
+  assert.match(builder, /t\('\{brand\} ending in \{last4\} · Expires \{month\}\/\{year\}', \{ brand: card\.brand, last4: card\.last4,/);
   assert.match(builder, /requestId !== currentCardSummaryRequest/);
   assert.match(builder, /syncPaymentMethodFromCustomer\(\)/);
   assert.doesNotMatch(builder, /card\.number|card\.cvc/);
@@ -154,9 +154,9 @@ test('payment history is authenticated, paginated, and restricted to verified Pa
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=mw3-20261105u/);
-  assert.match(html, /builder\.js\?v=mw3-20261105u/);
-  assert.match(html, /styles\.css\?v=mw3-20261105u/);
+  assert.match(html, /backend\.js\?v=mw3-20261105v/);
+  assert.match(html, /builder\.js\?v=mw3-20261105v/);
+  assert.match(html, /styles\.css\?v=mw3-20261105v/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);
