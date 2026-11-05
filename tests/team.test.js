@@ -155,10 +155,10 @@ test('My Team shows up to three included seats, defaults permissions on, and sup
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=mw3-20261105t/);
-  assert.match(html, /backend\.js\?v=mw3-20261105t/);
-  assert.match(html, /builder\.js\?v=mw3-20261105t/);
-  assert.match(html, /styles\.css\?v=mw3-20261105t/);
+  assert.match(html, /auth\.js\?v=mw3-20261105u/);
+  assert.match(html, /backend\.js\?v=mw3-20261105u/);
+  assert.match(html, /builder\.js\?v=mw3-20261105u/);
+  assert.match(html, /styles\.css\?v=mw3-20261105u/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
@@ -167,7 +167,7 @@ test('My Team renders loading cards before its list request resolves and ignores
   const builder = read('builder.js');
   const edge = read('supabase/functions/team/index.ts');
   assert.match(builder, /function renderMyTeamLoadingMarkup\(\)/);
-  assert.match(builder, /role="status">Loading your team/);
+  assert.match(builder, /role="status">\$\{t\('Loading your team…'\)\}/);
   assert.match(builder, /team-skeleton-seat/);
   assert.match(builder, /team-skeleton-field/);
   assert.match(builder, /const requestId = \+\+teamRenderRequestId;\s*renderMyTeamLoading\(\);\s*try \{\s*let data = await window\.PathwayBackend\.listTeam\(\)/);

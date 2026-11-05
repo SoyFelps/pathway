@@ -65,10 +65,10 @@ test('the dashboard locks an incomplete job (red card, only Delete) instead of b
   assert.ok(builder.includes('flowIsDamaged(flow) ? 0 : flow.nodes.length'), 'the totals skip it');
   const menu = builder.slice(builder.indexOf('function showFlowMenu(id)'), builder.indexOf('modalRoot.querySelector(\'#copy-flow-url\')'));
   assert.ok(menu.includes('const damaged = flowIsDamaged(flow);'));
-  assert.ok(menu.includes('<button class="btn btn-danger" id="delete-flow">Delete flow</button><button class="btn" data-close>Close</button>'));
+  assert.ok(menu.includes('<button class="btn btn-danger" id="delete-flow">${t(\'Delete flow\')}</button><button class="btn" data-close>${t(\'Close\')}</button>'));
   assert.equal(/damaged[^\n]*id=\\"toggle-flow-status\\"/.test(menu.split('else setModal')[0]), false, 'no publish/unpublish for a locked job');
   assert.match(read('styles.css'), /\.flow-card\.is-damaged\{border-color:var\(--red-border\)/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105t/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105u/);
 });
 
 test('a damaged job cannot keep collecting candidate data: the database, the public page and the intake function all stop it', () => {

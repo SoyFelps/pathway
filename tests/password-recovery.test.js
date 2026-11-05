@@ -9,7 +9,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 test('sign-in exposes Forgot your password only outside invitation and signup flows', () => {
   const auth = read('auth.js');
   assert.match(auth, /if \(!isInvite && state\.mode === 'signin'\)/);
-  assert.match(auth, /forgotPassword\.textContent = 'Forgot your password\?'/);
+  assert.match(auth, /forgotPassword\.textContent = t\('Forgot your password\?'\)/);
   assert.match(auth, /forgotPassword\.addEventListener\('click',[\s\S]*renderPasswordResetRequest\(\)/);
   assert.match(auth, /function renderPasswordResetRequest\(/);
 });
@@ -44,8 +44,8 @@ test('new password must match, meet minimum length, and is updated through Supab
 test('password recovery styles and cache-busted assets are included in the static app', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /styles\.css\?v=mw3-20261105t/);
-  assert.match(html, /backend\.js\?v=mw3-20261105t/);
-  assert.match(html, /auth\.js\?v=mw3-20261105t/);
+  assert.match(html, /styles\.css\?v=mw3-20261105u/);
+  assert.match(html, /backend\.js\?v=mw3-20261105u/);
+  assert.match(html, /auth\.js\?v=mw3-20261105u/);
   assert.match(css, /\.auth-forgot-link/);
 });

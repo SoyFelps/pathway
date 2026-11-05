@@ -111,7 +111,7 @@ test('the header shows the person\'s name, with the e-mail as tooltip, on every 
 
 test('the My Team notice for workspaces without Premium says "No team access"', () => {
   const builder = read('builder.js');
-  assert.ok(builder.includes('<strong>No team access</strong>'));
+  assert.ok(builder.includes("<strong>${t('No team access')}</strong>"));
   assert.equal(builder.includes('Team access is paused'), false);
 });
 

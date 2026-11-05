@@ -6,9 +6,10 @@ const path = require('node:path');
 const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8').replace(/\r\n/g, '\n');
 
 test('the sign-in screen uses the same headline and subtitle as the dashboard', () => {
-  const dashboard = read('builder.js').match(/<h1>(Hiring made organized)<\/h1><p>([^<]+)<\/p>/);
-  assert.ok(dashboard, 'dashboard title and subtitle found');
-  assert.ok(read('auth.js').includes(`<h1>${dashboard[1]}</h1><p>${dashboard[2]}</p>`), 'same words on both screens');
+  // Both screens send the same English texts through t(), so they read the same in every language.
+  const words = "<h1>${t('Hiring made organized')}</h1><p>${t('Build application flows, share role links and review every candidate in one place.')}</p>";
+  assert.ok(read('builder.js').includes(words), 'dashboard title and subtitle found');
+  assert.ok(read('auth.js').includes(words), 'same words on both screens');
   assert.equal(read('auth.js').includes('Make applying feel human'), false);
 });
 

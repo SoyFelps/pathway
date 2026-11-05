@@ -39,8 +39,8 @@ test('the team function: Diversity is off unless explicitly ticked and is carrie
 test('the team screen: Diversity is unticked by default, in the invitation and for members', () => {
   const builder = read('builder.js');
   assert.match(builder, /data-permission="diversity" \$\{permissions\.can_diversity === true \? 'checked' : ''\}/);
-  assert.match(builder, /<input type="checkbox" data-invite-permission="diversity"><span>Diversity<\/span>/, 'no "checked" on the invitation checkbox');
-  assert.match(builder, /p\.can_diversity && 'Diversity'/);
+  assert.match(builder, /<input type="checkbox" data-invite-permission="diversity"><span>\$\{t\('Diversity'\)\}<\/span>/, 'no "checked" on the invitation checkbox');
+  assert.match(builder, /p\.can_diversity && t\('Diversity'\)/);
   assert.match(builder, /'canDiversity'/);
   assert.match(builder, /All are enabled by default, except Diversity\./);
   assert.match(builder, /does not move candidates between stages/);

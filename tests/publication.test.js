@@ -157,9 +157,9 @@ test('dashboard flow menu replaces Keep flow with status-aware lifecycle and lin
   const source = fs.readFileSync(require.resolve('../builder.js'), 'utf8');
   assert.ok(!source.includes('Keep flow'));
   assert.ok(source.includes("const isPublished = flow.publicationStatus === 'published'"));
-  assert.ok(source.includes("isPublished ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'"));
+  assert.ok(source.includes("isPublished ? t('Unpublish') : subscription?.active ? t('Publish') : t('Upgrade to publish')"));
   assert.ok(source.includes("isPublished || !subscription?.active ? '' : 'btn-primary'"));
-  assert.ok(source.includes("id=\"copy-flow-url\">Copy job link"));
+  assert.ok(source.includes("id=\"copy-flow-url\">${t('Copy job link')}"));
 });
 
 test('editor surfaces publish changes between workspace save status and candidate preview', () => {

@@ -833,17 +833,17 @@
     void refreshPeople().then(() => { if (host.isConnected) { paintTrigger(); if (!menu.hidden) paintMenu(); } });
   }
   function companyOptionsHtml(selectedId = '') {
-    return `<option value="" ${selectedId ? '' : 'selected'}>Use workspace name (${esc(workspace.name)})</option>${companies.map(company => `<option value="${esc(company.id)}" ${company.id === selectedId ? 'selected' : ''}>${esc(company.name)}</option>`).join('')}`;
+    return `<option value="" ${selectedId ? '' : 'selected'}>${t('Use workspace name ({name})', { name: esc(workspace.name) })}</option>${companies.map(company => `<option value="${esc(company.id)}" ${company.id === selectedId ? 'selected' : ''}>${esc(company.name)}</option>`).join('')}`;
   }
-  function nodeSummary(flow) { return `${flow.nodes.length} steps · ${flow.edges.length} connections`; }
+  function nodeSummary(flow) { return tn('{count} step', '{count} steps', flow.nodes.length) + ' · ' + tn('{count} connection', '{count} connections', flow.edges.length); }
   const flowIsDamaged = flow => !C.flowIsUsable(flow);
   function ago(value) {
-    if (!value) return 'Just created';
+    if (!value) return t('Just created');
     const mins = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
-    if (mins < 1) return 'Edited just now';
-    if (mins < 60) return `Edited ${mins}m ago`;
-    const hours = Math.floor(mins / 60); if (hours < 24) return `Edited ${hours}h ago`;
-    return `Edited ${Math.floor(hours / 24)}d ago`;
+    if (mins < 1) return t('Edited just now');
+    if (mins < 60) return t('Edited {count}m ago', { count: mins });
+    const hours = Math.floor(mins / 60); if (hours < 24) return t('Edited {count}h ago', { count: hours });
+    return t('Edited {count}d ago', { count: Math.floor(hours / 24) });
   }
   function setModal(html) {
     const applicantReview = html.includes('applicant-review-layout');
@@ -1447,30 +1447,31 @@
   }
   function flowCompanyFilterOptionsHtml() {
     const ids = [...new Set(flows.map(flow => flow.companyId).filter(Boolean))];
-    const named = ids.map(id => ({ id, name: companies.find(item => item.id === id)?.name || flows.find(flow => flow.companyId === id)?.companyName || 'Company' })).sort((a, b) => a.name.localeCompare(b.name));
-    const options = [['', 'All companies'], ...named.map(item => [item.id, item.name])];
+    const named = ids.map(id => ({ id, name: companies.find(item => item.id === id)?.name || flows.find(flow => flow.companyId === id)?.companyName || t('Company') })).sort((a, b) => a.name.localeCompare(b.name));
+    const options = [['', t('All companies')], ...named.map(item => [item.id, item.name])];
     if (flows.some(flow => !flow.companyId)) options.push([WORKSPACE_FILTER, workspace.name]);
     if (!options.some(([value]) => value === flowFilters.company)) flowFilters.company = '';
     return options.map(([value, label]) => '<option value="' + esc(value) + '"' + (flowFilters.company === value ? ' selected' : '') + '>' + esc(label) + '</option>').join('');
   }
   function flowResponsibleFilterOptionsHtml() {
     if (people.length && flowFilters.responsible && !people.some(person => person.userId === flowFilters.responsible)) flowFilters.responsible = '';
-    return '<option value="">All responsibles</option>' + people.map(person => '<option value="' + esc(person.userId) + '"' + (flowFilters.responsible === person.userId ? ' selected' : '') + '>' + esc(personLabel(person)) + (person.isOwner ? ' (owner)' : '') + '</option>').join('');
+    return `<option value="">${t('All responsibles')}</option>` + people.map(person => '<option value="' + esc(person.userId) + '"' + (flowFilters.responsible === person.userId ? ' selected' : '') + '>' + esc(personLabel(person)) + (person.isOwner ? ' ' + t('(owner)') : '') + '</option>').join('');
   }
   function flowFiltersHtml() {
     if (!flows.length) return '';
-    return '<div class="flow-filters"><input class="text-input" type="search" id="flow-search" placeholder="Search flows" aria-label="Search flows" value="' + esc(flowFilters.search) + '"><select class="select-input" id="flow-company-filter" aria-label="Filter by company">' + flowCompanyFilterOptionsHtml() + '</select><select class="select-input" id="flow-responsible-filter" aria-label="Filter by responsible">' + flowResponsibleFilterOptionsHtml() + '</select></div>';
+    return '<div class="flow-filters"><input class="text-input" type="search" id="flow-search" placeholder="' + t('Search flows') + '" aria-label="' + t('Search flows') + '" value="' + esc(flowFilters.search) + '"><select class="select-input" id="flow-company-filter" aria-label="' + t('Filter by company') + '">' + flowCompanyFilterOptionsHtml() + '</select><select class="select-input" id="flow-responsible-filter" aria-label="' + t('Filter by responsible') + '">' + flowResponsibleFilterOptionsHtml() + '</select></div>';
   }
   function damagedFlowCardHtml(flow) {
-    return `<article class="flow-card is-damaged" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="${esc(flow.jobTitle || 'Untitled role')} has incomplete data and is locked"><div class="flow-card-body"><div class="flow-card-top"><span class="damaged-tag"><span class="status-dot"></span>Incomplete</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><p class="flow-damaged-note">This job has incomplete data and is locked. It is not accepting applications. Contact support.</p><div class="flow-card-foot"><span>${ago(flow.updatedAt)}</span></div></div></article>`;
+    const title = esc(flow.jobTitle || t('Untitled role'));
+    return `<article class="flow-card is-damaged" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="${t('{title} has incomplete data and is locked', { title })}"><div class="flow-card-body"><div class="flow-card-top"><span class="damaged-tag"><span class="status-dot"></span>${t('Incomplete')}</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="${t('Flow actions')}">···</button></div><h3>${title}</h3><div class="flow-company">${esc(flow.companyName || t('Your company'))}</div><p class="flow-damaged-note">${t('This job has incomplete data and is locked. It is not accepting applications. Contact support.')}</p><div class="flow-card-foot"><span>${ago(flow.updatedAt)}</span></div></div></article>`;
   }
   function flowCardHtml(flow) {
     if (flowIsDamaged(flow)) return damagedFlowCardHtml(flow);
-    return `<article class="flow-card" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="Edit ${esc(flow.jobTitle)}"><div class="flow-card-preview"><svg class="mini-svg" viewBox="0 0 400 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path class="mw" d="M117 73C142.5 73 142.5 60 168 60"/><path class="mw" d="M270 60C285 60 285 44 300 44"/><path class="mw" d="M270 60C285 60 285 94 300 94"/><rect class="mn" x="24" y="56" width="93" height="36" rx="8"/><rect class="mb" x="36" y="65" width="46" height="4" rx="2"/><rect class="ms" x="36" y="74" width="62" height="3" rx="1.5"/><circle class="mp" cx="24" cy="73" r="3.5"/><circle class="mp" cx="117" cy="73" r="3.5"/><rect class="mn" x="168" y="43" width="102" height="36" rx="8"/><rect class="mb" x="180" y="52" width="49" height="4" rx="2"/><rect class="ms" x="180" y="61" width="62" height="3" rx="1.5"/><circle class="mp" cx="168" cy="60" r="3.5"/><circle class="mp" cx="270" cy="60" r="3.5"/><rect class="mn" x="300" y="27" width="77" height="36" rx="8"/><rect class="mb" x="312" y="36" width="35" height="4" rx="2"/><rect class="ms" x="312" y="45" width="49" height="3" rx="1.5"/><circle class="mp" cx="300" cy="44" r="3.5"/><circle class="mp" cx="377" cy="44" r="3.5"/><rect class="mn" x="300" y="77" width="77" height="36" rx="8"/><rect class="mb" x="312" y="86" width="35" height="4" rx="2"/><rect class="ms" x="312" y="95" width="49" height="3" rx="1.5"/><circle class="mp" cx="300" cy="94" r="3.5"/><circle class="mp" cx="377" cy="94" r="3.5"/></svg></div><div class="flow-card-body"><div class="flow-card-top"><span class="${flow.publicationStatus === 'published' ? 'published-tag' : 'draft-tag'}"><span class="status-dot"></span>${flow.publicationStatus === 'published' ? 'Published' : 'Draft'}</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="Flow actions">···</button></div><h3>${esc(flow.jobTitle || 'Untitled role')}</h3><div class="flow-company">${esc(flow.companyName || 'Your company')}</div><div class="flow-card-foot"><span class="flow-count">${ICONS.node}${nodeSummary(flow)}</span><span>${ago(flow.updatedAt)}</span></div></div></article>`;
+    return `<article class="flow-card" data-flow="${esc(flow.id)}" tabindex="0" role="button" aria-label="${t('Edit {title}', { title: esc(flow.jobTitle) })}"><div class="flow-card-preview"><svg class="mini-svg" viewBox="0 0 400 120" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><path class="mw" d="M117 73C142.5 73 142.5 60 168 60"/><path class="mw" d="M270 60C285 60 285 44 300 44"/><path class="mw" d="M270 60C285 60 285 94 300 94"/><rect class="mn" x="24" y="56" width="93" height="36" rx="8"/><rect class="mb" x="36" y="65" width="46" height="4" rx="2"/><rect class="ms" x="36" y="74" width="62" height="3" rx="1.5"/><circle class="mp" cx="24" cy="73" r="3.5"/><circle class="mp" cx="117" cy="73" r="3.5"/><rect class="mn" x="168" y="43" width="102" height="36" rx="8"/><rect class="mb" x="180" y="52" width="49" height="4" rx="2"/><rect class="ms" x="180" y="61" width="62" height="3" rx="1.5"/><circle class="mp" cx="168" cy="60" r="3.5"/><circle class="mp" cx="270" cy="60" r="3.5"/><rect class="mn" x="300" y="27" width="77" height="36" rx="8"/><rect class="mb" x="312" y="36" width="35" height="4" rx="2"/><rect class="ms" x="312" y="45" width="49" height="3" rx="1.5"/><circle class="mp" cx="300" cy="44" r="3.5"/><circle class="mp" cx="377" cy="44" r="3.5"/><rect class="mn" x="300" y="77" width="77" height="36" rx="8"/><rect class="mb" x="312" y="86" width="35" height="4" rx="2"/><rect class="ms" x="312" y="95" width="49" height="3" rx="1.5"/><circle class="mp" cx="300" cy="94" r="3.5"/><circle class="mp" cx="377" cy="94" r="3.5"/></svg></div><div class="flow-card-body"><div class="flow-card-top"><span class="${flow.publicationStatus === 'published' ? 'published-tag' : 'draft-tag'}"><span class="status-dot"></span>${flow.publicationStatus === 'published' ? t('Published') : t('Draft')}</span><button class="icon-btn flow-menu" data-menu="${esc(flow.id)}" aria-label="${t('Flow actions')}">···</button></div><h3>${esc(flow.jobTitle || t('Untitled role'))}</h3><div class="flow-company">${esc(flow.companyName || t('Your company'))}</div><div class="flow-card-foot"><span class="flow-count">${ICONS.node}${nodeSummary(flow)}</span><span>${ago(flow.updatedAt)}</span></div></div></article>`;
   }
   function flowCardsHtml() {
     const visible = filteredFlows();
-    return visible.length ? visible.map(flowCardHtml).join('') : '<div class="flow-grid-empty"><p>No flows match these filters.</p><button class="btn btn-sm" type="button" id="flow-clear-filters">Clear filters</button></div>';
+    return visible.length ? visible.map(flowCardHtml).join('') : `<div class="flow-grid-empty"><p>${t('No flows match these filters.')}</p><button class="btn btn-sm" type="button" id="flow-clear-filters">${t('Clear filters')}</button></div>`;
   }
   function bindFlowCards() {
     root.querySelectorAll('.flow-card').forEach(card => {
@@ -1505,7 +1506,7 @@
     const drafts = flows.filter(flow => flow.publicationStatus !== 'published').length;
     const published = count - drafts;
     const nodes = flows.reduce((sum, flow) => sum + (flowIsDamaged(flow) ? 0 : flow.nodes.length), 0);
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">Your workspace</div><h1>Hiring made organized</h1><p>Build application flows, share role links and review every candidate in one place.</p></div><div class="dash-action"><button class="btn btn-primary" id="new-flow">＋ &nbsp;New flow</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>Application ${count === 1 ? 'flow' : 'flows'}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.applicants}</span><div><strong id="dashboard-new-applicant-count" title="${hasPermission('applicants') ? 'Loading new applicants' : 'Candidates access required'}">—</strong><span>New applicants</span></div></div><div class="stat"><span class="stat-icon">${ICONS.published}</span><div><strong>${published}</strong><span>Published flows</span></div></div></section><div class="section-heading"><h2>Application flows</h2><span class="muted" style="font-size:12px">${drafts} draft${drafts === 1 ? '' : 's'} · ${published} published</span></div>${flows.length ? `${flowFiltersHtml()}<section class="flow-grid" id="flow-grid">${flowCardsHtml()}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>Your next great flow starts here.</h3><p>Create a role page and shape a thoughtful path for applicants.</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;Create your first flow</button></section>`}</main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('dashboard')}<main class="dashboard"><div class="dash-greeting"><div><div class="eyebrow">${t('Your workspace')}</div><h1>${t('Hiring made organized')}</h1><p>${t('Build application flows, share role links and review every candidate in one place.')}</p></div><div class="dash-action"><button class="btn btn-primary" id="new-flow">＋ &nbsp;${t('New flow')}</button></div></div><section class="dash-stats"><div class="stat"><span class="stat-icon">${ICONS.flows}</span><div><strong>${count}</strong><span>${tn('Application flow', 'Application flows', count)}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.applicants}</span><div><strong id="dashboard-new-applicant-count" title="${hasPermission('applicants') ? t('Loading new applicants') : t('Candidates access required')}">—</strong><span>${t('New applicants')}</span></div></div><div class="stat"><span class="stat-icon">${ICONS.published}</span><div><strong>${published}</strong><span>${t('Published flows')}</span></div></div></section><div class="section-heading"><h2>${t('Application flows')}</h2><span class="muted" style="font-size:12px">${tn('{count} draft', '{count} drafts', drafts)} · ${tn('{count} published', '{count} published', published)}</span></div>${flows.length ? `${flowFiltersHtml()}<section class="flow-grid" id="flow-grid">${flowCardsHtml()}</section>` : `<section class="empty-state"><span class="brand-mark">↗</span><h3>${t('Your next great flow starts here.')}</h3><p>${t('Create a role page and shape a thoughtful path for applicants.')}</p><button class="btn btn-primary" id="empty-new-flow">＋ &nbsp;${t('Create your first flow')}</button></section>`}</main></div></div>`;
     bindSidebar();
     bindPlanControl();
     root.querySelector('#empty-new-flow')?.addEventListener('click', showNewFlow);
@@ -1519,7 +1520,7 @@
     flows.filter(flow => flowIsDamaged(flow) && flow.publicationStatus === 'published').forEach(flow => {
       void window.PathwayBackend.unpublishFlow(flow, workspace).then(() => {
         if (root.querySelector('#flow-grid')) renderDashboard();
-        showToast(`"${flow.jobTitle || 'Untitled role'}" was unpublished because its data is incomplete.`, 6000);
+        showToast(t('“{title}” was unpublished because its data is incomplete.', { title: flow.jobTitle || t('Untitled role') }), 6000);
       }).catch(() => { /* the server turns it off on the next application attempt */ });
     });
   }
@@ -1531,11 +1532,11 @@
       const count = await window.PathwayBackend.countNewApplicants(workspace.id);
       if (requestId !== dashboardApplicantCountRequestId || !countNode.isConnected) return;
       countNode.textContent = String(count);
-      countNode.title = `${count} new applicant${count === 1 ? '' : 's'}`;
+      countNode.title = tn('{count} new applicant', '{count} new applicants', count);
     } catch (_) {
       if (requestId === dashboardApplicantCountRequestId && countNode.isConnected) {
         countNode.textContent = '—';
-        countNode.title = 'New applicants could not be loaded';
+        countNode.title = t('New applicants could not be loaded');
       }
     }
   }
@@ -2269,12 +2270,12 @@
 
   function renderAccessMessage(section) {
     currentId = null; selectedId = null;
-    const area = section === 'flows' ? 'Flows' : section === 'view_reports' ? 'Reports' : section === 'diversity' ? 'Diversity' : 'Applicants';
+    const area = section === 'flows' ? t('Flows') : section === 'view_reports' ? t('Reports') : section === 'diversity' ? t('Diversity') : t('Applicants');
     const permitted = Boolean(teamMember?.[`can_${section}`]);
     const message = !subscription?.active
-      ? 'The workspace Premium plan is inactive. Access to shared workspace data is paused until the owner restores Premium.'
-      : permitted ? 'This area is unavailable for this account.' : `The workspace owner has not enabled ${area} access for your account.`;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('')}<main class="my-team-page"><section class="team-empty-state"><div class="eyebrow">Workspace access</div><h1>${area} access is unavailable</h1><p>${esc(message)}</p>${teamMember ? '<button class="btn" id="open-my-team">Open My Team</button>' : ''}</section></main></div></div>`;
+      ? t('The workspace Premium plan is inactive. Access to shared workspace data is paused until the owner restores Premium.')
+      : permitted ? t('This area is unavailable for this account.') : t('The workspace owner has not enabled {area} access for your account.', { area });
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('')}<main class="my-team-page"><section class="team-empty-state"><div class="eyebrow">${t('Workspace access')}</div><h1>${t('{area} access is unavailable', { area })}</h1><p>${esc(message)}</p>${teamMember ? `<button class="btn" id="open-my-team">${t('Open My Team')}</button>` : ''}</section></main></div></div>`;
     bindSidebar();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); if (hasPermission('flows')) renderDashboard(); });
     
@@ -2284,7 +2285,7 @@
   // The access options of a person or an invitation are a multiselect: the checkboxes (unchanged) live in a dropdown, the chosen ones show as chips.
   function paintPermissionMulti(multi) {
     const chosen = [...multi.querySelectorAll('.perm-multi-panel label')].filter(label => label.querySelector('input').checked).map(label => label.querySelector('span').textContent);
-    multi.querySelector('.perm-multi-summary').innerHTML = chosen.length ? chosen.map(name => '<span class="perm-chip">' + esc(name) + '</span>').join('') : '<span class="perm-none">No access</span>';
+    multi.querySelector('.perm-multi-summary').innerHTML = chosen.length ? chosen.map(name => '<span class="perm-chip">' + esc(name) + '</span>').join('') : '<span class="perm-none">' + t('No access') + '</span>';
     multi.dataset.painted = '1';
   }
   function closePermissionMultis(except = null) {
@@ -2332,8 +2333,10 @@
     paintNew();
   }
 
+  // Dates in My Team follow the interface language.
+  const teamDate = value => window.PathwayI18n.formatDate(value, { year: 'numeric', month: 'short', day: 'numeric' });
   function teamPermissionControls(permissions = {}, disabled = false) {
-    return `<div class="perm-multi"><button type="button" class="perm-multi-btn" aria-haspopup="true" aria-expanded="false" aria-label="Choose what this person can access"><span class="perm-multi-summary"></span>${CHEVRON}</button><div class="perm-multi-panel" role="group" aria-label="Access" hidden><div class="perm-multi-busy" role="status" aria-live="polite" hidden>Applying changes, please wait.</div><label><input type="checkbox" data-permission="flows" ${permissions.can_flows !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Flows</span></label><label><input type="checkbox" data-permission="applicants" ${permissions.can_applicants !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Candidates</span></label><label><input type="checkbox" data-permission="team" ${permissions.can_manage_team !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Team</span></label><label><input type="checkbox" data-permission="stages" ${permissions.can_customize_stages !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Customize stages</span></label><label><input type="checkbox" data-permission="reports" ${permissions.can_view_reports !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Reports</span></label><label><input type="checkbox" data-permission="diversity" ${permissions.can_diversity === true ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>Diversity</span></label></div></div>`;
+    return `<div class="perm-multi"><button type="button" class="perm-multi-btn" aria-haspopup="true" aria-expanded="false" aria-label="${t('Choose what this person can access')}"><span class="perm-multi-summary"></span>${CHEVRON}</button><div class="perm-multi-panel" role="group" aria-label="${t('Access')}" hidden><div class="perm-multi-busy" role="status" aria-live="polite" hidden>${t('Applying changes, please wait.')}</div><label><input type="checkbox" data-permission="flows" ${permissions.can_flows !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>${t('Flows')}</span></label><label><input type="checkbox" data-permission="applicants" ${permissions.can_applicants !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>${t('Candidates')}</span></label><label><input type="checkbox" data-permission="team" ${permissions.can_manage_team !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>${t('Team')}</span></label><label><input type="checkbox" data-permission="stages" ${permissions.can_customize_stages !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>${t('Customize stages')}</span></label><label><input type="checkbox" data-permission="reports" ${permissions.can_view_reports !== false ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>${t('Reports')}</span></label><label><input type="checkbox" data-permission="diversity" ${permissions.can_diversity === true ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>${t('Diversity')}</span></label></div></div>`;
   }
 
   // Name on top and e-mail below it (the e-mail always stays visible in My Team). Without a known name only the e-mail shows.
@@ -2344,17 +2347,18 @@
   }
   function renderMyTeamMarkup(data) {
     const manager = Boolean(data.canManage);
-    const describe = p => [p.can_flows && 'Flows', p.can_applicants && 'Candidates', p.can_manage_team && 'Team', p.can_customize_stages && 'Customize stages', p.can_view_reports && 'Reports', p.can_diversity && 'Diversity'].filter(Boolean).join(' · ') || 'No access';
-    const members = manager ? (data.members || []).map(member => `<article class="team-person" data-member-id="${esc(member.user_id)}"><div class="team-person-heading"><div>${teamPersonLines(member.user_id, member.member_email)}<span>Member since ${esc(new Date(member.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div><button class="btn btn-danger btn-sm" data-remove-member="${esc(member.user_id)}">Remove</button></div>${teamPermissionControls(member)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : data.readOnlyTeam ? data.readOnlyTeam.filter(person => !person.isOwner).map(person => `<article class="team-person${person.userId === user.id ? ' team-self' : ''}"><div class="team-person-heading"><div>${teamPersonLines(person.userId, person.email)}<span>${person.userId === user.id ? 'You · ' : ''}Member since ${esc(new Date(person.memberSince).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div></div><div class="team-permission-summary">${esc(describe(person))}</div></article>`).join('') : teamMember ? `<article class="team-person team-self"><div class="team-person-heading"><div>${teamPersonLines(user.id, teamMember.email || user.email)}<span>You · ${data.premiumActive ? 'Team member' : 'Workspace access paused'}</span></div></div><div class="team-permission-summary">${esc(describe(teamMember))}</div></article>` : '';
-    const pending = manager ? (data.invitations || []).map(invite => `<article class="team-invite-item" data-invitation-id="${esc(invite.id)}"><div class="team-person-heading"><div><strong>${esc(invite.invited_email)}</strong><span>Expires ${esc(new Date(invite.expires_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }))}</span></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${data.premiumActive ? `<button class="btn btn-sm" data-copy-invitation-link="${esc(invite.id)}">Copy invitation link</button>` : ''}<button class="btn btn-sm" data-revoke-invitation="${esc(invite.id)}">Revoke</button></div></div>${teamPermissionControls(invite)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : '';
+    const describe = p => [p.can_flows && t('Flows'), p.can_applicants && t('Candidates'), p.can_manage_team && t('Team'), p.can_customize_stages && t('Customize stages'), p.can_view_reports && t('Reports'), p.can_diversity && t('Diversity')].filter(Boolean).join(' · ') || t('No access');
+    const since = value => t('Member since {date}', { date: esc(teamDate(value)) });
+    const members = manager ? (data.members || []).map(member => `<article class="team-person" data-member-id="${esc(member.user_id)}"><div class="team-person-heading"><div>${teamPersonLines(member.user_id, member.member_email)}<span>${since(member.created_at)}</span></div><button class="btn btn-danger btn-sm" data-remove-member="${esc(member.user_id)}">${t('Remove')}</button></div>${teamPermissionControls(member)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : data.readOnlyTeam ? data.readOnlyTeam.filter(person => !person.isOwner).map(person => `<article class="team-person${person.userId === user.id ? ' team-self' : ''}"><div class="team-person-heading"><div>${teamPersonLines(person.userId, person.email)}<span>${person.userId === user.id ? t('You') + ' · ' : ''}${since(person.memberSince)}</span></div></div><div class="team-permission-summary">${esc(describe(person))}</div></article>`).join('') : teamMember ? `<article class="team-person team-self"><div class="team-person-heading"><div>${teamPersonLines(user.id, teamMember.email || user.email)}<span>${t('You')} · ${data.premiumActive ? t('Team member') : t('Workspace access paused')}</span></div></div><div class="team-permission-summary">${esc(describe(teamMember))}</div></article>` : '';
+    const pending = manager ? (data.invitations || []).map(invite => `<article class="team-invite-item" data-invitation-id="${esc(invite.id)}"><div class="team-person-heading"><div><strong>${esc(invite.invited_email)}</strong><span>${t('Expires {date}', { date: esc(teamDate(invite.expires_at)) })}</span></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${data.premiumActive ? `<button class="btn btn-sm" data-copy-invitation-link="${esc(invite.id)}">${t('Copy invitation link')}</button>` : ''}<button class="btn btn-sm" data-revoke-invitation="${esc(invite.id)}">${t('Revoke')}</button></div></div>${teamPermissionControls(invite)}<span class="team-save-status" aria-live="polite"></span></article>`).join('') : '';
     const paused = !subscription?.active;
     // Everyone on the team can see who owns the workspace (managers get it with the team data, members from the team overview).
     const ownerEmail = data.owner?.email || teamDirectory.find(person => person.isOwner)?.email || data.readOnlyTeam?.find(person => person.isOwner)?.email || (isOwner ? user.email : '');
-    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>${manager ? `Manage access to ${esc(workspaceLabel(workspace))}. Premium includes up to 3 additional members at no extra seat charge.` : `See who has access to ${esc(workspaceLabel(workspace))}.`}</p>${isOwner ? `<button class="btn btn-sm team-rename" type="button" data-ws-rename="${esc(workspace.id)}">Rename workspace</button>` : ''}</div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>member seats in use</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>No team access</strong><p>The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.</p>${isOwner ? '<button class="btn btn-primary" id="team-upgrade">Upgrade to Premium</button>' : ''}</section>` : ''}${!manager && !paused ? '<section class="team-notice"><strong>View only</strong><p>You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.</p></section>' : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>Invite a teammate</h2><p>Create a private link and share it directly. Pathway will not send an email.</p></div></div>${paused ? '<div class="team-inline-notice">An active Premium plan is required to invite additional members.</div>' : data.seatsUsed >= 3 ? '<div class="team-inline-notice">All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.</div>' : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">Work email</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="teammate@company.com"></div><div class="team-permission-label">Access for this teammate <small>All are enabled by default, except Diversity.</small></div><div class="perm-multi"><button type="button" class="perm-multi-btn" aria-haspopup="true" aria-expanded="false" aria-label="Choose what this person can access"><span class="perm-multi-summary"></span>${CHEVRON}</button><div class="perm-multi-panel" role="group" aria-label="Access" hidden><div class="perm-multi-busy" role="status" aria-live="polite" hidden>Applying changes, please wait.</div><label><input type="checkbox" data-invite-permission="flows" checked><span>Flows</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>Candidates</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>Team</span></label><label><input type="checkbox" data-invite-permission="stages" checked><span>Customize stages</span></label><label><input type="checkbox" data-invite-permission="reports" checked><span>Reports</span></label><label><input type="checkbox" data-invite-permission="diversity"><span>Diversity</span></label></div></div><p class="team-permission-hint">Diversity shows combined percentages from candidates’ voluntary self-identification answers. It is off by default; give it to someone who does not move candidates between stages.</p><button class="btn btn-primary" id="create-team-invite" type="submit">Create invitation link</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>People</h2><p>${manager ? 'The workspace owner cannot be removed. Members keep their own accounts when they leave.' : 'Your account stays yours if you leave this workspace.'}</p></div></div>${ownerEmail ? `<article class="team-person team-owner"><div class="team-person-heading"><div>${teamPersonLines(teamDirectory.find(person => person.isOwner)?.userId || (isOwner ? user.id : ''), ownerEmail)}<span>Workspace owner · cannot be removed</span></div><span class="team-owner-badge">Owner</span></div><div class="team-permission-summary">Full workspace access · Billing owner</div></article>` : ''}${members || '<p class="team-empty-copy">No other team members to show here.</p>'}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>Pending invitations</h2><p>Invitation links expire after 7 days and can be revoked at any time.</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? '<button class="btn btn-danger" id="leave-team">Leave this team</button>' : ''}</div></main></div></div>`;
+    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><div class="my-team-heading"><div><div class="eyebrow">${t('Workspace access')}</div><h1>${t('My Team')}</h1><p>${manager ? t('Manage access to {workspace}. Premium includes up to 3 additional members at no extra seat charge.', { workspace: esc(workspaceLabel(workspace)) }) : t('See who has access to {workspace}.', { workspace: esc(workspaceLabel(workspace)) })}</p>${isOwner ? `<button class="btn btn-sm team-rename" type="button" data-ws-rename="${esc(workspace.id)}">${t('Rename workspace')}</button>` : ''}</div>${manager ? `<div class="team-seat-count"><strong>${data.seatsUsed || 0}<span> / 3</span></strong><small>${t('member seats in use')}</small></div>` : ''}</div>${paused ? `<section class="team-notice is-paused"><strong>${t('No team access')}</strong><p>${t('The workspace needs an active Premium plan to restore member access to flows and candidates. Members can still leave, and the owner can remove members.')}</p>${isOwner ? `<button class="btn btn-primary" id="team-upgrade">${t('Upgrade to Premium')}</button>` : ''}</section>` : ''}${!manager && !paused ? `<section class="team-notice"><strong>${t('View only')}</strong><p>${t('You can see who is on the team and what each person can access. Inviting, removing and changing permissions needs the Team permission: ask a team manager.')}</p></section>` : ''}${manager ? `<section class="team-card"><div class="team-card-heading"><div><h2>${t('Invite a teammate')}</h2><p>${t('Create a private link and share it directly. Pathway will not send an email.')}</p></div></div>${paused ? `<div class="team-inline-notice">${t('An active Premium plan is required to invite additional members.')}</div>` : data.seatsUsed >= 3 ? `<div class="team-inline-notice">${t('All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.')}</div>` : `<form id="team-invite-form"><div class="field-group"><label for="team-invite-email">${t('Work email')}</label><input class="text-input" id="team-invite-email" type="email" autocomplete="email" maxlength="254" required placeholder="${t('teammate@company.com')}"></div><div class="team-permission-label">${t('Access for this teammate')} <small>${t('All are enabled by default, except Diversity.')}</small></div><div class="perm-multi"><button type="button" class="perm-multi-btn" aria-haspopup="true" aria-expanded="false" aria-label="${t('Choose what this person can access')}"><span class="perm-multi-summary"></span>${CHEVRON}</button><div class="perm-multi-panel" role="group" aria-label="${t('Access')}" hidden><div class="perm-multi-busy" role="status" aria-live="polite" hidden>${t('Applying changes, please wait.')}</div><label><input type="checkbox" data-invite-permission="flows" checked><span>${t('Flows')}</span></label><label><input type="checkbox" data-invite-permission="applicants" checked><span>${t('Candidates')}</span></label><label><input type="checkbox" data-invite-permission="team" checked><span>${t('Team')}</span></label><label><input type="checkbox" data-invite-permission="stages" checked><span>${t('Customize stages')}</span></label><label><input type="checkbox" data-invite-permission="reports" checked><span>${t('Reports')}</span></label><label><input type="checkbox" data-invite-permission="diversity"><span>${t('Diversity')}</span></label></div></div><p class="team-permission-hint">${t('Diversity shows combined percentages from candidates’ voluntary self-identification answers. It is off by default; give it to someone who does not move candidates between stages.')}</p><button class="btn btn-primary" id="create-team-invite" type="submit">${t('Create invitation link')}</button><p class="team-form-error" id="team-form-error" role="alert" hidden></p></form>`}</section>` : ''}<section class="team-card"><div class="team-card-heading"><div><h2>${t('People')}</h2><p>${manager ? t('The workspace owner cannot be removed. Members keep their own accounts when they leave.') : t('Your account stays yours if you leave this workspace.')}</p></div></div>${ownerEmail ? `<article class="team-person team-owner"><div class="team-person-heading"><div>${teamPersonLines(teamDirectory.find(person => person.isOwner)?.userId || (isOwner ? user.id : ''), ownerEmail)}<span>${t('Workspace owner · cannot be removed')}</span></div><span class="team-owner-badge">${t('Owner')}</span></div><div class="team-permission-summary">${t('Full workspace access · Billing owner')}</div></article>` : ''}${members || `<p class="team-empty-copy">${t('No other team members to show here.')}</p>`}</section>${manager && data.invitations?.length ? `<section class="team-card"><div class="team-card-heading"><div><h2>${t('Pending invitations')}</h2><p>${t('Invitation links expire after 7 days and can be revoked at any time.')}</p></div></div><div class="team-invitation-list">${pending}</div></section>` : ''}<div class="team-leave-wrap">${!data.isOwner ? `<button class="btn btn-danger" id="leave-team">${t('Leave this team')}</button>` : ''}</div></main></div></div>`;
   }
 
   function renderMyTeamLoadingMarkup() {
-    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page" aria-busy="true"><div class="my-team-heading"><div><div class="eyebrow">Workspace access</div><h1>My Team</h1><p>Loading team members and invitations…</p></div><div class="team-skeleton team-skeleton-seat" aria-hidden="true"></div></div><section class="team-card team-loading-card" aria-hidden="true"><div class="team-skeleton team-skeleton-title"></div><div class="team-skeleton team-skeleton-copy"></div><div class="team-skeleton team-skeleton-field"></div><div class="team-skeleton team-skeleton-button"></div></section><section class="team-card team-loading-card" aria-hidden="true"><div class="team-skeleton team-skeleton-title"></div><div class="team-skeleton team-skeleton-person"></div><div class="team-skeleton team-skeleton-person short"></div></section><p class="team-loading-status" role="status">Loading your team…</p></main></div></div>`;
+    return `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page" aria-busy="true"><div class="my-team-heading"><div><div class="eyebrow">${t('Workspace access')}</div><h1>${t('My Team')}</h1><p>${t('Loading team members and invitations…')}</p></div><div class="team-skeleton team-skeleton-seat" aria-hidden="true"></div></div><section class="team-card team-loading-card" aria-hidden="true"><div class="team-skeleton team-skeleton-title"></div><div class="team-skeleton team-skeleton-copy"></div><div class="team-skeleton team-skeleton-field"></div><div class="team-skeleton team-skeleton-button"></div></section><section class="team-card team-loading-card" aria-hidden="true"><div class="team-skeleton team-skeleton-title"></div><div class="team-skeleton team-skeleton-person"></div><div class="team-skeleton team-skeleton-person short"></div></section><p class="team-loading-status" role="status">${t('Loading your team…')}</p></main></div></div>`;
   }
 
   function renderMyTeamLoading() {
@@ -2391,7 +2395,7 @@
       root.querySelector('#leave-team')?.addEventListener('click', showLeaveTeamConfirmation);
     } catch (error) {
       if (requestId !== teamRenderRequestId || !root.querySelector('[data-route="my-team"].active')) return;
-      root.innerHTML = `<div class="app-shell"><header class="topbar"><span class="brand">pathway</span><div class="top-actions">${workspaceSwitcherHtml()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><section class="team-notice is-paused"><h1>Team data unavailable</h1><p>${esc(error.message || 'Please try again.')}</p><button class="btn" id="retry-team">Retry</button></section></main></div></div>`;
+      root.innerHTML = `<div class="app-shell"><header class="topbar"><span class="brand">pathway</span><div class="top-actions">${workspaceSwitcherHtml()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-team')}<main class="my-team-page"><section class="team-notice is-paused"><h1>${t('Team data unavailable')}</h1><p>${esc(error.message || t('Please try again.'))}</p><button class="btn" id="retry-team">${t('Retry')}</button></section></main></div></div>`;
       bindSidebar(); root.querySelector('#retry-team')?.addEventListener('click', () => { void renderMyTeam(); }); 
     }
   }
@@ -2401,21 +2405,21 @@
     const form = event.currentTarget;
     const submit = form.querySelector('#create-team-invite');
     const errorBox = form.querySelector('#team-form-error');
-    submit.disabled = true; submit.textContent = 'Creating link…'; errorBox.hidden = true;
+    submit.disabled = true; submit.textContent = t('Creating link…'); errorBox.hidden = true;
     try {
       const permissions = Object.fromEntries([...form.querySelectorAll('[data-invite-permission]')].map(input => [input.dataset.invitePermission, input.checked]));
       const email = form.querySelector('#team-invite-email').value.trim();
       const result = await window.PathwayBackend.createTeamInvitation(email, permissions);
-      setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Invitation created</div><h2>Share this secure link.</h2><p>The link is unique, can be used once, and expires in 7 days. It works only for <strong>${esc(email)}</strong>.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><label class="form-label" for="team-invite-link">Invitation link</label><input class="text-input" id="team-invite-link" readonly value="${esc(result.url)}"><div class="modal-actions"><button class="btn" data-close>Done</button><button class="btn btn-primary" id="copy-team-invite">Copy invitation link</button></div>`);
+      setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Invitation created')}</div><h2>${t('Share this secure link.')}</h2><p>${t('The link is unique, can be used once, and expires in 7 days. It works only for {email}.', { email: `<strong>${esc(email)}</strong>` })}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><label class="form-label" for="team-invite-link">${t('Invitation link')}</label><input class="text-input" id="team-invite-link" readonly value="${esc(result.url)}"><div class="modal-actions"><button class="btn" data-close>${t('Done')}</button><button class="btn btn-primary" id="copy-team-invite">${t('Copy invitation link')}</button></div>`);
       modalRoot.querySelector('#copy-team-invite').addEventListener('click', async () => {
         const input = modalRoot.querySelector('#team-invite-link');
-        try { await navigator.clipboard.writeText(result.url); showToast('Invitation link copied.'); closeModal(); }
-        catch (_) { input.focus(); input.select(); showToast('Link selected. Copy it to your clipboard.'); }
+        try { await navigator.clipboard.writeText(result.url); showToast(t('Invitation link copied.')); closeModal(); }
+        catch (_) { input.focus(); input.select(); showToast(t('Link selected. Copy it to your clipboard.')); }
       });
       void renderMyTeam();
     } catch (error) {
-      errorBox.textContent = error.message || 'The invitation could not be created.'; errorBox.hidden = false;
-      submit.disabled = false; submit.textContent = 'Create invitation link';
+      errorBox.textContent = error.message || t('The invitation could not be created.'); errorBox.hidden = false;
+      submit.disabled = false; submit.textContent = t('Create invitation link');
     }
   }
 
@@ -2424,13 +2428,13 @@
     const status = card.querySelector('.team-save-status');
     inputs.forEach(input => { input.disabled = true; });
     setPermissionBusy(card, true);
-    if (status) status.textContent = 'Saving…';
+    if (status) status.textContent = t('Saving…');
     try {
       const permissions = Object.fromEntries(inputs.map(input => [input.dataset.permission, input.checked]));
       await window.PathwayBackend.updateTeamMemberPermissions(card.dataset.memberId, permissions);
       if (card.dataset.memberId === user.id) { await renderMyTeam(); return; }
-      if (status) status.textContent = 'Permissions saved';
-    } catch (error) { if (status) status.textContent = error.message || 'Could not save'; }
+      if (status) status.textContent = t('Permissions saved');
+    } catch (error) { if (status) status.textContent = error.message || t('Could not save'); }
     finally { inputs.forEach(input => { input.disabled = false; }); setPermissionBusy(card, false); }
   }
 
@@ -2439,59 +2443,60 @@
     const status = card.querySelector('.team-save-status');
     inputs.forEach(input => { input.disabled = true; });
     setPermissionBusy(card, true);
-    if (status) status.textContent = 'Saving…';
+    if (status) status.textContent = t('Saving…');
     try {
       const permissions = Object.fromEntries(inputs.map(input => [input.dataset.permission, input.checked]));
       await window.PathwayBackend.updateTeamInvitationPermissions(card.dataset.invitationId, permissions);
-      if (status) status.textContent = 'Invitation permissions saved';
-    } catch (error) { if (status) status.textContent = error.message || 'Could not save'; }
+      if (status) status.textContent = t('Invitation permissions saved');
+    } catch (error) { if (status) status.textContent = error.message || t('Could not save'); }
     finally { inputs.forEach(input => { input.disabled = false; }); setPermissionBusy(card, false); }
   }
 
   async function revokeTeamInvite(id) {
-    try { await window.PathwayBackend.revokeTeamInvitation(id); showToast('Invitation revoked.'); await renderMyTeam(); }
-    catch (error) { showToast(error.message || 'Invitation could not be revoked.'); }
+    try { await window.PathwayBackend.revokeTeamInvitation(id); showToast(t('Invitation revoked.')); await renderMyTeam(); }
+    catch (error) { showToast(error.message || t('Invitation could not be revoked.')); }
   }
 
   async function copyTeamInviteLink(button) {
     const id = button.dataset.copyInvitationLink;
     const card = button.closest('[data-invitation-id]');
-    const email = card?.querySelector('.team-person-heading strong')?.textContent || 'this teammate';
-    button.disabled = true; button.textContent = 'Preparing…';
+    const email = card?.querySelector('.team-person-heading strong')?.textContent || t('this teammate');
+    button.disabled = true; button.textContent = t('Preparing…');
     try {
       const result = await window.PathwayBackend.getTeamInvitationLink(id);
       const detail = result.refreshed
-        ? 'This invitation predates secure link recovery, so a replacement was created and the previous link no longer works.'
-        : 'This is the active link and remains valid until the invitation expires or is revoked.';
-      setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Pending invitation</div><h2>Copy the invitation link.</h2><p>This link is for <strong>${esc(email)}</strong>. ${esc(detail)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><label class="form-label" for="team-invite-link">Invitation link</label><input class="text-input" id="team-invite-link" readonly value="${esc(result.url)}"><div class="modal-actions"><button class="btn" data-close>Done</button><button class="btn btn-primary" id="copy-team-invite">Copy invitation link</button></div>`);
+        ? t('This invitation predates secure link recovery, so a replacement was created and the previous link no longer works.')
+        : t('This is the active link and remains valid until the invitation expires or is revoked.');
+      setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Pending invitation')}</div><h2>${t('Copy the invitation link.')}</h2><p>${t('This link is for {email}.', { email: `<strong>${esc(email)}</strong>` })} ${esc(detail)}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><label class="form-label" for="team-invite-link">${t('Invitation link')}</label><input class="text-input" id="team-invite-link" readonly value="${esc(result.url)}"><div class="modal-actions"><button class="btn" data-close>${t('Done')}</button><button class="btn btn-primary" id="copy-team-invite">${t('Copy invitation link')}</button></div>`);
       modalRoot.querySelector('#copy-team-invite').addEventListener('click', async () => {
         const input = modalRoot.querySelector('#team-invite-link');
-        try { await navigator.clipboard.writeText(result.url); showToast('Invitation link copied.'); closeModal(); }
-        catch (_) { input.focus(); input.select(); showToast('Link selected. Copy it to your clipboard.'); }
+        try { await navigator.clipboard.writeText(result.url); showToast(t('Invitation link copied.')); closeModal(); }
+        catch (_) { input.focus(); input.select(); showToast(t('Link selected. Copy it to your clipboard.')); }
       });
     } catch (error) {
-      button.disabled = false; button.textContent = 'Copy invitation link';
-      showToast(error.message || 'The invitation link could not be retrieved.');
+      button.disabled = false; button.textContent = t('Copy invitation link');
+      showToast(error.message || t('The invitation link could not be retrieved.'));
     }
   }
 
   function confirmRemoveTeamMember(id) {
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Remove team member</div><h2>Revoke this person's workspace access?</h2><p>Their Pathway account and email remain intact. They can create their own workspace or join another team.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn" data-close>Keep member</button><button class="btn btn-danger" id="confirm-remove-member">Remove member</button></div>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Remove team member')}</div><h2>${t('Revoke this person’s workspace access?')}</h2><p>${t('Their Pathway account and email remain intact. They can create their own workspace or join another team.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="modal-actions"><button class="btn" data-close>${t('Keep member')}</button><button class="btn btn-danger" id="confirm-remove-member">${t('Remove member')}</button></div>`);
     modalRoot.querySelector('#confirm-remove-member').addEventListener('click', async event => {
-      event.currentTarget.disabled = true; event.currentTarget.textContent = 'Removing…';
-      try { await window.PathwayBackend.removeTeamMember(id); closeModal(); if (id === user.id) { await openWorkspaceDashboard(); return; } showToast('Team access removed.'); await renderMyTeam(); }
-      catch (error) { closeModal(); showToast(error.message || 'Member could not be removed.'); }
+      event.currentTarget.disabled = true; event.currentTarget.textContent = t('Removing…');
+      try { await window.PathwayBackend.removeTeamMember(id); closeModal(); if (id === user.id) { await openWorkspaceDashboard(); return; } showToast(t('Team access removed.')); await renderMyTeam(); }
+      catch (error) { closeModal(); showToast(error.message || t('Member could not be removed.')); }
     });
   }
 
   function showLeaveTeamConfirmation(item = workspace) {
     const name = String(item?.name || '');
     const label = item && item.id ? workspaceLabel(item) : name;
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Leave workspace</div><h2>Leave ${esc(label)}?</h2><p>Your account will remain active, but you will immediately lose access to this workspace and its data. You can create a personal workspace or accept another team's invitation later.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn" data-close>Stay on team</button><button class="btn btn-danger" id="confirm-leave-team">Leave team</button></div>`);
+    // English stays word for word ("immediately lose access to this workspace and its data" is checked by a test).
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Leave workspace')}</div><h2>${t('Leave {workspace}?', { workspace: esc(label) })}</h2><p>${t('Your account will remain active, but you will immediately lose access to this workspace and its data. You can create a personal workspace or accept another team’s invitation later.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="modal-actions"><button class="btn" data-close>${t('Stay on team')}</button><button class="btn btn-danger" id="confirm-leave-team">${t('Leave team')}</button></div>`);
     modalRoot.querySelector('#confirm-leave-team').addEventListener('click', async event => {
-      event.currentTarget.disabled = true; event.currentTarget.textContent = 'Leaving…';
+      event.currentTarget.disabled = true; event.currentTarget.textContent = t('Leaving…');
       try { await window.PathwayBackend.leaveTeam(item.id); closeModal(); await afterWorkspaceRemoved(item); }
-      catch (error) { closeModal(); showToast(error.message || 'Could not leave the workspace.'); }
+      catch (error) { closeModal(); showToast(error.message || t('Could not leave the workspace.')); }
     });
   }
 
@@ -3657,7 +3662,7 @@
 
   function showNewFlow() {
     root.querySelector('.app-shell')?.classList.add('is-creating-flow');
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Start with the role</div><h2>Create a new application flow</h2><p>Add the job description and the AI interview questions inside the flow.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-flow-form">${companies.length ? `<div class="field-group"><label for="new-company-id">Company</label><select class="select-input" id="new-company-id" name="companyId">${companyOptionsHtml()}</select></div>` : `<p class="field-help">This job will use your workspace name: ${esc(workspace.name)}. Add a company profile from My Companies to choose another.</p>`}<div class="field-group"><label for="new-title">Job title</label><input class="text-input" id="new-title" name="jobTitle" placeholder="e.g. Senior Product Designer" required></div><div class="field-group"><span class="form-label" id="new-responsible-label">Responsible</span><div id="new-responsible"></div></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit">Create flow</button></div></form>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Start with the role')}</div><h2>${t('Create a new application flow')}</h2><p>${t('Add the job description and the AI interview questions inside the flow.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><form id="new-flow-form">${companies.length ? `<div class="field-group"><label for="new-company-id">${t('Company')}</label><select class="select-input" id="new-company-id" name="companyId">${companyOptionsHtml()}</select></div>` : `<p class="field-help">${t('This job will use your workspace name: {name}. Add a company profile from My Companies to choose another.', { name: esc(workspace.name) })}</p>`}<div class="field-group"><label for="new-title">${t('Job title')}</label><input class="text-input" id="new-title" name="jobTitle" placeholder="${t('e.g. Senior Product Designer')}" required></div><div class="field-group"><span class="form-label" id="new-responsible-label">${t('Responsible')}</span><div id="new-responsible"></div></div><div class="modal-actions"><button class="btn" type="button" data-close>${t('Cancel')}</button><button class="btn btn-primary" type="submit">${t('Create flow')}</button></div></form>`);
     let newResponsible = [];
     mountResponsibleField(modalRoot.querySelector('#new-responsible'), 'new-responsible-label', () => newResponsible, ids => { newResponsible = ids; });
     modalRoot.querySelector('#new-flow-form').addEventListener('submit', event => {
@@ -3673,12 +3678,12 @@
     const flow = flows.find(item => item.id === id); if (!flow) return;
     const isPublished = flow.publicationStatus === 'published' && Boolean(flow.activePublishedFlowId);
     const damaged = flowIsDamaged(flow);
-    if (damaged) setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Incomplete job</div><h2>${esc(flow.jobTitle || 'Untitled role')}</h2><p>${esc(flow.companyName || '')}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="danger-confirm"><strong>This job has incomplete data and is locked.</strong> It cannot be opened or edited, and its public link is turned off so no new applications arrive. Contact support, or delete it. Deleting also removes every application and private resume submitted to it. This cannot be undone.</div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">Delete flow</button><button class="btn" data-close>Close</button></div>`);
-    else setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${isPublished ? 'Published flow' : 'Draft flow'}</div><h2>${esc(flow.jobTitle)}</h2><p>${esc(flow.companyName)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="danger-confirm"><strong>Permanent deletion.</strong> Removing this job also deletes every application and private resume submitted to it. This cannot be undone.</div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">Delete flow</button><div style="display:flex;gap:8px;flex-wrap:wrap">${isPublished ? '<button class="btn" id="copy-flow-url">Copy job link</button>' : ''}<button class="btn ${isPublished || !subscription?.active ? '' : 'btn-primary'}" id="toggle-flow-status">${isPublished ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'}</button></div></div>`);
+    if (damaged) setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Incomplete job')}</div><h2>${esc(flow.jobTitle || t('Untitled role'))}</h2><p>${esc(flow.companyName || '')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="danger-confirm"><strong>${t('This job has incomplete data and is locked.')}</strong> ${t('It cannot be opened or edited, and its public link is turned off so no new applications arrive. Contact support, or delete it. Deleting also removes every application and private resume submitted to it. This cannot be undone.')}</div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">${t('Delete flow')}</button><button class="btn" data-close>${t('Close')}</button></div>`);
+    else setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${isPublished ? t('Published flow') : t('Draft flow')}</div><h2>${esc(flow.jobTitle)}</h2><p>${esc(flow.companyName)}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="danger-confirm"><strong>${t('Permanent deletion.')}</strong> ${t('Removing this job also deletes every application and private resume submitted to it. This cannot be undone.')}</div><div class="modal-actions" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><button class="btn btn-danger" id="delete-flow">${t('Delete flow')}</button><div style="display:flex;gap:8px;flex-wrap:wrap">${isPublished ? `<button class="btn" id="copy-flow-url">${t('Copy job link')}</button>` : ''}<button class="btn ${isPublished || !subscription?.active ? '' : 'btn-primary'}" id="toggle-flow-status">${isPublished ? t('Unpublish') : subscription?.active ? t('Publish') : t('Upgrade to publish')}</button></div></div>`);
     modalRoot.querySelector('#copy-flow-url')?.addEventListener('click', () => copyFlowUrl(flow, true));
     modalRoot.querySelector('#toggle-flow-status')?.addEventListener('click', async event => {
       const button = event.currentTarget;
-      button.disabled = true; button.textContent = isPublished ? 'Unpublishing…' : 'Opening editor…';
+      button.disabled = true; button.textContent = isPublished ? t('Unpublishing…') : t('Opening editor…');
       if (!isPublished) {
         if (!subscription?.active) { closeModal(); openSubscriptionPage(); return; }
         closeModal(); openFlow(id); await publishFlow(); return;
@@ -3686,21 +3691,21 @@
       try {
         await window.PathwayBackend.unpublishFlow(flow, workspace);
         flow.updatedAt = new Date().toISOString();
-        closeModal(); renderDashboard(); showToast('Flow returned to draft. Existing public links are now inactive.');
+        closeModal(); renderDashboard(); showToast(t('Flow returned to draft. Existing public links are now inactive.'));
       } catch (error) {
-        button.disabled = false; button.textContent = 'Unpublish';
-        showToast(error.message || 'This flow could not be unpublished.');
+        button.disabled = false; button.textContent = t('Unpublish');
+        showToast(error.message || t('This flow could not be unpublished.'));
       }
     });
     modalRoot.querySelector('#delete-flow').addEventListener('click', async () => {
-      const button = modalRoot.querySelector('#delete-flow'); button.disabled = true; button.textContent = 'Deleting…';
+      const button = modalRoot.querySelector('#delete-flow'); button.disabled = true; button.textContent = t('Deleting…');
       try {
         const result = await window.PathwayBackend.deleteFlow(flow, workspace);
         flows = flows.filter(item => item.id !== id);
         applicants = applicants.filter(item => item.flow_id !== flow.cloudId);
         closeModal(); renderDashboard();
-        showToast(result && result.resumesRemoved === false ? 'Flow and applications deleted. Some resume files may need cleanup.' : 'Flow, applications, and resumes deleted.');
-      } catch (error) { button.disabled = false; button.textContent = 'Delete flow'; showToast(`Could not delete this flow: ${error.message || 'try again'}`); }
+        showToast(result && result.resumesRemoved === false ? t('Flow and applications deleted. Some resume files may need cleanup.') : t('Flow, applications, and resumes deleted.'));
+      } catch (error) { button.disabled = false; button.textContent = t('Delete flow'); showToast(t('Could not delete this flow: {reason}', { reason: error.message || t('try again') })); }
     });
   }
 
@@ -4246,6 +4251,12 @@
     user = context.user;
     myProfile = context.profile || null;
     // The language saved in the profile wins (empty = browser language); it is applied before the first screen is drawn.
+    // A language chosen on the sign-in screen (kept in the browser) is copied to a profile that has none yet.
+    if (myProfile && !myProfile.uiLanguage && window.PathwayI18n.preference) {
+      const chosen = window.PathwayI18n.preference;
+      myProfile = { ...myProfile, uiLanguage: chosen };
+      window.PathwayBackend.updateMyLanguage(chosen).catch(() => { /* kept in the browser; Settings can save it later */ });
+    }
     if (myProfile) window.PathwayI18n.setPreference(myProfile.uiLanguage || null);
     isOwner = Boolean(context.isOwner);
     teamMember = context.teamMember || null;

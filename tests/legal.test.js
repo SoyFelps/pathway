@@ -11,9 +11,10 @@ test('the sign-in screens no longer say "Early access"', () => {
 
 test('under the main button, people agree to the Terms of Use and Privacy Policy, with links to the legal page', () => {
   const auth = read('auth.js');
-  assert.ok(auth.includes("'By ' + action + ', you agree to our <a href=\"legal.html#terms\" target=\"_blank\" rel=\"noopener\">Terms of Use</a> and <a href=\"legal.html#privacy\" target=\"_blank\" rel=\"noopener\">Privacy Policy</a>.'"));
-  assert.ok(auth.includes("legalConsentHtml(state.mode === 'signup' ? 'creating an account' : 'signing in')"), 'sign-up and sign-in each get their own wording');
-  assert.ok(auth.includes("(state.mode === 'signup' ? ' ' + legalConsentHtml('creating an account') : '')"), 'people who sign up from an invitation also see it');
+  assert.ok(auth.includes('<a href="legal.html#terms" target="_blank" rel="noopener">${t(\'Terms of Use\')}</a>') && auth.includes('<a href="legal.html#privacy" target="_blank" rel="noopener">${t(\'Privacy Policy\')}</a>'));
+  assert.ok(auth.includes("t('By creating an account, you agree to our {terms} and {privacy}.', { terms, privacy })") && auth.includes("t('By signing in, you agree to our {terms} and {privacy}.', { terms, privacy })"));
+  assert.ok(auth.includes("legalConsentHtml(state.mode === 'signup' ? 'signup' : 'signin')"), 'sign-up and sign-in each get their own wording');
+  assert.ok(auth.includes("(state.mode === 'signup' ? ' ' + legalConsentHtml('signup') : '')"), 'people who sign up from an invitation also see it');
   assert.equal(auth.includes('One account creates one private workspace'), false, 'the old text is gone');
 });
 

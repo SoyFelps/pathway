@@ -64,7 +64,7 @@ test('the Reports page is in the sidebar for people with the permission and open
   assert.match(builder, /root\.querySelector\('\[data-route="reports"\]'\)\?\.addEventListener\('click', \(\) => \{ void renderReports\(\); \}\)/);
   assert.match(builder, /requestedPage === 'reports'\) void renderReports\(\)/);
   assert.match(builder, /if \(!hasPermission\('view_reports'\)\) return renderAccessMessage\('view_reports'\)/);
-  assert.match(builder, /section === 'view_reports' \? 'Reports'/);
+  assert.match(builder, /section === 'view_reports' \? t\('Reports'\)/);
   const backend = read('backend.js');
   assert.match(backend, /client\.rpc\('get_workspace_report'/);
   assert.match(backend, /getWorkspaceReport,/);
@@ -74,7 +74,7 @@ test('My Team lets managers choose the Reports permission for members and invita
   const builder = read('builder.js');
   assert.match(builder, /data-permission="reports"/);
   assert.match(builder, /data-invite-permission="reports" checked/);
-  assert.match(builder, /p\.can_view_reports && 'Reports'/);
+  assert.match(builder, /p\.can_view_reports && t\('Reports'\)/);
 });
 
 test('the page offers period and job filters, the four summary numbers, the chart, the funnel and a CSV export', () => {
@@ -108,9 +108,9 @@ test('report text coming from the database is escaped before it reaches the page
 test('the Reports styles exist and the changed files carry a new cache version', () => {
   const css = read('styles.css');
   ['.reports-page', '.rpt-stats', '.rpt-chart', '.rpt-table'].forEach(selector => assert.ok(css.includes(selector), selector));
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105t/);
-  assert.match(read('index.html'), /backend\.js\?v=mw3-20261105t/);
-  assert.match(read('index.html'), /styles\.css\?v=mw3-20261105t/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105u/);
+  assert.match(read('index.html'), /backend\.js\?v=mw3-20261105u/);
+  assert.match(read('index.html'), /styles\.css\?v=mw3-20261105u/);
 });
 
 const scaling = read('supabase/migrations/20261020230000_report_scaling_and_step_counts.sql');

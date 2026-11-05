@@ -83,7 +83,7 @@ test('a Customize button opens a modal that turns stages on and off; Failed, New
   assert.match(migration, /check \(status in \('failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'\)\)/);
   assert.match(migration, /public\.workspace_user_has_permission\(workspace_id, 'applicants'\)/);
   assert.match(read('styles.css'), /\.stage-option\.is-locked\{cursor:not-allowed\}/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105t/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105u/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -125,7 +125,7 @@ test('flow deletion is authenticated, pauses intake, removes private files, then
   assert.match(deletion, /admin\.auth\.getUser\(bearer\)/);
   assert.match(deletion, /publication_status: "draft", active_published_flow_id: null/);
   assert.ok(deletion.indexOf('.remove(paths.slice') < deletion.indexOf('.delete().eq("id", flowId)'));
-  assert.match(read('builder.js'), /Permanent deletion\.<\/strong> Removing this job also deletes every application and private resume/);
+  assert.ok(read('builder.js').includes("<strong>${t('Permanent deletion.')}</strong> ${t('Removing this job also deletes every application and private resume submitted to it. This cannot be undone.')}"));
 });
 
 test('Applicants-only members receive job labels without opening full Flows data', () => {
@@ -158,13 +158,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=mw3-20261105t/);
-  assert.match(read('index.html'), /pathway\.js\?v=mw3-20261105t/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261105t/);
-  assert.match(read('index.html'), /candidate\.js\?v=mw3-20261105t/);
-  assert.match(read('apply.html'), /styles\.css\?v=mw3-20261105t/);
-  assert.match(read('index.html'), /styles\.css\?v=mw3-20261105t/);
-  assert.match(read('apply.html'), /backend\.js\?v=mw3-20261105t/);
+  assert.match(read('apply.html'), /pathway\.js\?v=mw3-20261105u/);
+  assert.match(read('index.html'), /pathway\.js\?v=mw3-20261105u/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261105u/);
+  assert.match(read('index.html'), /candidate\.js\?v=mw3-20261105u/);
+  assert.match(read('apply.html'), /styles\.css\?v=mw3-20261105u/);
+  assert.match(read('index.html'), /styles\.css\?v=mw3-20261105u/);
+  assert.match(read('apply.html'), /backend\.js\?v=mw3-20261105u/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
@@ -269,8 +269,8 @@ test('dashboard shows new applicant and published-flow counts without loading ap
   const dashboard = builder.slice(dashboardStart, dashboardEnd);
   assert.ok(dashboardStart >= 0 && dashboardEnd > dashboardStart);
   assert.match(dashboard, /id="dashboard-new-applicant-count"/);
-  assert.match(dashboard, /<span>New applicants<\/span>/);
-  assert.match(dashboard, /<span>Published flows<\/span>/);
+  assert.ok(dashboard.includes("<span>${t('New applicants')}</span>"));
+  assert.ok(dashboard.includes("<span>${t('Published flows')}</span>"));
   assert.match(dashboard, /if \(hasPermission\('applicants'\)\) void loadDashboardNewApplicantCount/);
   assert.doesNotMatch(dashboard, /Steps in your journeys|Saved to Supabase/);
   assert.ok(css.includes('.draft-tag{color:var(--slate-text)}.draft-tag .status-dot{background:var(--slate)'));

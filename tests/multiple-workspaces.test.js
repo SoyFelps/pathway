@@ -118,7 +118,7 @@ test('the app passes the current workspace to the server and loads it from the l
 });
 
 test('owners rename from Settings and My Team; nobody else sees the button; no workspace shows the empty state with Settings only', () => {
-  assert.match(builder, /data-ws-rename="\$\{esc\(workspace\.id\)\}">Rename workspace/);
+  assert.match(builder, /data-ws-rename="\$\{esc\(workspace\.id\)\}">\$\{t\('Rename workspace'\)\}/);
   assert.match(builder, /isOwner \? `<button class="btn btn-sm team-rename"/);
   assert.match(builder, /function renderNoWorkspace\(\)/);
   assert.match(builder, /if \(!workspace\) \{ if \(requestedPage === 'settings'\) renderSettings\(\); else renderNoWorkspace\(\); \}/);

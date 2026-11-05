@@ -15,10 +15,10 @@ test('the dashboard no longer has the Workspace details button or its modal', ()
 test('the dashboard has a search box and company and responsible filters above the flow grid', () => {
   const builder = read('builder.js');
   const markup = builder.slice(builder.indexOf('function flowFiltersHtml('), builder.indexOf('function flowCardHtml('));
-  assert.ok(markup.includes('id="flow-search"') && markup.includes('placeholder="Search flows"'));
+  assert.ok(markup.includes('id="flow-search"') && markup.includes("placeholder=\"' + t('Search flows') + '\""));
   assert.ok(markup.includes('id="flow-company-filter"') && markup.includes('id="flow-responsible-filter"'));
   assert.ok(builder.includes('${flowFiltersHtml()}<section class="flow-grid" id="flow-grid">${flowCardsHtml()}</section>'), 'filters sit right above the grid');
-  assert.ok(builder.includes("<option value=\"\">All responsibles</option>") && builder.includes("['', 'All companies']"));
+  assert.ok(builder.includes("<option value=\"\">${t('All responsibles')}</option>") && builder.includes("['', t('All companies')]"));
 });
 
 test('filtering narrows the cards by title or company, by company, and by responsible (All means everyone)', () => {
