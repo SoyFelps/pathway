@@ -9,7 +9,9 @@ const builder = read('builder.js');
 
 // Runs the real CSV helpers from builder.js.
 const start = builder.indexOf('function csvCell(value)'), end = builder.indexOf('function downloadTextFile(');
-const { myDataToCsv, csvCell } = new Function(builder.slice(start, end) + '\nreturn { myDataToCsv, csvCell };')();
+// t() stands in for the translator of i18n.js (English: the text itself, with its {variables} filled in).
+const t = (text, vars) => String(text).replace(/\{(\w+)\}/g, (all, name) => (vars && name in vars ? vars[name] : all));
+const { myDataToCsv, csvCell } = new Function('t', builder.slice(start, end) + '\nreturn { myDataToCsv, csvCell };')(t);
 
 test('the export function only reads the caller\'s own rows and leaves out other people and secrets', () => {
   assert.match(sql, /create or replace function public\.export_my_data\(\)\s+returns jsonb[\s\S]*security definer\s+set search_path = ''/);
@@ -60,7 +62,7 @@ test('the CSV lists each section\'s fields in a natural order', () => {
   assert.ok(lines.indexOf('account,,userId,u') < lines.indexOf('account,,email,e') && lines.indexOf('account,,email,e') < lines.indexOf('account,,lastSignInAt,l'));
 });
 
-const { candidateDataToCsv } = new Function(builder.slice(start, builder.indexOf('function downloadTextFile(')) + '\nreturn { candidateDataToCsv };')();
+const { candidateDataToCsv } = new Function('t', builder.slice(start, builder.indexOf('function downloadTextFile(')) + '\nreturn { candidateDataToCsv };')(t);
 
 test('"Export data" on a candidate builds one CSV with the application data held about them (no internal comments)', () => {
   const person = { candidate_name: 'Ana Souza', candidate_email: 'ana@x.com' };

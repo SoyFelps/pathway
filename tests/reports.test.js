@@ -80,7 +80,7 @@ test('My Team lets managers choose the Reports permission for members and invita
 test('the page offers period and job filters, the four summary numbers, the chart, the funnel and a CSV export', () => {
   const builder = read('builder.js');
   ['7 days', '30 days', '90 days', 'All time'].forEach(label => assert.ok(builder.includes(label), label));
-  ['Page visits', 'Started applying', "card('Candidates', reportNumber(t.candidates)", 'Completion rate', 'Applications over time', 'Application funnel', 'Where candidates are now', 'Automatic screening'].forEach(label => assert.ok(builder.includes(label), label));
+  ['Page visits', 'Started applying', "card(t('Candidates'), reportNumber(totals.candidates)", 'Completion rate', 'Applications over time', 'Application funnel', 'Where candidates are now', 'Automatic screening'].forEach(label => assert.ok(builder.includes(label), label));
   assert.match(builder, /id="report-export"/);
   assert.match(builder, /downloadTextFile\('pathway-report-'/);
   assert.match(builder, /can be inflated by anyone who knows the job link/);
@@ -100,7 +100,7 @@ test('report text coming from the database is escaped before it reaches the page
   const end = builder.indexOf('function formatPlanDate');
   const code = builder.slice(start, end);
   assert.match(code, /esc\(item\.reason\)/, 'auto-fail reasons contain text typed by employers');
-  assert.match(code, /esc\(job\.title \|\| 'Untitled role'\)/);
+  assert.match(code, /esc\(job\.title \|\| t\('Untitled role'\)\)/);
   assert.match(code, /esc\(job\.company \|\| ''\)/);
   assert.match(code, /esc\(reportStageLabel\(item\.status\)\)/, 'custom column names are escaped');
 });
@@ -108,9 +108,9 @@ test('report text coming from the database is escaped before it reaches the page
 test('the Reports styles exist and the changed files carry a new cache version', () => {
   const css = read('styles.css');
   ['.reports-page', '.rpt-stats', '.rpt-chart', '.rpt-table'].forEach(selector => assert.ok(css.includes(selector), selector));
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105y/);
-  assert.match(read('index.html'), /backend\.js\?v=mw3-20261105y/);
-  assert.match(read('index.html'), /styles\.css\?v=mw3-20261105y/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105z/);
+  assert.match(read('index.html'), /backend\.js\?v=mw3-20261105z/);
+  assert.match(read('index.html'), /styles\.css\?v=mw3-20261105z/);
 });
 
 const scaling = read('supabase/migrations/20261020230000_report_scaling_and_step_counts.sql');
@@ -170,10 +170,10 @@ test('the Reports page lists jobs ten at a time with search and sorting, and kee
   const builder = read('builder.js');
   assert.match(builder, /const REPORT_JOBS_PAGE = 10;/);
   assert.match(builder, /id="rpt-jobs-more"/);
-  assert.match(builder, /'Show ' \+ Math\.min\(REPORT_JOBS_PAGE, remaining\) \+ ' more'/);
+  assert.match(builder, /t\('Show \{count\} more', \{ count: Math\.min\(REPORT_JOBS_PAGE, remaining\) \}\)/);
   ['Most candidates', 'Most visits', 'Best completion rate', 'Highest auto-fail rate'].forEach(label => assert.ok(builder.includes(label), label));
   assert.match(builder, /id="rpt-jobs-search"/);
-  assert.match(builder, /<th scope="col">Auto-fail<\/th>/);
+  assert.match(builder, /<th scope="col">' \+ t\('Auto-fail rate'\) \+ '<\/th>/);
   assert.match(builder, /function mountReportPicker\(\)/);
   assert.match(builder, /limit: REPORT_PICKER_PAGE, offset/, 'the chooser asks for a page at a time and a search, never every job');
   assert.match(builder, /id="report-company"/);
@@ -182,7 +182,7 @@ test('the Reports page lists jobs ten at a time with search and sorting, and kee
 
 test('the auto-fail reasons are listed only for one job, grouped by question', () => {
   const builder = read('builder.js');
-  assert.match(builder, /if \(!data\.selectedJob\) return lead \+ '<p class="rpt-note">Every job has its own form/);
+  assert.match(builder, /if \(!data\.selectedJob\) return lead \+ '<p class="rpt-note">' \+ t\('Every job has its own form/);
   assert.match(builder, /rpt-af-group/);
   assert.match(builder, /esc\(group\.question\)/, 'question labels are typed by employers and must be escaped');
   assert.match(builder, /esc\(item\.reason\)/);
@@ -257,7 +257,7 @@ function loadStepsModel() {
   const start = builder.indexOf('const REPORT_STEP_MIN_SAMPLE');
   const end = builder.indexOf('function reportStepsHtml');
   assert.ok(start > 0 && end > start, 'the steps model is in builder.js');
-  const context = vm.createContext({});
+  const context = vm.createContext({ t: (text, vars) => String(text).replace(/\{(\w+)\}/g, (all, name) => (vars && name in vars ? vars[name] : all)) });
   vm.runInContext(builder.slice(start, end) + '\nthis.reportStepsModel = reportStepsModel;', context);
   return raw => JSON.parse(JSON.stringify(context.reportStepsModel(raw)));
 }
@@ -266,10 +266,10 @@ const edge = (from, to, option = null) => ({ from, to, option });
 
 test('the drop-off block appears inside Reports only when a job is chosen, and is part of the CSV', () => {
   const builder = read('builder.js');
-  assert.match(builder, /\(data\.selectedJob \? '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Where candidates drop off<\/h2>/);
+  assert.match(builder, /\(data\.selectedJob \? '<section class="rpt-card"><div class="rpt-card-head"><div><h2>' \+ t\('Where candidates drop off'\) \+ '<\/h2>/);
   assert.match(builder, /if \(data\.selectedJob\) void loadReportSteps\(\);/);
   assert.match(builder, /id="rpt-steps-body"/);
-  assert.match(builder, /block\('Where candidates drop off'/);
+  assert.match(builder, /block\(t\('Where candidates drop off'\)/);
   assert.match(builder, /reportSteps = null; reportStepsRequestId \+= 1;/, 'steps of another job are never reused');
   assert.match(builder, /esc\(row\.label\)/, 'question labels are typed by employers and must be escaped');
   assert.doesNotMatch(builder, /row\.hint|--lvl/, 'no "If Qn" legend and no indentation: a plain list of questions');

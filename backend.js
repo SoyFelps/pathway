@@ -9,6 +9,8 @@
   });
   let passwordRecoveryPending = false;
   client.auth.onAuthStateChange(event => { if (event === 'PASSWORD_RECOVERY') passwordRecoveryPending = true; });
+  // Messages shown to the signed-in person follow the interface language (i18n.js); English when it is not loaded.
+  const t = (text, vars) => (window.PathwayI18n ? window.PathwayI18n.t(text, vars) : String(text).replace(/\{(\w+)\}/g, (all, name) => (vars && name in vars ? vars[name] : all)));
   const saveQueues = new Map();
   // The workspace this tab is working in (a person can belong to several). Set by bootstrap and added to every call that needs it.
   let currentWorkspaceId = '';
@@ -46,7 +48,7 @@
   async function requireSession() {
     const { data, error } = await client.auth.getSession();
     if (error) throw error;
-    if (!data.session) throw new Error('Your session expired. Sign in again to continue.');
+    if (!data.session) throw new Error(t('Your session expired. Sign in again to continue.'));
     return data.session;
   }
 
@@ -66,16 +68,16 @@
     if (token && currentWorkspaceId && !body.workspaceId) body = { ...body, workspaceId: currentWorkspaceId };
     let result;
     try { result = await fetch(TEAM_FUNCTION, { method: 'POST', headers, body: JSON.stringify(body) }); }
-    catch (_) { throw new Error('Could not reach the team service. Check your connection and try again.'); }
+    catch (_) { throw new Error(t('Could not reach the team service. Check your connection and try again.')); }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
     if (result.status === 403 && /do not belong to this workspace/i.test(String(payload.error || '')) && body.workspaceId && body.workspaceId === currentWorkspaceId) announceWorkspaceLost();
-    if (!result.ok) throw new Error(payload.error || 'The team service could not complete this request.');
+    if (!result.ok) throw new Error(payload.error || t('The team service could not complete this request.'));
     return payload;
   }
 
   async function previewTeamInvitation(token) {
-    if (typeof token !== 'string' || !/^[a-f0-9]{64}$/i.test(token)) throw new Error('This invitation link is invalid.');
+    if (typeof token !== 'string' || !/^[a-f0-9]{64}$/i.test(token)) throw new Error(t('This invitation link is invalid.'));
     return callTeam({ action: 'previewInvitation', token }, '');
   }
 
@@ -121,10 +123,10 @@
     let result;
     try {
       result = await fetch(AI_INTERVIEW_FUNCTION, { method: 'POST', headers: { apikey: config.publishableKey, 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify(body) });
-    } catch (_) { throw new Error('Could not reach the interview service. Check your connection and try again.'); }
+    } catch (_) { throw new Error(t('Could not reach the interview service. Check your connection and try again.')); }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) { const error = new Error(payload.error || 'The interview service could not complete this request.'); error.code = payload.code || null; error.retryAt = payload.retryAt || null; throw error; }
+    if (!result.ok) { const error = new Error(payload.error || t('The interview service could not complete this request.')); error.code = payload.code || null; error.retryAt = payload.retryAt || null; throw error; }
     return payload;
   }
   // Asks the AI for ONE interview question from the job description, different from the questions already in the field. Resolves to
@@ -137,7 +139,7 @@
     } catch (_) { const error = new Error('network'); error.code = 'network'; throw error; }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* the code below covers it */ }
-    if (!result.ok) { const error = new Error(payload.error || 'The AI could not answer.'); error.code = payload.code || 'ai_unavailable'; throw error; }
+    if (!result.ok) { const error = new Error(payload.error || t('The AI could not answer.')); error.code = payload.code || 'ai_unavailable'; throw error; }
     return payload;
   }
   // `purpose` "export" is the candidate data export, the one place that still reads the transcript on the free plan.
@@ -198,8 +200,8 @@
   async function addApplicantComment(flowId, email, body, mentionedUserIds = []) {
     await requireSession();
     const text = String(body || '').trim();
-    if (!text) throw new Error('Write a comment first.');
-    if (text.length > 2000) throw new Error('A comment can have at most 2000 characters.');
+    if (!text) throw new Error(t('Write a comment first.'));
+    if (text.length > 2000) throw new Error(t('A comment can have at most 2000 characters.'));
     const { data, error } = await client.rpc('add_applicant_comment', { p_flow_id: flowId, p_candidate_email: email, p_body: text, p_mentions: mentionedUserIds });
     if (error) throw error;
     return mapComment(data);
@@ -242,25 +244,25 @@
   async function updateMyLanguage(code) {
     await requireSession();
     const value = code ? String(code) : null;
-    if (value !== null && !['en', 'pt-BR', 'es'].includes(value)) throw new Error('This language is not available.');
+    if (value !== null && !['en', 'pt-BR', 'es'].includes(value)) throw new Error(t('This language is not available.'));
     const { data: authData } = await client.auth.getSession();
     const userId = authData?.session?.user?.id;
     const { data, error } = await client.from('profiles').update({ ui_language: value }).eq('user_id', userId).select('ui_language').maybeSingle();
     if (error) throw error;
-    if (!data) throw new Error('Could not save your language. Please refresh and try again.');
+    if (!data) throw new Error(t('Could not save your language. Please refresh and try again.'));
     return data.ui_language || null;
   }
   async function updateMyProfile(firstName, lastName) {
     await requireSession();
     const first = String(firstName || '').replace(/\s+/g, ' ').trim();
     const last = String(lastName || '').replace(/\s+/g, ' ').trim();
-    if (!first || !last) throw new Error('Enter your first and last name.');
-    if (first.length > 60 || last.length > 60) throw new Error('Each name can have at most 60 characters.');
+    if (!first || !last) throw new Error(t('Enter your first and last name.'));
+    if (first.length > 60 || last.length > 60) throw new Error(t('Each name can have at most 60 characters.'));
     const { data: authData } = await client.auth.getSession();
     const userId = authData?.session?.user?.id;
     const { data, error } = await client.from('profiles').update({ first_name: first, last_name: last }).eq('user_id', userId).select('first_name,last_name,ui_language').maybeSingle();
     if (error) throw error;
-    if (!data) throw new Error('Could not save your name. Please refresh and try again.');
+    if (!data) throw new Error(t('Could not save your name. Please refresh and try again.'));
     return { firstName: data.first_name, lastName: data.last_name, uiLanguage: data.ui_language || null };
   }
   async function getFlowResponsibles(flowId) {
@@ -289,17 +291,17 @@
         body: JSON.stringify({ action: 'deleteWorkspace', workspaceId: workspaceId || currentWorkspaceId })
       });
     } catch (_) {
-      throw new Error('Could not reach the workspace service. Check your connection and try again.');
+      throw new Error(t('Could not reach the workspace service. Check your connection and try again.'));
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || 'The workspace could not be deleted.');
-    if (!payload.deleted) throw new Error('The workspace deletion was not confirmed. Refresh the page before retrying.');
+    if (!result.ok) throw new Error(payload.error || t('The workspace could not be deleted.'));
+    if (!payload.deleted) throw new Error(t('The workspace deletion was not confirmed. Refresh the page before retrying.'));
     return payload;
   }
 
   async function deleteAccount(password) {
-    if (typeof password !== 'string' || !password.length) throw new Error('Enter your password to confirm account deletion.');
+    if (typeof password !== 'string' || !password.length) throw new Error(t('Enter your password to confirm account deletion.'));
     const session = await requireSession();
     let result;
     try {
@@ -309,12 +311,12 @@
         body: JSON.stringify({ password })
       });
     } catch (_) {
-      throw new Error('Could not reach the account service. Check your connection and try again.');
+      throw new Error(t('Could not reach the account service. Check your connection and try again.'));
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || 'Your account could not be deleted.');
-    if (!payload.deleted) throw new Error('The account deletion was not confirmed. Refresh the page before retrying.');
+    if (!result.ok) throw new Error(payload.error || t('Your account could not be deleted.'));
+    if (!payload.deleted) throw new Error(t('The account deletion was not confirmed. Refresh the page before retrying.'));
     try { await client.auth.signOut({ scope: 'local' }); } catch (_) { /* the Auth user and refresh sessions were already deleted server-side */ }
     return payload;
   }
@@ -322,7 +324,7 @@
   async function createWorkspace(name) {
     await requireSession();
     const cleanName = String(name || '').trim().slice(0, 120);
-    if (!cleanName) throw new Error('Enter a name for your workspace.');
+    if (!cleanName) throw new Error(t('Enter a name for your workspace.'));
     const { data, error } = await client.rpc('create_workspace', { p_name: cleanName });
     if (error) throw error;
     return data;
@@ -366,12 +368,12 @@
         body: billingBody({})
       });
     } catch (_) {
-      throw new Error('Could not reach the billing service. Check your connection and try again.');
+      throw new Error(t('Could not reach the billing service. Check your connection and try again.'));
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || 'The subscription checkout could not be started.');
-    if (!payload.client_secret) throw new Error('Stripe did not return a checkout form.');
+    if (!result.ok) throw new Error(payload.error || t('The subscription checkout could not be started.'));
+    if (!payload.client_secret) throw new Error(t('Stripe did not return a checkout form.'));
     return payload.client_secret;
   }
 
@@ -385,16 +387,16 @@
         body: billingBody({ action: 'createPaymentMethodUpdateSession' })
       });
     } catch (_) {
-      throw new Error('Could not reach the billing service. Check your connection and try again.');
+      throw new Error(t('Could not reach the billing service. Check your connection and try again.'));
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || 'The secure payment method update could not be opened.');
-    if (typeof payload.url !== 'string') throw new Error('Stripe did not return a secure payment method update link.');
+    if (!result.ok) throw new Error(payload.error || t('The secure payment method update could not be opened.'));
+    if (typeof payload.url !== 'string') throw new Error(t('Stripe did not return a secure payment method update link.'));
     let portalUrl;
-    try { portalUrl = new URL(payload.url); } catch (_) { throw new Error('Stripe returned an invalid billing portal link.'); }
+    try { portalUrl = new URL(payload.url); } catch (_) { throw new Error(t('Stripe returned an invalid billing portal link.')); }
     if (portalUrl.protocol !== 'https:' || portalUrl.hostname !== 'billing.stripe.com') {
-      throw new Error('Stripe returned an unexpected billing portal domain.');
+      throw new Error(t('Stripe returned an unexpected billing portal domain.'));
     }
     return portalUrl.href;
   }
@@ -409,15 +411,15 @@
         body: billingBody({ action: 'getPaymentMethodSummary' })
       });
     } catch (_) {
-      throw new Error('Could not reach the billing service. Check your connection and try again.');
+      throw new Error(t('Could not reach the billing service. Check your connection and try again.'));
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || 'The current payment method could not be loaded.');
+    if (!result.ok) throw new Error(payload.error || t('The current payment method could not be loaded.'));
     if (payload.payment_method == null) return null;
     const card = payload.payment_method;
     if (typeof card.brand !== 'string' || !/^\d{4}$/.test(card.last4) || !Number.isInteger(card.exp_month) || card.exp_month < 1 || card.exp_month > 12 || !Number.isInteger(card.exp_year) || card.exp_year < 2000) {
-      throw new Error('Stripe returned incomplete payment method details.');
+      throw new Error(t('Stripe returned incomplete payment method details.'));
     }
     return { brand: card.brand, last4: card.last4, expMonth: card.exp_month, expYear: card.exp_year };
   }
@@ -425,7 +427,7 @@
   async function listPaymentHistory(startingAfter = null) {
     const session = await requireSession();
     if (startingAfter != null && (typeof startingAfter !== 'string' || !/^in_[A-Za-z0-9]{1,64}$/.test(startingAfter))) {
-      throw new Error('The invoice history cursor is invalid.');
+      throw new Error(t('The invoice history cursor is invalid.'));
     }
     let result;
     try {
@@ -435,13 +437,13 @@
         body: billingBody({ action: 'listPaymentHistory', ...(startingAfter ? { starting_after: startingAfter } : {}) })
       });
     } catch (_) {
-      throw new Error('Could not reach the billing service. Check your connection and try again.');
+      throw new Error(t('Could not reach the billing service. Check your connection and try again.'));
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || 'Payment history could not be loaded.');
+    if (!result.ok) throw new Error(payload.error || t('Payment history could not be loaded.'));
     if (!Array.isArray(payload.invoices) || payload.invoices.length > 10 || typeof payload.has_more !== 'boolean') {
-      throw new Error('Stripe returned an invalid invoice history page.');
+      throw new Error(t('Stripe returned an invalid invoice history page.'));
     }
     const allowedStatuses = new Set(['draft', 'open', 'paid', 'uncollectible', 'void']);
     const invoices = payload.invoices.map(invoice => {
@@ -449,7 +451,7 @@
         || typeof invoice.status !== 'string' || !allowedStatuses.has(invoice.status)
         || typeof invoice.currency !== 'string' || !/^[a-z]{3}$/.test(invoice.currency)
         || !Number.isSafeInteger(invoice.amount_minor) || !Number.isFinite(invoice.created_at)) {
-        throw new Error('Stripe returned an invalid invoice record.');
+        throw new Error(t('Stripe returned an invalid invoice record.'));
       }
       const safeUrl = value => {
         if (typeof value !== 'string') return null;
@@ -471,7 +473,7 @@
       };
     });
     if (payload.has_more && (typeof payload.next_after !== 'string' || !/^in_[A-Za-z0-9]+$/.test(payload.next_after))) {
-      throw new Error('Stripe returned an invalid invoice history cursor.');
+      throw new Error(t('Stripe returned an invalid invoice history cursor.'));
     }
     return { invoices, hasMore: payload.has_more, nextAfter: payload.has_more ? payload.next_after : null };
   }
@@ -486,12 +488,12 @@
         body: billingBody({ action: 'syncPaymentMethodFromCustomer' })
       });
     } catch (_) {
-      throw new Error('Could not reach the billing service. Check your connection and try again.');
+      throw new Error(t('Could not reach the billing service. Check your connection and try again.'));
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || 'The updated payment method could not be applied to this subscription.');
-    if (payload.payment_method == null) throw new Error('Stripe did not confirm a card for this subscription.');
+    if (!result.ok) throw new Error(payload.error || t('The updated payment method could not be applied to this subscription.'));
+    if (payload.payment_method == null) throw new Error(t('Stripe did not confirm a card for this subscription.'));
     return payload.payment_method;
   }
 
@@ -505,12 +507,12 @@
         body: billingBody({ action: 'cancelSubscription' })
       });
     } catch (_) {
-      throw new Error('Could not reach the billing service. Check your connection and try again.');
+      throw new Error(t('Could not reach the billing service. Check your connection and try again.'));
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || 'The cancellation request could not be completed.');
-    if (!payload.cancel_at_period_end) throw new Error('Stripe did not confirm the scheduled cancellation.');
+    if (!result.ok) throw new Error(payload.error || t('The cancellation request could not be completed.'));
+    if (!payload.cancel_at_period_end) throw new Error(t('Stripe did not confirm the scheduled cancellation.'));
     return payload;
   }
 
@@ -524,12 +526,12 @@
         body: billingBody({ action: 'resumeSubscription' })
       });
     } catch (_) {
-      throw new Error('Could not reach the billing service. Check your connection and try again.');
+      throw new Error(t('Could not reach the billing service. Check your connection and try again.'));
     }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
-    if (!result.ok) throw new Error(payload.error || 'The subscription renewal could not be restored.');
-    if (payload.cancel_at_period_end !== false) throw new Error('Stripe did not confirm that cancellation was removed.');
+    if (!result.ok) throw new Error(payload.error || t('The subscription renewal could not be restored.'));
+    if (payload.cancel_at_period_end !== false) throw new Error(t('Stripe did not confirm that cancellation was removed.'));
     return payload;
   }
 
@@ -550,7 +552,7 @@
   function companyColor(value) {
     const text = String(value || '').trim().toLowerCase();
     if (!text) return null;
-    if (!/^#[0-9a-f]{6}$/.test(text)) throw new Error('Choose a valid primary colour.');
+    if (!/^#[0-9a-f]{6}$/.test(text)) throw new Error(t('Choose a valid primary colour.'));
     return text;
   }
 
@@ -560,11 +562,11 @@
     const description = String(input?.description || '').trim();
     const logoFile = input?.logoFile || null;
     const primaryColor = companyColor(input?.primaryColor);
-    if (!name || name.length > 120) throw new Error('Enter a company name (up to 120 characters).');
-    if (!description || description.length > 3000) throw new Error('Enter a company description (up to 3,000 characters).');
+    if (!name || name.length > 120) throw new Error(t('Enter a company name (up to 120 characters).'));
+    if (!description || description.length > 3000) throw new Error(t('Enter a company description (up to 3,000 characters).'));
     const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
     if (logoFile && (!(logoFile instanceof File) || !allowedTypes.has(logoFile.type) || logoFile.size < 1 || logoFile.size > 2 * 1024 * 1024)) {
-      throw new Error('Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.');
+      throw new Error(t('Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.'));
     }
     const id = crypto.randomUUID();
     let logoPath = null;
@@ -596,11 +598,11 @@
     const description = String(input?.description || '').trim();
     const logoFile = input?.logoFile || null;
     const primaryColor = companyColor(input?.primaryColor);
-    if (!name || name.length > 120) throw new Error('Enter a company name (up to 120 characters).');
-    if (!description || description.length > 3000) throw new Error('Enter a company description (up to 3,000 characters).');
+    if (!name || name.length > 120) throw new Error(t('Enter a company name (up to 120 characters).'));
+    if (!description || description.length > 3000) throw new Error(t('Enter a company description (up to 3,000 characters).'));
     const allowedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
     if (logoFile && (!(logoFile instanceof File) || !allowedTypes.has(logoFile.type) || logoFile.size < 1 || logoFile.size > 2 * 1024 * 1024)) {
-      throw new Error('Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.');
+      throw new Error(t('Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.'));
     }
 
     const bucket = client.storage.from('company-logos');
@@ -657,10 +659,10 @@
       }
       const { data, error } = await client.rpc('delete_workspace_company', { p_company_id: company.id });
       if (error) throw error;
-      if (data !== true) throw new Error('The company deletion was not confirmed. Refresh the page before retrying.');
+      if (data !== true) throw new Error(t('The company deletion was not confirmed. Refresh the page before retrying.'));
       return { deletedFlowIds };
     } catch (error) {
-      const failure = new Error(error?.message || 'The company or its linked flows could not be deleted.');
+      const failure = new Error(error?.message || t('The company or its linked flows could not be deleted.'));
       failure.deletedFlowIds = deletedFlowIds;
       throw failure;
     }
@@ -670,7 +672,7 @@
   async function listMyWorkspaces() {
     await requireSession();
     const { data, error } = await client.rpc('list_my_workspaces');
-    if (error) throw new Error(error.message || 'Your workspaces could not be loaded.');
+    if (error) throw new Error(error.message || t('Your workspaces could not be loaded.'));
     return (data || []).map(row => ({
       id: row.workspace_id, name: row.name, createdAt: row.created_at, isOwner: Boolean(row.is_owner), isLast: Boolean(row.is_last), premiumActive: Boolean(row.premium_active)
     }));
@@ -709,7 +711,7 @@
     }
     currentWorkspaceId = '';
     const { data: canCreateWorkspace, error: setupError } = await client.rpc('current_user_can_create_workspace');
-    if (setupError) throw new Error(`Could not verify workspace setup: ${setupError.message}`);
+    if (setupError) throw new Error(t('Could not verify workspace setup: {reason}', { reason: setupError.message }));
     return { session: authData.session, user, profile, workspace: null, workspaces, subscription: null, flows: [], companies: [], isOwner: false, teamMember: null, canCreateWorkspace: Boolean(canCreateWorkspace) };
   }
 
@@ -747,14 +749,14 @@
     if (!flow.cloudId) return;
     const session = await requireSession();
     const cleanup = await callApplications({ action: 'deleteFlow', flowId: flow.cloudId }, session.access_token);
-    if (!cleanup.deleted) throw new Error('The flow could not be deleted.');
+    if (!cleanup.deleted) throw new Error(t('The flow could not be deleted.'));
     return cleanup;
   }
 
   async function publishFlow(flow, workspace) {
     await saveQueues.get(flow.id)?.catch(() => {});
     const subscription = await getSubscriptionState(workspace.id);
-    if (!subscription.active) throw new Error('An active subscription is required to publish job flows.');
+    if (!subscription.active) throw new Error(t('An active subscription is required to publish job flows.'));
     await saveFlow(flow, workspace);
     const session = await requireSession();
     const { cloudId, workspaceId, createdBy, companyId, publicationStatus, activePublishedFlowId, publishedAt, responsibleIds, interviewQuestions, interviewLanguage, interviewLanguageManual, ...flowData } = flow;
@@ -782,14 +784,14 @@
   async function updatePublishedFlow(flow, workspace) {
     await saveQueues.get(flow.id)?.catch(() => {});
     const subscription = await getSubscriptionState(workspace.id);
-    if (!subscription.active) throw new Error('An active subscription is required to publish job flows.');
+    if (!subscription.active) throw new Error(t('An active subscription is required to publish job flows.'));
     if (!flow.cloudId || flow.publicationStatus !== 'published' || !flow.activePublishedFlowId) {
-      throw new Error('This flow does not have an active public link to update.');
+      throw new Error(t('This flow does not have an active public link to update.'));
     }
     await requireSession();
     const { data, error } = await client.rpc('update_published_flow_snapshot', { p_flow_id: flow.cloudId });
     if (error) throw error;
-    if (!data) throw new Error('The published form could not be updated.');
+    if (!data) throw new Error(t('The published form could not be updated.'));
     flow.publishedAt = data;
     flow.updatedAt = data;
     return data;
@@ -798,7 +800,7 @@
   async function unpublishFlow(flow, workspace) {
     await saveQueues.get(flow.id)?.catch(() => {});
     await requireSession();
-    if (!flow.cloudId) throw new Error('This flow has not been saved to your workspace yet.');
+    if (!flow.cloudId) throw new Error(t('This flow has not been saved to your workspace yet.'));
     const { error } = await client.from('application_flows')
       .update({ publication_status: 'draft', active_published_flow_id: null })
       .eq('id', flow.cloudId).eq('workspace_id', workspace.id).select('id').single();
@@ -809,7 +811,7 @@
 
   function getPublishedJobUrl(flow) {
     if (!flow || flow.publicationStatus !== 'published' || !flow.activePublishedFlowId) {
-      throw new Error('Publish this flow to create a public job link.');
+      throw new Error(t('Publish this flow to create a public job link.'));
     }
     const url = new URL('apply.html', window.location.href);
     url.hash = `id=${encodeURIComponent(flow.activePublishedFlowId)}`;
@@ -838,7 +840,7 @@
 
   async function countNewApplicants(workspaceId) {
     await requireSession();
-    if (typeof workspaceId !== 'string' || !/^[0-9a-f-]{36}$/i.test(workspaceId)) throw new Error('A valid workspace is required to count applicants.');
+    if (typeof workspaceId !== 'string' || !/^[0-9a-f-]{36}$/i.test(workspaceId)) throw new Error(t('A valid workspace is required to count applicants.'));
     // Counts candidates, not applications: repeat applications from one address to one job are a single candidate.
     // Only the job and address columns are read, never applicant details.
     const { data, error } = await client.from('applicants')
@@ -853,10 +855,10 @@
   async function listApplicantFlowLabels() {
     const session = await requireSession();
     const payload = await callApplications({ action: 'listApplicantFlowLabels' }, session.access_token);
-    if (!Array.isArray(payload.flows) || payload.flows.length > 1000) throw new Error('The applicant job filters could not be validated.');
+    if (!Array.isArray(payload.flows) || payload.flows.length > 1000) throw new Error(t('The applicant job filters could not be validated.'));
     return payload.flows.map(flow => {
       if (!flow || typeof flow.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(flow.id) || typeof flow.jobTitle !== 'string' || typeof flow.companyName !== 'string') {
-        throw new Error('The applicant job filters could not be validated.');
+        throw new Error(t('The applicant job filters could not be validated.'));
       }
       return { cloudId: flow.id, jobTitle: flow.jobTitle, companyName: flow.companyName };
     });
@@ -869,19 +871,19 @@
     const day = value => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
     const { data, error } = await client.rpc('get_workspace_report', { p_workspace_id: workspaceId, p_from: day(from), p_to: day(to), p_flow_id: flowId || null, p_company: company || null });
     if (error) throw error;
-    if (!data || typeof data !== 'object' || !Array.isArray(data.daily) || !data.totals) throw new Error('The report could not be read. Please try again.');
+    if (!data || typeof data !== 'object' || !Array.isArray(data.daily) || !data.totals) throw new Error(t('The report could not be read. Please try again.'));
     return data;
   }
   // Where candidates stop in ONE job's form: the steps of its published form with how many people reached each one.
   async function getReportSteps(workspaceId, flowId, { from = null, to = null, versionId = null } = {}) {
     await requireSession();
-    if (typeof flowId !== 'string' || !/^[0-9a-f-]{36}$/i.test(flowId)) throw new Error('Choose a job to see where candidates stop.');
+    if (typeof flowId !== 'string' || !/^[0-9a-f-]{36}$/i.test(flowId)) throw new Error(t('Choose a job to see where candidates stop.'));
     const day = value => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
     const version = typeof versionId === 'string' && /^[0-9a-f-]{36}$/i.test(versionId) ? versionId : null;
     const { data, error } = await client.rpc('get_report_steps', { p_workspace_id: workspaceId, p_flow_id: flowId, p_from: day(from), p_to: day(to), p_version_id: version });
     if (error) throw error;
-    if (!data || typeof data !== 'object' || typeof data.hasData !== 'boolean') throw new Error('The steps could not be read. Please try again.');
-    if (data.hasData && (!Array.isArray(data.nodes) || !Array.isArray(data.edges) || !data.transitions || !data.completions)) throw new Error('The steps could not be read. Please try again.');
+    if (!data || typeof data !== 'object' || typeof data.hasData !== 'boolean') throw new Error(t('The steps could not be read. Please try again.'));
+    if (data.hasData && (!Array.isArray(data.nodes) || !Array.isArray(data.edges) || !data.transitions || !data.completions)) throw new Error(t('The steps could not be read. Please try again.'));
     return data;
   }
   // The jobs of the report, one page at a time (search, sorting and counting happen in the database, so there is no cap).
@@ -890,7 +892,7 @@
     const day = value => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
     const { data, error } = await client.rpc('get_report_jobs', { p_workspace_id: workspaceId, p_from: day(from), p_to: day(to), p_company: company || null, p_search: String(search || '').slice(0, 100), p_sort: sort, p_limit: limit, p_offset: offset });
     if (error) throw error;
-    if (!data || typeof data !== 'object' || !Array.isArray(data.jobs) || !Number.isFinite(Number(data.total))) throw new Error('The list of jobs could not be read. Please try again.');
+    if (!data || typeof data !== 'object' || !Array.isArray(data.jobs) || !Number.isFinite(Number(data.total))) throw new Error(t('The list of jobs could not be read. Please try again.'));
     return { total: Number(data.total), jobs: data.jobs };
   }
 
@@ -899,15 +901,15 @@
     await requireSession();
     const { data, error } = await client.rpc('get_diversity_jobs', { p_workspace_id: workspaceId });
     if (error) throw error;
-    if (!Array.isArray(data)) throw new Error('The list of jobs could not be read. Please try again.');
+    if (!Array.isArray(data)) throw new Error(t('The list of jobs could not be read. Please try again.'));
     return data;
   }
   async function getDiversityReport(workspaceId, flowId) {
     await requireSession();
-    if (typeof flowId !== 'string' || !/^[0-9a-f-]{36}$/i.test(flowId)) throw new Error('Choose a job to see its diversity report.');
+    if (typeof flowId !== 'string' || !/^[0-9a-f-]{36}$/i.test(flowId)) throw new Error(t('Choose a job to see its diversity report.'));
     const { data, error } = await client.rpc('get_diversity_report', { p_workspace_id: workspaceId, p_flow_id: flowId });
     if (error) throw error;
-    if (!data || typeof data !== 'object' || typeof data.enough !== 'boolean' || !Array.isArray(data.questions)) throw new Error('The report could not be read. Please try again.');
+    if (!data || typeof data !== 'object' || typeof data.enough !== 'boolean' || !Array.isArray(data.questions)) throw new Error(t('The report could not be read. Please try again.'));
     return data;
   }
 
@@ -952,7 +954,7 @@
   }
 
   async function updateApplicantStatus(applicantId, status) {
-    if (!isApplicantStatus(status)) throw new Error('Choose a valid applicant stage.');
+    if (!isApplicantStatus(status)) throw new Error(t('Choose a valid applicant stage.'));
     await requireSession();
     const { data, error } = await client.from('applicants').update({ status }).eq('id', applicantId).select('id,status,updated_at').single();
     if (error) throw error;
@@ -961,9 +963,9 @@
 
   // Moves every application of one candidate to the same stage in a single request.
   async function updateApplicantStatuses(applicantIds, status) {
-    if (!isApplicantStatus(status)) throw new Error('Choose a valid applicant stage.');
+    if (!isApplicantStatus(status)) throw new Error(t('Choose a valid applicant stage.'));
     if (!Array.isArray(applicantIds) || !applicantIds.length || applicantIds.length > 200 || applicantIds.some(id => typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id))) {
-      throw new Error('The applicant could not be updated.');
+      throw new Error(t('The applicant could not be updated.'));
     }
     await requireSession();
     // A card that changes stage loses its manual place (it is shown at the top of the new column, or placed again by the caller).
@@ -975,7 +977,7 @@
   // Saves the manual order of the cards of a column: one { id, position } per application (the applications of one candidate share a position).
   async function setApplicantOrder(items) {
     if (!Array.isArray(items) || !items.length || items.length > 2000 || items.some(item => !item || typeof item.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(item.id) || typeof item.position !== 'number' || !Number.isFinite(item.position))) {
-      throw new Error('The new order could not be saved.');
+      throw new Error(t('The new order could not be saved.'));
     }
     await requireSession();
     const { data, error } = await client.rpc('set_applicant_order', { p_items: items.map(item => ({ id: item.id, position: item.position })) });
@@ -988,7 +990,7 @@
     const body = { action: 'deleteFailedApplicants' };
     if (flowId) body.flowId = flowId;
     const result = await callApplications(body, session.access_token);
-    if (typeof result.deleted !== 'number') throw new Error('The failed applicants could not be deleted.');
+    if (typeof result.deleted !== 'number') throw new Error(t('The failed applicants could not be deleted.'));
     return result;
   }
 
@@ -996,20 +998,20 @@
   async function deleteCandidate(flowId, email) {
     const session = await requireSession();
     const result = await callApplications({ action: 'deleteCandidate', flowId, email: String(email || '').trim().toLowerCase() }, session.access_token);
-    if (typeof result.deleted !== 'number') throw new Error('The candidate could not be deleted.');
+    if (typeof result.deleted !== 'number') throw new Error(t('The candidate could not be deleted.'));
     return result;
   }
   // The file itself (not a link), for browsers that cannot show a PDF inside a page. Same access rules as the link.
   async function downloadApplicantResume(path) {
     await requireSession();
-    if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('..')) throw new Error('This resume link is not valid.');
+    if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('..')) throw new Error(t('This resume link is not valid.'));
     const { data, error } = await client.storage.from('applicant-resumes').download(path);
     if (error) throw error;
     return data;
   }
   async function getApplicantResumeUrl(path, download = false, filename = '') {
     await requireSession();
-    if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('..')) throw new Error('This resume link is not valid.');
+    if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('..')) throw new Error(t('This resume link is not valid.'));
     const bucket = client.storage.from('applicant-resumes');
     const result = download
       ? await bucket.createSignedUrl(path, 120, { download: filename || true })
@@ -1061,7 +1063,7 @@
 
   async function sendPasswordReset(email) {
     const cleanEmail = String(email || '').trim();
-    if (!cleanEmail) throw new Error('Enter your work email address.');
+    if (!cleanEmail) throw new Error(t('Enter your work email address.'));
     const { error } = await client.auth.resetPasswordForEmail(cleanEmail, {
       redirectTo: window.location.origin + window.location.pathname
     });
@@ -1069,7 +1071,7 @@
   }
 
   async function updatePassword(password) {
-    if (typeof password !== 'string' || password.length < 8) throw new Error('Choose a password with at least 8 characters.');
+    if (typeof password !== 'string' || password.length < 8) throw new Error(t('Choose a password with at least 8 characters.'));
     const { data, error } = await client.auth.updateUser({ password });
     if (error) throw error;
     return data;

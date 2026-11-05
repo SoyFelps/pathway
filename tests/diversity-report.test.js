@@ -107,7 +107,8 @@ test('the privacy rules are applied on the server: 10 respondents, 7 days, group
   assert.match(built, /'size', case when v_respondents >= 1000 then '1000\+' when v_respondents >= 400 then '400-999' when v_respondents >= 200 then '200-399' when v_respondents >= 100 then '100-199' when v_respondents >= 30 then '30-99' else '10-29' end/, 'only a band for the number of respondents');
   assert.doesNotMatch(built, /'size', v_respondents|'respondents'/, 'never the exact number');
   const page = read('builder.js');
-  assert.match(page, /const SIZES = \{ '10-29': '10 to 29', '30-99': '30 to 99', '100-199': '100 to 199', '200-399': '200 to 399', '400-999': '400 to 999', '1000\+': '1,000 or more' \};/);
+  assert.match(page, /const DIVERSITY_SIZES = \{ '10-29': \[10, 29\], '30-99': \[30, 99\], '100-199': \[100, 199\], '200-399': \[200, 399\], '400-999': \[400, 999\] \};/);
+  assert.match(page, /if \(size === '1000\+'\) return t\('\{number\} or more'/, 'only bands are shown, in the interface language');
 });
 
 test('the cache table is closed to the browser (RLS, no grants besides service_role) and the answer column exists', () => {
@@ -135,7 +136,7 @@ test('the transgender question: a separate, voluntary question with "Prefer not 
 
 test('the Diversity page can export a CSV of the same whole percentages, and nothing else', () => {
   const builder = read('builder.js');
-  assert.match(builder, /id="diversity-export" type="button" disabled>↓ Export CSV/);
+  assert.match(builder, /id="diversity-export" type="button" disabled>↓ \$\{t\('Export CSV'\)\}/);
   const start = builder.indexOf('function diversityToCsv');
   const end = builder.indexOf('function diversityQuestionHtml');
   assert.ok(start > 0 && end > start);

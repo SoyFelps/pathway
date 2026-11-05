@@ -1093,7 +1093,7 @@
   }
 
   function companyCardHtml(company) {
-    return `<article class="company-card"><div class="company-card-heading">${company.logoUrl ? `<img class="company-card-logo" src="${esc(company.logoUrl)}" alt="${esc(company.name)} logo">` : `<span class="company-card-logo company-card-logo-fallback" aria-hidden="true">${esc(initials(company.name))}</span>`}<div><h2>${esc(company.name)}</h2><span>Company profile</span></div></div><p title="${esc(company.description)}">${esc(company.description)}</p><div class="company-card-actions"><button type="button" class="btn btn-sm" data-edit-company="${esc(company.id)}">Edit</button><button type="button" class="btn btn-sm btn-danger" data-delete-company="${esc(company.id)}">Delete</button></div></article>`;
+    return `<article class="company-card"><div class="company-card-heading">${company.logoUrl ? `<img class="company-card-logo" src="${esc(company.logoUrl)}" alt="${t('{company} logo', { company: esc(company.name) })}">` : `<span class="company-card-logo company-card-logo-fallback" aria-hidden="true">${esc(initials(company.name))}</span>`}<div><h2>${esc(company.name)}</h2><span>${t('Company profile')}</span></div></div><p title="${esc(company.description)}">${esc(company.description)}</p><div class="company-card-actions"><button type="button" class="btn btn-sm" data-edit-company="${esc(company.id)}">${t('Edit')}</button><button type="button" class="btn btn-sm btn-danger" data-delete-company="${esc(company.id)}">${t('Delete')}</button></div></article>`;
   }
 
   function renderMyCompanies() {
@@ -1101,7 +1101,7 @@
     setRoute('my-companies');
     currentId = null; selectedId = null;
     const atLimit = companies.length >= 3;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-companies')}<main class="companies-page"><div class="companies-heading"><div><div class="eyebrow">Hiring workspace</div><h1>My Companies</h1><p>Choose a company to represent a job on its public application page.</p></div><div class="companies-heading-actions"><span class="companies-count">${companies.length} / 3 companies</span><button class="btn btn-primary" id="new-company" ${atLimit ? 'disabled title="You can add up to three companies."' : ''}>＋ &nbsp;New company</button></div></div>${companies.length ? `<section class="companies-grid" aria-label="Your companies">${companies.map(companyCardHtml).join('')}</section>` : `<section class="companies-empty"><span class="brand-mark">↗</span><h2>No companies yet</h2><p>New flows will use ${esc(workspace.name)} until you add a company profile.</p><button class="btn btn-primary" id="empty-new-company">＋ &nbsp;New company</button></section>`}</main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('my-companies')}<main class="companies-page"><div class="companies-heading"><div><div class="eyebrow">${t('Hiring workspace')}</div><h1>${t('My Companies')}</h1><p>${t('Choose a company to represent a job on its public application page.')}</p></div><div class="companies-heading-actions"><span class="companies-count">${t('{count} / 3 companies', { count: companies.length })}</span><button class="btn btn-primary" id="new-company" ${atLimit ? `disabled title="${t('You can add up to three companies.')}"` : ''}>＋ &nbsp;${t('New company')}</button></div></div>${companies.length ? `<section class="companies-grid" aria-label="${t('Your companies')}">${companies.map(companyCardHtml).join('')}</section>` : `<section class="companies-empty"><span class="brand-mark">↗</span><h2>${t('No companies yet')}</h2><p>${t('New flows will use {workspace} until you add a company profile.', { workspace: esc(workspace.name) })}</p><button class="btn btn-primary" id="empty-new-company">＋ &nbsp;${t('New company')}</button></section>`}</main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
     
@@ -1126,7 +1126,7 @@
     const field = form.elements.primaryColor;
     if (!picker || !field) return;
     picker.addEventListener('input', () => { field.value = picker.value.toLowerCase(); label.textContent = picker.value.toUpperCase(); reset.hidden = false; });
-    reset.addEventListener('click', () => { field.value = ''; picker.value = COMPANY_DEFAULT_COLOR; label.textContent = 'Default'; reset.hidden = true; });
+    reset.addEventListener('click', () => { field.value = ''; picker.value = COMPANY_DEFAULT_COLOR; label.textContent = t('Default'); reset.hidden = true; });
   }
 
   const TRASH_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg>';
@@ -1136,17 +1136,17 @@
   function companyFieldsHtml(company, editing) {
     const hasLogo = Boolean(editing && company.logoUrl);
     const logoControl = hasLogo
-      ? `<div class="company-logo-current" id="company-logo-current"><img src="${esc(company.logoUrl)}" alt="Current ${esc(company.name)} logo"><button class="icon-btn company-logo-remove" id="remove-company-logo" type="button" aria-label="Remove current logo" title="Remove current logo">${TRASH_ICON}</button></div><div class="company-logo-removal-pending" id="company-logo-removal-pending" hidden><span id="company-logo-removal-message">Logo will be removed when you save.</span><button class="company-link-btn" id="restore-company-logo" type="button">Undo</button></div><input type="hidden" name="removeLogo" value="false">`
+      ? `<div class="company-logo-current" id="company-logo-current"><img src="${esc(company.logoUrl)}" alt="${t('Current {company} logo', { company: esc(company.name) })}"><button class="icon-btn company-logo-remove" id="remove-company-logo" type="button" aria-label="${t('Remove current logo')}" title="${t('Remove current logo')}">${TRASH_ICON}</button></div><div class="company-logo-removal-pending" id="company-logo-removal-pending" hidden><span id="company-logo-removal-message">${t('Logo will be removed when you save.')}</span><button class="company-link-btn" id="restore-company-logo" type="button">${t('Undo')}</button></div><input type="hidden" name="removeLogo" value="false">`
       : '';
-    const picker = `<div class="company-logo-picker" id="company-logo-picker"${hasLogo ? ' hidden' : ''}><input class="company-file-input" id="company-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"><label class="btn btn-sm company-file-btn" for="company-logo">Choose file</label><div class="company-logo-chosen" id="company-logo-chosen" hidden><img id="company-logo-preview" alt="Preview of the selected logo"><button class="icon-btn company-logo-remove" id="clear-company-logo" type="button" aria-label="Remove selected logo" title="Remove selected logo">${TRASH_ICON}</button></div></div>`;
+    const picker = `<div class="company-logo-picker" id="company-logo-picker"${hasLogo ? ' hidden' : ''}><input class="company-file-input" id="company-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp"><label class="btn btn-sm company-file-btn" for="company-logo">${t('Choose file')}</label><div class="company-logo-chosen" id="company-logo-chosen" hidden><img id="company-logo-preview" alt="${t('Preview of the selected logo')}"><button class="icon-btn company-logo-remove" id="clear-company-logo" type="button" aria-label="${t('Remove selected logo')}" title="${t('Remove selected logo')}">${TRASH_ICON}</button></div></div>`;
     const color = /^#[0-9a-f]{6}$/i.test(editing ? company.primaryColor : '') ? String(company.primaryColor).toLowerCase() : '';
-    return `<div class="field-group"><label for="company-name">Company name</label><input class="text-input" id="company-name" name="name" maxlength="120" required value="${editing ? esc(company.name) : ''}" placeholder="e.g. Northstar Studio"></div>
-<div class="company-brand-title">Branding <span class="muted">(optional)</span></div>
+    return `<div class="field-group"><label for="company-name">${t('Company name')}</label><input class="text-input" id="company-name" name="name" maxlength="120" required value="${editing ? esc(company.name) : ''}" placeholder="${t('e.g. Northstar Studio')}"></div>
+<div class="company-brand-title">${t('Branding')} <span class="muted">${t('(optional)')}</span></div>
 <div class="company-brand">
-<div class="company-brand-row"><div class="company-brand-label"><strong>Logo</strong><small>PNG, JPG, or WebP · Maximum 2 MB</small></div><div class="company-brand-control">${logoControl}${picker}</div></div>
-<div class="company-brand-row"><div class="company-brand-label"><strong>Primary color</strong><small>Shown on the AI interview page and in the invitation e-mail.</small></div><div class="company-brand-control"><div class="company-color-row"><input class="company-color-input" id="company-color" type="color" value="${color || COMPANY_DEFAULT_COLOR}" aria-label="Choose the primary color"><span class="company-color-hex" id="company-color-hex">${color ? color.toUpperCase() : 'Default'}</span><button class="company-link-btn" type="button" id="company-color-reset" ${color ? '' : 'hidden'}>Use default</button></div><input type="hidden" name="primaryColor" value="${color}"></div></div>
+<div class="company-brand-row"><div class="company-brand-label"><strong>${t('Logo')}</strong><small>${t('PNG, JPG, or WebP · Maximum 2 MB')}</small></div><div class="company-brand-control">${logoControl}${picker}</div></div>
+<div class="company-brand-row"><div class="company-brand-label"><strong>${t('Primary color')}</strong><small>${t('Shown on the AI interview page and in the invitation e-mail.')}</small></div><div class="company-brand-control"><div class="company-color-row"><input class="company-color-input" id="company-color" type="color" value="${color || COMPANY_DEFAULT_COLOR}" aria-label="${t('Choose the primary color')}"><span class="company-color-hex" id="company-color-hex">${color ? color.toUpperCase() : t('Default')}</span><button class="company-link-btn" type="button" id="company-color-reset" ${color ? '' : 'hidden'}>${t('Use default')}</button></div><input type="hidden" name="primaryColor" value="${color}"></div></div>
 </div>
-<div class="field-group company-description-field"><label for="company-description">Company description</label><textarea class="text-area" id="company-description" name="description" maxlength="3000" rows="6" required placeholder="Tell candidates about the company: what it does, its culture, what it is like to work there…">${editing ? esc(company.description) : ''}</textarea><small class="field-help">Shown to candidates on the job page · up to 3,000 characters</small></div>`;
+<div class="field-group company-description-field"><label for="company-description">${t('Company description')}</label><textarea class="text-area" id="company-description" name="description" maxlength="3000" rows="6" required placeholder="${t('Tell candidates about the company: what it does, its culture, what it is like to work there…')}">${editing ? esc(company.description) : ''}</textarea><small class="field-help">${t('Shown to candidates on the job page · up to 3,000 characters')}</small></div>`;
   }
 
   // A chosen logo file is shown as a preview in place of the "Choose file" button, with a remove button; another file can be chosen only after removing it.
@@ -1178,8 +1178,8 @@
 
   function showNewCompany() {
     if (!hasPermission('flows')) return renderAccessMessage('flows');
-    if (companies.length >= 3) { showToast('You can add up to three companies to your workspace.'); return; }
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Company profile</div><h2>New company</h2><p>Details are shown to candidates when this company is selected for a job.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-company-form" class="company-form">${companyFieldsHtml(null, false)}<div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit" id="create-company-submit">Save company</button></div></form>`);
+    if (companies.length >= 3) { showToast(t('You can add up to three companies to your workspace.')); return; }
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Company profile')}</div><h2>${t('New company')}</h2><p>${t('Details are shown to candidates when this company is selected for a job.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><form id="new-company-form" class="company-form">${companyFieldsHtml(null, false)}<div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-close>${t('Cancel')}</button><button class="btn btn-primary" type="submit" id="create-company-submit">${t('Save company')}</button></div></form>`);
     wireCompanyColor(modalRoot.querySelector('#new-company-form'));
     wireCompanyLogoPicker(modalRoot.querySelector('#new-company-form'));
     modalRoot.querySelector('#new-company-form').addEventListener('submit', async event => {
@@ -1187,28 +1187,28 @@
       const form = event.currentTarget; const button = form.querySelector('#create-company-submit'); const errorBox = form.querySelector('#company-form-error');
       const file = form.elements.logo.files?.[0] || null;
       if (file && (file.size > 2 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
-        errorBox.textContent = 'Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.'; errorBox.classList.add('show'); return;
+        errorBox.textContent = t('Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.'); errorBox.classList.add('show'); return;
       }
-      button.disabled = true; button.textContent = 'Saving…'; errorBox.classList.remove('show');
+      button.disabled = true; button.textContent = t('Saving…'); errorBox.classList.remove('show');
       try {
         const company = await window.PathwayBackend.createCompany({ name: form.elements.name.value, description: form.elements.description.value, logoFile: file, primaryColor: form.elements.primaryColor.value }, workspace);
-        companies.push(company); closeModal(); renderMyCompanies(); showToast('Company added.');
+        companies.push(company); closeModal(); renderMyCompanies(); showToast(t('Company added.'));
       } catch (error) {
-        errorBox.textContent = error.message || 'The company could not be saved.'; errorBox.classList.add('show'); button.disabled = false; button.textContent = 'Save company';
+        errorBox.textContent = error.message || t('The company could not be saved.'); errorBox.classList.add('show'); button.disabled = false; button.textContent = t('Save company');
       }
     });
   }
 
   function companyFormHtml(company, editing) {
-    const title = editing ? 'Edit company' : 'New company';
-    const action = editing ? 'Save changes' : 'Save company';
-    const deleteButton = editing ? '<button class="btn btn-danger company-delete-from-edit" id="delete-company-from-edit" type="button">Delete</button>' : '';
-    return `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Company profile</div><h2>${title}</h2><p>Details are shown to candidates when this company is selected for a job.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="company-profile-form" class="company-form">${companyFieldsHtml(company, editing)}<div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions company-edit-actions">${deleteButton}<button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" type="submit" id="company-profile-submit">${action}</button></div></form>`;
+    const title = editing ? t('Edit company') : t('New company');
+    const action = editing ? t('Save changes') : t('Save company');
+    const deleteButton = editing ? '<button class="btn btn-danger company-delete-from-edit" id="delete-company-from-edit" type="button">' + t('Delete') + '</button>' : '';
+    return `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Company profile')}</div><h2>${title}</h2><p>${t('Details are shown to candidates when this company is selected for a job.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><form id="company-profile-form" class="company-form">${companyFieldsHtml(company, editing)}<div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions company-edit-actions">${deleteButton}<button class="btn" type="button" data-close>${t('Cancel')}</button><button class="btn btn-primary" type="submit" id="company-profile-submit">${action}</button></div></form>`;
   }
 
   function validateCompanyLogo(file, errorBox) {
     if (file && (file.size > 2 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
-      errorBox.textContent = 'Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.';
+      errorBox.textContent = t('Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.');
       errorBox.classList.add('show');
       return false;
     }
@@ -1231,16 +1231,16 @@
       removalPending.hidden = false;
       logoPicker.hidden = false;
       removeLogoInput.value = 'true';
-      removalMessage.textContent = form.elements.logo.files?.length ? 'Logo will be changed when you save.' : 'Logo will be removed when you save.';
+      removalMessage.textContent = form.elements.logo.files?.length ? t('Logo will be changed when you save.') : t('Logo will be removed when you save.');
     });
     form.elements.logo.addEventListener('change', () => {
       if (!logoPreview?.hidden || !removalPending) return;
-      removalMessage.textContent = form.elements.logo.files?.length ? 'Logo will be changed when you save.' : 'Logo will be removed when you save.';
+      removalMessage.textContent = form.elements.logo.files?.length ? t('Logo will be changed when you save.') : t('Logo will be removed when you save.');
     });
     form.querySelector('#restore-company-logo')?.addEventListener('click', () => {
       form.elements.logo.value = '';
       form.elements.logo.dispatchEvent(new Event('change', { bubbles: true }));
-      removalMessage.textContent = 'Logo will be removed when you save.';
+      removalMessage.textContent = t('Logo will be removed when you save.');
       logoPicker.hidden = true;
       logoPreview.hidden = false;
       removalPending.hidden = true;
@@ -1254,7 +1254,7 @@
       const errorBox = form.querySelector('#company-form-error');
       const file = form.elements.logo.files?.[0] || null;
       if (!validateCompanyLogo(file, errorBox)) return;
-      button.disabled = true; button.textContent = 'Saving…'; errorBox.classList.remove('show');
+      button.disabled = true; button.textContent = t('Saving…'); errorBox.classList.remove('show');
       try {
         const result = await window.PathwayBackend.updateCompany({
           name: form.elements.name.value,
@@ -1272,10 +1272,10 @@
           if (flow.publicationStatus === 'published' && flow.activePublishedFlowId) flow.publishedAt = updatedAt;
         });
         closeModal(); renderMyCompanies();
-        showToast(result.cleanupWarning ? 'Company updated. The previous logo could not be removed.' : 'Company updated in its linked flows.');
+        showToast(result.cleanupWarning ? t('Company updated. The previous logo could not be removed.') : t('Company updated in its linked flows.'));
       } catch (error) {
-        errorBox.textContent = error.message || 'The company could not be updated.'; errorBox.classList.add('show');
-        button.disabled = false; button.textContent = 'Save changes';
+        errorBox.textContent = error.message || t('The company could not be updated.'); errorBox.classList.add('show');
+        button.disabled = false; button.textContent = t('Save changes');
       }
     });
   }
@@ -1284,12 +1284,13 @@
     if (!hasPermission('flows')) return renderAccessMessage('flows');
     const linkedFlows = flows.filter(flow => flow.companyId === company.id);
     const flowList = linkedFlows.length
-      ? `<ul class="company-delete-flow-list">${linkedFlows.slice(0, 8).map(flow => `<li>${esc(flow.jobTitle || 'Untitled role')}</li>`).join('')}${linkedFlows.length > 8 ? `<li>and ${linkedFlows.length - 8} more</li>` : ''}</ul>`
+      ? `<ul class="company-delete-flow-list">${linkedFlows.slice(0, 8).map(flow => `<li>${esc(flow.jobTitle || t('Untitled role'))}</li>`).join('')}${linkedFlows.length > 8 ? `<li>${t('and {count} more', { count: linkedFlows.length - 8 })}</li>` : ''}</ul>`
       : '';
     const consequences = linkedFlows.length
-      ? `This also permanently deletes ${linkedFlows.length} linked ${linkedFlows.length === 1 ? 'flow' : 'flows'}, all candidate applications and answers, uploaded resumes, and their public job links. This cannot be undone.`
-      : 'This permanently deletes this company profile. This cannot be undone.';
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Delete company</div><h2>Delete ${esc(company.name)}?</h2><p>${esc(consequences)}</p>${flowList}</div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="delete-company-form"><div class="field-group"><label for="confirm-company-name">Type <strong>${esc(company.name)}</strong> to confirm</label><input class="text-input" id="confirm-company-name" name="confirmation" autocomplete="off" required></div><div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-danger" type="submit" id="delete-company-submit" disabled>Delete company${linkedFlows.length ? ' and flows' : ''}</button></div></form>`);
+      ? tn('This also permanently deletes {count} linked job, all candidate applications and answers, uploaded resumes, and their public job links. This cannot be undone.', 'This also permanently deletes {count} linked jobs, all candidate applications and answers, uploaded resumes, and their public job links. This cannot be undone.', linkedFlows.length)
+      : t('This permanently deletes this company profile. This cannot be undone.');
+    const deleteLabel = linkedFlows.length ? t('Delete company and jobs') : t('Delete company');
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Delete company')}</div><h2>${t('Delete {company}?', { company: esc(company.name) })}</h2><p>${esc(consequences)}</p>${flowList}</div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><form id="delete-company-form"><div class="field-group"><label for="confirm-company-name">${t('Type {name} to confirm', { name: '<strong>' + esc(company.name) + '</strong>' })}</label><input class="text-input" id="confirm-company-name" name="confirmation" autocomplete="off" required></div><div class="company-form-error auth-error" id="company-form-error" role="alert"></div><div class="modal-actions"><button class="btn" type="button" data-close>${t('Cancel')}</button><button class="btn btn-danger" type="submit" id="delete-company-submit" disabled>${deleteLabel}</button></div></form>`);
     const form = modalRoot.querySelector('#delete-company-form');
     const confirmation = form.elements.confirmation;
     const button = form.querySelector('#delete-company-submit');
@@ -1298,21 +1299,21 @@
       event.preventDefault();
       if (confirmation.value !== company.name) return;
       const errorBox = form.querySelector('#company-form-error');
-      button.disabled = true; button.textContent = 'Deleting…'; errorBox.classList.remove('show');
+      button.disabled = true; button.textContent = t('Deleting…'); errorBox.classList.remove('show');
       try {
         const result = await window.PathwayBackend.deleteCompany(company, workspace, linkedFlows, deletedFlow => {
           flows = flows.filter(flow => flow.id !== deletedFlow.id);
         });
         flows = flows.filter(flow => !result.deletedFlowIds.includes(flow.id));
         companies = companies.filter(item => item.id !== company.id);
-        closeModal(); renderMyCompanies(); showToast('Company and linked flows deleted.');
+        closeModal(); renderMyCompanies(); showToast(linkedFlows.length ? t('Company and linked jobs deleted.') : t('Company deleted.'));
       } catch (error) {
         const deleted = Array.isArray(error.deletedFlowIds) ? new Set(error.deletedFlowIds) : new Set();
         if (deleted.size) flows = flows.filter(flow => !deleted.has(flow.id));
-        const message = `${deleted.size ? `${deleted.size} linked ${deleted.size === 1 ? 'flow was' : 'flows were'} deleted. ` : ''}${error.message || 'The company could not be deleted.'}`;
+        const message = `${deleted.size ? tn('{count} linked job was deleted.', '{count} linked jobs were deleted.', deleted.size) + ' ' : ''}${error.message || t('The company could not be deleted.')}`;
         if (deleted.size) { closeModal(); renderMyCompanies(); showToast(message); return; }
         errorBox.textContent = message;
-        errorBox.classList.add('show'); button.disabled = false; button.textContent = `Delete company${linkedFlows.length ? ' and flows' : ''}`;
+        errorBox.classList.add('show'); button.disabled = false; button.textContent = deleteLabel;
       }
     });
   }
@@ -1670,11 +1671,11 @@
   let reportStepsRequestId = 0;
   let reportStepsVersion = '';
   let reportStepsVersionFlow = '';
-  const reportNumber = value => Number(value || 0).toLocaleString('en-US');
-  const reportDayLabel = (day, withYear = false) => new Date(day + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' });
+  const reportNumber = value => window.PathwayI18n.formatNumber(Number(value || 0));
+  const reportDayLabel = (day, withYear = false) => window.PathwayI18n.formatDate(new Date(day + 'T00:00:00Z'), { month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' });
   const reportPercent = (part, whole) => (whole > 0 ? Math.min(100, Math.round((part / whole) * 100)) : null);
   const reportPercentText = (part, whole) => { const value = reportPercent(part, whole); return value === null ? '—' : value + '%'; };
-  const reportStageLabel = key => (String(key).startsWith('custom:') ? (allApplicantStages().find(stage => stage.key === key)?.label || 'Custom column') : applicantStageLabel(key));
+  const reportStageLabel = key => (String(key).startsWith('custom:') ? (allApplicantStages().find(stage => stage.key === key)?.label || t('Custom column')) : applicantStageLabel(key));
   const reportStageColor = key => allApplicantStages().find(stage => stage.key === key)?.color || 'stage-custom';
   function reportDates() {
     const range = REPORT_RANGES.find(item => item.key === reportRange) || REPORT_RANGES[1];
@@ -1702,59 +1703,59 @@
     const total = buckets.reduce((sum, bucket) => sum + bucket.candidates + bucket.repeats, 0);
     const bars = buckets.map(bucket => {
       const label = bucket.from === bucket.to ? reportDayLabel(bucket.from) : reportDayLabel(bucket.from) + ' – ' + reportDayLabel(bucket.to);
-      const tip = label + ': ' + bucket.candidates + (bucket.candidates === 1 ? ' new candidate' : ' new candidates') + (bucket.repeats ? ', ' + bucket.repeats + (bucket.repeats === 1 ? ' repeat application' : ' repeat applications') : '');
+      const tip = label + ': ' + tn('{count} new candidate', '{count} new candidates', bucket.candidates) + (bucket.repeats ? ', ' + tn('{count} repeat application', '{count} repeat applications', bucket.repeats) : '');
       return '<div class="rpt-bar" title="' + esc(tip) + '"><span class="rpt-part rpt-part-repeat" style="height:' + (bucket.repeats / max * 100) + '%"></span><span class="rpt-part rpt-part-new" style="height:' + (bucket.candidates / max * 100) + '%"></span></div>';
     }).join('');
     const mid = buckets[Math.floor((buckets.length - 1) / 2)];
     const first = buckets[0], last = buckets[buckets.length - 1];
     const busiest = buckets.reduce((best, bucket) => (bucket.candidates > best.candidates ? bucket : best), buckets[0]);
     const busiestText = busiest.candidates > 0 && daily.length > 1 && busiest.from === busiest.to
-      ? 'Busiest day: ' + reportDayLabel(busiest.from) + ' with ' + busiest.candidates + (busiest.candidates === 1 ? ' new candidate' : ' new candidates') + '.'
+      ? tn('Busiest day: {day} with {count} new candidate.', 'Busiest day: {day} with {count} new candidates.', busiest.candidates, { day: reportDayLabel(busiest.from) })
       : '';
     return (busiestText ? '<p class="rpt-note">' + esc(busiestText) + '</p>' : '')
-      + '<div class="rpt-chart"><div class="rpt-y" aria-hidden="true"><span>' + max + '</span><span>' + (max > 1 ? Math.round(max / 2) : '') + '</span><span>0</span></div><div class="rpt-plot">' + (total ? '' : '<div class="rpt-plot-empty">No applications in this period</div>') + '<div class="rpt-bars">' + bars + '</div></div></div>'
+      + '<div class="rpt-chart"><div class="rpt-y" aria-hidden="true"><span>' + max + '</span><span>' + (max > 1 ? Math.round(max / 2) : '') + '</span><span>0</span></div><div class="rpt-plot">' + (total ? '' : '<div class="rpt-plot-empty">' + t('No applications in this period') + '</div>') + '<div class="rpt-bars">' + bars + '</div></div></div>'
       + '<div class="rpt-x" aria-hidden="true"><span>' + esc(reportDayLabel(first.from)) + '</span><span>' + esc(reportDayLabel(mid.from)) + '</span><span>' + esc(reportDayLabel(last.to)) + '</span></div>'
-      + '<div class="rpt-legend"><span><i class="rpt-swatch rpt-part-new"></i>New candidates</span><span><i class="rpt-swatch rpt-part-repeat"></i>Repeat applications</span>' + (daily.length > 100 ? '<span>Each bar is one week</span>' : '') + '</div>';
+      + '<div class="rpt-legend"><span><i class="rpt-swatch rpt-part-new"></i>' + t('New candidates') + '</span><span><i class="rpt-swatch rpt-part-repeat"></i>' + t('Repeat applications') + '</span>' + (daily.length > 100 ? '<span>' + t('Each bar is one week') + '</span>' : '') + '</div>';
   }
   function reportFunnelHtml(totals) {
     const steps = [
-      { label: 'Opened the job page', value: Number(totals.views || 0), hint: 'Anonymous page counter' },
-      { label: 'Started the form', value: Number(totals.starts || 0), hint: 'Typed in the first field' },
-      { label: 'Submitted an application', value: Number(totals.funnelApplications || 0), hint: 'Sent on days that visits were counted' }
+      { label: t('Opened the job page'), value: Number(totals.views || 0), hint: t('Anonymous page counter') },
+      { label: t('Started the form'), value: Number(totals.starts || 0), hint: t('Typed in the first field') },
+      { label: t('Submitted an application'), value: Number(totals.funnelApplications || 0), hint: t('Sent on days that visits were counted') }
     ];
     const top = Math.max(1, ...steps.map(step => step.value));
-    if (!steps[0].value && !steps[1].value) return '<p class="rpt-empty">No page visits were counted in this period.</p>';
-    return '<ol class="rpt-funnel">' + steps.map((step, index) => '<li class="rpt-funnel-row"><div class="rpt-funnel-head"><span>' + esc(step.label) + '</span><strong>' + reportNumber(step.value) + '</strong></div><div class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (step.value / top * 100) + '%"></span></div><small>' + (index ? esc(reportPercentText(step.value, steps[index - 1].value)) + ' of the previous step' : esc(step.hint)) + '</small></li>').join('') + '</ol>';
+    if (!steps[0].value && !steps[1].value) return '<p class="rpt-empty">' + t('No page visits were counted in this period.') + '</p>';
+    return '<ol class="rpt-funnel">' + steps.map((step, index) => '<li class="rpt-funnel-row"><div class="rpt-funnel-head"><span>' + esc(step.label) + '</span><strong>' + reportNumber(step.value) + '</strong></div><div class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (step.value / top * 100) + '%"></span></div><small>' + (index ? esc(t('{percent} of the previous step', { percent: reportPercentText(step.value, steps[index - 1].value) })) : esc(step.hint)) + '</small></li>').join('') + '</ol>';
   }
   function reportStagesHtml(stages) {
     const order = orderedApplicantStages().map(stage => stage.key);
     const rank = key => { const index = order.indexOf(key); return index < 0 ? order.length : index; };
     const list = [...stages].sort((a, b) => rank(a.status) - rank(b.status));
     const total = list.reduce((sum, item) => sum + Number(item.n || 0), 0);
-    if (!total) return '<p class="rpt-empty">No candidates applied in this period.</p>';
+    if (!total) return '<p class="rpt-empty">' + t('No candidates applied in this period.') + '</p>';
     return '<ul class="rpt-stages">' + list.map(item => '<li class="rpt-stage"><span class="stage-dot ' + esc(reportStageColor(item.status)) + '"></span><span class="rpt-stage-name">' + esc(reportStageLabel(item.status)) + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (Number(item.n) / total * 100) + '%"></span></span><strong>' + reportNumber(item.n) + '</strong></li>').join('') + '</ul>';
   }
   function reportCompanyLabel(data) {
     if (!reportCompany) return '';
     if (reportCompany === 'none') return workspace.name;
-    return (data.companies || []).find(item => item.id === reportCompany)?.name || 'Company';
+    return (data.companies || []).find(item => item.id === reportCompany)?.name || t('Company');
   }
   // What the numbers on screen are about: one job, one company, or everything.
   function reportScopeLabel(data) {
-    if (data.selectedJob) return data.selectedJob.title || 'Untitled role';
-    return reportCompany ? reportCompanyLabel(data) : 'All jobs';
+    if (data.selectedJob) return data.selectedJob.title || t('Untitled role');
+    return reportCompany ? reportCompanyLabel(data) : t('All jobs');
   }
   function reportAutoFailHtml(data) {
     const failed = Number(data.totals.autoFailed || 0);
     const candidates = Number(data.totals.candidates || 0);
-    if (!candidates) return '<p class="rpt-empty">No candidates applied in this period.</p>';
-    if (!failed) return '<p class="rpt-empty">No candidates were moved to Failed automatically in this period.</p>';
-    const lead = '<p class="rpt-lead-number"><strong>' + reportNumber(failed) + '</strong> of ' + reportNumber(candidates) + ' candidates (' + reportPercentText(failed, candidates) + ') were screened out by your auto-fail rules.</p>';
+    if (!candidates) return '<p class="rpt-empty">' + t('No candidates applied in this period.') + '</p>';
+    if (!failed) return '<p class="rpt-empty">' + t('No candidates were moved to Failed automatically in this period.') + '</p>';
+    const lead = '<p class="rpt-lead-number">' + t('{failed} of {total} candidates ({percent}) were screened out by your auto-fail rules.', { failed: '<strong>' + reportNumber(failed) + '</strong>', total: reportNumber(candidates), percent: reportPercentText(failed, candidates) }) + '</p>';
     // The rules belong to one job's form, so the questions are listed only when a single job is chosen.
-    if (!data.selectedJob) return lead + '<p class="rpt-note">Every job has its own form and its own rules. The Auto-fail column in the table below shows the rate of each job; choose a job to see which questions screened people out.</p>';
+    if (!data.selectedJob) return lead + '<p class="rpt-note">' + t('Every job has its own form and its own rules. The Auto-fail column in the table below shows the rate of each job; choose a job to see which questions screened people out.') + '</p>';
     return lead + (data.autoFailGroups || []).map(group => {
       const top = Math.max(1, ...group.reasons.map(item => Number(item.n || 0)));
-      return '<div class="rpt-af-group"><div class="rpt-af-head"><strong>' + esc(group.question) + '</strong><span>' + reportNumber(group.n) + (Number(group.n) === 1 ? ' candidate' : ' candidates') + '</span></div><ul class="rpt-reasons">' + group.reasons.map(item => '<li><span class="rpt-reason-text">' + esc(item.reason) + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (Number(item.n) / top * 100) + '%"></span></span><strong>' + reportNumber(item.n) + '</strong></li>').join('') + '</ul></div>';
+      return '<div class="rpt-af-group"><div class="rpt-af-head"><strong>' + esc(group.question) + '</strong><span>' + tn('{count} candidate', '{count} candidates', Number(group.n), { count: reportNumber(group.n) }) + '</span></div><ul class="rpt-reasons">' + group.reasons.map(item => '<li><span class="rpt-reason-text">' + esc(item.reason) + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (Number(item.n) / top * 100) + '%"></span></span><strong>' + reportNumber(item.n) + '</strong></li>').join('') + '</ul></div>';
     }).join('');
   }
   const REPORT_JOB_SORTS = [['candidates', 'Most candidates'], ['visits', 'Most visits'], ['completion', 'Best completion rate'], ['autofail', 'Highest auto-fail rate']];
@@ -1763,17 +1764,17 @@
     const rows = jobs.map(job => {
       const rate = reportPercentText(Number(job.funnelApplications || 0), Number(job.starts || 0));
       const autoFail = Number(job.candidates || 0) ? reportNumber(job.autoFailed) + ' (' + reportPercentText(Number(job.autoFailed || 0), Number(job.candidates || 0)) + ')' : '—';
-      return '<tr data-report-job="' + esc(job.id) + '" tabindex="0" role="button" aria-label="Show only ' + esc(job.title || 'Untitled role') + '"><th scope="row" class="rpt-job-name"><span class="' + (job.status === 'published' ? 'published-tag' : 'draft-tag') + '"><span class="status-dot"></span>' + (job.status === 'published' ? 'Published' : 'Draft') + '</span><strong>' + esc(job.title || 'Untitled role') + '</strong><small>' + esc(job.company || '') + '</small></th><td data-label="Visits">' + reportNumber(job.views) + '</td><td data-label="Started">' + reportNumber(job.starts) + '</td><td data-label="New candidates">' + reportNumber(job.candidates) + '</td><td data-label="Completion">' + rate + '</td><td data-label="Auto-fail">' + autoFail + '</td></tr>';
+      return '<tr data-report-job="' + esc(job.id) + '" tabindex="0" role="button" aria-label="' + t('Show only {job}', { job: esc(job.title || t('Untitled role')) }) + '"><th scope="row" class="rpt-job-name"><span class="' + (job.status === 'published' ? 'published-tag' : 'draft-tag') + '"><span class="status-dot"></span>' + (job.status === 'published' ? t('Published') : t('Draft')) + '</span><strong>' + esc(job.title || t('Untitled role')) + '</strong><small>' + esc(job.company || '') + '</small></th><td data-label="' + t('Visits') + '">' + reportNumber(job.views) + '</td><td data-label="' + t('Form starts') + '">' + reportNumber(job.starts) + '</td><td data-label="' + t('New candidates') + '">' + reportNumber(job.candidates) + '</td><td data-label="' + t('Completion') + '">' + rate + '</td><td data-label="' + t('Auto-fail rate') + '">' + autoFail + '</td></tr>';
     }).join('');
-    return '<div class="rpt-table-wrap"><table class="rpt-table"><thead><tr><th scope="col">Job</th><th scope="col">Visits</th><th scope="col">Started</th><th scope="col">Candidates</th><th scope="col">Completion</th><th scope="col">Auto-fail</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    return '<div class="rpt-table-wrap"><table class="rpt-table"><thead><tr><th scope="col">' + t('Job') + '</th><th scope="col">' + t('Visits') + '</th><th scope="col">' + t('Form starts') + '</th><th scope="col">' + t('Candidates') + '</th><th scope="col">' + t('Completion') + '</th><th scope="col">' + t('Auto-fail rate') + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
   function reportJobsBodyHtml() {
     const { rows, total, loading, error } = reportJobs;
-    if (error) return '<div class="auth-error show" role="alert">' + esc('Could not load the jobs: ' + error) + '</div><button class="btn btn-sm" id="rpt-jobs-retry" type="button" style="margin-top:10px">Try again</button>';
-    if (!rows.length && loading) return '<div class="loading-card" style="margin-top:16px"><span class="brand-mark">↗</span><span>Loading the jobs…</span></div>';
-    if (!rows.length) return '<p class="rpt-empty">' + (reportJobsSearch.trim() ? 'No jobs match “' + esc(reportJobsSearch.trim()) + '”.' : 'There are no jobs to show.') + '</p>';
+    if (error) return '<div class="auth-error show" role="alert">' + esc(t('Could not load the jobs: {reason}', { reason: error })) + '</div><button class="btn btn-sm" id="rpt-jobs-retry" type="button" style="margin-top:10px">' + t('Try again') + '</button>';
+    if (!rows.length && loading) return '<div class="loading-card" style="margin-top:16px"><span class="brand-mark">↗</span><span>' + t('Loading the jobs…') + '</span></div>';
+    if (!rows.length) return '<p class="rpt-empty">' + (reportJobsSearch.trim() ? t('No jobs match “{search}”.', { search: esc(reportJobsSearch.trim()) }) : t('There are no jobs to show.')) + '</p>';
     const remaining = total - rows.length;
-    return reportJobRowsHtml(rows) + '<div class="rpt-more"><span class="rpt-note">Showing ' + reportNumber(rows.length) + ' of ' + reportNumber(total) + (total === 1 ? ' job' : ' jobs') + '. Select a job to see only its numbers.</span>' + (remaining > 0 ? '<button class="btn btn-sm" id="rpt-jobs-more" type="button"' + (loading ? ' disabled' : '') + '>' + (loading ? 'Loading…' : 'Show ' + Math.min(REPORT_JOBS_PAGE, remaining) + ' more') + '</button>' : '') + '</div>';
+    return reportJobRowsHtml(rows) + '<div class="rpt-more"><span class="rpt-note">' + tn('Showing {shown} of {count} job. Select a job to see only its numbers.', 'Showing {shown} of {count} jobs. Select a job to see only its numbers.', total, { shown: reportNumber(rows.length), count: reportNumber(total) }) + '</span>' + (remaining > 0 ? '<button class="btn btn-sm" id="rpt-jobs-more" type="button"' + (loading ? ' disabled' : '') + '>' + (loading ? t('Loading…') : t('Show {count} more', { count: Math.min(REPORT_JOBS_PAGE, remaining) })) + '</button>' : '') + '</div>';
   }
   function paintReportJobs() {
     const body = root.querySelector('#rpt-jobs-body');
@@ -1799,7 +1800,7 @@
       reportJobs = { rows: append ? [...reportJobs.rows, ...page.jobs] : page.jobs, total: page.total, loading: false, error: '' };
     } catch (error) {
       if (requestId !== reportJobsRequestId || !root.querySelector('#rpt-jobs-body')) return;
-      reportJobs = { ...reportJobs, loading: false, error: error.message || 'check your connection and try again' };
+      reportJobs = { ...reportJobs, loading: false, error: error.message || t('check your connection and try again') };
     }
     paintReportJobs();
   }
@@ -1841,15 +1842,15 @@
     const number = new Map(order.map((id, index) => [id, index + 1]));
     const views = Number(raw.views || 0), starts = Number(raw.starts || 0);
     const rows = [
-      { kind: 'views', label: 'Opened the job page', reached: views, left: Math.max(0, views - starts), leftHere: 'did not start the form' },
-      { kind: 'start', label: 'Started the first page', reached: starts, left: Math.max(0, starts - reached('details')), leftHere: 'left the first page' },
-      { kind: 'details', label: 'Completed the first page', reached: reached('details'), left: Math.max(0, reached('details') - moved('details') - Number(done.details || 0)), leftHere: 'stopped here' }
+      { kind: 'views', label: t('Opened the job page'), reached: views, left: Math.max(0, views - starts), leftHere: t('{count} did not start the form') },
+      { kind: 'start', label: t('Started the first page'), reached: starts, left: Math.max(0, starts - reached('details')), leftHere: t('{count} left the first page') },
+      { kind: 'details', label: t('Completed the first page'), reached: reached('details'), left: Math.max(0, reached('details') - moved('details') - Number(done.details || 0)), leftHere: t('{count} stopped here') }
     ];
     order.forEach(id => {
-      rows.push({ kind: 'question', number: number.get(id), label: nodes.get(id).label || 'Question', reached: reached(id), left: Math.max(0, reached(id) - moved(id) - Number(done[id] || 0)), leftHere: 'stopped here' });
+      rows.push({ kind: 'question', number: number.get(id), label: nodes.get(id).label || t('Question'), reached: reached(id), left: Math.max(0, reached(id) - moved(id) - Number(done[id] || 0)), leftHere: t('{count} stopped here') });
     });
-    Object.keys(arrivals).filter(id => id !== 'details' && !nodes.has(id) && reached(id) > 0).forEach(id => rows.push({ kind: 'removed', label: 'A step that was removed from the form', reached: reached(id), left: null, leftHere: '' }));
-    rows.push({ kind: 'submitted', label: 'Submitted an application', reached: Number(raw.submitted || 0), left: null, leftHere: '' });
+    Object.keys(arrivals).filter(id => id !== 'details' && !nodes.has(id) && reached(id) > 0).forEach(id => rows.push({ kind: 'removed', label: t('A step that was removed from the form'), reached: reached(id), left: null, leftHere: '' }));
+    rows.push({ kind: 'submitted', label: t('Submitted an application'), reached: Number(raw.submitted || 0), left: null, leftHere: '' });
     rows.forEach(row => { row.share = row.left !== null && row.reached > 0 ? row.left / row.reached : null; });
     // The biggest drop inside the form (visitors who never start are normal and would hide it), with enough people to mean something.
     const candidates = rows.filter(row => ['start', 'details', 'question'].includes(row.kind) && row.reached >= REPORT_STEP_MIN_SAMPLE && row.left > 0);
@@ -1857,17 +1858,17 @@
     return { rows, top };
   }
   function reportStepsHtml(raw) {
-    if (!raw.hasData) return '<p class="rpt-empty">' + (raw.versions && raw.versions.length > 1 ? 'No steps were counted for this version in the chosen period. Try a wider period or another version.' : 'No steps have been counted for this job yet. They are counted when candidates open its form.') + '</p>';
+    if (!raw.hasData) return '<p class="rpt-empty">' + (raw.versions && raw.versions.length > 1 ? t('No steps were counted for this version in the chosen period. Try a wider period or another version.') : t('No steps have been counted for this job yet. They are counted when candidates open its form.')) + '</p>';
     const model = reportStepsModel(raw);
     const maxReached = Math.max(1, ...model.rows.map(row => row.reached));
     const since = raw.since && reportData && reportData.range && raw.range.from > reportData.range.from
-      ? '<p class="rpt-note">Steps are counted from ' + esc(reportDayLabel(raw.since, true)) + ', so the numbers above cover ' + esc(reportDayLabel(raw.range.from)) + ' – ' + esc(reportDayLabel(raw.range.to, true)) + '.</p>' : '';
-    return '<div class="rpt-steps-head" aria-hidden="true"><span>Step</span><span></span><span>Reached</span><span>Stopped</span></div>'
+      ? '<p class="rpt-note">' + esc(t('Steps are counted from {since}, so the numbers above cover {from} – {to}.', { since: reportDayLabel(raw.since, true), from: reportDayLabel(raw.range.from), to: reportDayLabel(raw.range.to, true) })) + '</p>' : '';
+    return '<div class="rpt-steps-head" aria-hidden="true"><span>' + t('Step') + '</span><span></span><span>' + t('Reached') + '</span><span>' + t('Stopped') + '</span></div>'
       + '<ol class="rpt-steps">' + model.rows.map(row => {
         const isTop = model.top === row;
-        const name = (row.kind === 'question' ? '<span class="rpt-step-num">Q' + row.number + '</span>' : '') + '<span class="rpt-step-label">' + esc(row.label) + '</span>';
+        const name = (row.kind === 'question' ? '<span class="rpt-step-num">' + t('Q{number}', { number: row.number }) + '</span>' : '') + '<span class="rpt-step-label">' + esc(row.label) + '</span>';
         const stopped = row.left === null ? '<span class="rpt-left"></span>' : (row.left > 0
-          ? '<span class="rpt-left' + (isTop ? ' is-top' : '') + '" title="' + esc(reportNumber(row.left) + ' ' + row.leftHere) + '">−' + reportNumber(row.left) + ' · ' + Math.round(row.share * 100) + '%</span>'
+          ? '<span class="rpt-left' + (isTop ? ' is-top' : '') + '" title="' + esc(row.leftHere.replace('{count}', reportNumber(row.left))) + '">−' + reportNumber(row.left) + ' · ' + Math.round(row.share * 100) + '%</span>'
           : '<span class="rpt-left is-none">—</span>');
         return '<li class="rpt-step rpt-step-' + row.kind + (isTop ? ' is-top' : '') + '"><span class="rpt-step-name">' + name + '</span><span class="rpt-track" aria-hidden="true"><span class="rpt-fill" style="width:' + (row.reached / maxReached * 100) + '%"></span></span><strong class="rpt-step-count">' + reportNumber(row.reached) + '</strong>' + stopped + '</li>';
       }).join('') + '</ol>' + since;
@@ -1875,14 +1876,14 @@
   // The form changes over time; the picker only exists once a job has more than one version.
   function reportVersionLabel(version) {
     const started = reportDayLabel(String(version.startedAt).slice(0, 10), true);
-    if (version.current) return 'Version ' + version.number + ' · current (since ' + started + ')';
-    return 'Version ' + version.number + ' · ' + reportDayLabel(String(version.startedAt).slice(0, 10)) + ' – ' + reportDayLabel(String(version.endedAt).slice(0, 10), true);
+    if (version.current) return t('Version {number} · current (since {date})', { number: version.number, date: started });
+    return t('Version {number} · {from} – {to}', { number: version.number, from: reportDayLabel(String(version.startedAt).slice(0, 10)), to: reportDayLabel(String(version.endedAt).slice(0, 10), true) });
   }
   function reportVersionPickerHtml(raw) {
     const versions = Array.isArray(raw.versions) ? raw.versions : [];
     if (versions.length < 2) return '';
     const selected = raw.version ? raw.version.id : '';
-    return '<label class="rpt-version"><span>Form version</span><select id="rpt-steps-version" class="applicants-filter" aria-label="Form version">'
+    return '<label class="rpt-version"><span>' + t('Form version') + '</span><select id="rpt-steps-version" class="applicants-filter" aria-label="' + t('Form version') + '">'
       + versions.map(version => '<option value="' + esc(version.id) + '"' + (version.id === selected ? ' selected' : '') + '>' + esc(reportVersionLabel(version)) + '</option>').join('') + '</select></label>';
   }
   async function loadReportSteps() {
@@ -1893,7 +1894,7 @@
     if (reportStepsVersionFlow !== job.id) { reportStepsVersionFlow = job.id; reportStepsVersion = ''; }
     const requestId = ++reportStepsRequestId;
     reportSteps = null;
-    body.innerHTML = '<div class="loading-card" style="margin-top:16px"><span class="brand-mark">↗</span><span>Loading the steps…</span></div>';
+    body.innerHTML = '<div class="loading-card" style="margin-top:16px"><span class="brand-mark">↗</span><span>' + t('Loading the steps…') + '</span></div>';
     try {
       const range = reportRangeResolved || {};
       const raw = await window.PathwayBackend.getReportSteps(workspace.id, job.id, { from: range.from, to: range.to, versionId: reportStepsVersion });
@@ -1906,29 +1907,30 @@
       body.innerHTML = reportStepsHtml(raw);
     } catch (error) {
       if (requestId !== reportStepsRequestId || !root.querySelector('#rpt-steps-body')) return;
-      body.innerHTML = '<div class="auth-error show" role="alert">' + esc('Could not load the steps: ' + (error.message || 'check your connection and try again')) + '</div><button class="btn btn-sm" id="rpt-steps-retry" type="button" style="margin-top:10px">Try again</button>';
+      body.innerHTML = '<div class="auth-error show" role="alert">' + esc(t('Could not load the steps: {reason}', { reason: error.message || t('check your connection and try again') })) + '</div><button class="btn btn-sm" id="rpt-steps-retry" type="button" style="margin-top:10px">' + t('Try again') + '</button>';
       body.querySelector('#rpt-steps-retry')?.addEventListener('click', () => { void loadReportSteps(); });
     }
   }
   function reportToCsv(data, scopeLabel, jobRows) {
     const rows = [];
     const block = (title, header, lines) => { if (rows.length) rows.push([]); rows.push([title]); rows.push(header); lines.forEach(line => rows.push(line)); };
-    const t = data.totals;
-    block('Pathway report', ['field', 'value'], [
-      ['period from', data.range.from], ['period to', data.range.to], ['scope', scopeLabel], ['exported at', new Date().toISOString()],
-      ['note', 'Days are UTC days. Visits and form starts are anonymous page counters and can be inflated by anyone who knows the job link. A candidate is one person per job and e-mail address; a repeat application is not counted as a new candidate.']
+    // Titles and column names follow the interface language; the numbers, the dates (YYYY-MM-DD) and what people wrote do not.
+    const totals = data.totals;
+    block(t('Pathway report'), [t('field'), t('value')], [
+      [t('period from'), data.range.from], [t('period to'), data.range.to], [t('scope'), scopeLabel], [t('exported at'), new Date().toISOString()],
+      [t('note'), t('Days are UTC days. Visits and form starts are anonymous page counters and can be inflated by anyone who knows the job link. A candidate is one person per job and e-mail address; a repeat application is not counted as a new candidate.')]
     ]);
-    block('Summary', ['metric', 'value'], [
-      ['visits', t.views], ['form starts', t.starts], ['candidates', t.candidates], ['applications', t.applications],
-      ['repeat applications', Math.max(0, Number(t.applications || 0) - Number(t.candidates || 0))], ['moved to Failed automatically', t.autoFailed],
-      ['completion rate', reportPercentText(Number(t.funnelApplications || 0), Number(t.starts || 0))]
+    block(t('Summary'), [t('metric'), t('value')], [
+      [t('visits'), totals.views], [t('form starts'), totals.starts], [t('candidates'), totals.candidates], [t('applications'), totals.applications],
+      [t('repeat applications'), Math.max(0, Number(totals.applications || 0) - Number(totals.candidates || 0))], [t('moved to Failed automatically'), totals.autoFailed],
+      [t('completion rate'), reportPercentText(Number(totals.funnelApplications || 0), Number(totals.starts || 0))]
     ]);
-    block('Per day', ['day', 'visits', 'form starts', 'new candidates', 'repeat applications'], data.daily.map(d => [d.day, d.views, d.starts, d.candidates, Math.max(0, Number(d.applications || 0) - Number(d.candidates || 0))]));
-    block('Where candidates are now', ['stage', 'candidates'], data.stages.map(s => [reportStageLabel(s.status), s.n]));
+    block(t('Per day'), [t('day'), t('visits'), t('form starts'), t('new candidates'), t('repeat applications')], data.daily.map(d => [d.day, d.views, d.starts, d.candidates, Math.max(0, Number(d.applications || 0) - Number(d.candidates || 0))]));
+    block(t('Where candidates are now'), [t('stage'), t('candidates')], data.stages.map(s => [reportStageLabel(s.status), s.n]));
     if (data.selectedJob) {
-      if (reportSteps && reportSteps.hasData) block('Where candidates drop off' + (reportSteps.version && reportSteps.versions.length > 1 ? ' (form version ' + reportSteps.version.number + ')' : ''), ['step', 'people who reached it', 'stopped here', 'share who stopped'], reportStepsModel(reportSteps).rows.map(row => [(row.kind === 'question' ? 'Question ' + row.number + ': ' : '') + row.label, row.reached, row.left === null ? '' : row.left, row.share === null ? '' : Math.round(row.share * 100) + '%']));
-      block('Auto-fail reasons', ['question', 'reason', 'candidates'], (data.autoFailGroups || []).flatMap(group => group.reasons.map(item => [group.question, item.reason, item.n])));
-    } else block('Jobs', ['job', 'company', 'status', 'visits', 'form starts', 'candidates', 'applications', 'completion rate', 'moved to Failed automatically'], jobRows.map(j => [j.title, j.company, j.status, j.views, j.starts, j.candidates, j.applications, reportPercentText(Number(j.funnelApplications || 0), Number(j.starts || 0)), j.autoFailed]));
+      if (reportSteps && reportSteps.hasData) block(t('Where candidates drop off') + (reportSteps.version && reportSteps.versions.length > 1 ? ' (' + t('form version {number}', { number: reportSteps.version.number }) + ')' : ''), [t('step'), t('people who reached it'), t('stopped here'), t('share who stopped')], reportStepsModel(reportSteps).rows.map(row => [(row.kind === 'question' ? t('Question {number}', { number: row.number }) + ': ' : '') + row.label, row.reached, row.left === null ? '' : row.left, row.share === null ? '' : Math.round(row.share * 100) + '%']));
+      block(t('Auto-fail reasons'), [t('question'), t('reason'), t('candidates')], (data.autoFailGroups || []).flatMap(group => group.reasons.map(item => [group.question, item.reason, item.n])));
+    } else block(t('Jobs'), [t('job'), t('company'), t('status'), t('visits'), t('form starts'), t('candidates'), t('applications'), t('completion rate'), t('moved to Failed automatically')], jobRows.map(j => [j.title, j.company, j.status === 'published' ? t('Published') : j.status === 'draft' ? t('Draft') : j.status, j.views, j.starts, j.candidates, j.applications, reportPercentText(Number(j.funnelApplications || 0), Number(j.starts || 0)), j.autoFailed]));
     return rowsToCsv(rows);
   }
   function paintReport() {
@@ -1937,7 +1939,7 @@
     if (!content || !data) return;
     const pickerInput = root.querySelector('#report-picker-input');
     if (pickerInput) {
-      pickerInput.dataset.label = data.selectedJob ? (data.selectedJob.title || 'Untitled role') : 'All jobs';
+      pickerInput.dataset.label = data.selectedJob ? (data.selectedJob.title || t('Untitled role')) : t('All jobs');
       if (document.activeElement !== pickerInput) pickerInput.value = pickerInput.dataset.label;
     }
     const companySelect = root.querySelector('#report-company');
@@ -1945,40 +1947,40 @@
       const companies = data.companies || [];
       companySelect.hidden = !companies.length;
       if (companies.length) {
-        companySelect.innerHTML = '<option value="">All companies</option>' + (data.hasJobsWithoutCompany ? '<option value="none">' + esc(workspace.name) + '</option>' : '') + companies.map(item => '<option value="' + esc(item.id) + '">' + esc(item.name) + '</option>').join('');
+        companySelect.innerHTML = '<option value="">' + t('All companies') + '</option>' + (data.hasJobsWithoutCompany ? '<option value="none">' + esc(workspace.name) + '</option>' : '') + companies.map(item => '<option value="' + esc(item.id) + '">' + esc(item.name) + '</option>').join('');
         companySelect.value = reportCompany;
         companySelect.disabled = Boolean(reportFlow);
-        companySelect.title = reportFlow ? 'Choose “All jobs” to filter by company' : '';
+        companySelect.title = reportFlow ? t('Choose “All jobs” to filter by company') : '';
       }
     }
     const exportButton = root.querySelector('#report-export');
     exportButton?.removeAttribute('disabled');
     content.setAttribute('aria-busy', 'false');
     if (!Number(data.jobCount)) {
-      content.innerHTML = '<section class="applicants-empty"><span class="applicant-empty-icon" aria-hidden="true">' + ICONS.reports + '</span><h2>No data yet</h2><p>Reports fill in as soon as you publish a job and people start to visit and apply.</p>' + (hasPermission('flows') ? '<button class="btn btn-primary" id="reports-go-dashboard">Go to dashboard</button>' : '') + '</section>';
+      content.innerHTML = '<section class="applicants-empty"><span class="applicant-empty-icon" aria-hidden="true">' + ICONS.reports + '</span><h2>' + t('No data yet') + '</h2><p>' + t('Reports fill in as soon as you publish a job and people start to visit and apply.') + '</p>' + (hasPermission('flows') ? '<button class="btn btn-primary" id="reports-go-dashboard">' + t('Go to dashboard') + '</button>' : '') + '</section>';
       content.querySelector('#reports-go-dashboard')?.addEventListener('click', renderDashboard);
       exportButton?.setAttribute('disabled', '');
       return;
     }
-    const t = data.totals;
-    const repeats = Math.max(0, Number(t.applications || 0) - Number(t.candidates || 0));
-    const rate = reportPercentText(Number(t.funnelApplications || 0), Number(t.starts || 0));
+    const totals = data.totals;
+    const repeats = Math.max(0, Number(totals.applications || 0) - Number(totals.candidates || 0));
+    const rate = reportPercentText(Number(totals.funnelApplications || 0), Number(totals.starts || 0));
     const sameDay = data.range.from === data.range.to;
     const card = (label, value, caption) => '<div class="rpt-stat"><span class="rpt-stat-label">' + esc(label) + '</span><strong class="rpt-stat-value">' + value + '</strong><span class="rpt-stat-caption">' + caption + '</span></div>';
     content.innerHTML = '<p class="rpt-summary"><strong>' + esc(reportScopeLabel(data)) + '</strong> · ' + esc(sameDay ? reportDayLabel(data.range.from, true) : reportDayLabel(data.range.from) + ' – ' + reportDayLabel(data.range.to, true)) + '</p>'
-      + '<section class="rpt-stats" aria-label="Summary">'
-      + card('Page visits', reportNumber(t.views), 'Times the job page was opened')
-      + card('Started applying', reportNumber(t.starts), 'People who began the form')
-      + card('Candidates', reportNumber(t.candidates), repeats ? '+ ' + reportNumber(repeats) + (repeats === 1 ? ' repeat application' : ' repeat applications') : 'First application of each person')
-      + card('Completion rate', rate, 'Of those who started, how many sent the application')
+      + '<section class="rpt-stats" aria-label="' + t('Summary') + '">'
+      + card(t('Page visits'), reportNumber(totals.views), t('Times the job page was opened'))
+      + card(t('Started applying'), reportNumber(totals.starts), t('People who began the form'))
+      + card(t('Candidates'), reportNumber(totals.candidates), repeats ? '+ ' + tn('{count} repeat application', '{count} repeat applications', repeats, { count: reportNumber(repeats) }) : t('First application of each person'))
+      + card(t('Completion rate'), rate, t('Of those who started, how many sent the application'))
       + '</section>'
-      + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Applications over time</h2><p>New candidates per ' + (data.daily.length > 100 ? 'week' : 'day') + '.</p></div></div>' + reportChartHtml(data.daily) + '</section>'
-      + '<div class="rpt-grid"><section class="rpt-card"><div class="rpt-card-head"><div><h2>Application funnel</h2><p>How many visitors become applicants.</p></div></div>' + reportFunnelHtml(t) + '</section>'
-      + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Where candidates are now</h2><p>Current stage of the people who applied in this period.</p></div></div>' + reportStagesHtml(data.stages) + '</section></div>'
-      + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Automatic screening</h2><p>Candidates moved to Failed by your auto-fail rules.</p></div></div>' + reportAutoFailHtml(data) + '</section>'
-      + (data.selectedJob ? '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Where candidates drop off</h2><p>How many people reached each step of this job’s form, and how many stopped there.</p></div><div id="rpt-steps-version-slot"></div></div><div id="rpt-steps-body"></div></section>' : '')
-      + (data.selectedJob ? '' : '<section class="rpt-card"><div class="rpt-card-head"><div><h2>Jobs</h2><p>Compare your jobs in this period.</p></div></div><div class="rpt-jobs-tools"><input type="search" id="rpt-jobs-search" class="applicants-search" placeholder="Search jobs" aria-label="Search jobs" maxlength="100" value="' + esc(reportJobsSearch) + '"><select id="rpt-jobs-sort" class="applicants-filter" aria-label="Sort jobs">' + REPORT_JOB_SORTS.map(([value, text]) => '<option value="' + value + '"' + (reportJobsSort === value ? ' selected' : '') + '>' + text + '</option>').join('') + '</select></div><div id="rpt-jobs-body" aria-live="polite"></div></section>')
-      + '<p class="rpt-foot">Visits and form starts are anonymous page counters and can be inflated by anyone who knows the job link. Candidates are counted once per job and e-mail address. Days are UTC days.</p>';
+      + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>' + t('Applications over time') + '</h2><p>' + (data.daily.length > 100 ? t('New candidates per week.') : t('New candidates per day.')) + '</p></div></div>' + reportChartHtml(data.daily) + '</section>'
+      + '<div class="rpt-grid"><section class="rpt-card"><div class="rpt-card-head"><div><h2>' + t('Application funnel') + '</h2><p>' + t('How many visitors become applicants.') + '</p></div></div>' + reportFunnelHtml(totals) + '</section>'
+      + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>' + t('Where candidates are now') + '</h2><p>' + t('Current stage of the people who applied in this period.') + '</p></div></div>' + reportStagesHtml(data.stages) + '</section></div>'
+      + '<section class="rpt-card"><div class="rpt-card-head"><div><h2>' + t('Automatic screening') + '</h2><p>' + t('Candidates moved to Failed by your auto-fail rules.') + '</p></div></div>' + reportAutoFailHtml(data) + '</section>'
+      + (data.selectedJob ? '<section class="rpt-card"><div class="rpt-card-head"><div><h2>' + t('Where candidates drop off') + '</h2><p>' + t('How many people reached each step of this job’s form, and how many stopped there.') + '</p></div><div id="rpt-steps-version-slot"></div></div><div id="rpt-steps-body"></div></section>' : '')
+      + (data.selectedJob ? '' : '<section class="rpt-card"><div class="rpt-card-head"><div><h2>' + t('Jobs') + '</h2><p>' + t('Compare your jobs in this period.') + '</p></div></div><div class="rpt-jobs-tools"><input type="search" id="rpt-jobs-search" class="applicants-search" placeholder="' + t('Search jobs') + '" aria-label="' + t('Search jobs') + '" maxlength="100" value="' + esc(reportJobsSearch) + '"><select id="rpt-jobs-sort" class="applicants-filter" aria-label="' + t('Sort jobs') + '">' + REPORT_JOB_SORTS.map(([value, text]) => '<option value="' + value + '"' + (reportJobsSort === value ? ' selected' : '') + '>' + t(text) + '</option>').join('') + '</select></div><div id="rpt-jobs-body" aria-live="polite"></div></section>')
+      + '<p class="rpt-foot">' + t('Visits and form starts are anonymous page counters and can be inflated by anyone who knows the job link. Candidates are counted once per job and e-mail address. Days are UTC days.') + '</p>';
     if (data.selectedJob) void loadReportSteps();
     if (!data.selectedJob) {
       content.querySelector('#rpt-jobs-search')?.addEventListener('input', event => {
@@ -1996,7 +1998,7 @@
     const requestId = ++reportRequestId;
     reportSteps = null; reportStepsRequestId += 1;
     content.setAttribute('aria-busy', 'true');
-    content.innerHTML = '<div class="loading-card"><span class="brand-mark">↗</span><span>Loading the report…</span></div>';
+    content.innerHTML = '<div class="loading-card"><span class="brand-mark">↗</span><span>' + t('Loading the report…') + '</span></div>';
     try {
       const { from, to } = reportDates();
       const data = await window.PathwayBackend.getWorkspaceReport(workspace.id, { from, to, flowId: reportFlow, company: reportCompany });
@@ -2008,7 +2010,7 @@
       if (requestId !== reportRequestId || !root.querySelector('.reports-page')) return;
       if (reportFlow && /could not be found/i.test(error.message || '')) { reportFlow = ''; void loadReport(); return; }
       content.setAttribute('aria-busy', 'false');
-      content.innerHTML = '<div class="auth-error show" role="alert">' + esc('Could not load the report: ' + (error.message || 'check your connection and try again')) + '</div><button class="btn" id="report-retry" style="margin-top:12px">Try again</button>';
+      content.innerHTML = '<div class="auth-error show" role="alert">' + esc(t('Could not load the report: {reason}', { reason: error.message || t('check your connection and try again') })) + '</div><button class="btn" id="report-retry" style="margin-top:12px">' + t('Try again') + '</button>';
       content.querySelector('#report-retry')?.addEventListener('click', () => { void loadReport(); });
     }
   }
@@ -2020,8 +2022,8 @@
     const input = host.querySelector('#report-picker-input'), list = host.querySelector('#report-picker-list');
     let timer = null, requestId = 0, active = -1, jobs = [], total = 0, query = '', loadingMore = false, failed = false;
     const isOpen = () => !list.hidden;
-    const currentLabel = () => input.dataset.label || 'All jobs';
-    const entries = () => [...(query ? [] : [{ value: '', label: 'All jobs', company: '' }]), ...jobs.map(job => ({ value: job.id, label: job.title || 'Untitled role', company: job.company || '' }))];
+    const currentLabel = () => input.dataset.label || t('All jobs');
+    const entries = () => [...(query ? [] : [{ value: '', label: t('All jobs'), company: '' }]), ...jobs.map(job => ({ value: job.id, label: job.title || t('Untitled role'), company: job.company || '' }))];
     const highlight = () => {
       list.querySelectorAll('.job-combobox-option').forEach((node, index) => node.classList.toggle('is-active', index === active));
       const node = list.querySelector('.job-combobox-option.is-active');
@@ -2032,9 +2034,9 @@
       const top = list.scrollTop;
       const items = entries();
       const more = jobs.length < total;
-      list.innerHTML = (loading ? '<li class="job-combobox-note">Searching…</li>'
+      list.innerHTML = (loading ? '<li class="job-combobox-note">' + t('Searching…') + '</li>'
         : items.map((item, index) => '<li role="option" id="report-job-opt-' + index + '" class="job-combobox-option" data-index="' + index + '" aria-selected="' + (item.value === reportFlow) + '"><span>' + esc(item.label) + '</span>' + (item.company ? '<small>' + esc(item.company) + '</small>' : '') + '</li>').join('')
-          + (failed ? '<li class="job-combobox-note">Could not load the jobs.</li>' : more ? '<li class="job-combobox-note">Loading more…</li>' : (!jobs.length ? '<li class="job-combobox-note">No jobs match.</li>' : '')));
+          + (failed ? '<li class="job-combobox-note">' + t('Could not load the jobs.') + '</li>' : more ? '<li class="job-combobox-note">' + t('Loading more…') + '</li>' : (!jobs.length ? '<li class="job-combobox-note">' + t('No jobs match.') + '</li>' : '')));
       list.scrollTop = top;
       highlight();
     };
@@ -2098,7 +2100,7 @@
     if (!reportData) return;
     const data = reportData;
     const original = button.textContent;
-    button.disabled = true; button.textContent = 'Preparing…';
+    button.disabled = true; button.textContent = t('Preparing…');
     try {
       const jobRows = [];
       if (!data.selectedJob) {
@@ -2110,9 +2112,9 @@
         }
       }
       downloadTextFile('pathway-report-' + new Date().toISOString().slice(0, 10) + '.csv', reportToCsv(data, reportScopeLabel(data), jobRows));
-      showToast('Report downloaded.');
+      showToast(t('Report downloaded.'));
     } catch (error) {
-      showToast('Could not prepare the report. Please try again.');
+      showToast(t('Could not prepare the report. Please try again.'));
     } finally { button.disabled = false; button.textContent = original; }
   }
   async function renderReports() {
@@ -2120,7 +2122,7 @@
     setRoute('reports');
     currentId = null; selectedId = null;
     reportData = null; reportRangeResolved = null;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('reports')}<main class="reports-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Reports</h1><p>See how your jobs are doing: who visits, who applies and where candidates end up.</p></div><div class="reports-tools"><div class="rpt-seg-control" role="group" aria-label="Period">${REPORT_RANGES.map(item => `<button type="button" class="rpt-seg-btn${item.key === reportRange ? ' is-active' : ''}" data-report-range="${item.key}" aria-pressed="${item.key === reportRange}">${item.label}</button>`).join('')}</div><select id="report-company" class="applicants-filter" aria-label="Filter by company" hidden><option value="">All companies</option></select><div class="rpt-picker" id="report-picker"><div class="rpt-picker-field"><input type="text" class="applicants-filter rpt-picker-input" id="report-picker-input" role="combobox" aria-expanded="false" aria-controls="report-picker-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="Filter by job" placeholder="Search jobs" maxlength="100" value="All jobs"><span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span></div><ul class="job-combobox-list" id="report-picker-list" role="listbox" aria-label="Jobs" hidden></ul></div><button class="btn btn-sm" id="report-export" type="button" disabled>↓ Export CSV</button></div></div><div id="reports-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('reports')}<main class="reports-page"><div class="reports-heading"><div><div class="eyebrow">${t('Hiring workspace')}</div><h1>${t('Reports')}</h1><p>${t('See how your jobs are doing: who visits, who applies and where candidates end up.')}</p></div><div class="reports-tools"><div class="rpt-seg-control" role="group" aria-label="${t('Period')}">${REPORT_RANGES.map(item => `<button type="button" class="rpt-seg-btn${item.key === reportRange ? ' is-active' : ''}" data-report-range="${item.key}" aria-pressed="${item.key === reportRange}">${t(item.label)}</button>`).join('')}</div><select id="report-company" class="applicants-filter" aria-label="${t('Filter by company')}" hidden><option value="">${t('All companies')}</option></select><div class="rpt-picker" id="report-picker"><div class="rpt-picker-field"><input type="text" class="applicants-filter rpt-picker-input" id="report-picker-input" role="combobox" aria-expanded="false" aria-controls="report-picker-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="${t('Filter by job')}" placeholder="${t('Search jobs')}" maxlength="100" value="${t('All jobs')}"><span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span></div><ul class="job-combobox-list" id="report-picker-list" role="listbox" aria-label="${t('Jobs')}" hidden></ul></div><button class="btn btn-sm" id="report-export" type="button" disabled>↓ ${t('Export CSV')}</button></div></div><div id="reports-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
     
@@ -2156,21 +2158,29 @@
   }
 
   // "Export CSV": the same whole percentages the page shows, nothing more (no head counts, names or e-mail addresses).
+  // The band for the number of answers (the database never sends the exact number), in the interface language.
+  const DIVERSITY_SIZES = { '10-29': [10, 29], '30-99': [30, 99], '100-199': [100, 199], '200-399': [200, 399], '400-999': [400, 999] };
+  function diversitySizeLabel(size) {
+    if (size === '1000+') return t('{number} or more', { number: window.PathwayI18n.formatNumber(1000) });
+    const band = DIVERSITY_SIZES[size];
+    return band ? t('{from} to {to}', { from: band[0], to: band[1] }) : '';
+  }
+  // Answers are stored in English (the report adds them up); only the screen and the export translate them.
+  const diversityAnswerLabel = answer => t(String(answer));
   function diversityToCsv(data, jobLabel) {
     const PNTS = 'Prefer not to say';
-    const SIZES = { '10-29': '10 to 29', '30-99': '30 to 99', '100-199': '100 to 199', '200-399': '200 to 399', '400-999': '400 to 999', '1000+': '1,000 or more' };
     const coverage = Number.isFinite(Number(data.coverage)) && data.coverage !== null ? Math.round(Number(data.coverage)) : '';
     // The table comes first (percentage right after the question); the long note goes last, in the third column, so it never widens the percentage column.
-    const rows = [['question', 'percentage', 'answer']];
+    const rows = [[t('question'), t('percentage'), t('answer')]];
     (data.questions || []).forEach(question => {
-      const title = DIVERSITY_TITLES[question.key] || String(question.key);
-      if (!question.enough) { rows.push([title, '', 'Not enough answers to show this question privately']); return; }
+      const title = DIVERSITY_TITLES[question.key] ? t(DIVERSITY_TITLES[question.key]) : String(question.key);
+      if (!question.enough) { rows.push([title, '', t('Not enough answers to show this question privately')]); return; }
       const items = [...(question.items || [])].sort((a, b) => (a.answer === PNTS) - (b.answer === PNTS) || b.pct - a.pct);
       if (question.other) items.push({ answer: 'Other groups (small groups combined)', pct: question.other.pct });
-      items.forEach(item => rows.push([title, Math.max(0, Math.min(100, Math.round(Number(item.pct) || 0))), item.answer]));
+      items.forEach(item => rows.push([title, Math.max(0, Math.min(100, Math.round(Number(item.pct) || 0))), diversityAnswerLabel(item.answer)]));
     });
-    rows.push([], ['Pathway diversity report'], ['job', '', jobLabel], ['based on', '', SIZES[data.size] || ''], ['answer rate (%)', '', coverage], ['report updated at', '', data.generatedAt || ''], ['exported at', '', new Date().toISOString()],
-      ['note', '', 'Percentages are rounded to whole numbers, so they may not add up to exactly 100%. Groups of fewer than 5 people are combined under "Other groups". Candidates count once their application is at least 7 days old and the numbers refresh once a day. Use these numbers to understand your hiring process, not to make decisions about individual people.']);
+    rows.push([], [t('Pathway diversity report')], [t('job'), '', jobLabel], [t('based on'), '', diversitySizeLabel(data.size)], [t('answer rate (%)'), '', coverage], [t('report updated at'), '', data.generatedAt || ''], [t('exported at'), '', new Date().toISOString()],
+      [t('note'), '', t('Percentages are rounded to whole numbers, so they may not add up to exactly 100%. Groups of fewer than 5 people are combined under “Other groups”. Candidates count once their application is at least 7 days old and the numbers refresh once a day. Use these numbers to understand your hiring process, not to make decisions about individual people.')]);
     return rowsToCsv(rows);
   }
 
@@ -2180,21 +2190,21 @@
     const label = select && select.selectedOptions[0] ? select.selectedOptions[0].textContent : '';
     try {
       downloadTextFile('pathway-diversity-' + new Date().toISOString().slice(0, 10) + '.csv', diversityToCsv(diversityData, label));
-      showToast('Diversity report downloaded.');
+      showToast(t('Diversity report downloaded.'));
     } catch (error) {
-      showToast('Could not prepare the report. Please try again.');
+      showToast(t('Could not prepare the report. Please try again.'));
     }
   }
 
   function diversityQuestionHtml(question) {
-    const title = DIVERSITY_TITLES[question.key] || String(question.key);
-    if (!question.enough) return `<section class="rpt-card"><div class="rpt-card-head"><h2>${esc(title)}</h2></div><p class="rpt-empty">Not enough answers to show this question privately.</p></section>`;
+    const title = DIVERSITY_TITLES[question.key] ? t(DIVERSITY_TITLES[question.key]) : String(question.key);
+    if (!question.enough) return `<section class="rpt-card"><div class="rpt-card-head"><h2>${esc(title)}</h2></div><p class="rpt-empty">${t('Not enough answers to show this question privately.')}</p></section>`;
     const PNTS = 'Prefer not to say';
     const items = [...(question.items || [])].sort((a, b) => (a.answer === PNTS) - (b.answer === PNTS) || b.pct - a.pct);
     if (question.other) items.push({ answer: 'Other groups (small groups combined)', pct: question.other.pct, muted: true });
     const rows = items.map(item => {
       const pct = Math.max(0, Math.min(100, Math.round(Number(item.pct) || 0)));
-      return `<li class="rpt-funnel-row"><div class="rpt-funnel-head"><span>${esc(item.answer)}</span><strong>${pct}%</strong></div><span class="rpt-track" aria-hidden="true"><span class="rpt-fill${item.muted ? ' is-muted' : ''}" style="width:${pct}%"></span></span></li>`;
+      return `<li class="rpt-funnel-row"><div class="rpt-funnel-head"><span>${esc(diversityAnswerLabel(item.answer))}</span><strong>${pct}%</strong></div><span class="rpt-track" aria-hidden="true"><span class="rpt-fill${item.muted ? ' is-muted' : ''}" style="width:${pct}%"></span></span></li>`;
     }).join('');
     return `<section class="rpt-card"><div class="rpt-card-head"><h2>${esc(title)}</h2></div><ul class="rpt-funnel">${rows}</ul></section>`;
   }
@@ -2205,16 +2215,15 @@
     content.setAttribute('aria-busy', 'false');
     setDiversityExport(data);
     if (!data.enough) {
-      content.innerHTML = '<section class="rpt-card"><p class="rpt-empty">There are not enough answers for this job to show results privately yet. Candidates count once their application is at least 7 days old, and results appear once at least 10 candidates have answered.</p></section>';
+      content.innerHTML = '<section class="rpt-card"><p class="rpt-empty">' + t('There are not enough answers for this job to show results privately yet. Candidates count once their application is at least 7 days old, and results appear once at least 10 candidates have answered.') + '</p></section>';
       return;
     }
-    const updated = data.generatedAt && !Number.isNaN(new Date(data.generatedAt).getTime()) ? new Date(data.generatedAt).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    const updated = data.generatedAt && !Number.isNaN(new Date(data.generatedAt).getTime()) ? window.PathwayI18n.formatDate(new Date(data.generatedAt), { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
     const coverage = Number.isFinite(Number(data.coverage)) && data.coverage !== null ? Math.round(Number(data.coverage)) : null;
     // The database only sends a band for the number of answers (never the exact number).
-    const SIZES = { '10-29': '10 to 29', '30-99': '30 to 99', '100-199': '100 to 199', '200-399': '200 to 399', '400-999': '400 to 999', '1000+': '1,000 or more' };
-    const size = SIZES[data.size] || '';
-    const summary = [size ? `Based on <strong>${size}</strong> answers` : '', coverage === null ? '' : `<strong>${coverage}%</strong> of the candidates answered the voluntary questions`, updated ? `updated ${esc(updated)}` : ''].filter(Boolean).join(' · ');
-    content.innerHTML = `<p class="rpt-summary">${summary}</p><div class="rpt-grid">${(data.questions || []).map(diversityQuestionHtml).join('')}</div><p class="rpt-note">Use these numbers to understand your hiring process, not to make decisions about individual people. Candidates count once their application is at least 7 days old and the numbers refresh once a day. Percentages are rounded to whole numbers, so they may not add up to exactly 100%. Groups of fewer than 5 people are never shown on their own: they are combined under “Other groups”.</p>`;
+    const size = diversitySizeLabel(data.size);
+    const summary = [size ? t('Based on {size} answers', { size: `<strong>${esc(size)}</strong>` }) : '', coverage === null ? '' : t('{percent} of the candidates answered the voluntary questions', { percent: `<strong>${coverage}%</strong>` }), updated ? t('updated {date}', { date: esc(updated) }) : ''].filter(Boolean).join(' · ');
+    content.innerHTML = `<p class="rpt-summary">${summary}</p><div class="rpt-grid">${(data.questions || []).map(diversityQuestionHtml).join('')}</div><p class="rpt-note">${t('Use these numbers to understand your hiring process, not to make decisions about individual people. Candidates count once their application is at least 7 days old and the numbers refresh once a day. Percentages are rounded to whole numbers, so they may not add up to exactly 100%. Groups of fewer than 5 people are never shown on their own: they are combined under “Other groups”.')}</p>`;
   }
 
   async function loadDiversityReport() {
@@ -2223,7 +2232,7 @@
     const requestId = ++diversityRequestId;
     setDiversityExport(null);
     content.setAttribute('aria-busy', 'true');
-    content.innerHTML = '<p class="rpt-empty">Loading…</p>';
+    content.innerHTML = '<p class="rpt-empty">' + t('Loading…') + '</p>';
     try {
       const data = await window.PathwayBackend.getDiversityReport(workspace.id, diversityFlow);
       if (requestId !== diversityRequestId || !root.querySelector('.diversity-page')) return;
@@ -2231,7 +2240,7 @@
     } catch (error) {
       if (requestId !== diversityRequestId || !root.querySelector('.diversity-page')) return;
       content.setAttribute('aria-busy', 'false');
-      content.innerHTML = '<div class="auth-error show" role="alert">' + esc('Could not load the report: ' + (error.message || 'check your connection and try again')) + '</div><button class="btn" id="diversity-retry" style="margin-top:12px">Try again</button>';
+      content.innerHTML = '<div class="auth-error show" role="alert">' + esc(t('Could not load the report: {reason}', { reason: error.message || t('check your connection and try again') })) + '</div><button class="btn" id="diversity-retry" style="margin-top:12px">' + t('Try again') + '</button>';
       content.querySelector('#diversity-retry')?.addEventListener('click', () => { void loadDiversityReport(); });
     }
   }
@@ -2240,7 +2249,7 @@
     if (!hasPermission('diversity')) return renderAccessMessage('diversity');
     setRoute('diversity');
     currentId = null; selectedId = null;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('diversity')}<main class="diversity-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Diversity</h1><p>Combined percentages from candidates’ voluntary self-identification answers, one job at a time.</p></div><div class="reports-tools"><select id="diversity-job" class="applicants-filter" aria-label="Choose a job" hidden></select><button class="btn btn-sm" id="diversity-export" type="button" disabled>↓ Export CSV</button></div></div><div id="diversity-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('diversity')}<main class="diversity-page"><div class="reports-heading"><div><div class="eyebrow">${t('Hiring workspace')}</div><h1>${t('Diversity')}</h1><p>${t('Combined percentages from candidates’ voluntary self-identification answers, one job at a time.')}</p></div><div class="reports-tools"><select id="diversity-job" class="applicants-filter" aria-label="${t('Choose a job')}" hidden></select><button class="btn btn-sm" id="diversity-export" type="button" disabled>↓ ${t('Export CSV')}</button></div></div><div id="diversity-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
     
@@ -2255,14 +2264,14 @@
     } catch (error) {
       if (requestId !== diversityRequestId || !root.querySelector('.diversity-page')) return;
       content.setAttribute('aria-busy', 'false');
-      content.innerHTML = '<div class="auth-error show" role="alert">' + esc('Could not load the jobs: ' + (error.message || 'check your connection and try again')) + '</div><button class="btn" id="diversity-retry" style="margin-top:12px">Try again</button>';
+      content.innerHTML = '<div class="auth-error show" role="alert">' + esc(t('Could not load the jobs: {reason}', { reason: error.message || t('check your connection and try again') })) + '</div><button class="btn" id="diversity-retry" style="margin-top:12px">' + t('Try again') + '</button>';
       content.querySelector('#diversity-retry')?.addEventListener('click', () => { void renderDiversity(); });
       return;
     }
     if (requestId !== diversityRequestId || !root.querySelector('.diversity-page')) return;
     if (!jobs.length) {
       content.setAttribute('aria-busy', 'false');
-      content.innerHTML = '<section class="rpt-card"><p class="rpt-empty">None of your jobs has collected diversity answers yet.</p></section>';
+      content.innerHTML = '<section class="rpt-card"><p class="rpt-empty">' + t('None of your jobs has collected diversity answers yet.') + '</p></section>';
       return;
     }
     if (!jobs.some(job => job.id === diversityFlow)) diversityFlow = jobs[0].id;
@@ -2523,13 +2532,16 @@
     return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
   }
   function rowsToCsv(rows) { return '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n'; }
+  // Personal-data exports: the column titles and the notes follow the interface language; the section and field names stay
+  // as they are (they name the data, like a database column) and so do the values.
+  const exportHeader = () => [t('section'), t('record'), t('field'), t('value')];
   function myDataToCsv(data) {
-    const rows = [['section', 'record', 'field', 'value']];
+    const rows = [exportHeader()];
     // The database returns keys sorted by length; this puts the fields in a natural reading order.
     const ORDER = ['exportedAt', 'note', 'userId', 'email', 'firstName', 'lastName', 'name', 'workspaceName', 'title', 'company', 'job', 'status', 'text', 'writtenAt', 'canManageFlows', 'canReviewCandidates', 'canManageTeam', 'canCustomizeStages', 'canViewReports', 'canDiversity', 'memberSince', 'planStatus', 'planCurrentPeriodEnd', 'planCancelAtPeriodEnd', 'createdAt', 'updatedAt', 'emailConfirmedAt', 'lastSignInAt'];
     const rank = field => { const i = ORDER.indexOf(field); return i < 0 ? ORDER.length : i; };
     const add = (section, record, object) => Object.entries(object || {}).sort((x, y) => rank(x[0]) - rank(y[0])).forEach(([field, value]) => rows.push([section, record, field, value]));
-    add('export', '', { exportedAt: data?.exportedAt, note: 'Your account, profile, workspace and plan details and the jobs you created. Candidate details belong to the employer and are not included. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.' });
+    add('export', '', { exportedAt: data?.exportedAt, note: t('Your account, profile, workspace and plan details and the jobs you created. Candidate details belong to the employer and are not included. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.') });
     add('account', '', data?.account);
     add('profile', '', data?.profile);
     if (data?.ownedWorkspace) add('ownedWorkspace', '', data.ownedWorkspace);
@@ -2539,9 +2551,9 @@
   }
   // "Export data" for one candidate: everything Pathway holds about them for this job, as the same flat CSV.
   function candidateDataToCsv({ person, items, jobTitle, stage, exportedAt, interview = null }) {
-    const rows = [['section', 'record', 'field', 'value']];
+    const rows = [exportHeader()];
     const add = (section, record, object) => Object.entries(object || {}).forEach(([field, value]) => { if (value !== null && value !== undefined && value !== '') rows.push([section, record, field, value]); });
-    add('export', '', { exportedAt, note: 'The application data Pathway holds about this candidate for this job. The resume file is not inside this CSV: download it from the candidate panel. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.' });
+    add('export', '', { exportedAt, note: t('The application data Pathway holds about this candidate for this job. The resume file is not inside this CSV: download it from the candidate panel. A leading apostrophe on a value (for example a phone number starting with +) is added so spreadsheets do not treat it as a formula.') });
     add('candidate', '', { name: person.candidate_name, email: person.candidate_email, job: jobTitle, currentStage: stage, applications: items.length });
     [...items].reverse().forEach((item, index) => {
       const record = String(index + 1);
@@ -2552,19 +2564,19 @@
     // The AI interview (kept by Witcher, Pathway's interview provider): every interview of this candidate for this job (state and dates),
     // and for the latest finished one the impression, the evaluation and the transcript. The audio is never stored anywhere.
     if (interview && interview.rows.length) {
-      add('aiInterviewNote', '', { note: 'AI interview data comes from Witcher, the interview service Pathway uses. Only the transcript is kept: the audio of the answers is never stored. The impression and the evaluation are written by an AI to help the hiring team; the AI does not decide who moves forward.' });
+      add('aiInterviewNote', '', { note: t('AI interview data comes from Witcher, the interview service Pathway uses. Only the transcript is kept: the audio of the answers is never stored. The impression and the evaluation are written by an AI to help the hiring team; the AI does not decide who moves forward.') });
       [...interview.rows].reverse().forEach((row, index) => add('aiInterview', String(index + 1), { state: row.state, createdAt: row.createdAt, completedAt: row.completedAt, impression: row.impression }));
       const live = interview.live;
       if (aiInterviewPurged(interview.rows[0])) add('aiInterviewResult', '', { impression: interview.rows[0].impression, note: aiPurgedText(interview.rows[0].impression) });
       else if (live && live.status === 'completed') {
-        add('aiInterviewResult', '', { impression: live.impression, evaluation: live.evaluation, answeredInJobLanguage: live.languageFlag ? 'no (an answer in another language than the one of the job sets the impression to negative)' : 'yes' });
+        add('aiInterviewResult', '', { impression: live.impression, evaluation: live.evaluation, answeredInJobLanguage: live.languageFlag ? t('no (an answer in another language than the one of the job sets the impression to negative)') : t('yes') });
         (live.messages || []).filter(message => message.kind !== 'closing').forEach(message => add('aiInterviewTranscript', String(message.seq), {
-          speaker: message.role === 'ai' ? 'AI interviewer' : 'Candidate',
+          speaker: message.role === 'ai' ? t('AI interviewer') : t('Candidate'),
           type: message.kind,
-          text: message.role === 'candidate' && message.answer_status === 'skipped' ? '(skipped)' : message.body,
+          text: message.role === 'candidate' && message.answer_status === 'skipped' ? t('(skipped)') : message.body,
           answerSeconds: message.role === 'candidate' ? message.audio_seconds : ''
         }));
-      } else if (live && live.status) add('aiInterviewResult', '', { note: 'The latest interview has no result to export (status: ' + live.status + ').' });
+      } else if (live && live.status) add('aiInterviewResult', '', { note: t('The latest interview has no result to export (status: {status}).', { status: live.status }) });
     }
     return rowsToCsv(rows);
   }
@@ -2689,22 +2701,22 @@
   function showDeleteWorkspaceConfirmation(item = workspace) {
     const name = String(item?.name || '');
     const label = item && item.id ? workspaceLabel(item) : name;
-    const shown = label !== name ? `${label} (real name: ${name})` : name;
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Delete workspace</div><h2>Permanently delete ${esc(shown)}?</h2><p>This removes the workspace, job flows and public pages, candidate applications and private resumes, pending invitations, and all member access. Other members' Pathway accounts will remain active.</p><p>Any Stripe subscription will be canceled immediately. This stops future renewals; unused paid time is not automatically refunded. Your own Pathway account will remain, and you can create another workspace.</p><p><strong>This action is irreversible.</strong></p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="field-group settings-delete-confirmation"><label for="delete-workspace-name">Type <strong>${esc(name)}</strong> to enable deletion.</label><input class="text-input" id="delete-workspace-name" autocomplete="off" autocapitalize="off" spellcheck="false"></div><p class="settings-delete-error" id="delete-workspace-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" data-close>Keep workspace</button><button class="btn btn-danger" id="confirm-delete-workspace" type="button" disabled>Delete workspace permanently</button></div>`);
+    const shown = label !== name ? t('{label} (real name: {name})', { label, name }) : name;
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Delete workspace')}</div><h2>${t('Permanently delete {workspace}?', { workspace: esc(shown) })}</h2><p>${t('This removes the workspace, job flows and public pages, candidate applications and private resumes, pending invitations, and all member access. Other members’ Pathway accounts will remain active.')}</p><p>${t('Any Stripe subscription will be canceled immediately. This stops future renewals; unused paid time is not automatically refunded. Your own Pathway account will remain, and you can create another workspace.')}</p><p><strong>${t('This action is irreversible.')}</strong></p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="field-group settings-delete-confirmation"><label for="delete-workspace-name">${t('Type {name} to enable deletion.', { name: '<strong>' + esc(name) + '</strong>' })}</label><input class="text-input" id="delete-workspace-name" autocomplete="off" autocapitalize="off" spellcheck="false"></div><p class="settings-delete-error" id="delete-workspace-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" data-close>${t('Keep workspace')}</button><button class="btn btn-danger" id="confirm-delete-workspace" type="button" disabled>${t('Delete workspace permanently')}</button></div>`);
     const input = modalRoot.querySelector('#delete-workspace-name');
     const button = modalRoot.querySelector('#confirm-delete-workspace');
     const errorBox = modalRoot.querySelector('#delete-workspace-error');
     input.addEventListener('input', () => { button.disabled = input.value.trim() !== name; });
     button.addEventListener('click', async () => {
       if (input.value.trim() !== name || button.disabled) return;
-      input.disabled = true; button.disabled = true; button.textContent = 'Deleting workspace…'; errorBox.hidden = true;
+      input.disabled = true; button.disabled = true; button.textContent = t('Deleting workspace…'); errorBox.hidden = true;
       try {
         await window.PathwayBackend.deleteWorkspace(item.id);
         closeModal();
         await afterWorkspaceRemoved(item);
       } catch (error) {
-        errorBox.textContent = error.message || 'Workspace deletion could not be completed. Refresh the page or retry.';
-        errorBox.hidden = false; input.disabled = false; button.disabled = input.value.trim() !== name; button.textContent = 'Delete workspace permanently';
+        errorBox.textContent = error.message || t('Workspace deletion could not be completed. Refresh the page or retry.');
+        errorBox.hidden = false; input.disabled = false; button.disabled = input.value.trim() !== name; button.textContent = t('Delete workspace permanently');
       }
     });
     input.focus();
@@ -4326,9 +4338,9 @@
     try {
       await window.PathwayBackend.syncPaymentMethodFromCustomer();
       await loadCurrentCardSummary();
-      showToast('Payment method updated for this subscription.');
+      showToast(t('Payment method updated for this subscription.'));
     } catch (error) {
-      showToast(error.message || 'The updated card could not be applied. Please try again.');
+      showToast(error.message || t('The updated card could not be applied. Please try again.'));
     }
   }
 })();

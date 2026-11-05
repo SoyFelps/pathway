@@ -76,13 +76,13 @@ test('company cards have fixed height and truncate long descriptions', () => {
 test('edit modal defers logo removal until save and offers the confirmed company delete flow', () => {
   const builder = read('builder.js');
   const styles = read('styles.css');
-  assert.match(builder, /id="remove-company-logo" type="button" aria-label="Remove current logo"/);
+  assert.match(builder, /id="remove-company-logo" type="button" aria-label="\$\{t\('Remove current logo'\)\}"/);
   assert.match(builder, /name="removeLogo" value="false"/);
   assert.match(builder, /id="company-logo-removal-pending" hidden/);
   assert.match(builder, /removeLogoInput\.value = 'true'/);
   assert.match(builder, /removeLogo: form\.elements\.removeLogo\?\.value === 'true'/);
   assert.match(builder, /id="restore-company-logo" type="button"/);
-  assert.match(builder, /id="delete-company-from-edit" type="button">Delete/);
+  assert.match(builder, /id="delete-company-from-edit" type="button">' \+ t\('Delete'\)/);
   assert.match(builder, /addEventListener\('click', \(\) => showDeleteCompany\(company\)\)/);
   assert.match(styles, /\.company-logo-remove\{[^}]*color:var\(--red\)/);
   assert.match(styles, /\.company-edit-actions \.company-delete-from-edit\{[^}]*margin-right:auto/);
@@ -103,8 +103,8 @@ test('company edits propagate atomically to linked drafts and active published s
   assert.match(builder, /window\.PathwayBackend\.updateCompany/);
   assert.match(builder, /Company updated in its linked flows/);
   assert.match(styles, /\.company-card-actions/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105y/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261105y/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105z/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261105z/);
 });
 
 test('company deletion requires all linked flows removed first and the UI confirms candidate-data loss', () => {
@@ -122,8 +122,8 @@ test('company deletion requires all linked flows removed first and the UI confir
   assert.match(appFunction, /async function deleteFlowForOwner/);
   assert.match(appFunction, /applicant-resumes|const BUCKET = "applicant-resumes"/);
   assert.match(builder, /all candidate applications and answers, uploaded resumes, and their public job links/);
-  assert.match(builder, /Type <strong>\$\{esc\(company\.name\)\}<\/strong> to confirm/);
-  assert.match(builder, /Delete company\$\{linkedFlows\.length \? ' and flows'/);
+  assert.match(builder, /t\('Type \{name\} to confirm', \{ name: '<strong>' \+ esc\(company\.name\) \+ '<\/strong>' \}\)/);
+  assert.match(builder, /const deleteLabel = linkedFlows\.length \? t\('Delete company and jobs'\) : t\('Delete company'\);/);
 });
 
 test('company Storage policies qualify the outer object path instead of shadowed company name', () => {
@@ -182,7 +182,7 @@ test('a company can have an optional primary colour that is stored, edited and s
 test('a chosen logo file shows a preview with a remove button instead of the file name, and only then can another be chosen', () => {
   const builder = read('builder.js');
   assert.match(builder, /id="company-logo-chosen" hidden/);
-  assert.match(builder, /id="clear-company-logo" type="button" aria-label="Remove selected logo"/);
+  assert.match(builder, /id="clear-company-logo" type="button" aria-label="\$\{t\('Remove selected logo'\)\}"/);
   assert.match(builder, /URL\.createObjectURL\(file\)/);
   assert.match(builder, /URL\.revokeObjectURL\(previewUrl\)/, 'the preview address is released');
   assert.match(builder, /picker\.classList\.toggle\('has-file', Boolean\(file\)\)/);
