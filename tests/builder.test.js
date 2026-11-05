@@ -57,9 +57,9 @@ test('job details are shown only when the fixed candidate-details node is select
   const end = builder.indexOf('function updateNodeLabel(', start);
   const inspector = builder.slice(start, end);
   assert.match(inspector, /const roleSettings = selected\.type === 'candidateInfo'/);
-  assert.match(inspector, /<h2>Job details<\/h2>/);
+  assert.match(inspector, /<h2>\$\{t\('Job details'\)\}<\/h2>/);
   assert.match(inspector, /panel\.innerHTML = `<div class="mobile-details-bar">[\s\S]*?<\/div>\$\{roleSettings\}/);
-  assert.match(inspector, /<div class="inspector-kicker">Selected step<\/div>/);
+  assert.match(inspector, /<div class="inspector-kicker">\$\{t\('Selected step'\)\}<\/div>/);
   assert.match(inspector, /querySelector\('#role-company-profile'\)\?\./);
   assert.match(inspector, /companyOptionsHtml\(flow\.companyId/);
 });
@@ -82,14 +82,14 @@ test('short-answer nodes expose an accessible numeric-only switch', () => {
   const inspector = builder.slice(start, end);
   assert.match(inspector, /selected\.type === 'shortText'[\s\S]*?class="numeric-only-toggle"[\s\S]*?role="switch"/);
   assert.match(inspector, /numericToggle\?\.addEventListener\('change',[\s\S]*selected\.numericOnly = event\.target\.checked/);
-  assert.match(builder, /node\.numericOnly \? 'Number response'[\s\S]*?: 'Open-ended response'/);
+  assert.match(builder, /node\.numericOnly \? t\('Number response'\)[\s\S]*?: t\('Open-ended response'\)/);
   assert.match(styles, /\.numeric-only-switch input:checked\+\.numeric-only-track/);
   assert.match(styles, /\.answer-text\[data-numeric-only=true\]/);
 });
 
 test('the job editor has a Back button to the dashboard instead of the "My flows" breadcrumb', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
-  assert.ok(src.includes('<button class="btn btn-sm crumb-back" id="dashboard-back" type="button" aria-label="Back to the dashboard">← Back</button><span class="crumb-title">'));
+  assert.ok(src.includes("<button class=\"btn btn-sm crumb-back\" id=\"dashboard-back\" type=\"button\" aria-label=\"${t('Back to the dashboard')}\">← ${t('Back')}</button><span class=\"crumb-title\">"));
   assert.equal(src.includes('>My flows</button>'), false);
   assert.equal(src.includes('crumb-chevron'), false);
 });
@@ -146,7 +146,7 @@ test('phone editor: board OR step details (never both), Back to board, no pencil
   assert.match(src, /if \(lastEditorFlowId !== currentId\) mobileEditorView = 'board';/, 'opening a job on a phone starts on the board');
   assert.match(src, /selectedId = element\.dataset\.node; drawCanvas\(\); drawInspector\(\);\n\s+openNodeDetailsOnPhone\(\);/, 'tapping a step opens its details');
   assert.match(src, /selectedId = info\.id; mobileEditorView = 'board'; save\(\); renderEditor\(\);/, 'after deleting a step the board comes back');
-  assert.match(src, /id="close-node-details">← Back to board<\/button>/);
+  assert.match(src, /id="close-node-details">← \$\{t\('Back to board'\)\}<\/button>/);
   assert.match(css, /\.editor-layout\.is-mobile-board \.inspector\{display:none\}/);
   assert.match(css, /\.editor-layout\.is-mobile-details \.workspace\{display:none\}/);
   assert.match(css, /\.editor-main\.is-mobile-details \.canvas-add,\.editor-main\.is-mobile-details \.canvas-zoom-controls/);
@@ -177,7 +177,7 @@ test('the AI interview questions come last in the job details, below the candida
   const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
   const inspector = src.slice(src.indexOf('function drawInspector()'), src.indexOf('function updateNodeLabel(', src.indexOf('function drawInspector()')));
   assert.ok(inspector.includes(`const aiSection = selected.type === 'candidateInfo' ? '<hr class="inspector-divider"><div class="field-group" id="role-language-group">`), 'the language of the interview comes first');
-  assert.ok(inspector.includes('<div class="field-group"><div class="field-label-row"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><button type="button" class="icon-btn expand-btn" id="expand-ai-questions"'), 'the questions have an expander next to the title');
+  assert.ok(inspector.includes("<div class=\"field-group\"><div class=\"field-label-row\"><span class=\"form-label\" id=\"role-ai-questions-label\">' + t('AI interview questions') + '</span><button type=\"button\" class=\"icon-btn expand-btn\" id=\"expand-ai-questions\""), 'the questions have an expander next to the title');
   assert.ok(inspector.indexOf('id="role-language-group"') < inspector.indexOf('id="role-ai-questions-label"'), 'the language comes right above the questions');
   assert.match(inspector, /<div id="node-editor"><\/div>\$\{aiSection\}`;/, 'after the step editor');
   const roleSettings = inspector.slice(inspector.indexOf('const roleSettings'), inspector.indexOf('const aiSection'));
@@ -187,12 +187,12 @@ test('the AI interview questions come last in the job details, below the candida
 test('each AI interview question has a sparkles button next to the remove button; it writes THAT line with the AI', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
   const field = src.slice(src.indexOf('function mountInterviewQuestionsField('), src.indexOf('let myProfile = null;'));
-  assert.match(field, /\(options && options\.generate \? '<button type="button" class="icon-btn ai-question-sparkles"[^>]*aria-label="Write question ' \+ \(index \+ 1\) \+ ' with AI"/, 'only where the AI is wired (the job editor)');
+  assert.match(field, /\(options && options\.generate \? '<button type="button" class="icon-btn ai-question-sparkles"[^>]*aria-label="' \+ t\('Write question \{number\} with AI', number\(index\)\) \+ '"/, 'only where the AI is wired (the job editor)');
   assert.ok(field.indexOf('ai-question-sparkles') < field.indexOf('ai-question-remove'), 'sparkles come right before the remove button');
   assert.match(field, /host\.querySelectorAll\('\.ai-question-sparkles'\)\.forEach\(button => button\.addEventListener\('click', async event => \{/);
   assert.match(field, /const others = list\.filter\(\(text, position\) => position !== index && String\(text\)\.trim\(\)\);/, 'the lines in the field now (the draft), without the line being replaced');
   assert.match(field, /list\[index\] = result\.question; paint\(\); syncActions\(\);/, 'the question goes into that line of the draft, to be saved by the person');
-  assert.match(field, /We couldn\\u2019t generate a question from the job description\. Add more detail about the role and try again\./, 'the notification when there is not enough information');
+  assert.match(field, /We couldn’t generate a question from the job description\. Add more detail about the role and try again\./, 'the notification when there is not enough information');
   assert.match(field, /Writing questions with AI is part of the Premium plan\./);
   assert.match(field, /AI is unavailable right now\. Try again in a moment\./);
 });
@@ -203,7 +203,7 @@ test('AI interview questions in the job editor are a draft: they only reach the 
   assert.match(field, /const draftMode = Boolean\(options && options\.saveButtons\);/);
   assert.match(field, /if \(draftMode\) syncActions\(\); else setList\(list\.slice\(\)\);/, 'typing does not save in draft mode');
   assert.match(field, /if \(!draftMode\) setList\(list\.slice\(\)\); paint\(\);/, 'removing a line does not save in draft mode');
-  assert.match(field, /id="ai-questions-revert">Revert<\/button><span class="ai-questions-status"[^>]*><\/span><button type="button" class="btn btn-sm btn-primary ai-questions-save" id="ai-questions-save">Save questions<\/button>/);
+  assert.match(field, /id="ai-questions-revert">' \+ t\('Revert'\) \+ '<\/button><span class="ai-questions-status"[^>]*><\/span><button type="button" class="btn btn-sm btn-primary ai-questions-save" id="ai-questions-save">' \+ t\('Save questions'\) \+ '<\/button>/);
   assert.match(field, /setList\(kept\); list = padded\(kept\); paint\(\);/, 'saving sends the cleaned list once');
   assert.match(field, /Lines shorter than 3 characters were left out\./, 'the person is told what was left out');
   assert.match(field, /list = padded\(clean\(getList\(\) \|\| \[\]\)\); paint\(\);/, 'Revert goes back to the saved list');
@@ -239,7 +239,7 @@ test('the job editor shows only the saved AI interview questions (even none, and
 test('the job description can be opened in a larger window (desktop only) that edits the same text', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
-  assert.match(src, /id="expand-description" aria-label="Open the job description in a larger window"/);
+  assert.match(src, /id="expand-description" aria-label="\$\{t\('Open the job description in a larger window'\)\}"/);
   assert.match(src, /function openJobDescriptionEditor\(initial, onChange\) \{/);
   assert.match(src, /area\.addEventListener\('input', event => onChange\(event\.target\.value\)\);/, 'every key updates the job, like the small field');
   assert.match(src, /openJobDescriptionEditor\(flow\.jobDescription \|\| '', value => \{ syncRole\('jobDescription', value\); const small = panel\.querySelector\('#role-description'\); if \(small\) small\.value = value; refreshLanguage\(\); \}\)/, 'the small field follows the large one, and the language is detected again');
@@ -253,5 +253,5 @@ test('the interview question field accepts at most 300 characters and tells the 
   const field = src.slice(src.indexOf('function mountInterviewQuestionsField('), src.indexOf('let myProfile = null;'));
   assert.match(field, /class="text-input ai-question-input" data-index="' \+ index \+ '" maxlength="300"/);
   assert.equal(field.includes('maxlength="500"'), false);
-  assert.match(field, /result\.reason === 'long'\) showToast\('We couldn\\u2019t write a question short enough\. Try again\.'/);
+  assert.match(field, /result\.reason === 'long'\) showToast\(t\('We couldn’t write a question short enough\. Try again\.'\)/);
 });

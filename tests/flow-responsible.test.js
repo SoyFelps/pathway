@@ -35,5 +35,5 @@ test('the create-flow modal and the first step both offer the multi-select', () 
   assert.ok(modal.includes('flow.responsibleIds = currentResponsibleIds(newResponsible);'));
   assert.ok(builder.includes("ids => { flow.responsibleIds = ids; save({ internal: true }); }"), 'editing the first step saves the flow');
   assert.ok(builder.includes("if (input.hasAttribute('data-all-people')) ids = [];"), 'choosing All clears the individual choices');
-  assert.ok(builder.includes("if (!names.length) return 'All';"), 'an empty selection reads as All');
+  assert.ok(builder.includes("if (!names.length) return t('All');"), 'an empty selection reads as All');
 });

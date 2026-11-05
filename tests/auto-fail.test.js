@@ -17,10 +17,10 @@ test('the final step has no Result: it is a fixed ending, and the old "Not a mat
   assert.equal(builder.includes('Not a match this time'), false, 'the polite-disqualification choice is not offered any more');
   assert.equal(builder.includes('Polite disqualification'), false);
   assert.equal(builder.includes('End screen'), false);
-  assert.match(builder, /<label for="end-title">Completion title<\/label><input class="text-input locked-input" id="end-title" value="\$\{esc\(C\.END_LABEL\)\}" disabled readonly/, 'the title is shown but locked');
+  assert.match(builder, /<label for="end-title">\$\{t\('Completion title'\)\}<\/label><input class="text-input locked-input" id="end-title" value="\$\{esc\(t\(C\.END_LABEL\)\)\}" disabled readonly/, 'the title is shown but locked');
   assert.equal(/<input[^>]*id="node-label"[^>]*>/.test(builder.slice(builder.indexOf("selected.type === 'end'"), builder.indexOf("selected.type === 'end'") + 1200)), false, 'the end step has no editable title field');
   assert.match(builder, /Candidates who reach it are saved in New, unless an Auto-fail answer on the way sends them to Failed/);
-  assert.match(builder, /detail = '<div class="node-detail">Application confirmation<\/div>';/, 'the card always says it is the confirmation');
+  assert.match(builder, /detail = `<div class="node-detail">\$\{t\('Application confirmation'\)\}<\/div>`;/, 'the card always says it is the confirmation');
 });
 
 test('older jobs get the fixed ending when they are opened (in memory) and when they are published; new end steps start fixed', () => {
@@ -57,7 +57,7 @@ test('the normalizer forces the fixed ending on every end step, whatever an olde
 test('choice questions can mark options as auto-fail, and a number question can set a minimum', () => {
   const builder = read('builder.js');
   const inspector = builder.slice(builder.indexOf('function drawInspector()'), builder.indexOf('function updateNodeLabel('));
-  assert.ok(inspector.includes('class="option-autofail"') && inspector.includes('<span>Auto-fail</span>'), 'every option row has an Auto-fail box');
+  assert.ok(inspector.includes('class="option-autofail"') && inspector.includes("<span>${t('Auto-fail')}</span>"), 'every option row has an Auto-fail box');
   assert.ok(inspector.includes('Auto-fail if below') && inspector.includes('id="autofail-below"'));
   assert.ok(inspector.includes("selected.type === 'shortText' && selected.numericOnly ? `<div class=\"field-group autofail-below\">"), 'the number rule only shows when Numbers only is on');
   assert.ok(inspector.includes('delete selected.autoFailBelow'), 'turning Numbers only off removes the rule');

@@ -9,7 +9,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 test('free accounts see upgrade controls instead of publish actions across editor and flow menu', () => {
   const builder = read('builder.js');
   assert.match(builder, /Upgrade to publish/);
-  assert.match(builder, /subscription\?\.active \? 'Publish' : 'Upgrade to publish'/);
+  assert.match(builder, /subscription\?\.active \? t\('Publish'\) : t\('Upgrade to publish'\)/);
   assert.match(builder, /if \(!subscription\?\.active\) \{ openSubscriptionPage\(\); return; \}/);
   assert.match(builder, /renderPlanControl\(\)/);
   assert.match(builder, /id="upgrade-to-publish"/);
@@ -154,9 +154,9 @@ test('payment history is authenticated, paginated, and restricted to verified Pa
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=mw3-20261105x/);
-  assert.match(html, /builder\.js\?v=mw3-20261105x/);
-  assert.match(html, /styles\.css\?v=mw3-20261105x/);
+  assert.match(html, /backend\.js\?v=mw3-20261105y/);
+  assert.match(html, /builder\.js\?v=mw3-20261105y/);
+  assert.match(html, /styles\.css\?v=mw3-20261105y/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);

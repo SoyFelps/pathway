@@ -123,10 +123,10 @@
     if (!slot) return;
     const flow = currentFlow();
     if (!hasUnpublishedChanges(flow)) { slot.innerHTML = ''; return; }
-    slot.innerHTML = `<div class="unpublished-changes" role="status"><span>You have changes that aren’t published yet.</span><button type="button" class="btn btn-sm btn-primary" id="publish-changes">Publish changes</button></div>`;
+    slot.innerHTML = `<div class="unpublished-changes" role="status"><span>${t('You have changes that aren’t published yet.')}</span><button type="button" class="btn btn-sm btn-primary" id="publish-changes">${t('Publish changes')}</button></div>`;
     const button = slot.querySelector('#publish-changes');
     button.disabled = publishingFlows.has(flow);
-    if (button.disabled) button.textContent = 'Publishing…';
+    if (button.disabled) button.textContent = t('Publishing…');
     button.addEventListener('click', publishFlowChanges);
   }
   // internal: true for changes candidates never see (the people responsible), which do not count as unpublished changes.
@@ -138,7 +138,7 @@
     if (!internal) flow.updatedAt = new Date().toISOString();
     updatePublicationNotice();
     const indicator = document.querySelector('.save-indicator');
-    if (indicator) indicator.innerHTML = '<span class="status-dot"></span> Saving…';
+    if (indicator) indicator.innerHTML = '<span class="status-dot"></span> ' + t('Saving…');
     clearTimeout(cloudSaveTimer);
     const runCloudSave = async () => {
       pendingCloudSave = null;
@@ -146,14 +146,14 @@
         await window.PathwayBackend.saveFlow(flow, workspace);
         if (flow.cloudId && currentFlow() === flow) setRoute(`flow=${flow.cloudId}`); // a brand-new flow only gets its id after the first save
         const item = document.querySelector('.save-indicator');
-        if (item) item.innerHTML = '<span class="status-dot"></span> Saved securely';
+        if (item) item.innerHTML = '<span class="status-dot"></span> ' + t('Saved securely');
         updatePublicationNotice();
         clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => { const current = document.querySelector('.save-indicator'); if (current) current.innerHTML = '<span class="status-dot"></span> Saved to workspace'; }, 1800);
+        saveTimer = setTimeout(() => { const current = document.querySelector('.save-indicator'); if (current) current.innerHTML = '<span class="status-dot"></span> ' + t('Saved to workspace'); }, 1800);
       } catch (error) {
         const item = document.querySelector('.save-indicator');
-        if (item) item.innerHTML = '<span class="save-failed">Save failed</span>';
-        showToast(`Could not save this flow: ${error.message || 'check your connection'}`);
+        if (item) item.innerHTML = '<span class="save-failed">' + t('Save failed') + '</span>';
+        showToast(t('Could not save this flow: {reason}', { reason: error.message || t('check your connection') }));
       }
     };
     pendingCloudSave = runCloudSave;
@@ -186,7 +186,7 @@
     undoDelete = { flowId, snapshot, selectedBefore };
     const bar = document.createElement('div');
     bar.id = 'undo-delete-bar'; bar.className = 'undo-bar'; bar.setAttribute('role', 'status');
-    bar.innerHTML = '<span>Step deleted</span><button type="button" id="undo-delete-btn">Undo</button>';
+    bar.innerHTML = '<span>' + t('Step deleted') + '</span><button type="button" id="undo-delete-btn">' + t('Undo') + '</button>';
     document.body.appendChild(bar);
     // centred in the canvas area (not in the whole window: the settings panel sits on the right)
     const place = () => { const view = document.getElementById('workspace'); if (!view || !bar.isConnected) return; const box = view.getBoundingClientRect(); bar.style.left = (box.left + view.clientWidth / 2) + 'px'; };
@@ -202,7 +202,7 @@
     flow.nodes = state.snapshot.nodes; flow.edges = state.snapshot.edges;
     selectedId = flow.nodes.some(node => node.id === state.selectedBefore) ? state.selectedBefore : flow.nodes.find(node => node.type === 'candidateInfo').id;
     clearUndoDelete();
-    save(); renderEditor(); showToast('Step restored.');
+    save(); renderEditor(); showToast(t('Step restored.'));
   }
   const CANVAS_THINGS = '.node, .port, .target-port, .edge-path, .edge-hit, .canvas-toolbar, button, input, textarea, select'; // same list the canvas uses to tell the background from a step
   ['pointerdown', 'keydown'].forEach(type => document.addEventListener(type, event => {
@@ -729,7 +729,7 @@
     // The same field also opens in a large window (options.large): one big, wrapping box per question, easier to read. The window starts from the draft
     // of the field in the panel and hands its own draft back when it closes (see openInterviewQuestionsEditor).
     const large = Boolean(options && options.large);
-    const placeholderFor = index => index === 0 ? 'e.g. Tell us about a project you are proud of.' : 'Question ' + (index + 1);
+    const placeholderFor = index => index === 0 ? t('e.g. Tell us about a project you are proud of.') : t('Question {number}', { number: index + 1 });
     // The new-job form starts with three empty lines; the job editor shows only the saved questions (even none): no empty lines are added for the person.
     const minRows = options && options.saveButtons ? 0 : 3;
     while (list.length < minRows) list.push('');
@@ -745,11 +745,12 @@
       if (!saveButton || !revertButton || !status) return;
       const changed = isDirty();
       saveButton.disabled = !changed; revertButton.disabled = !changed;
-      status.textContent = changed ? 'Not saved yet' : '';
+      status.textContent = changed ? t('Not saved yet') : '';
       (host.closest('.field-group') || host).classList.toggle('has-unsaved', changed); // the whole section (title included) is highlighted while the draft differs from what is saved
     };
     const paint = () => {
-      host.innerHTML = '<p class="field-help ai-questions-help">These are the questions the AI asks the candidate in the AI Interview, with one follow-up for each.</p><div class="ai-questions">' + list.map((text, index) => '<div class="ai-question-row' + (large ? ' is-large' : '') + '">' + (large ? '<span class="ai-question-number" aria-hidden="true">' + (index + 1) + '</span><textarea class="text-area ai-question-input" data-index="' + index + '" maxlength="300" rows="3" placeholder="' + placeholderFor(index) + '" aria-label="Interview question ' + (index + 1) + '">' + esc(text) + '</textarea>' : '<input class="text-input ai-question-input" data-index="' + index + '" maxlength="300" value="' + esc(text) + '" placeholder="' + placeholderFor(index) + '" aria-label="Interview question ' + (index + 1) + '">') + (options && options.generate ? '<button type="button" class="icon-btn ai-question-sparkles" data-index="' + index + '" aria-label="Write question ' + (index + 1) + ' with AI" title="Write this question with AI"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 6.5l1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1-5.1-1.9 5.1-1.9 1.9-5.1z"/><path d="M19 3v4M17 5h4"/></svg></button>' : '') + (list.length > (options && options.saveButtons ? 0 : 1) ? '<button type="button" class="icon-btn ai-question-remove" data-index="' + index + '" aria-label="Remove question ' + (index + 1) + '">×</button>' : '') + '</div>').join('') + '</div>' + (list.length < 5 ? '<button type="button" class="add-option" id="ai-question-add">＋ Add a question</button>' : '') + (draftMode ? '<div class="ai-questions-actions"><button type="button" class="btn btn-sm" id="ai-questions-revert">Revert</button><span class="ai-questions-status" id="ai-questions-status" role="status"></span><button type="button" class="btn btn-sm btn-primary ai-questions-save" id="ai-questions-save">Save questions</button></div>' : '');
+      const number = index => ({ number: index + 1 });
+      host.innerHTML = '<p class="field-help ai-questions-help">' + t('These are the questions the AI asks the candidate in the AI Interview, with one follow-up for each.') + '</p><div class="ai-questions">' + list.map((text, index) => '<div class="ai-question-row' + (large ? ' is-large' : '') + '">' + (large ? '<span class="ai-question-number" aria-hidden="true">' + (index + 1) + '</span><textarea class="text-area ai-question-input" data-index="' + index + '" maxlength="300" rows="3" placeholder="' + placeholderFor(index) + '" aria-label="' + t('Interview question {number}', number(index)) + '">' + esc(text) + '</textarea>' : '<input class="text-input ai-question-input" data-index="' + index + '" maxlength="300" value="' + esc(text) + '" placeholder="' + placeholderFor(index) + '" aria-label="' + t('Interview question {number}', number(index)) + '">') + (options && options.generate ? '<button type="button" class="icon-btn ai-question-sparkles" data-index="' + index + '" aria-label="' + t('Write question {number} with AI', number(index)) + '" title="' + t('Write this question with AI') + '"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 6.5l1.9 5.1 5.1 1.9-5.1 1.9-1.9 5.1-1.9-5.1-5.1-1.9 5.1-1.9 1.9-5.1z"/><path d="M19 3v4M17 5h4"/></svg></button>' : '') + (list.length > (options && options.saveButtons ? 0 : 1) ? '<button type="button" class="icon-btn ai-question-remove" data-index="' + index + '" aria-label="' + t('Remove question {number}', number(index)) + '">×</button>' : '') + '</div>').join('') + '</div>' + (list.length < 5 ? '<button type="button" class="add-option" id="ai-question-add">＋ ' + t('Add a question') + '</button>' : '') + (draftMode ? '<div class="ai-questions-actions"><button type="button" class="btn btn-sm" id="ai-questions-revert">' + t('Revert') + '</button><span class="ai-questions-status" id="ai-questions-status" role="status"></span><button type="button" class="btn btn-sm btn-primary ai-questions-save" id="ai-questions-save">' + t('Save questions') + '</button></div>' : '');
       const grow = box => { if (large && box && box.style) { box.style.height = 'auto'; box.style.height = Math.max(84, box.scrollHeight + 2) + 'px'; } };
       host.querySelectorAll('.ai-question-input').forEach(input => { grow(input); input.addEventListener('input', event => { list[Number(event.target.dataset.index)] = event.target.value; grow(event.target); if (draftMode) syncActions(); else setList(list.slice()); }); });
       host.querySelectorAll('.ai-question-remove').forEach(button => button.addEventListener('click', event => { list.splice(Number(event.currentTarget.dataset.index), 1); if (!draftMode) setList(list.slice()); paint(); }));
@@ -763,13 +764,13 @@
           const result = await options.generate(others);
           if (result && result.generated && index < list.length && host.isConnected) {
             list[index] = result.question; paint(); syncActions();
-            showToast('Question written. Review it, then save.');
-          } else if (result && result.reason === 'long') showToast('We couldn\u2019t write a question short enough. Try again.', 5000);
-          else if (result && result.reason === 'similar') showToast('We couldn\u2019t come up with a different question. Try again, or edit the existing ones.', 6000);
-          else if (!result || !result.generated) showToast('We couldn\u2019t generate a question from the job description. Add more detail about the role and try again.', 6500);
+            showToast(t('Question written. Review it, then save.'));
+          } else if (result && result.reason === 'long') showToast(t('We couldn’t write a question short enough. Try again.'), 5000);
+          else if (result && result.reason === 'similar') showToast(t('We couldn’t come up with a different question. Try again, or edit the existing ones.'), 6000);
+          else if (!result || !result.generated) showToast(t('We couldn’t generate a question from the job description. Add more detail about the role and try again.'), 6500);
         } catch (error) {
           const code = error && error.code;
-          showToast(code === 'premium_required' ? 'Writing questions with AI is part of the Premium plan.' : code === 'forbidden' ? 'You are not allowed to edit jobs in this workspace.' : code === 'signed_out' ? 'Your session expired. Sign in again.' : 'AI is unavailable right now. Try again in a moment.', 5000);
+          showToast(code === 'premium_required' ? t('Writing questions with AI is part of the Premium plan.') : code === 'forbidden' ? t('You are not allowed to edit jobs in this workspace.') : code === 'signed_out' ? t('Your session expired. Sign in again.') : t('AI is unavailable right now. Try again in a moment.'), 5000);
         } finally {
           if (button.isConnected) { button.disabled = false; button.classList.remove('is-working'); button.removeAttribute('aria-busy'); }
         }
@@ -780,7 +781,7 @@
           const kept = clean(list);
           const left = list.filter(item => String(item).trim()).length - kept.length;
           setList(kept); list = padded(kept); paint();
-          showToast(left > 0 ? 'Questions saved. Lines shorter than 3 characters were left out.' : 'Questions saved.');
+          showToast(left > 0 ? t('Questions saved. Lines shorter than 3 characters were left out.') : t('Questions saved.'));
         });
         host.querySelector('#ai-questions-revert')?.addEventListener('click', () => { list = padded(clean(getList() || [])); paint(); });
         syncActions();
@@ -818,14 +819,14 @@
     const trigger = host.querySelector('.multi-select-trigger'), menu = host.querySelector('.multi-select-menu');
     const summary = () => {
       const names = currentResponsibleIds(getIds()).map(id => people.find(person => person.userId === id)).filter(Boolean).map(person => personLabel(person));
-      if (!names.length) return 'All';
+      if (!names.length) return t('All');
       return names.length > 2 ? names[0] + ', ' + names[1] + ' +' + (names.length - 2) : names.join(', ');
     };
     const paintTrigger = () => { trigger.innerHTML = '<span class="multi-select-value">' + esc(summary()) + '</span><span class="multi-select-caret" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span>'; };
     const paintMenu = () => {
       const ids = currentResponsibleIds(getIds());
-      menu.innerHTML = '<label class="multi-select-option"><input type="checkbox" class="check" data-all-people ' + (ids.length ? '' : 'checked') + '><span>All</span></label>'
-        + people.map(person => '<label class="multi-select-option"><input type="checkbox" class="check" value="' + esc(person.userId) + '" ' + (ids.includes(person.userId) ? 'checked' : '') + '><span class="multi-select-person"><span class="multi-select-name">' + esc(personName(person) || person.email) + '</span>' + (personName(person) ? '<small class="multi-select-email">' + esc(person.email) + '</small>' : '') + '</span>' + (person.isOwner ? '<small>Owner</small>' : '') + '</label>').join('');
+      menu.innerHTML = '<label class="multi-select-option"><input type="checkbox" class="check" data-all-people ' + (ids.length ? '' : 'checked') + '><span>' + t('All') + '</span></label>'
+        + people.map(person => '<label class="multi-select-option"><input type="checkbox" class="check" value="' + esc(person.userId) + '" ' + (ids.includes(person.userId) ? 'checked' : '') + '><span class="multi-select-person"><span class="multi-select-name">' + esc(personName(person) || person.email) + '</span>' + (personName(person) ? '<small class="multi-select-email">' + esc(person.email) + '</small>' : '') + '</span>' + (person.isOwner ? '<small>' + t('Owner') + '</small>' : '') + '</label>').join('');
     };
     const setOpen = open => { menu.hidden = !open; trigger.setAttribute('aria-expanded', String(open)); if (open) paintMenu(); };
     trigger.addEventListener('click', () => setOpen(menu.hidden));
@@ -3798,7 +3799,7 @@
     if (lastEditorFlowId !== currentId) mobileEditorView = 'board'; // opening a job on a phone starts on the board
     lastEditorFlowId = currentId;
     if (flow.cloudId) setRoute(`flow=${flow.cloudId}`);
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body"><main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="btn btn-sm crumb-back" id="dashboard-back" type="button" aria-label="Back to the dashboard">← Back</button><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? 'Saved to workspace' : 'Not saved yet'}</span><button class="btn" id="preview-btn">▷ &nbsp;Preview as candidate</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? '<button class="btn" id="copy-job-url">Copy job link</button>' : ''}<button class="btn ${flow.publicationStatus === 'published' || !subscription?.active ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? 'Unpublish' : subscription?.active ? 'Publish' : 'Upgrade to publish'} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">Application journey <span class="canvas-hint"> · Drag background to pan, nodes to arrange, ports to connect</span></div><span></span></div><div class="canvas-zoom" id="canvas-zoom"><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="Flow connections"></svg><div id="nodes-layer"></div></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;Add a step</button><div class="canvas-zoom-controls" id="canvas-zoom-controls" role="group" aria-label="Zoom"><button type="button" class="zoom-btn" id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" class="zoom-level" id="zoom-reset" title="Back to 100%">100%</button><button type="button" class="zoom-btn" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button></div><div class="canvas-status" id="canvas-status"></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body"><main class="editor-main"><div class="editor-top"><div class="crumbs"><button class="btn btn-sm crumb-back" id="dashboard-back" type="button" aria-label="${t('Back to the dashboard')}">← ${t('Back')}</button><span class="crumb-title">${esc(flow.jobTitle)}</span></div><div class="editor-actions"><span class="save-indicator"><span class="status-dot"></span>${flow.cloudId ? t('Saved to workspace') : t('Not saved yet')}</span><button class="btn" id="preview-btn">▷ &nbsp;${t('Preview as candidate')}</button>${flow.publicationStatus === 'published' && flow.activePublishedFlowId ? `<button class="btn" id="copy-job-url">${t('Copy job link')}</button>` : ''}<button class="btn ${flow.publicationStatus === 'published' || !subscription?.active ? '' : 'btn-primary'}" id="publish-btn">${flow.publicationStatus === 'published' ? t('Unpublish') : subscription?.active ? t('Publish') : t('Upgrade to publish')} &nbsp;${flow.publicationStatus === 'published' ? '↘' : '↗'}</button></div></div><div class="editor-layout"><section class="workspace" id="workspace"><div class="canvas-toolbar"><div class="canvas-label">${t('Application journey')} <span class="canvas-hint"> · ${t('Drag background to pan, nodes to arrange, ports to connect')}</span></div><span></span></div><div class="canvas-zoom" id="canvas-zoom"><div class="canvas-stage" id="canvas-stage"><svg class="wires" id="wires" aria-label="${t('Flow connections')}"></svg><div id="nodes-layer"></div></div></div></section><aside class="inspector" id="inspector"></aside></div><button class="btn btn-primary canvas-add" id="add-node">＋ &nbsp;${t('Add a step')}</button><div class="canvas-zoom-controls" id="canvas-zoom-controls" role="group" aria-label="${t('Zoom')}"><button type="button" class="zoom-btn" id="zoom-out" aria-label="${t('Zoom out')}" title="${t('Zoom out')}">−</button><button type="button" class="zoom-level" id="zoom-reset" title="${t('Back to 100%')}">100%</button><button type="button" class="zoom-btn" id="zoom-in" aria-label="${t('Zoom in')}" title="${t('Zoom in')}">+</button></div><div class="canvas-status" id="canvas-status"></div></main></div></div>`;
     bindPlanControl();
     root.querySelector('.save-indicator')?.insertAdjacentHTML('afterend', '<div id="publish-changes-slot"></div>');
     updatePublicationNotice();
@@ -3878,8 +3879,10 @@
     workspace.addEventListener('lostpointercapture', endPan);
   }
 
+  // The fixed steps keep their English title in the saved job; the screen shows it in the interface language.
+  function nodeTitle(node) { return node.type === 'candidateInfo' || node.type === 'end' ? t(node.label) : node.label; }
   function typeInfo(node) {
-    return ({ candidateInfo: ['Candidate details', 'C'], shortText: ['Short answer', 'T'], singleChoice: ['Choose one', '◉'], multiChoice: ['Choose many', '☷'], end: ['End of journey', '✓'] })[node.type] || ['Step', '•'];
+    return ({ candidateInfo: [t('Candidate details'), 'C'], shortText: [t('Short answer'), 'T'], singleChoice: [t('Choose one'), '◉'], multiChoice: [t('Choose many'), '☷'], end: [t('End of journey'), '✓'] })[node.type] || [t('Step'), '•'];
   }
   function outgoingPorts(node) {
     if (node.type === 'end') return [];
@@ -3895,20 +3898,20 @@
       let detail = '';
       if (node.type === 'candidateInfo') {
         const enabled = C.OPTIONAL_FIELDS.filter(field => flow.candidateInfoFields[field.key]).length;
-        detail = `<div class="node-detail">Name · Email · Resume${enabled ? ` · +${enabled} more` : ''}</div>`;
+        detail = `<div class="node-detail">${t('Name · Email · Resume')}${enabled ? ' · ' + t('+{count} more', { count: enabled }) : ''}</div>`;
       } else if (node.type === 'singleChoice' || node.type === 'multiChoice') {
         const ports = outgoingPorts(node); detail = `<div class="node-rows">${ports.map(port => {
           const edge = flow.edges.find(item => item.fromNodeId === node.id && item.optionValue === port.optionValue);
           const target = edge && flow.nodes.find(item => item.id === edge.toNodeId);
-          return `<div class="node-option">${esc(port.label || 'Option')}${node.type === 'singleChoice' && (node.autoFailOptions || []).includes(port.optionValue) ? '<span class="node-autofail" title="Auto-fail">Auto-fail</span>' : ''}<span class="node-detail" style="margin-left:auto;margin-right:5px;font-size:8px">${target ? esc(target.label.slice(0, 16)) : 'Connect'}</span><span class="port" data-from="${esc(node.id)}" data-option="${esc(port.optionValue)}" title="Drag to branch: ${esc(port.label)}"></span></div>`;
-        }).join('')}</div>${node.type === 'multiChoice' && (node.autoFailOptions || []).length ? `<div class="node-detail">${node.autoFailOptions.length} auto-fail ${node.autoFailOptions.length === 1 ? 'option' : 'options'}</div>` : ''}`;
+          return `<div class="node-option">${esc(port.label || t('Option'))}${node.type === 'singleChoice' && (node.autoFailOptions || []).includes(port.optionValue) ? `<span class="node-autofail" title="${t('Auto-fail')}">${t('Auto-fail')}</span>` : ''}<span class="node-detail" style="margin-left:auto;margin-right:5px;font-size:8px">${target ? esc(nodeTitle(target).slice(0, 16)) : t('Connect')}</span><span class="port" data-from="${esc(node.id)}" data-option="${esc(port.optionValue)}" title="${t('Drag to branch: {option}', { option: esc(port.label) })}"></span></div>`;
+        }).join('')}</div>${node.type === 'multiChoice' && (node.autoFailOptions || []).length ? `<div class="node-detail">${tn('{count} auto-fail option', '{count} auto-fail options', node.autoFailOptions.length)}</div>` : ''}`;
       } else if (node.type === 'end') {
-        detail = '<div class="node-detail">Application confirmation</div>';
+        detail = `<div class="node-detail">${t('Application confirmation')}</div>`;
       } else {
         const edge = flow.edges.find(item => item.fromNodeId === node.id); const target = edge && flow.nodes.find(item => item.id === edge.toNodeId);
-        detail = `<div class="node-detail">${node.type === 'shortText' ? (node.numericOnly ? 'Number response' + (Number.isInteger(node.autoFailBelow) ? ' · auto-fail below ' + node.autoFailBelow : '') : 'Open-ended response') : `${(node.options || []).length} choices`}${target ? ` · → ${esc(target.label.slice(0, 19))}` : ' · Not connected'}</div>`;
+        detail = `<div class="node-detail">${node.type === 'shortText' ? (node.numericOnly ? t('Number response') + (Number.isInteger(node.autoFailBelow) ? ' · ' + t('auto-fail below {number}', { number: node.autoFailBelow }) : '') : t('Open-ended response')) : tn('{count} choice', '{count} choices', (node.options || []).length)}${target ? ` · → ${esc(nodeTitle(target).slice(0, 19))}` : ' · ' + t('Not connected')}</div>`;
       }
-      return `<article class="${nodeClass}" data-node="${esc(node.id)}" style="left:${Math.max(24, node.x)}px;top:${Math.max(24, node.y)}px">${node.type === 'candidateInfo' ? '' : `<span class="target-port" data-target="${esc(node.id)}" title="Drop a connection here"></span>`}<header class="node-head" data-drag-handle="${esc(node.id)}"><span class="type-icon">${icon}</span><span class="node-type">${title}</span>${node.type === 'candidateInfo' ? '<span class="node-badge">Fixed</span>' : node.type !== 'end' ? `<button class="node-remove" data-delete="${esc(node.id)}" aria-label="Delete step">×</button>` : '<span class="node-badge">Finish</span>'}</header><div class="node-body"><div class="node-title">${esc(node.label)}</div>${detail}${node.type !== 'singleChoice' && node.type !== 'multiChoice' && node.type !== 'end' ? `<div class="node-ports"><span class="port" data-from="${esc(node.id)}" data-option="" title="Drag to connect"></span></div>` : ''}</div></article>`;
+      return `<article class="${nodeClass}" data-node="${esc(node.id)}" style="left:${Math.max(24, node.x)}px;top:${Math.max(24, node.y)}px">${node.type === 'candidateInfo' ? '' : `<span class="target-port" data-target="${esc(node.id)}" title="${t('Drop a connection here')}"></span>`}<header class="node-head" data-drag-handle="${esc(node.id)}"><span class="type-icon">${icon}</span><span class="node-type">${title}</span>${node.type === 'candidateInfo' ? `<span class="node-badge">${t('Fixed')}</span>` : node.type !== 'end' ? `<button class="node-remove" data-delete="${esc(node.id)}" aria-label="${t('Delete step')}">×</button>` : `<span class="node-badge">${t('Finish')}</span>`}</header><div class="node-body"><div class="node-title">${esc(nodeTitle(node))}</div>${detail}${node.type !== 'singleChoice' && node.type !== 'multiChoice' && node.type !== 'end' ? `<div class="node-ports"><span class="port" data-from="${esc(node.id)}" data-option="" title="${t('Drag to connect')}"></span></div>` : ''}</div></article>`;
     }).join('');
     layer.querySelectorAll('.node').forEach(element => {
       element.addEventListener('click', event => {
@@ -3937,11 +3940,11 @@
       if (!source || !target) return;
       const a = center(source, stage); const b = center(target, stage);
       const bend = Math.max(42, (b.x - a.x) * .46); const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}`); path.setAttribute('class', 'edge-path'); path.setAttribute('data-edge', edge.id); path.setAttribute('aria-label', `${edge.optionValue ? `${edge.optionValue}: ` : ''}connection`);
+      path.setAttribute('d', `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}`); path.setAttribute('class', 'edge-path'); path.setAttribute('data-edge', edge.id); path.setAttribute('aria-label', `${edge.optionValue ? `${edge.optionValue}: ` : ''}${t('connection')}`);
       svg.appendChild(path);
       // The visible line is thin; a wide invisible copy on top of it is what the mouse hits, so a connection is easy to point at and remove.
       const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path'); hit.setAttribute('d', path.getAttribute('d')); hit.setAttribute('class', 'edge-hit'); hit.setAttribute('data-edge', edge.id);
-      const hint = document.createElementNS('http://www.w3.org/2000/svg', 'title'); hint.textContent = 'Click to remove · drag onto another step to move it'; hit.appendChild(hint);
+      const hint = document.createElementNS('http://www.w3.org/2000/svg', 'title'); hint.textContent = t('Click to remove · drag onto another step to move it'); hit.appendChild(hint);
       hit.addEventListener('pointerenter', () => path.classList.add('is-hover')); hit.addEventListener('pointerleave', () => path.classList.remove('is-hover'));
       // Press on a line: a click removes it, dragging it onto another step moves its end there.
       hit.addEventListener('pointerdown', event => startEdgeGesture(event, edge)); svg.appendChild(hit);
@@ -3953,8 +3956,8 @@
   }
   let reconnectingEdgeId = null;
   function removeEdge(flow, edge) {
-    if (flow.nodes.find(node => node.id === edge.fromNodeId)?.type === 'candidateInfo') { showToast('The candidate-details step must always connect to the journey.'); return; }
-    flow.edges = flow.edges.filter(item => item.id !== edge.id); save(); drawCanvas(); drawInspector(); showToast('Connection removed.');
+    if (flow.nodes.find(node => node.id === edge.fromNodeId)?.type === 'candidateInfo') { showToast(t('The candidate-details step must always connect to the journey.')); return; }
+    flow.edges = flow.edges.filter(item => item.id !== edge.id); save(); drawCanvas(); drawInspector(); showToast(t('Connection removed.'));
   }
   function startEdgeGesture(event, edge) {
     if (event.button !== 0) return;
@@ -3976,7 +3979,7 @@
       const target = flow.nodes.find(node => node.id === targetId);
       connectFrom = null; window.pendingPointer = null; reconnectingEdgeId = null;
       if (target && target.id !== edge.fromNodeId && target.type !== 'candidateInfo' && target.id !== edge.toNodeId) {
-        edge.toNodeId = target.id; save(); drawCanvas(); drawInspector(); showToast('Connection moved.');
+        edge.toNodeId = target.id; save(); drawCanvas(); drawInspector(); showToast(t('Connection moved.'));
       } else drawCanvas();
     };
     const onUp = up => finish(up, false);
@@ -4019,7 +4022,7 @@
   function finishConnect(event, targetId) {
     if (!connectFrom || !targetId) return;
     event.stopPropagation(); const flow = currentFlow(); const source = flow.nodes.find(node => node.id === connectFrom.id); const target = flow.nodes.find(node => node.id === targetId);
-    if (!source || !target || source.id === target.id || target.type === 'candidateInfo') { connectFrom = null; window.pendingPointer = null; drawCanvas(); showToast('Choose a different destination.'); return; }
+    if (!source || !target || source.id === target.id || target.type === 'candidateInfo') { connectFrom = null; window.pendingPointer = null; drawCanvas(); showToast(t('Choose a different destination.')); return; }
     const optionValue = source.type === 'singleChoice' ? connectFrom.optionValue : null;
     flow.edges = flow.edges.filter(edge => !(edge.fromNodeId === source.id && (source.type !== 'singleChoice' || edge.optionValue === optionValue)));
     flow.edges.push({ id: C.uid('edge'), fromNodeId: source.id, toNodeId: target.id, ...(source.type === 'singleChoice' ? { optionValue } : {}) });
@@ -4028,7 +4031,7 @@
 
   // Job description in a larger window (desktop only: the button is hidden on phones). It edits the SAME text: every key updates the job like the small field does.
   function openJobDescriptionEditor(initial, onChange) {
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Job details</div><h2>Job description</h2></div><button class="modal-x" data-close aria-label="Close">×</button></div><div id="job-description-modal"><textarea class="text-area job-description-large" id="job-description-large" aria-label="Job description">${esc(initial)}</textarea></div><div class="modal-actions"><button class="btn btn-primary" data-close type="button">Done</button></div>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Job details')}</div><h2>${t('Job description')}</h2></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div id="job-description-modal"><textarea class="text-area job-description-large" id="job-description-large" aria-label="${t('Job description')}">${esc(initial)}</textarea></div><div class="modal-actions"><button class="btn btn-primary" data-close type="button">${t('Done')}</button></div>`);
     const area = modalRoot.querySelector('#job-description-large');
     if (!area) return;
     area.addEventListener('input', event => onChange(event.target.value));
@@ -4039,7 +4042,7 @@
   // The AI interview questions in a larger window (desktop only), with everything the field in the panel does: write with AI, add, remove, Revert and
   // Save questions. It starts from the draft in the panel; what is still unsaved when it closes goes back to the panel, so nothing typed here is lost.
   function openInterviewQuestionsEditor(panelField, getList, setList, options) {
-    setModal('<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Job details</div><h2>AI interview questions</h2></div><button class="modal-x" data-close aria-label="Close">×</button></div><div id="ai-questions-modal"><div id="ai-questions-modal-field"></div></div><div class="modal-actions"><button class="btn btn-primary" data-close type="button">Close</button></div>');
+    setModal('<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">' + t('Job details') + '</div><h2>' + t('AI interview questions') + '</h2></div><button class="modal-x" data-close aria-label="' + t('Close') + '">×</button></div><div id="ai-questions-modal"><div id="ai-questions-modal-field"></div></div><div class="modal-actions"><button class="btn btn-primary" data-close type="button">' + t('Close') + '</button></div>');
     const host = modalRoot.querySelector('#ai-questions-modal-field');
     if (!host) return;
     const bigField = mountInterviewQuestionsField(host, getList, setList, { ...options, large: true, initialDraft: panelField ? panelField.getDraft() : null });
@@ -4053,14 +4056,14 @@
     const selected = flow.nodes.find(node => node.id === selectedId) || flow.nodes[0];
     const [title] = typeInfo(selected);
     const roleSettings = selected.type === 'candidateInfo'
-      ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><div class="field-label-row"><label for="role-description">Job description</label><button type="button" class="icon-btn expand-btn" id="expand-description" aria-label="Open the job description in a larger window" title="Larger window"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">Responsible</span><div id="role-responsible"></div></div><hr class="inspector-divider">`
+      ? `<div class="inspector-title"><div><div class="inspector-kicker">${t('Flow settings')}</div><h2>${t('Job details')}</h2></div></div><div class="field-group"><label for="role-company-profile">${t('Company')}</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">${t('Job title')}</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><div class="field-label-row"><label for="role-description">${t('Job description')}</label><button type="button" class="icon-btn expand-btn" id="expand-description" aria-label="${t('Open the job description in a larger window')}" title="${t('Larger window')}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">${t('Responsible')}</span><div id="role-responsible"></div></div><hr class="inspector-divider">`
       : '';
     // The AI interview questions are part of the job details but come LAST, below the candidate-details step.
-    const aiSection = selected.type === 'candidateInfo' ? '<hr class="inspector-divider"><div class="field-group" id="role-language-group"><label class="form-label" for="role-interview-language">' + t('Job language') + '</label><select class="select-input" id="role-interview-language"></select><small class="field-help" id="role-language-help"></small></div><div class="field-group"><div class="field-label-row"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><button type="button" class="icon-btn expand-btn" id="expand-ai-questions" aria-label="Open the AI interview questions in a larger window" title="Larger window"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div><div id="role-ai-questions"></div></div>' : '';
-    panel.innerHTML = `<div class="mobile-details-bar"><button type="button" class="btn btn-sm" id="close-node-details">← Back to board</button></div>${roleSettings}<div class="inspector-title"><div><div class="inspector-kicker">Selected step</div><h2>${esc(title)}</h2></div>${selected.type === 'candidateInfo' ? '<span class="node-badge">Fixed start</span>' : ''}</div><div id="node-editor"></div>${aiSection}`;
+    const aiSection = selected.type === 'candidateInfo' ? '<hr class="inspector-divider"><div class="field-group" id="role-language-group"><label class="form-label" for="role-interview-language">' + t('Job language') + '</label><select class="select-input" id="role-interview-language"></select><small class="field-help" id="role-language-help"></small></div><div class="field-group"><div class="field-label-row"><span class="form-label" id="role-ai-questions-label">' + t('AI interview questions') + '</span><button type="button" class="icon-btn expand-btn" id="expand-ai-questions" aria-label="' + t('Open the AI interview questions in a larger window') + '" title="' + t('Larger window') + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div><div id="role-ai-questions"></div></div>' : '';
+    panel.innerHTML = `<div class="mobile-details-bar"><button type="button" class="btn btn-sm" id="close-node-details">← ${t('Back to board')}</button></div>${roleSettings}<div class="inspector-title"><div><div class="inspector-kicker">${t('Selected step')}</div><h2>${esc(title)}</h2></div>${selected.type === 'candidateInfo' ? `<span class="node-badge">${t('Fixed start')}</span>` : ''}</div><div id="node-editor"></div>${aiSection}`;
     panel.querySelector('#close-node-details')?.addEventListener('click', closeNodeDetailsOnPhone);
     let refreshLanguage = () => {}; // set below, once the language field exists; the larger description window calls it too
-    const syncRole = (key, value) => { flow[key] = value; const crumb = document.querySelector('.crumb-title'); if (crumb && key === 'jobTitle') crumb.textContent = value || 'Untitled role'; save(); };
+    const syncRole = (key, value) => { flow[key] = value; const crumb = document.querySelector('.crumb-title'); if (crumb && key === 'jobTitle') crumb.textContent = value || t('Untitled role'); save(); };
     panel.querySelector('#role-company-profile')?.addEventListener('change', event => { const company = companies.find(item => item.id === event.target.value) || null; flow.companyId = company?.id || null; flow.companyProfile = companySnapshot(company); flow.companyName = company?.name || workspace.name; save(); });
     panel.querySelector('#role-title')?.addEventListener('input', event => syncRole('jobTitle', event.target.value));
     panel.querySelector('#role-description')?.addEventListener('input', event => syncRole('jobDescription', event.target.value));
@@ -4078,13 +4081,13 @@
     refreshLanguage = mountInterviewLanguageField(panel, flow, save);
     const editor = panel.querySelector('#node-editor');
     if (selected.type === 'candidateInfo') {
-      editor.innerHTML = `<div class="inspector-note">This is the fixed first step. Name, email, and resume are always included. Every detail you tick is required: candidates must fill it in to continue (where a list offers “Prefer not to say”, that counts as an answer).</div><div class="section-small">Always included</div>${[['name', 'Full name'], ['email', 'Email address'], ['resume', 'Resume link']].map(([key, label]) => `<label class="locked-field"><input type="checkbox" class="check" checked disabled><span>${label}</span><small>Required</small></label>`).join('')}<div class="section-small">Optional details</div>${C.OPTIONAL_FIELDS.map(field => `<label class="toggle-field"><span>${esc(field.label)}${field.hint ? `<small>${esc(field.hint)}</small>` : ''}</span><input type="checkbox" class="check optional-field" data-field="${esc(field.key)}" ${flow.candidateInfoFields[field.key] ? 'checked' : ''}></label>`).join('')}<p class="connection-help">The selected details appear directly on the public job application page.</p>`;
+      editor.innerHTML = `<div class="inspector-note">${t('This is the fixed first step. Name, email, and resume are always included. Every detail you tick is required: candidates must fill it in to continue (where a list offers “Prefer not to say”, that counts as an answer).')}</div><div class="section-small">${t('Always included')}</div>${[['name', t('Full name')], ['email', t('Email address')], ['resume', t('Resume link')]].map(([key, label]) => `<label class="locked-field"><input type="checkbox" class="check" checked disabled><span>${label}</span><small>${t('Required')}</small></label>`).join('')}<div class="section-small">${t('Optional details')}</div>${C.OPTIONAL_FIELDS.map(field => `<label class="toggle-field"><span>${esc(t(field.label))}${field.hint ? `<small>${esc(t(field.hint))}</small>` : ''}</span><input type="checkbox" class="check optional-field" data-field="${esc(field.key)}" ${flow.candidateInfoFields[field.key] ? 'checked' : ''}></label>`).join('')}<p class="connection-help">${t('The selected details appear directly on the public job application page.')}</p>`;
       editor.querySelectorAll('.optional-field').forEach(input => input.addEventListener('change', event => { flow.candidateInfoFields[event.target.dataset.field] = event.target.checked; save(); drawCanvas(); }));
     } else if (selected.type === 'end') {
-      editor.innerHTML = `<div class="field-group"><label for="end-title">Completion title</label><input class="text-input locked-input" id="end-title" value="${esc(C.END_LABEL)}" disabled readonly aria-describedby="end-title-help"><small class="field-help" id="end-title-help">Fixed text. Every candidate sees the standard confirmation screen.</small></div><div class="inspector-note">This is the last step of the journey. Candidates who reach it are saved in New, unless an Auto-fail answer on the way sends them to Failed. You can create more than one ending.</div><button class="btn btn-sm btn-danger" id="remove-step" style="margin-top:14px">Delete end step</button>`;
+      editor.innerHTML = `<div class="field-group"><label for="end-title">${t('Completion title')}</label><input class="text-input locked-input" id="end-title" value="${esc(t(C.END_LABEL))}" disabled readonly aria-describedby="end-title-help"><small class="field-help" id="end-title-help">${t('Fixed text. Every candidate sees the standard confirmation screen.')}</small></div><div class="inspector-note">${t('This is the last step of the journey. Candidates who reach it are saved in New, unless an Auto-fail answer on the way sends them to Failed. You can create more than one ending.')}</div><button class="btn btn-sm btn-danger" id="remove-step" style="margin-top:14px">${t('Delete end step')}</button>`;
       editor.querySelector('#remove-step').addEventListener('click', () => deleteNode(selected.id));
     } else {
-      editor.innerHTML = `<div class="field-group"><label for="node-label">Question</label><textarea class="text-area" id="node-label" style="min-height:76px">${esc(selected.label)}</textarea></div>${selected.type === 'shortText' ? `<label class="numeric-only-toggle"><span>Numbers only</span><span class="numeric-only-switch"><input id="numeric-only" type="checkbox" role="switch" ${selected.numericOnly ? 'checked' : ''}><span class="numeric-only-track" aria-hidden="true"></span></span></label>` : ''}${selected.type === 'singleChoice' || selected.type === 'multiChoice' ? `<div class="section-small">Answer options</div><div id="options-editor">${selected.options.map((option, index) => `<div class="option-edit has-autofail"><input class="text-input option-value" data-index="${index}" value="${esc(option)}" aria-label="Answer option ${index + 1}"><label class="option-autofail" title="Candidates who give this answer still finish the questions, then land in Failed."><input type="checkbox" class="check option-autofail-check" data-index="${index}" ${(selected.autoFailOptions || []).includes(option) ? 'checked' : ''}><span>Auto-fail</span></label><button class="icon-btn delete-option" data-index="${index}" aria-label="Remove option">×</button></div>`).join('')}</div><button class="add-option" id="add-option">＋ Add an option</button><p class="connection-help autofail-help">Auto-fail: candidates who give that answer still finish all the questions, then land in Failed. The option does not need to connect to an ending.</p>` : ''}${selected.type === 'shortText' && selected.numericOnly ? `<div class="field-group autofail-below"><label for="autofail-below">Auto-fail if below</label><input class="text-input" id="autofail-below" type="number" inputmode="numeric" min="0" step="1" placeholder="e.g. 4" value="${selected.autoFailBelow ?? ''}"><p class="connection-help">Candidates who enter a smaller number still finish the questions, then land in Failed.</p></div>` : ''}<div class="inspector-note">${selected.type === 'singleChoice' ? 'Each option needs its own connection. Drag a port from an answer row to the step that should follow it.' : selected.type === 'multiChoice' ? 'Candidates can select multiple answers. Connect this question to one next step.' : selected.numericOnly ? 'Candidates must enter a number. Connect this question to its next step.' : 'Candidates can enter a free-text answer. Connect this question to its next step.'}</div><button class="btn btn-sm btn-danger" id="remove-step" style="margin-top:14px">Delete step</button>`;
+      editor.innerHTML = `<div class="field-group"><label for="node-label">${t('Question')}</label><textarea class="text-area" id="node-label" style="min-height:76px">${esc(selected.label)}</textarea></div>${selected.type === 'shortText' ? `<label class="numeric-only-toggle"><span>${t('Numbers only')}</span><span class="numeric-only-switch"><input id="numeric-only" type="checkbox" role="switch" ${selected.numericOnly ? 'checked' : ''}><span class="numeric-only-track" aria-hidden="true"></span></span></label>` : ''}${selected.type === 'singleChoice' || selected.type === 'multiChoice' ? `<div class="section-small">${t('Answer options')}</div><div id="options-editor">${selected.options.map((option, index) => `<div class="option-edit has-autofail"><input class="text-input option-value" data-index="${index}" value="${esc(option)}" aria-label="${t('Answer option {number}', { number: index + 1 })}"><label class="option-autofail" title="${t('Candidates who give this answer still finish the questions, then land in Failed.')}"><input type="checkbox" class="check option-autofail-check" data-index="${index}" ${(selected.autoFailOptions || []).includes(option) ? 'checked' : ''}><span>${t('Auto-fail')}</span></label><button class="icon-btn delete-option" data-index="${index}" aria-label="${t('Remove option')}">×</button></div>`).join('')}</div><button class="add-option" id="add-option">＋ ${t('Add an option')}</button><p class="connection-help autofail-help">${t('Auto-fail: candidates who give that answer still finish all the questions, then land in Failed. The option does not need to connect to an ending.')}</p>` : ''}${selected.type === 'shortText' && selected.numericOnly ? `<div class="field-group autofail-below"><label for="autofail-below">${t('Auto-fail if below')}</label><input class="text-input" id="autofail-below" type="number" inputmode="numeric" min="0" step="1" placeholder="${t('e.g. 4')}" value="${selected.autoFailBelow ?? ''}"><p class="connection-help">${t('Candidates who enter a smaller number still finish the questions, then land in Failed.')}</p></div>` : ''}<div class="inspector-note">${selected.type === 'singleChoice' ? t('Each option needs its own connection. Drag a port from an answer row to the step that should follow it.') : selected.type === 'multiChoice' ? t('Candidates can select multiple answers. Connect this question to one next step.') : selected.numericOnly ? t('Candidates must enter a number. Connect this question to its next step.') : t('Candidates can enter a free-text answer. Connect this question to its next step.')}</div><button class="btn btn-sm btn-danger" id="remove-step" style="margin-top:14px">${t('Delete step')}</button>`;
       editor.querySelector('#node-label').addEventListener('input', event => { selected.label = event.target.value; save(); updateNodeLabel(selected); });
       const numericToggle = editor.querySelector('#numeric-only');
       numericToggle?.addEventListener('change', event => { selected.numericOnly = event.target.checked; if (!selected.numericOnly) delete selected.autoFailBelow; save(); drawCanvas(); drawInspector(); });
@@ -4102,28 +4105,28 @@
       }));
       editor.querySelectorAll('.option-value').forEach(input => input.addEventListener('change', event => changeOption(selected, Number(event.target.dataset.index), event.target.value)));
       editor.querySelectorAll('.delete-option').forEach(button => button.addEventListener('click', () => removeOption(selected, Number(button.dataset.index))));
-      const addOption = editor.querySelector('#add-option'); if (addOption) addOption.addEventListener('click', () => { selected.options.push(`Option ${selected.options.length + 1}`); save(); drawCanvas(); drawInspector(); });
+      const addOption = editor.querySelector('#add-option'); if (addOption) addOption.addEventListener('click', () => { selected.options.push(t('Option {number}', { number: selected.options.length + 1 })); save(); drawCanvas(); drawInspector(); });
       editor.querySelector('#remove-step').addEventListener('click', () => deleteNode(selected.id));
     }
   }
   function updateNodeLabel(node) { const element = document.querySelector(`.node[data-node="${CSS.escape(node.id)}"] .node-title`); if (element) element.textContent = node.label; }
   function changeOption(node, index, rawValue) {
-    const value = rawValue.trim() || `Option ${index + 1}`; const old = node.options[index];
-    if (node.options.some((option, i) => i !== index && option.toLowerCase() === value.toLowerCase())) { showToast('Each answer option needs a unique label.'); drawInspector(); return; }
+    const value = rawValue.trim() || t('Option {number}', { number: index + 1 }); const old = node.options[index];
+    if (node.options.some((option, i) => i !== index && option.toLowerCase() === value.toLowerCase())) { showToast(t('Each answer option needs a unique label.')); drawInspector(); return; }
     node.options[index] = value;
     if (Array.isArray(node.autoFailOptions)) node.autoFailOptions = node.autoFailOptions.map(option => option === old ? value : option);
     currentFlow().edges.forEach(edge => { if (edge.fromNodeId === node.id && edge.optionValue === old) edge.optionValue = value; });
     save(); drawCanvas(); drawInspector();
   }
   function removeOption(node, index) {
-    if (node.options.length <= 2) { showToast('Keep at least two answer options.'); return; }
+    if (node.options.length <= 2) { showToast(t('Keep at least two answer options.')); return; }
     const [removed] = node.options.splice(index, 1);
     if (Array.isArray(node.autoFailOptions)) { node.autoFailOptions = node.autoFailOptions.filter(option => option !== removed); if (!node.autoFailOptions.length) delete node.autoFailOptions; }
     currentFlow().edges = currentFlow().edges.filter(edge => !(edge.fromNodeId === node.id && edge.optionValue === removed)); save(); drawCanvas(); drawInspector();
   }
 
   function showNodePicker() {
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Build your journey</div><h2>Add a step</h2><p>Pick the kind of answer you need from candidates.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="type-picker"><button class="type-choice" data-type="shortText"><strong>Short answer</strong><span>An open-ended written response.</span></button><button class="type-choice" data-type="singleChoice"><strong>Choose one</strong><span>Route each answer down its own path.</span></button><button class="type-choice" data-type="multiChoice"><strong>Choose many</strong><span>Let candidates select all that apply.</span></button><button class="type-choice" data-type="end"><strong>Ending</strong><span>Show a final message and finish the flow.</span></button></div><div class="modal-actions"><button class="btn" data-close>Cancel</button></div>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Build your journey')}</div><h2>${t('Add a step')}</h2><p>${t('Pick the kind of answer you need from candidates.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="type-picker"><button class="type-choice" data-type="shortText"><strong>${t('Short answer')}</strong><span>${t('An open-ended written response.')}</span></button><button class="type-choice" data-type="singleChoice"><strong>${t('Choose one')}</strong><span>${t('Route each answer down its own path.')}</span></button><button class="type-choice" data-type="multiChoice"><strong>${t('Choose many')}</strong><span>${t('Let candidates select all that apply.')}</span></button><button class="type-choice" data-type="end"><strong>${t('Ending')}</strong><span>${t('Show a final message and finish the flow.')}</span></button></div><div class="modal-actions"><button class="btn" data-close>${t('Cancel')}</button></div>`);
     modalRoot.querySelectorAll('.type-choice').forEach(button => button.addEventListener('click', () => { addNode(button.dataset.type); closeModal(); }));
   }
   // A new step appears loose, in the part of the canvas the person is looking at; nothing is reconnected, they decide where it goes.
@@ -4142,7 +4145,7 @@
   }
   function deleteNode(id) {
     const flow = currentFlow(); const doomed = flow.nodes.find(node => node.id === id); if (!doomed || doomed.type === 'candidateInfo') return;
-    if (doomed.type === 'end' && flow.nodes.filter(node => node.type === 'end').length === 1) { showToast('Keep at least one ending in the journey.'); return; }
+    if (doomed.type === 'end' && flow.nodes.filter(node => node.type === 'end').length === 1) { showToast(t('Keep at least one ending in the journey.')); return; }
     const snapshot = JSON.parse(JSON.stringify({ nodes: flow.nodes, edges: flow.edges })); const selectedBefore = selectedId;
     const incoming = flow.edges.filter(edge => edge.toNodeId === id);
     const outgoing = flow.edges.filter(edge => edge.fromNodeId === id);
@@ -4172,18 +4175,18 @@
   async function copyFlowUrl(flow, closeOnSuccess = false) {
     let link;
     try { link = window.PathwayBackend.getPublishedJobUrl(flow); }
-    catch (error) { showToast(error.message || 'This flow has no active public link.'); return; }
+    catch (error) { showToast(t(error.message || 'This flow has no active public link.')); return; }
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard access is unavailable.');
       await navigator.clipboard.writeText(link);
       if (closeOnSuccess) closeModal();
-      showToast('Public job link copied.');
+      showToast(t('Public job link copied.'));
     } catch (_) {
-      setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Public job link</div><h2>Copy this link to share the role.</h2><p>This URL opens the published candidate experience.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><input class="text-input" id="job-link-fallback" aria-label="Public job link" readonly value="${esc(link)}"><div class="modal-actions"><button class="btn btn-primary" id="copy-job-link-fallback">Copy job link</button></div>`);
+      setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Public job link')}</div><h2>${t('Copy this link to share the role.')}</h2><p>${t('This URL opens the published candidate experience.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><input class="text-input" id="job-link-fallback" aria-label="${t('Public job link')}" readonly value="${esc(link)}"><div class="modal-actions"><button class="btn btn-primary" id="copy-job-link-fallback">${t('Copy job link')}</button></div>`);
       const input = modalRoot.querySelector('#job-link-fallback'); input.focus(); input.select();
       modalRoot.querySelector('#copy-job-link-fallback').addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(link); closeModal(); showToast('Public job link copied.'); }
-        catch (_) { input.focus(); input.select(); showToast('Link selected. Copy it to your clipboard.'); }
+        try { await navigator.clipboard.writeText(link); closeModal(); showToast(t('Public job link copied.')); }
+        catch (_) { input.focus(); input.select(); showToast(t('Link selected. Copy it to your clipboard.')); }
       });
     }
   }
@@ -4192,14 +4195,14 @@
     const flow = currentFlow();
     const button = root.querySelector('#publish-btn');
     if (!flow || !button) return;
-    button.disabled = true; button.textContent = 'Unpublishing…';
+    button.disabled = true; button.textContent = t('Unpublishing…');
     try {
       await window.PathwayBackend.unpublishFlow(flow, workspace);
       renderEditor();
-      showToast('Flow returned to draft. Existing public links are now inactive.');
+      showToast(t('Flow returned to draft. Existing public links are now inactive.'));
     } catch (error) {
-      button.disabled = false; button.textContent = 'Unpublish ↘';
-      showToast(error.message || 'This flow could not be unpublished.');
+      button.disabled = false; button.textContent = t('Unpublish') + ' ↘';
+      showToast(error.message || t('This flow could not be unpublished.'));
     }
   }
 
@@ -4209,17 +4212,18 @@
     C.lockEndSteps(flow);
     try { C.normalizeFlow(flow); }
     catch (error) {
-      setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Before you publish</div><h2>Your journey needs one more pass.</h2><p>${esc(error.message)}</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn btn-primary" data-close>Back to the builder</button></div>`); return;
+      // The checks of pathway.js write English sentences; the known ones are translated here.
+      setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Before you publish')}</div><h2>${t('Your journey needs one more pass.')}</h2><p>${esc(t(error.message))}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="modal-actions"><button class="btn btn-primary" data-close>${t('Back to the builder')}</button></div>`); return;
     }
     const publishButton = root.querySelector('#publish-btn');
-    if (publishButton) { publishButton.disabled = true; publishButton.textContent = 'Publishing…'; }
+    if (publishButton) { publishButton.disabled = true; publishButton.textContent = t('Publishing…'); }
     let link;
     try { const token = await window.PathwayBackend.publishFlow(flow, workspace); renderEditor(); const url = new URL('apply.html', window.location.href); url.hash = `id=${encodeURIComponent(token)}`; link = url.href; }
-    catch (error) { if (publishButton) { publishButton.disabled = false; publishButton.textContent = 'Publish ↗'; } showToast(error.message || 'This application could not be published.'); return; }
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Published snapshot</div><h2>Your job page is ready to share.</h2><p>Candidates see the currently published version. Use Publish changes to update this same job link after editing.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="publish-link" id="share-url">${esc(link)}</div><div class="modal-actions"><button class="btn" id="open-link">Open candidate page</button><button class="btn btn-primary" id="copy-link">${ICONS.copy} &nbsp;Copy link</button></div>`);
+    catch (error) { if (publishButton) { publishButton.disabled = false; publishButton.textContent = t('Publish') + ' ↗'; } showToast(error.message || t('This application could not be published.')); return; }
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Published snapshot')}</div><h2>${t('Your job page is ready to share.')}</h2><p>${t('Candidates see the currently published version. Use Publish changes to update this same job link after editing.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="publish-link" id="share-url">${esc(link)}</div><div class="modal-actions"><button class="btn" id="open-link">${t('Open candidate page')}</button><button class="btn btn-primary" id="copy-link">${ICONS.copy} &nbsp;${t('Copy link')}</button></div>`);
     modalRoot.querySelector('#copy-link').addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(link); showToast('Application link copied.'); closeModal(); }
-      catch (_) { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(modalRoot.querySelector('#share-url')); selection.removeAllRanges(); selection.addRange(range); showToast('Select and copy the highlighted link.'); }
+      try { await navigator.clipboard.writeText(link); showToast(t('Application link copied.')); closeModal(); }
+      catch (_) { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(modalRoot.querySelector('#share-url')); selection.removeAllRanges(); selection.addRange(range); showToast(t('Select and copy the highlighted link.')); }
     });
     modalRoot.querySelector('#open-link').addEventListener('click', () => window.open(link, '_blank', 'noopener'));
   }
@@ -4229,19 +4233,19 @@
     if (!flow || !event?.currentTarget || publishingFlows.has(flow)) return;
     C.lockEndSteps(flow);
     try { C.normalizeFlow(flow); }
-    catch (error) { showToast(error.message || 'This flow needs a fix before it can be published.'); return; }
+    catch (error) { showToast(t(error.message || 'This flow needs a fix before it can be published.')); return; }
     const editRevision = flowEditRevisions.get(flow) || 0;
     publishingFlows.add(flow); publishingCount += 1;
     clearTimeout(cloudSaveTimer);
     clearTimeout(saveTimer);
     updatePublicationNotice();
     const indicator = root.querySelector('.save-indicator');
-    if (indicator) indicator.innerHTML = '<span class="status-dot"></span> Saving & publishing…';
+    if (indicator) indicator.innerHTML = '<span class="status-dot"></span> ' + t('Saving & publishing…');
     let savedToWorkspace = false;
     try {
       await window.PathwayBackend.saveFlow(flow, workspace);
       savedToWorkspace = true;
-      if (indicator?.isConnected) indicator.innerHTML = '<span class="status-dot"></span> Saved to workspace';
+      if (indicator?.isConnected) indicator.innerHTML = '<span class="status-dot"></span> ' + t('Saved to workspace');
       const publishedAt = await window.PathwayBackend.updatePublishedFlow(flow, workspace);
       flow.publishedAt = publishedAt;
       if ((flowEditRevisions.get(flow) || 0) === editRevision) {
@@ -4250,13 +4254,13 @@
       }
       updatePublicationNotice();
       showToast((flowEditRevisions.get(flow) || 0) === editRevision
-        ? 'Changes published to your existing job link.'
-        : 'Changes published. Newer edits still need to be published.');
+        ? t('Changes published to your existing job link.')
+        : t('Changes published. Newer edits still need to be published.'));
     } catch (error) {
       if (indicator?.isConnected) indicator.innerHTML = savedToWorkspace
-        ? '<span class="status-dot"></span> Saved to workspace'
-        : '<span class="save-failed">Save failed</span>';
-      showToast(`Could not publish changes: ${error.message || 'please try again'}`);
+        ? '<span class="status-dot"></span> ' + t('Saved to workspace')
+        : '<span class="save-failed">' + t('Save failed') + '</span>';
+      showToast(t('Could not publish changes: {reason}', { reason: error.message || t('please try again') }));
     } finally {
       publishingFlows.delete(flow); publishingCount -= 1;
       updatePublicationNotice();
@@ -4268,7 +4272,7 @@
   bindPermissionMultis();
   // Removed from the workspace that is open (for example by its owner): say so and open another one.
   window.addEventListener('pathway:workspace-lost', () => {
-    showToast('You no longer have access to this workspace. Opening another one…', 4500);
+    showToast(t('You no longer have access to this workspace. Opening another one…'), 4500);
     setTimeout(() => { void openWorkspaceDashboard(); }, 2200);
   });
   window.PathwayAuth.start(context => {

@@ -9,18 +9,19 @@ const css = read('styles.css');
 
 // The real field function, run against a stand-in for the page that records what it writes.
 const fieldSource = builder.slice(builder.indexOf('function mountInterviewQuestionsField('), builder.indexOf('  let myProfile = null;'));
-const makeField = new Function('esc', 'window', 'showToast', `${fieldSource}; return mountInterviewQuestionsField;`);
+const makeField = new Function('esc', 'window', 'showToast', 't', `${fieldSource}; return mountInterviewQuestionsField;`);
+const t = (text, vars) => String(text).replace(/\{(\w+)\}/g, (all, name) => vars && name in vars ? vars[name] : all);
 const esc = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const clean = values => values.map(item => String(item ?? '').replace(/\s+/g, ' ').trim()).filter(item => item.length >= 3).slice(0, 5);
 const mount = (saved, options) => {
   const html = [];
   const host = { set innerHTML(value) { html.push(value); }, get innerHTML() { return html[html.length - 1] || ''; }, querySelector: () => null, querySelectorAll: () => [], closest: () => null, isConnected: true };
-  const controller = makeField(esc, { PathwayBackend: { cleanInterviewQuestions: clean } }, () => {})(host, () => saved, () => {}, options);
+  const controller = makeField(esc, { PathwayBackend: { cleanInterviewQuestions: clean } }, () => {}, t)(host, () => saved, () => {}, options);
   return { host, controller, html };
 };
 
 test('the interview questions have an expander next to the title, like the job description', () => {
-  assert.ok(builder.includes('<div class="field-label-row"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><button type="button" class="icon-btn expand-btn" id="expand-ai-questions" aria-label="Open the AI interview questions in a larger window" title="Larger window">'));
+  assert.ok(builder.includes("<div class=\"field-label-row\"><span class=\"form-label\" id=\"role-ai-questions-label\">' + t('AI interview questions') + '</span><button type=\"button\" class=\"icon-btn expand-btn\" id=\"expand-ai-questions\" aria-label=\"' + t('Open the AI interview questions in a larger window') + '\" title=\"' + t('Larger window') + '\">"));
   assert.ok(builder.includes("panel.querySelector('#expand-ai-questions')?.addEventListener('click', () => openInterviewQuestionsEditor(questionsField, questionsGet, questionsSet, questionsOptions));"));
   assert.match(css, /@media\(max-width:760px\)\{\.expand-btn\{display:none\}\}/, 'desktop only, like the description');
 });
@@ -28,10 +29,10 @@ test('the interview questions have an expander next to the title, like the job d
 test('the large window runs the same field with the same options: write with AI, add, remove, Revert and Save questions', () => {
   const start = builder.indexOf('function openInterviewQuestionsEditor(');
   const body = builder.slice(start, builder.indexOf('function drawInspector()', start));
-  assert.ok(body.includes('<h2>AI interview questions</h2>') && body.includes('id="ai-questions-modal"') && body.includes('id="ai-questions-modal-field"'));
+  assert.ok(body.includes("<h2>' + t('AI interview questions') + '</h2>") && body.includes('id="ai-questions-modal"') && body.includes('id="ai-questions-modal-field"'));
   assert.ok(body.includes('mountInterviewQuestionsField(host, getList, setList, { ...options, large: true, initialDraft: panelField ? panelField.getDraft() : null })'), 'same getList, setList and options (so the sparkles button and the draft mode come along)');
-  assert.ok(body.includes('<button class="btn btn-primary" data-close type="button">Close</button>'), 'the button says Close');
-  assert.equal(body.includes('>Done<'), false);
+  assert.ok(body.includes("<button class=\"btn btn-primary\" data-close type=\"button\">' + t('Close') + '</button>"), 'the button says Close');
+  assert.equal(body.includes("t('Done')"), false);
   assert.match(css, /#ai-questions-modal \+ \.modal-actions\{[^}]*border-top:1px solid var\(--border-subtle\)\}/, 'a dividing line above the Close button, like the one in the company form');
   assert.ok(body.includes("if (event.key === 'Escape') closeModal();"));
   assert.ok(builder.includes('const wideModal = html.includes(\'id="job-description-modal"\') || html.includes(\'id="ai-questions-modal"\');'));
