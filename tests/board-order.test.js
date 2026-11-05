@@ -71,6 +71,6 @@ test('the board: a green line shows where the card will land, and a drop gives t
   assert.match(builder, /async function moveApplicant\(id, status, orderIds = null\)/);
   assert.match(builder, /\(index \+ 1\) \* 1000/);
   assert.match(builder, /if \(sameColumn && !orderIds\) return;/, 'dropping in the same column without an order still does nothing');
-  assert.match(builder, /if \(workspaceIsFree\(\)\) \{ showToast\(FREE_MOVE_NOTE, 6000\); return; \}/, 'same plan rule as moving between stages');
+  assert.match(builder, /if \(workspaceIsFree\(\)\) \{ showToast\(t\(FREE_MOVE_NOTE\), 6000\); return; \}/, 'same plan rule as moving between stages');
   assert.match(styles, /\.applicant-card\.drop-before::before,\.applicant-card\.drop-after::after\{content:""/);
 });

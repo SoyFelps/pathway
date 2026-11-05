@@ -33,7 +33,7 @@ test('the bell shows one entry per job, refreshes every minute and clears when t
   const builder = read('builder.js');
   const backend = read('backend.js');
   assert.ok(builder.includes('const NOTIF_REFRESH_MS = 60000;'));
-  assert.ok(builder.includes('There are new applications for <strong>'));
+  assert.ok(builder.includes("t('There are new applications for {job}', { job: '<strong>'"));
   assert.ok(builder.includes("document.visibilityState === 'visible'"), 'no checks while the tab is hidden');
   assert.ok(builder.includes('notifObserver.observe(root, { childList: true })'), 'the bell is added to every page header');
   assert.match(builder, /renderApplicantBoard\(\);[\s\S]*?if \(applicantFilter\) markFlowSeen\(applicantFilter\);/, 'opening a job board clears its notification');

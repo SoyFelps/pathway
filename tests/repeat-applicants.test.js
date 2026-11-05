@@ -66,8 +66,8 @@ test('the board shows one card per candidate with an application count, and sear
   assert.ok(builder.includes('const allGroups = C.groupApplicants(applicants);'));
   assert.ok(builder.includes('group.items.some(applicant => {'), 'search looks at every application of a candidate');
   assert.ok(builder.includes("const cards = visible.filter(group => group.status === stage.key);"));
-  assert.ok(builder.includes('class="repeat-badge"') && builder.includes('title="This candidate applied ${group.count} times"'), 'a small count in the corner, with the full wording as its tooltip');
-  assert.ok(builder.includes('title="This candidate applied ${group.count} times">${group.count}x</span>') && !/class="repeat-badge"[^`]*↻/.test(builder), 'the badge reads 2x, 3x and so on, without the arrow symbol');
+  assert.ok(builder.includes('class="repeat-badge"') && builder.includes("title=\"${t('This candidate applied {count} times', { count: group.count })}\""), 'a small count in the corner, with the full wording as its tooltip');
+  assert.ok(builder.includes("title=\"${t('This candidate applied {count} times', { count: group.count })}\">${group.count}x</span>") && !/class="repeat-badge"[^`]*↻/.test(builder), 'the badge reads 2x, 3x and so on, without the arrow symbol');
   assert.ok(!builder.includes('class="repeat-chip"'), 'the wide "N applications" chip is gone from the card');
   assert.ok(builder.includes('const applicant = group.latest;'), 'the card shows the latest application');
   assert.equal(builder.split('<article class="applicant-card').length - 1, 1, 'both the Failed column and the other columns use the same card markup');
@@ -103,7 +103,7 @@ test('Clear all failed counts candidates and says how many applications go with 
   const builder = read('builder.js');
   const clear = builder.slice(builder.indexOf('function confirmClearFailedApplicants('), builder.indexOf('function formatApplicantDate('));
   assert.ok(clear.includes("C.groupApplicants(applicants).filter(group => group.status === 'failed')"));
-  assert.ok(clear.includes('all ${applicationCount} applications and their uploaded resumes'));
+  assert.ok(clear.includes("t('all {count} applications and their uploaded resumes', { count: applicationCount })"));
 });
 
 test('a repeat application inherits the candidate\'s current stage, including Failed', () => {

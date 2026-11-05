@@ -71,6 +71,9 @@
     { key: 'withdrawn', label: 'Withdrawn', color: 'stage-withdrawn' },
     { key: 'hired', label: 'Hired', color: 'stage-hired', defaultOn: true, pinnedLast: true }
   ];
+  // The standard stages are shown in the interface language; the key (what the database stores) never changes.
+  // Custom stages keep the name the team gave them.
+  standardApplicantStages.forEach(stage => { const english = stage.label; Object.defineProperty(stage, 'label', { get: () => t(english), enumerable: true }); });
   const MAX_CUSTOM_STAGES = 5;
   // The board setup (custom columns, their order and which columns are on) is stored per workspace and shared by the whole team.
   // Failed and New stay first and Hired stays last; the stages in between can be reordered in Customize.
@@ -255,13 +258,18 @@
     const total = notifications.length + mentionNotifs.length + aiNotifs.length;
     badge.textContent = total > 9 ? '9+' : String(total);
     badge.hidden = !total;
-    button.setAttribute('aria-label', total ? 'Notifications, ' + total + ' unread' : 'Notifications');
-    const mentionItems = mentionNotifs.map(item => '<button type="button" class="notif-item" data-notif-mention-flow="' + esc(item.flowId) + '" data-notif-mention-email="' + esc(item.candidateEmail) + '"><span class="notif-text"><strong>' + esc(item.authorName) + '</strong> mentioned you in a comment</span><span class="notif-sub">' + esc(item.candidateName) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
-    const aiItems = aiNotifs.map(item => '<button type="button" class="notif-item" data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"><span class="notif-text"><strong>' + esc(item.candidateName) + '</strong> finished the AI interview</span><span class="notif-sub">' + (item.impression ? (item.impression === 'positive' ? 'Positive' : item.impression === 'mixed' ? 'Mixed' : 'Negative') + ' impression' : 'Evaluation pending') + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
+    button.setAttribute('aria-label', total ? t('Notifications, {count} unread', { count: total }) : t('Notifications'));
+    const mentionItems = mentionNotifs.map(item => '<button type="button" class="notif-item" data-notif-mention-flow="' + esc(item.flowId) + '" data-notif-mention-email="' + esc(item.candidateEmail) + '"><span class="notif-text">' + notifMentionText(item.authorName) + '</span><span class="notif-sub">' + esc(item.candidateName) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
+    const aiItems = aiNotifs.map(item => '<button type="button" class="notif-item" data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"><span class="notif-text">' + notifAiText(item.candidateName) + '</span><span class="notif-sub">' + notifImpressionText(item.impression) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
     menu.innerHTML = (total
-      ? aiItems + mentionItems + notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">There are new applications for <strong>' + esc(item.jobTitle || 'Untitled role') + '</strong></span><span class="notif-sub">' + item.newCount + (item.newCount === 1 ? ' new candidate' : ' new candidates') + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
-      : '<div class="notif-empty">You are all caught up.</div>') + '<div class="notif-footer"><button type="button" class="notif-see-all" data-notif-all>See all</button></div>';
+      ? aiItems + mentionItems + notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">' + notifJobText(item.jobTitle) + '</span><span class="notif-sub">' + tn('{count} new candidate', '{count} new candidates', item.newCount) + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
+      : `<div class="notif-empty">${t('You are all caught up.')}</div>`) + `<div class="notif-footer"><button type="button" class="notif-see-all" data-notif-all>${t('See all')}</button></div>`;
   }
+  // Notification texts, shared by the bell and the notifications page (names are escaped before going into the sentence).
+  const notifMentionText = author => t('{name} mentioned you in a comment', { name: '<strong>' + esc(author || t('A teammate')) + '</strong>' });
+  const notifAiText = candidate => t('{name} finished the AI interview', { name: '<strong>' + esc(candidate) + '</strong>' });
+  const notifJobText = title => t('There are new applications for {job}', { job: '<strong>' + esc(title || t('Untitled role')) + '</strong>' });
+  const notifImpressionText = impression => !impression ? t('Evaluation pending') : impression === 'positive' ? t('Positive impression') : impression === 'mixed' ? t('Mixed impression') : t('Negative impression');
   // Opens what a notification is about (the bell and the notifications page share this): a finished AI interview, a mention, or a job's new candidates.
   function openNotificationTarget(target) {
     const aiNotice = target.closest('[data-notif-ai]');
@@ -284,7 +292,7 @@
   function mountNotificationBell() {
     const actions = root.querySelector('.top-actions');
     if (!actions || actions.querySelector('#notif') || !workspace || !hasPermission('applicants')) return;
-    const bellHost = actions.querySelector('.ws-switch'); (bellHost ? (html => bellHost.insertAdjacentHTML('afterend', html)) : (html => actions.insertAdjacentHTML('afterbegin', html)))('<div class="notif" id="notif"><button type="button" class="notif-btn" id="notif-bell" aria-haspopup="true" aria-expanded="false" aria-label="Notifications">' + BELL_ICON + '<span class="notif-badge" hidden></span></button><div class="notif-menu" role="menu" hidden></div></div>');
+    const bellHost = actions.querySelector('.ws-switch'); (bellHost ? (html => bellHost.insertAdjacentHTML('afterend', html)) : (html => actions.insertAdjacentHTML('afterbegin', html)))('<div class="notif" id="notif"><button type="button" class="notif-btn" id="notif-bell" aria-haspopup="true" aria-expanded="false" aria-label="' + t('Notifications') + '">' + BELL_ICON + '<span class="notif-badge" hidden></span></button><div class="notif-menu" role="menu" hidden></div></div>');
     const host = actions.querySelector('#notif'), button = host.querySelector('#notif-bell'), menu = host.querySelector('.notif-menu');
     const setOpen = open => { menu.hidden = !open; button.setAttribute('aria-expanded', String(open)); };
     button.addEventListener('click', () => { setOpen(menu.hidden); if (!menu.hidden) void refreshNotifications(true); });
@@ -321,33 +329,34 @@
   let notificationPageRequestId = 0;
   let notificationMonthOpen = false;
   let notificationPageSignature = '';
-  const NOTIF_IMPRESSION = { positive: 'Positive', mixed: 'Mixed', negative: 'Negative' };
+  // Times follow the interface language (formatDate of i18n.js).
   function notificationTimeLabel(value, section) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
-    if (section === 'today') return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    if (section === 'week') return date.toLocaleDateString('en-US', { weekday: 'short' }) + ', ' + date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const I18N = window.PathwayI18n;
+    if (section === 'today') return I18N.formatDate(date, { hour: 'numeric', minute: '2-digit' });
+    if (section === 'week') return I18N.formatDate(date, { weekday: 'short' }) + ', ' + I18N.formatDate(date, { hour: 'numeric', minute: '2-digit' });
+    return I18N.formatDate(date, { month: 'short', day: 'numeric' });
   }
   function notificationRowHtml(item, section) {
     let attrs = '', icon = '', text = '', sub = '';
     if (item.kind === 'mention') {
       attrs = 'data-notif-mention-flow="' + esc(item.flowId) + '" data-notif-mention-email="' + esc(item.candidateEmail) + '"';
       icon = '<span class="notif-row-icon is-mention" aria-hidden="true">@</span>';
-      text = '<strong>' + esc(item.authorName || 'A teammate') + '</strong> mentioned you in a comment';
+      text = notifMentionText(item.authorName);
       sub = esc(item.candidateName) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '');
     } else if (item.kind === 'ai_interview') {
       attrs = 'data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"';
       icon = '<span class="notif-row-icon is-ai" aria-hidden="true">✦</span>';
-      text = '<strong>' + esc(item.candidateName) + '</strong> finished the AI interview';
-      sub = (item.impression ? (NOTIF_IMPRESSION[item.impression] || 'Negative') + ' impression' : 'Evaluation pending') + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '');
+      text = notifAiText(item.candidateName);
+      sub = notifImpressionText(item.impression) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '');
     } else {
       attrs = 'data-notif-flow="' + esc(item.flowId) + '"';
       icon = '<span class="notif-row-icon is-candidates" aria-hidden="true">' + ICONS.applicants + '</span>';
-      text = 'There are new applications for <strong>' + esc(item.jobTitle || 'Untitled role') + '</strong>';
-      sub = item.newCount + (item.newCount === 1 ? ' new candidate' : ' new candidates') + (item.companyName ? ' · ' + esc(item.companyName) : '');
+      text = notifJobText(item.jobTitle);
+      sub = tn('{count} new candidate', '{count} new candidates', item.newCount) + (item.companyName ? ' · ' + esc(item.companyName) : '');
     }
-    return '<button type="button" class="notif-row' + (item.seen ? '' : ' is-unread') + '" ' + attrs + '>' + icon + '<span class="notif-row-body"><span class="notif-text">' + text + '</span><span class="notif-sub">' + sub + '</span></span><span class="notif-row-time">' + esc(notificationTimeLabel(item.at, section)) + '</span>' + (item.seen ? '' : '<span class="notif-unread-dot" role="img" aria-label="Unread"></span>') + '</button>';
+    return '<button type="button" class="notif-row' + (item.seen ? '' : ' is-unread') + '" ' + attrs + '>' + icon + '<span class="notif-row-body"><span class="notif-text">' + text + '</span><span class="notif-sub">' + sub + '</span></span><span class="notif-row-time">' + esc(notificationTimeLabel(item.at, section)) + '</span>' + (item.seen ? '' : '<span class="notif-unread-dot" role="img" aria-label="' + t('Unread') + '"></span>') + '</button>';
   }
   function paintNotificationPage(items) {
     const content = root.querySelector('#notifications-content');
@@ -363,11 +372,11 @@
     }
     notificationPageSignature = startOfToday.getTime() + '|' + JSON.stringify(items); // the day matters too: at midnight things move from Today to This week
     const unread = list => list.filter(item => !item.seen).length;
-    const count = list => '<span class="notif-section-count">' + list.length + (unread(list) ? ' · ' + unread(list) + ' unread' : '') + '</span>';
+    const count = list => '<span class="notif-section-count">' + list.length + (unread(list) ? ' · ' + t('{count} unread', { count: unread(list) }) : '') + '</span>';
     const open = (title, list, section, empty) => '<section class="notif-section"><h2 class="notif-section-title">' + title + ' ' + count(list) + '</h2><div class="notif-list">' + (list.length ? list.map(item => notificationRowHtml(item, section)).join('') : '<p class="notif-section-empty">' + empty + '</p>') + '</div></section>';
-    content.innerHTML = open('Today', today, 'today', 'Nothing new today.') + open('This week', week, 'week', 'Nothing else this week.') +
-      '<section class="notif-section"><h2 class="notif-section-heading"><button type="button" class="notif-section-toggle" id="notif-month-toggle" aria-expanded="' + notificationMonthOpen + '" aria-controls="notif-month-list"><span class="notif-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 4.5 13 10l-5.5 5.5"/></svg></span><span class="notif-section-title">Last 30 days</span> ' + count(month) + '</button></h2>' +
-      '<div class="notif-list" id="notif-month-list"' + (notificationMonthOpen ? '' : ' hidden') + '>' + (month.length ? month.map(item => notificationRowHtml(item, 'month')).join('') : '<p class="notif-section-empty">Nothing older than this week.</p>') + '</div></section>';
+    content.innerHTML = open(t('Today'), today, 'today', t('Nothing new today.')) + open(t('This week'), week, 'week', t('Nothing else this week.')) +
+      '<section class="notif-section"><h2 class="notif-section-heading"><button type="button" class="notif-section-toggle" id="notif-month-toggle" aria-expanded="' + notificationMonthOpen + '" aria-controls="notif-month-list"><span class="notif-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 4.5 13 10l-5.5 5.5"/></svg></span><span class="notif-section-title">' + t('Last 30 days') + '</span> ' + count(month) + '</button></h2>' +
+      '<div class="notif-list" id="notif-month-list"' + (notificationMonthOpen ? '' : ' hidden') + '>' + (month.length ? month.map(item => notificationRowHtml(item, 'month')).join('') : '<p class="notif-section-empty">' + t('Nothing older than this week.') + '</p>') + '</div></section>';
   }
   // Asks again while the page is open (the bell's check calls this); nothing is redrawn unless the list or the day changed.
   async function refreshNotificationPage() {
@@ -387,7 +396,7 @@
     currentId = null; selectedId = null;
     notificationMonthOpen = false; // every visit starts with "Last 30 days" folded
     notificationPageSignature = '';
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('')}<main class="notifications-page"><div class="reports-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Notifications</h1><p>Everything you were notified about in the last 30 days, including what you have already seen.</p></div></div><div id="notifications-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('')}<main class="notifications-page"><div class="reports-heading"><div><div class="eyebrow">${t('Hiring workspace')}</div><h1>${t('Notifications')}</h1><p>${t('Everything you were notified about in the last 30 days, including what you have already seen.')}</p></div></div><div id="notifications-content" aria-live="polite" aria-busy="true"></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
     const content = root.querySelector('#notifications-content');
@@ -403,7 +412,7 @@
       if (row) openNotificationTarget(row);
     });
     const requestId = ++notificationPageRequestId;
-    content.innerHTML = '<p class="rpt-empty">Loading…</p>';
+    content.innerHTML = '<p class="rpt-empty">' + t('Loading…') + '</p>';
     try {
       const items = await window.PathwayBackend.listNotificationHistory(workspace.id);
       if (requestId !== notificationPageRequestId || !root.querySelector('.notifications-page')) return;
@@ -411,7 +420,7 @@
     } catch (error) {
       if (requestId !== notificationPageRequestId || !root.querySelector('.notifications-page')) return;
       content.setAttribute('aria-busy', 'false');
-      content.innerHTML = '<div class="auth-error show" role="alert">' + esc('Could not load the notifications: ' + (error.message || 'check your connection and try again')) + '</div><button class="btn" id="notifications-retry" style="margin-top:12px">Try again</button>';
+      content.innerHTML = '<div class="auth-error show" role="alert">' + esc(t('Could not load the notifications: {reason}', { reason: error.message || t('check your connection and try again') })) + '</div><button class="btn" id="notifications-retry" style="margin-top:12px">' + t('Try again') + '</button>';
       content.querySelector('#notifications-retry')?.addEventListener('click', () => { void renderNotifications(); });
     }
   }
@@ -482,7 +491,7 @@
   const AI_IMPRESSION_LABELS = { positive: 'Positive impression', mixed: 'Mixed impression', negative: 'Negative impression' };
   function aiImpressionBadge(impression) {
     if (!AI_IMPRESSION_LABELS[impression]) return '';
-    const label = AI_IMPRESSION_LABELS[impression];
+    const label = t(AI_IMPRESSION_LABELS[impression]);
     return '<span class="ai-impression is-' + impression + '" role="img" aria-label="' + label + '" title="' + label + '"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + THUMB_PATHS[impression] + '</svg></span>';
   }
   // Small sparkle in a lilac circle, as in the first plan of the card
@@ -491,12 +500,12 @@
   function aiImpressionLabelled(impression) {
     const badge = aiImpressionBadge(impression);
     if (!badge) return '';
-    return '<span class="ai-impression-line is-' + impression + '"><span class="ai-impression-text">' + AI_IMPRESSION_LABELS[impression] + '</span>' + badge + '</span>';
+    return '<span class="ai-impression-line is-' + impression + '"><span class="ai-impression-text">' + t(AI_IMPRESSION_LABELS[impression]) + '</span>' + badge + '</span>';
   }
   function aiInterviewCardHtml(row) {
     const tag = row && aiInterviewTag(row);
     if (!tag) return '';
-    return '<div class="applicant-card-ai ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + AI_SPARKLE_ICON + '</span><span class="ai-tag-text">' + esc(tag[0]) + '</span>' + (row.state === 'completed' ? (aiImpressionBadge(row.impression) || '<span class="ai-impression is-none" role="img" aria-label="No impression yet" title="No impression yet"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M7 12h10"/></svg></span>') : '') + '</div>';
+    return '<div class="applicant-card-ai ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + AI_SPARKLE_ICON + '</span><span class="ai-tag-text">' + esc(t(tag[0])) + '</span>' + (row.state === 'completed' ? (aiImpressionBadge(row.impression) || '<span class="ai-impression is-none" role="img" aria-label="' + t('No impression yet') + '" title="' + t('No impression yet') + '"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M7 12h10"/></svg></span>') : '') + '</div>';
   }
   // After a card moves into or out of the AI Interview column the interview is set up (or dropped) on the server within seconds:
   // look again soon, and keep looking while one is being set up, so the tag follows without pressing Refresh.
@@ -1544,11 +1553,11 @@
 
   // Job filter of the Applicants page: a select you can type in (the list narrows as you type; arrows + Enter also work).
   function applicantJobOptions() {
-    return [{ value: '', label: 'All jobs' }, ...applicantFlowLabels.filter(flow => flow.cloudId).map(flow => ({ value: flow.cloudId, label: flow.jobTitle || 'Untitled role' }))];
+    return [{ value: '', label: t('All jobs') }, ...applicantFlowLabels.filter(flow => flow.cloudId).map(flow => ({ value: flow.cloudId, label: flow.jobTitle || t('Untitled role') }))];
   }
   function applicantJobLabel() {
     const found = applicantJobOptions().find(option => option.value === applicantFilter);
-    return found ? found.label : (applicantFilter ? 'Untitled role' : 'All jobs');
+    return found ? found.label : (applicantFilter ? t('Untitled role') : t('All jobs'));
   }
   function mountApplicantJobCombobox(scope, onPick) {
     const input = scope.querySelector('#applicant-flow-filter');
@@ -1568,7 +1577,7 @@
       active = needle ? (shown.length ? 0 : -1) : shown.findIndex(option => option.value === applicantFilter);
       list.innerHTML = shown.length
         ? shown.map((option, index) => `<li role="option" id="applicant-job-opt-${index}" class="job-combobox-option" data-index="${index}" aria-selected="${option.value === applicantFilter}">${esc(option.label)}</li>`).join('')
-        : '<li class="job-combobox-empty">No jobs match</li>';
+        : '<li class="job-combobox-empty">' + t('No jobs match') + '</li>';
       highlight();
     };
     const show = () => { list.hidden = false; input.setAttribute('aria-expanded', 'true'); };
@@ -1598,7 +1607,7 @@
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
     flowResponsiblesCache.clear();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body is-board">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">Hiring workspace</div><h1>Applicants</h1><p>Review applications and move candidates through your hiring stages.</p></div><div class="applicants-tools"><div class="job-combobox"><input id="applicant-flow-filter" class="applicants-filter" type="text" role="combobox" aria-expanded="false" aria-controls="applicant-job-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="Filter applicants by job" placeholder="Search jobs" value="${esc(applicantJobLabel())}"><span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span><ul class="job-combobox-list" id="applicant-job-list" role="listbox" aria-label="Jobs" hidden></ul></div><input id="applicant-search" class="applicants-search" type="search" placeholder="Search applicants" value="${esc(applicantSearch)}" aria-label="Search applicants"><button class="btn btn-sm" id="refresh-applicants" title="Refresh applicants">↻ Refresh</button>${hasPermission('customize_stages') ? '<button class="btn btn-sm" type="button" id="customize-stages">Customize</button>' : ''}</div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>Loading applicants…</span></div></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body is-board">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">${t('Hiring workspace')}</div><h1>${t('Applicants')}</h1><p>${t('Review applications and move candidates through your hiring stages.')}</p></div><div class="applicants-tools"><div class="job-combobox"><input id="applicant-flow-filter" class="applicants-filter" type="text" role="combobox" aria-expanded="false" aria-controls="applicant-job-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="${t('Filter applicants by job')}" placeholder="${t('Search jobs')}" value="${esc(applicantJobLabel())}"><span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span><ul class="job-combobox-list" id="applicant-job-list" role="listbox" aria-label="${t('Jobs')}" hidden></ul></div><input id="applicant-search" class="applicants-search" type="search" placeholder="${t('Search applicants')}" value="${esc(applicantSearch)}" aria-label="${t('Search applicants')}"><button class="btn btn-sm" id="refresh-applicants" title="${t('Refresh applicants')}">↻ ${t('Refresh')}</button>${hasPermission('customize_stages') ? `<button class="btn btn-sm" type="button" id="customize-stages">${t('Customize')}</button>` : ''}</div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>${t('Loading applicants…')}</span></div></div></main></div></div>`;
     bindSidebar();
     bindPlanControl();
     
@@ -1633,7 +1642,7 @@
       else if (!applicantSearch.trim() && applicants.length < APPLICANT_LIST_LIMIT) markAllFlowsSeen();
     } catch (error) {
       const content = root.querySelector('#applicants-content');
-      if (content) content.innerHTML = `<div class="auth-error show" role="alert">${esc(`Could not load applicants: ${error.message || 'check your connection and try again'}`)}</div>`;
+      if (content) content.innerHTML = `<div class="auth-error show" role="alert">${esc(t('Could not load applicants: {reason}', { reason: error.message || t('check your connection and try again') }))}</div>`;
     }
   }
 
@@ -2942,16 +2951,17 @@
     const rows = orderedApplicantStages().map(stage => {
       const occupied = applicantHasStage(stage.key);
       const locked = stage.locked || occupied;
-      const reason = stage.locked ? 'This column is always on.' : (occupied ? 'This column contains applicants. Move them to another stage before disabling it.' : '');
+      const reason = stage.locked ? t('This column is always on.') : (occupied ? t('This column contains applicants. Move them to another stage before disabling it.') : '');
       const movable = !stage.locked && !stage.pinnedLast;
-      const handle = movable ? `<button class="stage-drag" type="button" data-drag-handle aria-label="Reorder ${esc(stage.label)}. Use the up and down arrow keys." title="Drag to reorder">${'⠿'}</button>` : '<span class="stage-drag is-fixed" aria-hidden="true"></span>';
-      const tools = stage.custom ? `<span class="stage-tools"><button class="stage-tool" type="button" data-rename-stage="${esc(stage.customId)}" aria-label="Rename ${esc(stage.label)}" title="Rename">✎</button><button class="stage-tool" type="button" data-delete-stage="${esc(stage.customId)}" aria-label="Delete ${esc(stage.label)}" title="${occupied ? 'Move its applicants before deleting this column.' : 'Delete column'}" ${occupied ? 'disabled' : ''}>${'🗑'}</button></span>` : '';
+      const handle = movable ? `<button class="stage-drag" type="button" data-drag-handle aria-label="${t('Reorder {stage}. Use the up and down arrow keys.', { stage: esc(stage.label) })}" title="${t('Drag to reorder')}">${'⠿'}</button>` : '<span class="stage-drag is-fixed" aria-hidden="true"></span>';
+      const tools = stage.custom ? `<span class="stage-tools"><button class="stage-tool" type="button" data-rename-stage="${esc(stage.customId)}" aria-label="${t('Rename {stage}', { stage: esc(stage.label) })}" title="${t('Rename')}">✎</button><button class="stage-tool" type="button" data-delete-stage="${esc(stage.customId)}" aria-label="${t('Delete {stage}', { stage: esc(stage.label) })}" title="${occupied ? t('Move its applicants before deleting this column.') : t('Delete column')}" ${occupied ? 'disabled' : ''}>${'🗑'}</button></span>` : '';
       return `<label class="stage-option${locked ? ' is-locked' : ''}${movable ? ' is-movable' : ''}" data-stage-row="${esc(stage.key)}" ${movable ? 'draggable="true"' : ''} ${reason ? `title="${reason}"` : ''}><span class="stage-option-name">${handle}<span class="stage-dot ${stage.color}"></span><span class="stage-name">${esc(stage.label)}</span></span>${tools}<input type="checkbox" data-stage-key="${esc(stage.key)}" ${applicantStageEnabled(stage) || occupied ? 'checked' : ''} ${locked ? 'disabled' : ''}></label>`;
     }).join('');
     const currentOrder = orderedApplicantStages().filter(stage => !stage.locked && !stage.pinnedLast).map(stage => stage.key);
     const isDefaultOrder = currentOrder.every((key, index) => key === movableApplicantStageKeys()[index]);
     const atLimit = customCount >= MAX_CUSTOM_STAGES;
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Applicant board</div><h2>Customize stages</h2><p>Choose which columns appear and drag the handles to reorder them.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="stage-options">${rows}</div>${atLimit ? '' : creating ? '<form class="stage-create" id="stage-create-form" autocomplete="off"><input class="text-input" id="stage-create-name" maxlength="30" placeholder="New column name" aria-label="New column name"><button class="btn btn-sm btn-primary" type="submit">Create</button><button class="btn btn-sm" type="button" id="stage-create-close">Close</button></form>' : '<div class="stage-create-row"><button class="stage-new-link" type="button" id="stage-new-open">+ New Column</button><span class="stage-create-hint">' + customCount + ' of ' + MAX_CUSTOM_STAGES + ' custom columns</span></div>'}${atLimit || creating ? `<div class="stage-create-hint">${customCount} of ${MAX_CUSTOM_STAGES} custom columns${atLimit ? ' · limit reached' : ''}</div>` : ''}<div class="stage-error" id="stage-error" role="alert">${esc(message)}</div><div class="modal-actions stage-modal-actions"><button class="stage-reset" type="button" id="reset-stage-order" ${isDefaultOrder ? 'disabled' : ''}>Reset to default order</button><button class="btn btn-primary" data-close>Done</button></div>`);
+    const customHint = t('{count} of {max} custom columns', { count: customCount, max: MAX_CUSTOM_STAGES });
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Applicant board')}</div><h2>${t('Customize stages')}</h2><p>${t('Choose which columns appear and drag the handles to reorder them.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="stage-options">${rows}</div>${atLimit ? '' : creating ? `<form class="stage-create" id="stage-create-form" autocomplete="off"><input class="text-input" id="stage-create-name" maxlength="30" placeholder="${t('New column name')}" aria-label="${t('New column name')}"><button class="btn btn-sm btn-primary" type="submit">${t('Create')}</button><button class="btn btn-sm" type="button" id="stage-create-close">${t('Close')}</button></form>` : `<div class="stage-create-row"><button class="stage-new-link" type="button" id="stage-new-open">+ ${t('New Column')}</button><span class="stage-create-hint">${customHint}</span></div>`}${atLimit || creating ? `<div class="stage-create-hint">${customHint}${atLimit ? ' · ' + t('limit reached') : ''}</div>` : ''}<div class="stage-error" id="stage-error" role="alert">${esc(message)}</div><div class="modal-actions stage-modal-actions"><button class="stage-reset" type="button" id="reset-stage-order" ${isDefaultOrder ? 'disabled' : ''}>${t('Reset to default order')}</button><button class="btn btn-primary" data-close>${t('Done')}</button></div>`);
     const showError = text => { const box = modalRoot.querySelector('#stage-error'); if (box) box.textContent = text || ''; };
     const applyChange = async change => {
       const previous = boardConfig;
@@ -3014,7 +3024,7 @@
       event.preventDefault();
       const input = modalRoot.querySelector('#stage-create-name');
       const name = input.value.trim();
-      if (!name) { showError('Name the new column first.'); input.focus(); return; }
+      if (!name) { showError(t('Name the new column first.')); input.focus(); return; }
       event.target.querySelector('button').disabled = true;
       try {
         await window.PathwayBackend.createCustomStage(workspace.id, name);
@@ -3022,7 +3032,7 @@
         renderApplicantBoard();
         openCustomizeStages();
       } catch (error) {
-        openCustomizeStages(error.message || 'The column could not be created.', true);
+        openCustomizeStages(error.message || t('The column could not be created.'), true);
         const again = modalRoot.querySelector('#stage-create-name');
         if (again) again.value = name;
       }
@@ -3034,8 +3044,8 @@
       const row = button.closest('.stage-option');
       const label = row.querySelector('.stage-name');
       const current = boardConfig.customStages.find(stage => stage.id === stageId)?.name || '';
-      label.innerHTML = '<input class="text-input stage-rename-input" maxlength="30" aria-label="Column name">';
-      row.querySelector('.stage-tools').innerHTML = '<button class="btn btn-sm btn-primary" type="button" data-save-rename>Save</button><button class="btn btn-sm" type="button" data-cancel-rename>Cancel</button>';
+      label.innerHTML = '<input class="text-input stage-rename-input" maxlength="30" aria-label="' + t('Column name') + '">';
+      row.querySelector('.stage-tools').innerHTML = '<button class="btn btn-sm btn-primary" type="button" data-save-rename>' + t('Save') + '</button><button class="btn btn-sm" type="button" data-cancel-rename>' + t('Cancel') + '</button>';
       row.classList.add('is-renaming');
       row.removeAttribute('draggable');
       const input = label.querySelector('input');
@@ -3049,7 +3059,7 @@
       const cancel = () => { stop(); renderApplicantBoard(); openCustomizeStages(); };
       const save = async () => {
         const name = input.value.trim();
-        if (!name) { renderApplicantBoard(); openCustomizeStages('Name the column first.'); return; }
+        if (!name) { renderApplicantBoard(); openCustomizeStages(t('Name the column first.')); return; }
         if (name === current) { cancel(); return; }
         stop();
         try {
@@ -3059,7 +3069,7 @@
           openCustomizeStages();
         } catch (error) {
           renderApplicantBoard();
-          openCustomizeStages(error.message || 'The column could not be renamed.');
+          openCustomizeStages(error.message || t('The column could not be renamed.'));
         }
       };
       row.querySelector('[data-save-rename]').addEventListener('click', clickEvent => { clickEvent.preventDefault(); clickEvent.stopPropagation(); void save(); });
@@ -3075,7 +3085,7 @@
         await reloadBoardConfig();
         renderApplicantBoard();
         openCustomizeStages();
-      } catch (error) { openCustomizeStages(error.message || 'The column could not be deleted.'); }
+      } catch (error) { openCustomizeStages(error.message || t('The column could not be deleted.')); }
     }));
     if (creating) modalRoot.querySelector('#stage-create-name')?.focus();
   }
@@ -3098,7 +3108,7 @@
     const filterName = applicantFilter ? applicantFlowLabels.find(flow => flow.cloudId === applicantFilter)?.jobTitle : '';
     if (!applicants.length && !applicantFilter && !term) {
       const published = flows.filter(flow => flow.publicationStatus === 'published' && flow.activePublishedFlowId);
-      content.innerHTML = `<section class="applicants-empty"><span class="applicant-empty-icon" aria-hidden="true">${ICONS.applicants}</span><h2>No applicants yet</h2><p>${hasPermission('flows') ? 'Applications for published jobs will appear here as candidates submit them. Review a test application before sharing your job links widely.' : 'Applications will appear here as candidates submit them. Ask a team manager if you need access to the job flows.'}</p>${hasPermission('flows') ? (published.length ? `<button class="btn btn-primary" id="open-published-flow">View published jobs</button>` : `<button class="btn btn-primary" id="open-flows">Go to dashboard</button>`) : ''}</section>`;
+      content.innerHTML = `<section class="applicants-empty"><span class="applicant-empty-icon" aria-hidden="true">${ICONS.applicants}</span><h2>${t('No applicants yet')}</h2><p>${hasPermission('flows') ? t('Applications for published jobs will appear here as candidates submit them. Review a test application before sharing your job links widely.') : t('Applications will appear here as candidates submit them. Ask a team manager if you need access to the job flows.')}</p>${hasPermission('flows') ? (published.length ? `<button class="btn btn-primary" id="open-published-flow">${t('View published jobs')}</button>` : `<button class="btn btn-primary" id="open-flows">${t('Go to dashboard')}</button>`) : ''}</section>`;
       content.querySelector('#open-published-flow')?.addEventListener('click', renderDashboard);
       content.querySelector('#open-flows')?.addEventListener('click', renderDashboard);
       return;
@@ -3106,22 +3116,25 @@
     const stages = visibleApplicantStages();
     const otherStageCount = stages.length - 1;
     const applicationTotal = visible.reduce((total, group) => total + group.count, 0);
-    const freeNote = isOwner && workspaceIsFree() ? `<div class="ai-note is-warn applicants-free-note" role="note"><span><strong>This workspace is on the free plan.</strong> Upgrade to Premium to move candidates between stages.</span><button type="button" class="btn btn-sm btn-primary" data-open-plan>See plans</button></div>` : '';
-    content.innerHTML = `${freeNote}<div class="kanban-summary"><strong>${visible.length}</strong> ${visible.length === 1 ? 'applicant' : 'applicants'}${applicationTotal > visible.length ? ` <span class="kanban-summary-extra">· ${applicationTotal} applications</span>` : ''}${filterName ? ` for <strong>${esc(filterName)}</strong>` : ' across all jobs'}${applicants.length >= 1000 ? ' · Showing the latest 1,000; filter by job to narrow the list.' : ''}</div><section class="kanban-board failed-board${failedColumnOpen ? ' failed-open' : ''}" style="--other-stages:${otherStageCount}" aria-label="Applicant pipeline">${stages.map(stage => {
+    const freeNote = isOwner && workspaceIsFree() ? `<div class="ai-note is-warn applicants-free-note" role="note"><span><strong>${t('This workspace is on the free plan.')}</strong> ${t('Upgrade to Premium to move candidates between stages.')}</span><button type="button" class="btn btn-sm btn-primary" data-open-plan>${t('See plans')}</button></div>` : '';
+    // "12 applicants · 14 applications for Cook" (or "across all jobs"); the count goes in bold.
+    const summaryCount = tn('{count} applicant', '{count} applicants', visible.length).replace(String(visible.length), `<strong>${visible.length}</strong>`);
+    const summaryScope = filterName ? ' ' + t('for {job}', { job: `<strong>${esc(filterName)}</strong>` }) : ' ' + t('across all jobs');
+    content.innerHTML = `${freeNote}<div class="kanban-summary">${summaryCount}${applicationTotal > visible.length ? ` <span class="kanban-summary-extra">· ${tn('{count} application', '{count} applications', applicationTotal)}</span>` : ''}${summaryScope}${applicants.length >= 1000 ? ' · ' + t('Showing the latest 1,000; filter by job to narrow the list.') : ''}</div><section class="kanban-board failed-board${failedColumnOpen ? ' failed-open' : ''}" style="--other-stages:${otherStageCount}" aria-label="${t('Applicant pipeline')}">${stages.map(stage => {
       const cards = visible.filter(group => group.status === stage.key);
       const cardHtml = group => {
         const applicant = group.latest;
         // A candidate who applied more than once shows a small count in the corner of the card (the full wording is its tooltip).
-        const repeat = group.count > 1 ? `<span class="repeat-badge" role="img" aria-label="Applied ${group.count} times" title="This candidate applied ${group.count} times">${group.count}x</span>` : '';
-        return `<article class="applicant-card${group.count > 1 ? ' has-repeat' : ''}" data-applicant="${esc(applicant.id)}" draggable="${workspaceIsFree() ? 'false' : 'true'}" tabindex="0" role="button" aria-label="Review ${esc(applicant.candidate_name)}${group.count > 1 ? `, ${group.count} applications` : ''}">${repeat}<h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span></span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}</article>`;
+        const repeat = group.count > 1 ? `<span class="repeat-badge" role="img" aria-label="${t('Applied {count} times', { count: group.count })}" title="${t('This candidate applied {count} times', { count: group.count })}">${group.count}x</span>` : '';
+        return `<article class="applicant-card${group.count > 1 ? ' has-repeat' : ''}" data-applicant="${esc(applicant.id)}" draggable="${workspaceIsFree() ? 'false' : 'true'}" tabindex="0" role="button" aria-label="${t('Review {name}', { name: esc(applicant.candidate_name) })}${group.count > 1 ? ', ' + tn('{count} application', '{count} applications', group.count) : ''}">${repeat}<h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span></span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}</article>`;
       };
       if (stage.key === 'failed') {
         const head = `<div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div>`;
-        if (!failedColumnOpen) return `<section class="kanban-column failed-column is-collapsed" data-stage="failed" aria-label="Failed">${head}<div class="kanban-column-body"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="false">Open &gt;</button><div class="failed-drop">Drag here</div></div></section>`;
+        if (!failedColumnOpen) return `<section class="kanban-column failed-column is-collapsed" data-stage="failed" aria-label="${esc(stage.label)}">${head}<div class="kanban-column-body"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="false">${t('Open')} &gt;</button><div class="failed-drop">${t('Drag here')}</div></div></section>`;
         const hasFailed = allGroups.some(group => group.status === 'failed');
-        return `<section class="kanban-column failed-column is-open" data-stage="failed" aria-label="Failed">${head}<div class="kanban-column-body"><div class="failed-actions"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="true">&lt; Collapse</button>${hasFailed ? '<button class="btn btn-sm failed-clear" type="button" data-failed-clear>Clear all failed</button>' : ''}</div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></div></section>`;
+        return `<section class="kanban-column failed-column is-open" data-stage="failed" aria-label="${esc(stage.label)}">${head}<div class="kanban-column-body"><div class="failed-actions"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="true">&lt; ${t('Collapse')}</button>${hasFailed ? `<button class="btn btn-sm failed-clear" type="button" data-failed-clear>${t('Clear all failed')}</button>` : ''}</div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : `<div class="board-empty">${t('No applicants here')}</div>`}</div></div></section>`;
       }
-      return `<section class="kanban-column" data-stage="${esc(stage.key)}" aria-label="${esc(stage.label)}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div><div class="kanban-column-body"><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : '<div class="board-empty">No applicants here</div>'}</div></div></section>`;
+      return `<section class="kanban-column" data-stage="${esc(stage.key)}" aria-label="${esc(stage.label)}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div><div class="kanban-column-body"><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : `<div class="board-empty">${t('No applicants here')}</div>`}</div></div></section>`;
     }).join('')}</section>`;
     if (saved) {
       const board = content.querySelector('.kanban-board');
@@ -3200,25 +3213,26 @@
     const applicationCount = failed.reduce((total, group) => total + group.count, 0);
     const jobCount = new Set(failed.map(group => group.latest.flow_id)).size;
     const filterName = applicantFilter ? applicantFlowLabels.find(flow => flow.cloudId === applicantFilter)?.jobTitle : '';
-    const scope = filterName ? `for ${filterName}` : `across ${jobCount} ${jobCount === 1 ? 'job' : 'jobs'}`;
-    const noun = failed.length === 1 ? 'failed applicant' : 'failed applicants';
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Clear failed applicants</div><h2>Permanently delete ${failed.length} ${noun}?</h2><p>This removes ${applicationCount > failed.length ? `all ${applicationCount} applications and their uploaded resumes` : failed.length === 1 ? 'the application and its resume' : 'their applications and uploaded resumes'} ${esc(scope)}. This can't be undone.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-danger" type="button" id="confirm-clear-failed">Delete ${failed.length} ${noun}</button></div>`);
+    const scope = filterName ? t('for {job}', { job: esc(filterName) }) : tn('across {count} job', 'across {count} jobs', jobCount);
+    const what = applicationCount > failed.length ? t('all {count} applications and their uploaded resumes', { count: applicationCount }) : failed.length === 1 ? t('the application and its resume') : t('their applications and uploaded resumes');
+    const deleteLabel = tn('Delete {count} failed applicant', 'Delete {count} failed applicants', failed.length);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Clear failed applicants')}</div><h2>${tn('Permanently delete {count} failed applicant?', 'Permanently delete {count} failed applicants?', failed.length)}</h2><p>${t('This removes {what} {scope}. This can’t be undone.', { what, scope })}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="modal-actions"><button class="btn" type="button" data-close>${t('Cancel')}</button><button class="btn btn-danger" type="button" id="confirm-clear-failed">${deleteLabel}</button></div>`);
     const button = modalRoot.querySelector('#confirm-clear-failed');
     button.addEventListener('click', async () => {
-      button.disabled = true; button.textContent = 'Deleting…';
+      button.disabled = true; button.textContent = t('Deleting…');
       try {
         const result = await window.PathwayBackend.deleteFailedApplicants(applicantFilter);
         applicants = applicants.filter(applicant => applicant.status !== 'failed');
         closeModal(); renderApplicantBoard();
-        showToast(result && result.resumesRemoved === false ? 'Failed applicants deleted. Some resume files may need cleanup.' : 'Failed applicants deleted.');
-      } catch (error) { button.disabled = false; button.textContent = `Delete ${failed.length} ${noun}`; showToast(`Could not delete failed applicants: ${error.message || 'try again'}`); }
+        showToast(result && result.resumesRemoved === false ? t('Failed applicants deleted. Some resume files may need cleanup.') : t('Failed applicants deleted.'));
+      } catch (error) { button.disabled = false; button.textContent = deleteLabel; showToast(t('Could not delete failed applicants: {reason}', { reason: error.message || t('try again') })); }
     });
   }
 
   function formatApplicantDate(value) {
-    if (!value) return 'Just now';
+    if (!value) return t('Just now');
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? 'Just now' : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+    return Number.isNaN(date.getTime()) ? t('Just now') : window.PathwayI18n.formatDate(date, { month: 'short', day: 'numeric' });
   }
 
   // Moves a candidate to a stage and/or puts the cards of that column in a new order.
@@ -3229,7 +3243,7 @@
     if (!group || !allApplicantStages().some(stage => stage.key === status)) return;
     const sameColumn = group.status === status;
     if (sameColumn && !orderIds) return;
-    if (workspaceIsFree()) { showToast(FREE_MOVE_NOTE, 6000); return; }
+    if (workspaceIsFree()) { showToast(t(FREE_MOVE_NOTE), 6000); return; }
     // The stage belongs to the candidate: every application from the same address to the same job moves together.
     const members = group.items;
     const ordered = orderIds ? orderIds.map(latestId => groups.find(item => item.latest.id === latestId)).filter(Boolean) : null;
@@ -3245,7 +3259,7 @@
     try {
       if (!sameColumn) {
         const updated = await window.PathwayBackend.updateApplicantStatuses(members.map(member => member.id), status);
-        if (updated.length !== members.length) { boardOutOfDate = true; throw new Error('some applications could not be updated'); }
+        if (updated.length !== members.length) { boardOutOfDate = true; throw new Error(t('some applications could not be updated')); }
         updated.forEach(row => {
           const member = members.find(item => item.id === row.id);
           if (member) { member.status = row.status; member.updated_at = row.updated_at; }
@@ -3263,15 +3277,15 @@
       renderApplicantBoard();
       const open = modalRoot.querySelector('[data-detail-applicant]');
       if (open && members.some(member => member.id === open.dataset.detailApplicant)) showApplicantDetails(open.dataset.detailApplicant, Number(open.dataset.detailTab) || 0);
-      if (orderError) showToast(sameColumn ? `Could not save the new order: ${orderError.message || 'please retry'}` : `Applicant moved to ${applicantStageLabel(status)}, but its place in the column could not be saved.`, 6000);
-      else if (!sameColumn) showToast(`Applicant moved to ${applicantStageLabel(status)}.`);
+      if (orderError) showToast(sameColumn ? t('Could not save the new order: {reason}', { reason: orderError.message || t('please retry') }) : t('Applicant moved to {stage}, but its place in the column could not be saved.', { stage: applicantStageLabel(status) }), 6000);
+      else if (!sameColumn) showToast(t('Applicant moved to {stage}.', { stage: applicantStageLabel(status) }));
       if (!sameColumn && (status === 'ai_interview' || previous.includes('ai_interview'))) watchAiInterviewTags();
     } catch (error) {
       before.forEach((state, member) => { member.status = state.status; member.board_position = state.position; });
       renderApplicantBoard();
       // The board is not refreshed for the person: they press Refresh when they are ready.
-      if (boardOutOfDate) showToast('This candidate was removed or changed by someone else, so the stage was not updated. Press Refresh to update the board.', 7000);
-      else showToast(`Could not update applicant stage: ${error.message || 'please retry'}`);
+      if (boardOutOfDate) showToast(t('This candidate was removed or changed by someone else, so the stage was not updated. Press Refresh to update the board.'), 7000);
+      else showToast(t('Could not update applicant stage: {reason}', { reason: error.message || t('please retry') }));
     }
   }
 

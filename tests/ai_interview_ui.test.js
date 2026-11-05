@@ -244,7 +244,7 @@ test('the panel row carries createdAt, which the 12-month rule needs', () => {
 test('free plan (owner decisions 2026-11-01): stage moves locked with a note, transcript and evaluation hidden, plan cancellation explained', () => {
   assert.ok(builder.includes("const workspaceIsFree = () =>") && builder.includes('!item.premiumActive'));
   assert.ok(builder.includes("'This workspace is on the free plan. Upgrade to Premium to move candidates between stages.'"));
-  assert.ok(builder.includes("if (workspaceIsFree()) { showToast(FREE_MOVE_NOTE, 6000); return; }"), 'moveApplicant refuses on the free plan');
+  assert.ok(builder.includes("if (workspaceIsFree()) { showToast(t(FREE_MOVE_NOTE), 6000); return; }"), 'moveApplicant refuses on the free plan');
   assert.ok(builder.includes("const freeNote = isOwner && workspaceIsFree()"), 'the note above the board is for the owner only');
   assert.ok(builder.includes("draggable=\"${workspaceIsFree() ? 'false' : 'true'}\"") && builder.includes('id="applicant-status-select"${workspaceIsFree()'));
   assert.ok(builder.includes("data.locked && row.state === 'completed'") && builder.includes('Upgrade to Premium to see the transcript and the written evaluation of this interview.'));

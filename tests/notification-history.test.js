@@ -31,7 +31,7 @@ test('the backend asks for the history with the person\'s own time zone offset',
 
 test('the bell has a "See all" link that opens the notifications page, also when there is nothing unread', () => {
   const builder = read('builder.js');
-  assert.match(builder, /menu\.innerHTML = \(total[\s\S]*?: '<div class="notif-empty">You are all caught up\.<\/div>'\) \+ '<div class="notif-footer"><button type="button" class="notif-see-all" data-notif-all>See all<\/button><\/div>';/);
+  assert.match(builder, /menu\.innerHTML = \(total[\s\S]*?: `<div class="notif-empty">\$\{t\('You are all caught up\.'\)\}<\/div>`\) \+ `<div class="notif-footer"><button type="button" class="notif-see-all" data-notif-all>\$\{t\('See all'\)\}<\/button><\/div>`;/);
   assert.match(builder, /if \(event\.target\.closest\('\[data-notif-all\]'\)\) \{ setOpen\(false\); void renderNotifications\(\); return; \}/);
   assert.match(builder, /else if \(requestedPage === 'notifications'\) void renderNotifications\(\);/, 'the page has its own address');
 });
@@ -43,9 +43,9 @@ test('the page has Today and This week open, and Last 30 days folded until the p
   assert.match(builder, /let notificationMonthOpen = false;/, 'folded by default');
   assert.match(builder, /id="notif-month-toggle" aria-expanded="' \+ notificationMonthOpen \+ '" aria-controls="notif-month-list"/);
   assert.match(builder, /id="notif-month-list"' \+ \(notificationMonthOpen \? '' : ' hidden'\)/);
-  assert.match(builder, /open\('Today', today, 'today', 'Nothing new today\.'\)/);
-  assert.match(builder, /open\('This week', week, 'week', 'Nothing else this week\.'\)/);
-  assert.match(builder, /<span class="notif-unread-dot" role="img" aria-label="Unread">/, 'what was not seen yet is marked');
+  assert.match(builder, /open\(t\('Today'\), today, 'today', t\('Nothing new today\.'\)\)/);
+  assert.match(builder, /open\(t\('This week'\), week, 'week', t\('Nothing else this week\.'\)\)/);
+  assert.match(builder, /<span class="notif-unread-dot" role="img" aria-label="' \+ t\('Unread'\) \+ '">/, 'what was not seen yet is marked');
 });
 
 test('a notification opens the same thing from the bell and from the page', () => {

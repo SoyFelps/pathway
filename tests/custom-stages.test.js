@@ -69,7 +69,7 @@ test('the board uses the shared setup: custom columns sit before Hired, order an
   assert.match(builder, /window\.PathwayBackend\.renameCustomStage\(workspace\.id, stageId, name\)/);
   assert.match(builder, /window\.PathwayBackend\.deleteCustomStage\(workspace\.id, button\.dataset\.deleteStage\)/);
   assert.equal(/localStorage[^\n]*applicant-stage/.test(builder), false, 'the column choice no longer lives in the browser');
-  assert.match(builder, /hasPermission\('customize_stages'\) \? '<button class="btn btn-sm" type="button" id="customize-stages">Customize<\/button>' : ''/);
+  assert.match(builder, /hasPermission\('customize_stages'\) \? `<button class="btn btn-sm" type="button" id="customize-stages">\$\{t\('Customize'\)\}<\/button>` : ''/);
   assert.match(builder, /stage: applicantStageLabel\(group\.status\)/);
   const backend = read('backend.js');
   for (const name of ['getBoardConfig', 'createCustomStage', 'renameCustomStage', 'deleteCustomStage', 'saveBoardSettings']) {
@@ -78,7 +78,7 @@ test('the board uses the shared setup: custom columns sit before Hired, order an
   const styles = read('styles.css');
   assert.match(styles, /\.stage-custom\{background:var\(--stage-default\)\}/);
   assert.match(styles, /\.stage-create\{/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105v/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105w/);
 });
 
 test('the custom-stage migration does not use unknown color or table-privilege shortcuts', () => {

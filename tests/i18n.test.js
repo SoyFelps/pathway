@@ -174,7 +174,7 @@ test('the public page and the editor preview follow the job language, never the 
   assert.match(candidate, /G\.enhanceForm\(form, tr\)/);
   assert.ok(read('builder.js').includes("{ preview: true, onFinish: finish, language: flow.interviewLanguage || null }"), 'the editor preview uses the job language');
   const html = read('apply.html');
-  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261105v"></script>`);
+  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261105w"></script>`);
   for (const file of ['locales/pt-BR.js', 'locales/es.js', 'i18n.js']) assert.ok(at(file) > 0 && at(file) < at('candidate.js'), `${file} loads before candidate.js`);
 });
 
@@ -201,7 +201,7 @@ test('the confirmation e-mail is written in the job language; English stays exac
 
 test('the hiring app loads the dictionaries and i18n.js before the app code, and Settings saves the language in the profile', () => {
   const html = read('index.html');
-  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261105v"></script>`);
+  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261105w"></script>`);
   for (const file of ['locales/pt-BR.js', 'locales/es.js', 'i18n.js']) assert.ok(at(file) > 0, `${file} is loaded`);
   assert.ok(at('i18n.js') < at('backend.js') && at('i18n.js') < at('auth.js') && at('i18n.js') < at('builder.js'));
   const builder = read('builder.js');
@@ -221,4 +221,20 @@ test('the migration limits the language to the three codes and lets a person upd
   assert.match(sql, /check \(ui_language is null or ui_language in \('en', 'pt-BR', 'es'\)\)/);
   assert.match(sql, /grant update \(ui_language\) on public\.profiles to authenticated;/);
   assert.doesNotMatch(sql, /grant update on public\.profiles/);
+});
+
+test('the standard board stages and the AI interview tags of the cards are translated (their keys never change)', () => {
+  const { locales } = loadI18n();
+  const builder = read('builder.js');
+  const stages = builder.match(/const standardApplicantStages = \[([\s\S]*?)\n  \];/)[1];
+  const labels = [...stages.matchAll(/label: '([^']+)'/g)].map(match => match[1]);
+  assert.equal(labels.length, 11);
+  const tagBlock = builder.slice(builder.indexOf('const AI_BLOCK_TEXT = {'), builder.indexOf('// The impression is shown as a thumb'));
+  const tags = [...tagBlock.matchAll(/\['([^']+)', '(?:wait|ok|warn|muted)'\]|\[\s*'([^']+)', '[^']+'\]|\['(Interview waiting)'\]/g)].map(match => match[1] || match[2] || match[3]);
+  assert.ok(tags.length >= 13, 'the tag texts are found');
+  for (const code of LOCALES) {
+    const missing = [...labels, ...tags].filter(text => !(text in locales[code]));
+    assert.deepEqual(missing, [], `${code} is missing stage or tag texts`);
+  }
+  assert.match(builder, /standardApplicantStages\.forEach\(stage => \{ const english = stage\.label; Object\.defineProperty\(stage, 'label', \{ get: \(\) => t\(english\), enumerable: true \}\); \}\);/);
 });
