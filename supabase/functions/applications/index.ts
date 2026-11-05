@@ -115,7 +115,7 @@ async function loadActiveFlow(publishedId: string) {
   if (publicationError) throw publicationError;
   if (!publication) throw new Error("This job link is no longer available.");
   const { data: flow, error: flowError } = await admin
-    .from("application_flows").select("id,workspace_id,publication_status,active_published_flow_id")
+    .from("application_flows").select("id,workspace_id,publication_status,active_published_flow_id,interview_language")
     .eq("id", publication.flow_id).eq("workspace_id", publication.workspace_id).maybeSingle();
   if (flowError) throw flowError;
   if (!flow || flow.publication_status !== "published" || flow.active_published_flow_id !== publication.id) {
@@ -293,14 +293,15 @@ async function validateApplicantSubmission(snapshot: Record<string, unknown>, in
 }
 
 // Best effort: a failed confirmation e-mail must never fail or undo an application that is already saved.
-async function sendApplicationConfirmation(applicantId: string, to: string, name: string, snapshot: Record<string, unknown>) {
+// language: the job's language (application_flows.interview_language: 'en', 'pt', 'es' or null = English), like the job page.
+async function sendApplicationConfirmation(applicantId: string, to: string, name: string, snapshot: Record<string, unknown>, language: unknown) {
   if (!RESEND_API_KEY) {
     console.log("Confirmation e-mail skipped: RESEND_API_KEY is not configured.");
     return;
   }
   try {
     const profile = snapshot.companyProfile && typeof snapshot.companyProfile === "object" ? snapshot.companyProfile as Record<string, unknown> : {};
-    const content = buildConfirmationEmail({ name, jobTitle: snapshot.jobTitle, companyName: profile.name || snapshot.companyName });
+    const content = buildConfirmationEmail({ name, jobTitle: snapshot.jobTitle, companyName: profile.name || snapshot.companyName, language });
     const from = EMAIL_FROM_ADDRESS.includes("<") ? EMAIL_FROM_ADDRESS : `${content.fromName} <${EMAIL_FROM_ADDRESS}>`;
     const result = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -428,7 +429,7 @@ async function submitApplicant(req: Request, form: FormData) {
   }
   // Only a newly saved, validated application reaches this point: honeypot hits, invalid forms and duplicate submissions return earlier.
   if (firstForAddress) {
-    const confirmation = sendApplicationConfirmation(submissionKey, normalized.email, normalized.name, active.snapshot);
+    const confirmation = sendApplicationConfirmation(submissionKey, normalized.email, normalized.name, active.snapshot, active.flow.interview_language);
     const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void } }).EdgeRuntime;
     if (runtime?.waitUntil) runtime.waitUntil(confirmation); else await confirmation;
   } else {

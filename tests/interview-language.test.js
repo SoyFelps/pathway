@@ -89,7 +89,9 @@ test('the job editor field works end to end in a small browser-like harness', ()
   const end = src.indexOf('function mountInterviewQuestionsField(', start);
   const body = src.slice(start, end);
   const esc = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  const factory = new Function('esc', 'window', `${body}; return mountInterviewLanguageField;`);
+  const factory = new Function('esc', 'window', 't', `${body}; return mountInterviewLanguageField;`);
+  // English t(): fills {variables}, like i18n.js without a dictionary.
+  const t = (text, vars) => String(text).replace(/\{(\w+)\}/g, (match, name) => (vars && vars[name] != null ? String(vars[name]) : match));
   const make = text => {
     const listeners = {};
     const select = { innerHTML: '', value: '', addEventListener: (type, fn) => { listeners['select:' + type] = fn; } };
@@ -98,7 +100,7 @@ test('the job editor field works end to end in a small browser-like harness', ()
     const panel = { querySelector: selector => ({ '#role-interview-language': select, '#role-language-help': help, '#role-description': description }[selector] || null) };
     const flow = { jobDescription: text };
     const saves = [];
-    const detect = factory(esc, { PathwayLanguage: L })(panel, flow, options => saves.push(options));
+    const detect = factory(esc, { PathwayLanguage: L }, t)(panel, flow, options => saves.push(options));
     return { flow, select, help, description, listeners, saves, detect };
   };
 
@@ -120,7 +122,7 @@ test('the job editor field works end to end in a small browser-like harness', ()
 
   const unsure = make('Cook needed');
   assert.equal(unsure.flow.interviewLanguage, undefined, 'nothing is guessed from a short text');
-  assert.equal(unsure.help.textContent, 'We could not tell the language of the job description. Choose it manually. AI interviews are only sent once the language is set.');
+  assert.equal(unsure.help.textContent, 'We could not tell the language of the job description. Choose it manually. Until then the job page and the confirmation e-mail are in English, and AI interviews are not sent.');
   assert.equal(unsure.help.classList.classes.has('is-warning'), true);
   assert.match(unsure.select.innerHTML, /<option value="" selected disabled>Choose the language…<\/option>/);
   assert.equal(unsure.saves.length, 0);

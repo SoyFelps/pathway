@@ -143,7 +143,7 @@ test('the form builds the right control for each kind of detail', () => {
   assert.match(candidate, /data-geo="\$\{meta\.type\}"/, 'country and city: a searchable text box');
   assert.match(candidate, /<select id="candidate-pronouns" name="pronouns" data-geo="pronouns" required>/);
   assert.match(candidate, /G\.joinPronouns\(/);
-  assert.match(candidate, /G\.enhanceForm\(form\)/);
+  assert.match(candidate, /G\.enhanceForm\(form, tr\)/);
   const css = read('styles.css');
   assert.match(css, /\.combo-list\{position:absolute/);
   assert.match(css, /\.candidate-field select/);
@@ -169,7 +169,7 @@ test('every detail the employer ticks is required (no asterisks: they would mark
   const candidate = read('candidate.js');
   assert.match(candidate, /const required = 'required';/);
   assert.doesNotMatch(candidate, /\(!optional \|\| key === 'resume'\)/, 'no detail is optional any more');
-  assert.match(candidate, /placeholder="Type or select" required>/, 'country and city lists are required');
+  assert.match(candidate, /placeholder="\$\{t\('Type or select'\)\}" required>/, 'country and city lists are required');
   assert.doesNotMatch(candidate, /<span aria-hidden="true">\*<\/span>/, 'no asterisks anywhere in the candidate form');
   assert.match(read('geo.js'), /other\.required = !other\.hidden/, 'the "Other" pronouns box is required while it is shown');
   const index = read('supabase/functions/applications/index.ts');
@@ -188,7 +188,7 @@ test('the diversity questions: a second, voluntary page with "Prefer not to say"
   assert.match(candidate, /if \(meta\.type === 'diversity'\) return '';/, 'it is not a field of the first page');
   assert.match(candidate, /if \(askDiversity\) \{ state\.screen = 'diversity'; render\(\); return; \}/, 'the first page leads to the diversity page, then to the questions');
   assert.match(candidate, /function afterDetails\(\)/);
-  assert.match(candidate, /askDiversity \? 'Continue' : live \? 'Apply for this role'/, 'the first button says Continue when another page follows');
+  assert.match(candidate, /askDiversity \? t\('Continue'\) : live \? t\('Apply for this role'\)/, 'the first button says Continue when another page follows');
   assert.match(candidate, /diversity: state\.diversity,/, 'the answers travel with the application');
   assert.match(candidate, /form\.elements\.disabilityType\.required = yes;/, 'the type of disability is asked only for "Yes"');
   assert.match(read('backend.js'), /form\.set\('diversity', JSON\.stringify\(application\.diversity\)\)/);
@@ -304,7 +304,7 @@ test('the country of the phone number is a button that opens a list with its own
   const geo = read('geo.js');
   const picker = geo.slice(geo.indexOf('function attachCountryPicker'), geo.indexOf('function setupPhone'));
   assert.match(picker, /<button type="button" class="country-picker-btn" aria-haspopup="listbox" aria-expanded="false"/);
-  assert.match(picker, /<input type="search" class="country-picker-search" placeholder="Search country or code"/, 'the search box lives inside the list');
+  assert.match(picker, /<input type="search" class="country-picker-search" placeholder="' \+ t\('Search country or code'\) \+ '"/, 'the search box lives inside the list');
   assert.match(picker, /role="listbox"/);
   assert.match(picker, /search\.value = initial \|\| '';/, 'it always opens with an empty search and the whole list');
   assert.match(picker, /active = Math\.max\(0, !search\.value && selected \? shown\.indexOf\(selected\) : 0\);/, 'the chosen country is highlighted');

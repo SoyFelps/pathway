@@ -21,7 +21,10 @@ function loadI18n({ languages = ['en-US'], stored = null } = {}) {
 }
 
 // Every t('…') / tn('…', '…', n) key written in the code that is already translated.
-const TRANSLATED_FILES = ['builder.js'];
+const TRANSLATED_FILES = ['builder.js', 'candidate.js', 'geo.js'];
+// Where a dictionary key may come from: t() calls, but also English texts passed to t() as values (field labels, list options,
+// server messages shown through t(error.message)). A key that appears in none of these files is an old, unused translation.
+const SOURCE_FILES = ['builder.js', 'candidate.js', 'geo.js', 'pathway.js', 'backend.js', 'apply.html', 'supabase/functions/applications/index.ts'];
 function keysUsed(source) {
   const keys = new Set();
   const literal = String.raw`'((?:[^'\\]|\\.)*)'`;
@@ -101,17 +104,104 @@ test('every text the translated screens send through t()/tn() exists in both dic
   const used = new Set();
   for (const file of TRANSLATED_FILES) for (const key of keysUsed(read(file))) used.add(key);
   assert.ok(used.size > 50, 'the scan finds the keys');
+  const sources = SOURCE_FILES.map(read).join('\n');
+  const appears = key => ["'", '"', '`'].some(quote => sources.includes(quote + key + quote));
   for (const code of LOCALES) {
     const missing = [...used].filter(key => !(key in locales[code]));
     assert.deepEqual(missing, [], `${code} is missing translations`);
-    const unused = Object.keys(locales[code]).filter(key => !used.has(key));
+    const unused = Object.keys(locales[code]).filter(key => !used.has(key) && !appears(key));
     assert.deepEqual(unused, [], `${code} has translations no code uses (old English text?)`);
   }
 });
 
+test('the candidate page translates every field label, list option and candidate-facing server message', () => {
+  const { locales } = loadI18n();
+  const sandbox = { window: {}, document: {}, fetch() {}, Intl };
+  vm.runInNewContext(read('pathway.js'), sandbox);
+  vm.runInNewContext(read('geo.js'), sandbox);
+  const C = sandbox.window.PathwayCore, G = sandbox.window.PathwayGeo;
+  const texts = new Set([
+    ...C.OPTIONAL_FIELDS.filter(field => field.type !== 'diversity').map(field => field.label),
+    ...Object.values(C.FIELD_META).map(meta => meta.label),
+    ...G.PRONOUNS, G.PRONOUN_OTHER,
+    ...G.DIVERSITY_KEYS.flatMap(key => [G.DIVERSITY[key].label, ...G.DIVERSITY[key].options])
+  ]);
+  // Errors the applications function sends back to the candidate's page (internal errors are left out on purpose).
+  const internal = new Set(['Invalid body', 'Application service is not configured.']);
+  for (const match of read('supabase/functions/applications/index.ts').matchAll(/new Error\("([^"$]+)"\)/g)) if (!internal.has(match[1])) texts.add(match[1]);
+  for (const code of LOCALES) {
+    const missing = [...texts].filter(text => !(text in locales[code]));
+    assert.deepEqual(missing, [], `${code} is missing candidate texts`);
+  }
+});
+
+test('forLanguage gives a translator fixed to the job language without touching the person\'s choice', () => {
+  const { i18n, storage } = loadI18n({ languages: ['en-US'] });
+  const pt = i18n.forLanguage('pt');
+  assert.equal(pt.language, 'pt-BR');
+  assert.equal(pt.t('Apply for this role'), 'Candidatar-se a esta vaga');
+  assert.equal(i18n.forLanguage('es').t('Question {number}', { number: 2 }), 'Pregunta 2');
+  assert.equal(i18n.forLanguage(null).t('Apply for this role'), 'Apply for this role', 'a job without a language is in English');
+  assert.equal(i18n.language, 'en');
+  assert.equal(storage.has('pathway_ui_language'), false);
+});
+
+test('country names are shown in the job language but stored and checked in English', () => {
+  const sandbox = { window: {}, document: {}, fetch() {}, Intl };
+  vm.runInNewContext(read('geo.js'), sandbox);
+  const G = sandbox.window.PathwayGeo;
+  const brazil = G.countryItems('pt-BR').find(item => item.value === 'Brazil');
+  assert.equal(brazil.label, 'Brasil');
+  assert.equal(G.countryItems('en').find(item => item.value === 'Germany').label, 'Germany', 'English stays as before');
+  assert.equal(G.countryValue('Estados Unidos', 'pt-BR'), 'United States');
+  assert.equal(G.countryValue('united states', 'pt-BR'), 'United States', 'the English name is accepted too');
+  assert.equal(G.countryLabel('Germany', 'es'), 'Alemania');
+  assert.equal(G.countryValue('Atlantis', 'es'), 'Atlantis', 'unknown text is kept (the server rejects it)');
+  assert.ok(G.countryItems('pt-BR').every(item => G.COUNTRY_NAMES.includes(item.value)));
+  const candidate = read('candidate.js');
+  assert.match(candidate, /state\.info\.country = G\.countryValue\(state\.info\.country, tr\.language\)/);
+  assert.match(candidate, /<option value="\$\{C\.esc\(option\)\}">\$\{C\.esc\(t\(option\)\)\}<\/option>/, 'list values stay in English, only the text is translated');
+});
+
+test('the public page and the editor preview follow the job language, never the recruiter\'s', () => {
+  const sql = read('supabase/migrations/20261105150000_published_flow_language.sql');
+  assert.match(sql, /\|\| jsonb_build_object\('jobLanguage', f\.interview_language\)/);
+  for (const filter of ["f.publication_status = 'published'", 'f.active_published_flow_id = pf.id', 'public.flow_data_is_valid(f.flow_data)', 'public.workspace_has_active_subscription(pf.workspace_id)']) assert.ok(sql.includes(filter), filter);
+  assert.match(sql, /\(n\.node - 'autoFailOptions'\) - 'autoFailBelow'/, 'auto-fail rules stay hidden from candidates');
+  const candidate = read('candidate.js');
+  assert.match(candidate, /const jobLanguage = options\.language !== undefined \? options\.language : sourceFlow && sourceFlow\.jobLanguage;/);
+  assert.match(candidate, /if \(I18N\) tr = I18N\.forLanguage\(jobLanguage\);/);
+  assert.match(candidate, /G\.enhanceForm\(form, tr\)/);
+  assert.ok(read('builder.js').includes("{ preview: true, onFinish: finish, language: flow.interviewLanguage || null }"), 'the editor preview uses the job language');
+  const html = read('apply.html');
+  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261105t"></script>`);
+  for (const file of ['locales/pt-BR.js', 'locales/es.js', 'i18n.js']) assert.ok(at(file) > 0 && at(file) < at('candidate.js'), `${file} loads before candidate.js`);
+});
+
+test('the confirmation e-mail is written in the job language; English stays exactly as before', async () => {
+  const { buildConfirmationEmail, emailLanguage } = await import('../supabase/functions/applications/email.ts');
+  assert.equal(emailLanguage('pt'), 'pt');
+  assert.equal(emailLanguage(null), 'en');
+  assert.equal(emailLanguage('fr'), 'en');
+  const en = buildConfirmationEmail({ name: 'Alex', jobTitle: 'Cook', companyName: 'Acme', language: null });
+  assert.equal(en.subject, 'We received your application for Cook at Acme');
+  const pt = buildConfirmationEmail({ name: 'Ana', jobTitle: 'Advogada', companyName: 'Acme', language: 'pt' });
+  assert.equal(pt.subject, 'Recebemos sua candidatura para Advogada – Acme');
+  assert.match(pt.text, /^Olá, Ana,/);
+  assert.match(pt.html, /<html lang="pt-BR">/);
+  assert.match(pt.html, /Obrigado por se candidatar, Ana\./);
+  const es = buildConfirmationEmail({ name: '', jobTitle: 'Chef', companyName: 'Acme', language: 'es' });
+  assert.equal(es.subject, 'Recibimos su postulación para Chef – Acme');
+  assert.match(es.text, /^Hola:/);
+  assert.match(es.html, /Gracias por postularse\./);
+  const index = read('supabase/functions/applications/index.ts');
+  assert.match(index, /select\("id,workspace_id,publication_status,active_published_flow_id,interview_language"\)/);
+  assert.match(index, /sendApplicationConfirmation\(submissionKey, normalized\.email, normalized\.name, active\.snapshot, active\.flow\.interview_language\)/);
+});
+
 test('the hiring app loads the dictionaries and i18n.js before the app code, and Settings saves the language in the profile', () => {
   const html = read('index.html');
-  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261105s"></script>`);
+  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261105t"></script>`);
   for (const file of ['locales/pt-BR.js', 'locales/es.js', 'i18n.js']) assert.ok(at(file) > 0, `${file} is loaded`);
   assert.ok(at('i18n.js') < at('backend.js') && at('i18n.js') < at('auth.js') && at('i18n.js') < at('builder.js'));
   const builder = read('builder.js');

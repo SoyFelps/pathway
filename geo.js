@@ -79,6 +79,22 @@
     return String(text == null ? '' : text).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   }
 
+  // Texts and country names follow the language of the page (the job's language, see candidate.js), set by enhanceForm.
+  // Without a translator everything stays in English. What is stored and checked by the server never changes: English names.
+  const englishTranslator = { language: 'en', t: (text, vars) => String(text).replace(/\{(\w+)\}/g, (match, name) => (vars && vars[name] != null ? String(vars[name]) : match)) };
+  let tr = englishTranslator;
+  const t = (text, vars) => tr.t(text, vars);
+  const regionNames = new Map();
+  function countryDisplayName(code, language = tr.language) {
+    const english = COUNTRY_BY_CODE.get(code) || code;
+    if (!language || language === 'en' || typeof Intl === 'undefined' || !Intl.DisplayNames) return english;
+    try {
+      if (!regionNames.has(language)) regionNames.set(language, new Intl.DisplayNames([language], { type: 'region' }));
+      const name = regionNames.get(language).of(code);
+      return name && name !== code ? name : english;
+    } catch (_) { return english; }
+  }
+
   // Items are { label, key (normalized search text), nameKey (normalized main name), aliasKey (normalized other names, optional) }. Best matches first:
   // the typed word is one of the item's other names ("uk", "usa"), then the name starts with it, then a word starts with it, then it appears anywhere.
   // Items keep their own order inside each group (cities come largest first).
@@ -98,28 +114,50 @@
     return groups[0].concat(groups[1], groups[2], groups[3]).slice(0, max);
   }
 
-  function countryItems() {
-    return COUNTRIES.map(([, name, extra]) => ({ label: name, nameKey: normalize(name), aliasKey: normalize(extra || ''), key: normalize(name + ' ' + (extra || '')) }));
+  // label = the name shown (page language); value = the English name that is stored. The English name also finds the country.
+  function countryItems(language = tr.language) {
+    return COUNTRIES.map(([code, name, extra]) => {
+      const label = countryDisplayName(code, language);
+      const other = label !== name ? name + ' ' : '';
+      return { label, value: name, nameKey: normalize(label), aliasKey: normalize(other + (extra || '')), key: normalize(label + ' ' + other + (extra || '')) };
+    });
+  }
+  // The English name to store for what is typed in the country field (shown name or English name); unknown text is returned as it is.
+  function countryValue(text, language = tr.language) {
+    const key = normalize(text);
+    if (!key) return '';
+    const item = countryItems(language).find(entry => entry.nameKey === key || normalize(entry.value) === key);
+    return item ? item.value : String(text).trim();
+  }
+  // The name to show for a stored English country name.
+  function countryLabel(value, language = tr.language) {
+    const entry = COUNTRIES.find(country => country[1] === value);
+    return entry ? countryDisplayName(entry[0], language) : String(value || '');
   }
 
-  let cityRequest = null;
-  function loadCityItems() {
-    if (!cityRequest) {
-      cityRequest = fetch(CITY_LIST_URL).then(response => {
+  // One list per page language: the country at the end of each city ("Lisbon, Portugal") is shown in that language,
+  // and the English country name still finds the city.
+  const cityRequests = new Map();
+  function loadCityItems(language = tr.language) {
+    if (!cityRequests.has(language)) {
+      const request = fetch(CITY_LIST_URL).then(response => {
         if (!response.ok) throw new Error('The city list could not be loaded.');
         return response.json();
       }).then(data => {
         if (!data || !Array.isArray(data.cities) || !Array.isArray(data.countries) || !Array.isArray(data.regions)) throw new Error('The city list is not valid.');
-        const countryNames = data.countries.map(code => COUNTRY_BY_CODE.get(code) || code);
+        const countryNames = data.countries.map(code => countryDisplayName(code, language));
+        const englishNames = data.countries.map(code => COUNTRY_BY_CODE.get(code) || code);
         return data.cities.map(([name, region, country]) => {
           const regionName = region >= 0 ? data.regions[region] : '';
           const label = [name, regionName && regionName !== name ? regionName : '', countryNames[country]].filter(Boolean).join(', ');
-          return { label, nameKey: normalize(name), key: normalize(label) };
+          const english = englishNames[country] !== countryNames[country] ? ' ' + englishNames[country] : '';
+          return { label, nameKey: normalize(name), key: normalize(label + english) };
         });
       });
-      cityRequest.catch(() => { cityRequest = null; });
+      cityRequests.set(language, request);
+      request.catch(() => { cityRequests.delete(language); });
     }
-    return cityRequest;
+    return cityRequests.get(language);
   }
 
   let comboCounter = 0;
@@ -133,7 +171,7 @@
   }
   // Turns a text input into a searchable list. strict: only a value from the list is accepted; allowCustom: the typed text may also be used as it is.
   function attachCombobox(input, options) {
-    const { items, loadItems, strict = false, fullListOnFocus = strict, allowCustom = false, maxResults = 8, invalidMessage = 'Choose a value from the list.', loadingText = 'Loading…' } = options;
+    const { items, loadItems, strict = false, fullListOnFocus = strict, allowCustom = false, maxResults = 8, invalidMessage = t('Choose a value from the list.'), loadingText = t('Loading…') } = options;
     const wrap = input.parentElement;
     wrap.classList.add('combo');
     const list = document.createElement('ul');
@@ -143,7 +181,7 @@
     input.setAttribute('autocomplete', 'off'); input.setAttribute('autocapitalize', 'off'); input.spellcheck = false;
     let all = items || null, loading = false, failed = false, shown = [], active = -1, pristine = false; // pristine: opened and not typed in yet
 
-    const exact = value => all && all.find(item => item.nameKey === normalize(value) || normalize(item.label) === normalize(value));
+    const exact = value => all && all.find(item => item.nameKey === normalize(value) || normalize(item.label) === normalize(value) || (item.value && normalize(item.value) === normalize(value)));
     const syncValidity = () => { const value = input.value.trim(); input.setCustomValidity(strict && value && all && !exact(value) ? invalidMessage : ''); };
     const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); active = -1; };
     const choose = item => { input.value = item.label; pristine = fullListOnFocus; syncValidity(); close(); input.dispatchEvent(new Event('change', { bubbles: true })); };
@@ -154,11 +192,11 @@
         const li = document.createElement('li');
         li.id = list.id + '-' + index; li.setAttribute('role', 'option'); li.setAttribute('aria-selected', index === active ? 'true' : 'false');
         li.className = 'combo-option' + (item.custom ? ' is-custom' : '') + (index === active ? ' is-active' : '');
-        li.textContent = item.custom ? 'Use “' + item.label + '”' : item.label;
+        li.textContent = item.custom ? t('Use “{text}”', { text: item.label }) : item.label;
         li.addEventListener('mousedown', event => { event.preventDefault(); choose(item); });
         list.appendChild(li);
       });
-      if (!loading && !shown.length) { const li = document.createElement('li'); li.className = 'combo-note'; li.textContent = failed ? 'The list is not available. Type it in your own words.' : 'No match'; list.appendChild(li); }
+      if (!loading && !shown.length) { const li = document.createElement('li'); li.className = 'combo-note'; li.textContent = failed ? t('The list is not available. Type it in your own words.') : t('No match'); list.appendChild(li); }
       list.hidden = false; input.setAttribute('aria-expanded', 'true');
       if (active >= 0) input.setAttribute('aria-activedescendant', list.id + '-' + active); else input.removeAttribute('aria-activedescendant');
     }
@@ -283,16 +321,16 @@
     const id = 'cp-' + (++comboCounter);
     wrap.classList.add('country-picker');
     wrap.innerHTML = '<button type="button" class="country-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="' + id + '-panel"><span class="cp-name"></span><span class="cp-code"></span></button>'
-      + '<div class="country-picker-panel" id="' + id + '-panel" hidden><input type="search" class="country-picker-search" placeholder="Search country or code" aria-label="Search countries" aria-controls="' + id + '-list" autocomplete="off" spellcheck="false"><ul class="country-picker-list" id="' + id + '-list" role="listbox" aria-label="Countries"></ul></div>';
+      + '<div class="country-picker-panel" id="' + id + '-panel" hidden><input type="search" class="country-picker-search" placeholder="' + t('Search country or code') + '" aria-label="' + t('Search countries') + '" aria-controls="' + id + '-list" autocomplete="off" spellcheck="false"><ul class="country-picker-list" id="' + id + '-list" role="listbox" aria-label="' + t('Countries') + '"></ul></div>';
     const button = wrap.querySelector('.country-picker-btn'), panel = wrap.querySelector('.country-picker-panel'), search = wrap.querySelector('.country-picker-search'), list = wrap.querySelector('.country-picker-list');
     let selected = null, shown = [], active = 0;
     const isOpen = () => !panel.hidden;
     const setSelected = item => {
       selected = item;
-      wrap.querySelector('.cp-name').textContent = item ? item.name : 'Country';
+      wrap.querySelector('.cp-name').textContent = item ? item.name : t('Country');
       wrap.querySelector('.cp-code').textContent = item ? '+' + item.code : '';
       button.title = item ? item.label : '';
-      button.setAttribute('aria-label', item ? 'Country calling code: ' + item.label : 'Country calling code');
+      button.setAttribute('aria-label', item ? t('Country calling code: {country}', { country: item.label }) : t('Country calling code'));
     };
     const paint = center => {
       list.innerHTML = '';
@@ -304,7 +342,7 @@
         li.addEventListener('mousedown', event => { event.preventDefault(); pick(item); });
         list.appendChild(li);
       });
-      if (!shown.length) { const li = document.createElement('li'); li.className = 'combo-note'; li.textContent = 'No match'; list.appendChild(li); }
+      if (!shown.length) { const li = document.createElement('li'); li.className = 'combo-note'; li.textContent = t('No match'); list.appendChild(li); }
       if (shown.length) search.setAttribute('aria-activedescendant', id + '-o' + active); else search.removeAttribute('aria-activedescendant');
       scrollListTo(list, list.querySelector('.is-active'), center);
     };
@@ -347,17 +385,17 @@
     const state = { iso: '', lib: null, items: [], pending: numberInput._pendingPhone || '' };
     numberInput._phone = state;
     let picker = null;
-    const nameOf = iso => COUNTRY_BY_CODE.get(iso) || iso;
+    const nameOf = iso => countryDisplayName(iso);
     const itemOf = iso => state.items.find(entry => entry.iso === iso);
     const labelOf = iso => { const item = itemOf(iso); return item ? item.label : ''; };
     const validate = () => {
       if (!state.lib) return;
       const text = numberInput.value.trim();
-      numberInput.setCustomValidity(!text || phoneCheck(state.lib, state.iso, text).ok ? '' : 'Enter a valid phone number for ' + nameOf(state.iso) + '.');
+      numberInput.setCustomValidity(!text || phoneCheck(state.lib, state.iso, text).ok ? '' : t('Enter a valid phone number for {country}.', { country: nameOf(state.iso) }));
     };
     const setCountry = iso => {
       state.iso = iso; if (picker) picker.setSelected(itemOf(iso) || null);
-      numberInput.placeholder = phoneMask(state.lib, iso) || 'Phone number';
+      numberInput.placeholder = phoneMask(state.lib, iso) || t('Phone number');
       numberInput.value = phoneNational(state.lib, iso, numberInput.value);
       validate();
     };
@@ -372,9 +410,11 @@
     loadPhoneLib().then(lib => {
       state.lib = lib;
       const supported = new Set(lib.getCountries());
-      state.items = COUNTRIES.filter(country => supported.has(country[0])).map(([code, name, extra]) => {
+      state.items = COUNTRIES.filter(country => supported.has(country[0])).map(([code, english, extra]) => {
         const callingCode = lib.getCountryCallingCode(code);
-        return { label: name + ' (+' + callingCode + ')', name, code: callingCode, iso: code, nameKey: normalize(name), aliasKey: normalize(extra || ''), key: normalize(name + ' ' + (extra || '') + ' ' + callingCode) };
+        const name = countryDisplayName(code);
+        const other = name !== english ? english + ' ' : '';
+        return { label: name + ' (+' + callingCode + ')', name, code: callingCode, iso: code, nameKey: normalize(name), aliasKey: normalize(other + (extra || '')), key: normalize(name + ' ' + other + (extra || '') + ' ' + callingCode) };
       });
       // After a country is picked the cursor goes to the number: the next thing to do is to type it.
       picker = attachCountryPicker(countryWrap, { items: state.items, onPick: item => { if (item.iso !== state.iso) setCountry(item.iso); numberInput.focus({ preventScroll: true }); } });
@@ -392,7 +432,7 @@
           if (country && labelOf(country)) {
             const number = found.getNumber();
             const national = number ? number.nationalNumber : raw.replace(/[^0-9]/g, '').slice(String(callingCode).length);
-            state.iso = country; picker.setSelected(itemOf(country)); numberInput.placeholder = phoneMask(lib, country) || 'Phone number';
+            state.iso = country; picker.setSelected(itemOf(country)); numberInput.placeholder = phoneMask(lib, country) || t('Phone number');
             numberInput.value = phoneNational(lib, country, national); validate(); return;
           }
         }
@@ -402,7 +442,7 @@
     }).catch(() => {
       // The list could not be loaded: keep it usable with a plain number that starts with the country code.
       countryWrap.hidden = true;
-      numberInput.placeholder = '+55 31 99999-9999'; numberInput.pattern = '\\+[0-9 ()\\-]{7,24}'; numberInput.title = 'Start with the country code, for example +55 31 99999-9999';
+      numberInput.placeholder = '+55 31 99999-9999'; numberInput.pattern = '\\+[0-9 ()\\-]{7,24}'; numberInput.title = t('Start with the country code, for example +55 31 99999-9999');
     });
   }
   function readPhone(form) {
@@ -432,9 +472,11 @@
   }
 
   // Wires every geography / pronoun field found inside a form (the markup comes from candidate.js).
-  function enhanceForm(form) {
-    form.querySelectorAll('input[data-geo="country"]').forEach(input => attachCombobox(input, { items: countryItems(), strict: true, maxResults: 300, invalidMessage: 'Choose a country from the list.' }));
-    form.querySelectorAll('input[data-geo="city"]').forEach(input => attachCombobox(input, { loadItems: loadCityItems, allowCustom: true, maxResults: 8, loadingText: 'Loading cities…' }));
+  // translator: the page's texts ({ language, t } from i18n.js forLanguage); without one, English.
+  function enhanceForm(form, translator) {
+    tr = translator && typeof translator.t === 'function' ? translator : englishTranslator;
+    form.querySelectorAll('input[data-geo="country"]').forEach(input => attachCombobox(input, { items: countryItems(), strict: true, maxResults: 300, invalidMessage: t('Choose a country from the list.') }));
+    form.querySelectorAll('input[data-geo="city"]').forEach(input => attachCombobox(input, { loadItems: () => loadCityItems(), allowCustom: true, maxResults: 8, loadingText: t('Loading cities…') }));
     const phoneCountry = form.querySelector('[data-geo="phone-country"]'), phoneNumber = form.querySelector('input[data-geo="phone-number"]');
     if (phoneCountry && phoneNumber) setupPhone(phoneCountry, phoneNumber);
     const select = form.querySelector('select[data-geo="pronouns"]'), other = form.querySelector('input[data-geo="pronouns-other"]');
@@ -451,5 +493,5 @@
     if (other) { other.value = parts.other; other.hidden = parts.choice !== PRONOUN_OTHER; other.required = !other.hidden; }
   }
 
-  window.PathwayGeo = { phoneExamples, loadPhoneLib, phoneMask, phoneMaxDigits, phoneNational, phoneCheck, phoneParse, phoneExample, readPhone, fillPhone, DIVERSITY, DIVERSITY_KEYS, PREFER_NOT_TO_SAY, COUNTRIES, COUNTRY_NAMES, COUNTRY_BY_CODE, PRONOUNS, PRONOUN_OTHER, PRONOUN_OTHER_MAX, normalize, rankItems, countryItems, loadCityItems, attachCombobox, enhanceForm, joinPronouns, splitPronouns, fillPronouns };
+  window.PathwayGeo = { phoneExamples, loadPhoneLib, phoneMask, phoneMaxDigits, phoneNational, phoneCheck, phoneParse, phoneExample, readPhone, fillPhone, DIVERSITY, DIVERSITY_KEYS, PREFER_NOT_TO_SAY, COUNTRIES, COUNTRY_NAMES, COUNTRY_BY_CODE, PRONOUNS, PRONOUN_OTHER, PRONOUN_OTHER_MAX, normalize, rankItems, countryItems, countryValue, countryLabel, countryDisplayName, loadCityItems, attachCombobox, enhanceForm, joinPronouns, splitPronouns, fillPronouns };
 })();

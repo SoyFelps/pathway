@@ -687,12 +687,13 @@
     const text = () => (description ? description.value : flow.jobDescription || '');
     const paint = () => {
       const chosen = flow.interviewLanguage;
-      select.innerHTML = '<option value=""' + (chosen ? '' : ' selected') + ' disabled>Choose the language…</option>' + L.LANGUAGES.map(code => '<option value="' + code + '"' + (chosen === code ? ' selected' : '') + '>' + esc(L.NAMES[code]) + '</option>').join('');
+      select.innerHTML = '<option value=""' + (chosen ? '' : ' selected') + ' disabled>' + t('Choose the language…') + '</option>' + L.LANGUAGES.map(code => '<option value="' + code + '"' + (chosen === code ? ' selected' : '') + '>' + esc(L.NAMES[code]) + '</option>').join('');
+      // The job's language is used by the public job page, the candidate's confirmation e-mail and the AI interview.
       let note;
-      if (!chosen) note = 'We could not tell the language of the job description. Choose it manually. AI interviews are only sent once the language is set.';
-      else if (flow.interviewLanguageManual) { const found = L.detect(text()); note = 'Chosen by you.' + (found.code && found.code !== chosen ? ' The description looks like ' + L.NAMES[found.code] + '.' : ''); }
-      else note = 'Detected from the job description.';
-      help.textContent = chosen ? note + ' The AI talks to candidates in this language and expects their answers in it.' : note;
+      if (!chosen) note = t('We could not tell the language of the job description. Choose it manually. Until then the job page and the confirmation e-mail are in English, and AI interviews are not sent.');
+      else if (flow.interviewLanguageManual) { const found = L.detect(text()); note = t('Chosen by you.') + (found.code && found.code !== chosen ? ' ' + t('The description looks like {language}.', { language: L.NAMES[found.code] }) : ''); }
+      else note = t('Detected from the job description.');
+      help.textContent = chosen ? note + ' ' + t('The job page, the confirmation e-mail and the AI interview use this language; the AI expects the answers in it.') : note;
       help.classList.toggle('is-warning', !chosen);
     };
     const detect = () => {
@@ -4024,7 +4025,7 @@
       ? `<div class="inspector-title"><div><div class="inspector-kicker">Flow settings</div><h2>Job details</h2></div></div><div class="field-group"><label for="role-company-profile">Company</label><select class="select-input" id="role-company-profile">${companyOptionsHtml(flow.companyId || '')}</select></div><div class="field-group"><label for="role-title">Job title</label><input class="text-input" id="role-title" value="${esc(flow.jobTitle)}"></div><div class="field-group"><div class="field-label-row"><label for="role-description">Job description</label><button type="button" class="icon-btn expand-btn" id="expand-description" aria-label="Open the job description in a larger window" title="Larger window"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div><textarea class="text-area" id="role-description">${esc(flow.jobDescription)}</textarea></div><div class="field-group"><span class="form-label" id="role-responsible-label">Responsible</span><div id="role-responsible"></div></div><hr class="inspector-divider">`
       : '';
     // The AI interview questions are part of the job details but come LAST, below the candidate-details step.
-    const aiSection = selected.type === 'candidateInfo' ? '<hr class="inspector-divider"><div class="field-group" id="role-language-group"><label class="form-label" for="role-interview-language">AI interview language</label><select class="select-input" id="role-interview-language"></select><small class="field-help" id="role-language-help"></small></div><div class="field-group"><div class="field-label-row"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><button type="button" class="icon-btn expand-btn" id="expand-ai-questions" aria-label="Open the AI interview questions in a larger window" title="Larger window"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div><div id="role-ai-questions"></div></div>' : '';
+    const aiSection = selected.type === 'candidateInfo' ? '<hr class="inspector-divider"><div class="field-group" id="role-language-group"><label class="form-label" for="role-interview-language">' + t('Job language') + '</label><select class="select-input" id="role-interview-language"></select><small class="field-help" id="role-language-help"></small></div><div class="field-group"><div class="field-label-row"><span class="form-label" id="role-ai-questions-label">AI interview questions</span><button type="button" class="icon-btn expand-btn" id="expand-ai-questions" aria-label="Open the AI interview questions in a larger window" title="Larger window"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div><div id="role-ai-questions"></div></div>' : '';
     panel.innerHTML = `<div class="mobile-details-bar"><button type="button" class="btn btn-sm" id="close-node-details">← Back to board</button></div>${roleSettings}<div class="inspector-title"><div><div class="inspector-kicker">Selected step</div><h2>${esc(title)}</h2></div>${selected.type === 'candidateInfo' ? '<span class="node-badge">Fixed start</span>' : ''}</div><div id="node-editor"></div>${aiSection}`;
     panel.querySelector('#close-node-details')?.addEventListener('click', closeNodeDetailsOnPhone);
     let refreshLanguage = () => {}; // set below, once the language field exists; the larger description window calls it too
@@ -4129,10 +4130,11 @@
 
   function openPreview() {
     const flow = currentFlow();
-    modalRoot.innerHTML = `<div class="preview-overlay"><div class="preview-window" id="preview-window"><div id="candidate-preview"></div></div><button class="preview-close" id="close-preview">✕ &nbsp;Exit preview</button></div>`;
+    modalRoot.innerHTML = `<div class="preview-overlay"><div class="preview-window" id="preview-window"><div id="candidate-preview"></div></div><button class="preview-close" id="close-preview">✕ &nbsp;${t('Exit preview')}</button></div>`;
     const finish = () => { if (previewController) previewController.destroy(); modalRoot.innerHTML = ''; previewController = null; };
     modalRoot.querySelector('#close-preview').addEventListener('click', finish);
-    previewController = window.PathwayCandidate.mountCandidate(modalRoot.querySelector('#candidate-preview'), flow, { preview: true, onFinish: finish });
+    // The preview is in the job's language, exactly as candidates will see it (the button above follows the recruiter's language).
+    previewController = window.PathwayCandidate.mountCandidate(modalRoot.querySelector('#candidate-preview'), flow, { preview: true, onFinish: finish, language: flow.interviewLanguage || null });
   }
 
   async function copyJobUrl() { return copyFlowUrl(currentFlow()); }

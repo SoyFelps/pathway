@@ -65,28 +65,41 @@
     return text.replace(/\{(\w+)\}/g, (match, name) => (Object.prototype.hasOwnProperty.call(vars, name) && vars[name] != null ? String(vars[name]) : match));
   }
 
-  function t(text, vars) {
+  function translate(code, text, vars) {
     const key = String(text);
-    const dict = dictionary();
+    const dict = dictionary(code);
     const entry = dict ? dict[key] : undefined;
     return fill(typeof entry === 'string' ? entry : key, vars);
   }
+  function t(text, vars) { return translate(current, text, vars); }
 
-  let pluralRules = null;
-  function pluralCategory(count) {
-    if (!pluralRules || pluralRules.locale !== current) pluralRules = { locale: current, rules: new Intl.PluralRules(current) };
-    return pluralRules.rules.select(Number(count) || 0);
+  const pluralRules = new Map();
+  function pluralCategory(code, count) {
+    if (!pluralRules.has(code)) pluralRules.set(code, new Intl.PluralRules(code));
+    return pluralRules.get(code).select(Number(count) || 0);
   }
 
-  function tn(one, other, count, vars) {
+  function translatePlural(code, one, other, count, vars) {
     const values = { count, ...(vars || {}) };
-    const dict = dictionary();
+    const dict = dictionary(code);
     const entry = dict ? dict[String(one)] : undefined;
     if (entry && typeof entry === 'object') {
-      const form = entry[pluralCategory(count)] || entry.other || entry.one;
+      const form = entry[pluralCategory(code, count)] || entry.other || entry.one;
       if (typeof form === 'string') return fill(form, values);
     }
     return fill(Number(count) === 1 ? String(one) : String(other), values);
+  }
+  function tn(one, other, count, vars) { return translatePlural(current, one, other, count, vars); }
+
+  // A translator fixed to one language, whatever the person chose: the candidate page and its preview follow the job's language
+  // ('en', 'pt', 'es' or empty; empty = English). It never touches the saved preference.
+  function forLanguage(code) {
+    const language = normalize(code) || 'en';
+    return {
+      language,
+      t: (text, vars) => translate(language, text, vars),
+      tn: (one, other, count, vars) => translatePlural(language, one, other, count, vars)
+    };
   }
 
   // Dates and numbers follow the interface language.
@@ -118,6 +131,7 @@
     formatDate,
     formatNumber,
     setPreference,
+    forLanguage,
     get language() { return current; },
     get preference() { return preference; }
   };

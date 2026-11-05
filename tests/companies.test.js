@@ -103,8 +103,8 @@ test('company edits propagate atomically to linked drafts and active published s
   assert.match(builder, /window\.PathwayBackend\.updateCompany/);
   assert.match(builder, /Company updated in its linked flows/);
   assert.match(styles, /\.company-card-actions/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105s/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261105s/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261105t/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261105t/);
 });
 
 test('company deletion requires all linked flows removed first and the UI confirms candidate-data loss', () => {
@@ -145,7 +145,7 @@ test('candidate page shows the selected company logo in the header and the descr
   assert.match(candidate, /\$\{logoUrl \? `<span class="candidate-header-divider" aria-hidden="true"><\/span><img class="candidate-header-logo"/, 'logo in the header, after the Pathway brand, only when there is one');
   assert.equal(candidate.includes('company-avatar'), false, 'no logo box in the job details any more');
   assert.equal(candidate.includes('Careers'), false);
-  assert.match(candidate, /<h2>About \$\{C\.esc\(brandName\)}<\/h2>/);
+  assert.match(candidate, /<h2>\$\{t\('About \{company\}', \{ company: C\.esc\(brandName\) \}\)\}<\/h2>/);
   assert.match(candidate, /PATHWAY_SUPABASE_CONFIG\?\.url/);
   assert.match(candidate, /company-logos/);
   assert.match(candidate, /function companyLogoUrl\(profile\)/);
