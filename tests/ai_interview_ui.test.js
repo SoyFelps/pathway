@@ -35,10 +35,10 @@ test('the card shows the interview tag and badge, and the candidate panel gets a
 
 test('the panel offers re-send and cancel only before the candidate starts, and a retry of the evaluation only when it is missing', () => {
   const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
-  assert.ok(panel.includes("row.state === 'invited'") && panel.includes("button('resend', 'Re-send e-mail'"));
-  assert.ok(panel.includes("'Cancel invitation'") && panel.includes('cancel-yes'), 'cancelling asks for a second click');
+  assert.ok(panel.includes("row.state === 'invited'") && panel.includes("button('resend', t('Re-send e-mail')"));
+  assert.ok(panel.includes("t('Cancel invitation')") && panel.includes('cancel-yes'), 'cancelling asks for a second click');
   assert.ok(panel.includes('const ready = row.evaluationReady && live.evaluation'), 'a ready evaluation is shown as text');
-  assert.ok(panel.includes("button('reevaluate', 'Write the evaluation again')"), 'the retry button is only in the not-ready branch');
+  assert.ok(panel.includes("button('reevaluate', t('Write the evaluation again'))"), 'the retry button is only in the not-ready branch');
   assert.ok(panel.includes('The AI does not decide who moves forward'), 'the reminder that people decide is on screen');
   assert.ok(!panel.includes('localStorage') && !panel.includes('sessionStorage'), 'the evaluation and the conversation are never stored in the browser');
   assert.ok(!/innerHTML = [^;]*live\.evaluation\b(?![^;]*esc\()/.test(panel), 'the evaluation is escaped before it is shown');
@@ -61,7 +61,7 @@ test('the new styles use colour tokens only', () => {
 
 test('a new invitation after a cancelled, left or expired interview is only sent by the "Invite again" button, in any column', () => {
   const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
-  assert.ok(panel.includes("button('reinvite', 'Invite again')"));
+  assert.ok(panel.includes("button('reinvite', t('Invite again'))"));
   for (const state of ['cancelled', 'abandoned', 'expired']) {
     const start = panel.indexOf("row.state === '" + state + "'");
     assert.ok(start > 0, state + ' has its own branch');
@@ -163,7 +163,7 @@ test('an interview still going on while the candidate sits in another column sho
   const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
   assert.ok(panel.includes("['pending', 'blocked', 'invited', 'in_progress'].includes(row.state)"), 'only for an interview that is not finished and not cancelled');
   assert.ok(panel.includes("stage.getStage() !== 'ai_interview'") && panel.includes('stage.canMove()'), 'only when the card is elsewhere and the AI Interview column is turned on');
-  assert.ok(panel.includes('This candidate is not in the AI Interview column of the Kanban.') && panel.includes("button('move-stage', 'Move to AI Interview column')"));
+  assert.ok(panel.includes('This candidate is not in the AI Interview column of the Kanban.') && panel.includes("button('move-stage', t('Move to AI Interview column'))"));
   assert.ok(panel.includes('await stage.moveTo()') && panel.includes('pendingOpenAiTab = true'), 'the move keeps the person on the AI Interview tab');
   assert.ok(builder.includes("moveTo: () => moveApplicant(applicant.id, 'ai_interview')"), 'the button uses the normal move, so the stage history and the board stay in order');
 });
@@ -200,8 +200,8 @@ test('every way of deleting a candidate, a job, a workspace or an account reache
 
 test('the delete-candidate confirmation tells the person that the AI interview goes too, when there is one', () => {
   const confirm = builder.slice(builder.indexOf('const showConfirm = () => {'), builder.indexOf("row.querySelector('#cancel-delete-candidate')"));
-  assert.ok(confirm.includes("aiInterviewFor(flowId, email) ? ', their AI interview (answers, evaluation and impression)' : ''"));
-  assert.ok(confirm.includes('the resume file') && confirm.includes('the team comments about them. This cannot be undone.'), 'the rest of the warning is unchanged');
+  assert.ok(confirm.includes("aiInterviewFor(flowId, email) ? t(', the resume file, their AI interview (answers, evaluation and impression) and the team comments about them') : t(', the resume file and the team comments about them')"));
+  assert.ok(confirm.includes("t('This removes {what}. This cannot be undone.', { what: removes })"), 'the rest of the warning is unchanged');
 });
 
 test('every action of the AI Interview tab that goes to the server replaces its button by a notice at the click, with no lookup first', () => {
@@ -219,8 +219,8 @@ test('the "left before finishing" panel says when and where the candidate left, 
   const panel = builder.slice(builder.indexOf('function mountAiInterviewPanel'), builder.indexOf('function mountInterviewQuestionsField'));
   const start = panel.indexOf("row.state === 'abandoned'");
   const branch = panel.slice(start, panel.indexOf("row.state === 'expired'", start));
-  assert.ok(branch.includes("info('Left on', when(live.abandonedAt))") && branch.includes("info('Where they left', where)"));
-  assert.ok(branch.includes('live.progress') && branch.includes('On the follow-up to ') && branch.includes('questionText'));
+  assert.ok(branch.includes("info(t('Left on'), when(live.abandonedAt))") && branch.includes("info(t('Where they left'), where)"));
+  assert.ok(branch.includes('live.progress') && branch.includes('On the follow-up to question {number} of {total}') && branch.includes('questionText'));
   assert.ok(branch.includes('may give this candidate an advantage') && branch.indexOf('may give this candidate an advantage') < branch.indexOf('reinviteBlock(row)'));
   const user = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'functions', 'ai-interview', 'index.ts'), 'utf8');
   assert.ok(user.includes('abandonedAt: result.json.abandonedAt') && user.includes('progress: result.json.progress'));

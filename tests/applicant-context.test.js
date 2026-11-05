@@ -10,19 +10,20 @@ test('the applicant panel header shows "applying for <company>" instead of repea
   const d = details();
   const header = d.slice(d.indexOf('<div class="applicant-detail-title">'), d.indexOf('<button class="modal-x"'));
   assert.equal(header.includes('candidate_email'), false, 'the e-mail is no longer in the header (it is in Candidate details)');
-  assert.ok(d.includes("const applicantSubtitle = [flow?.companyName ? `applying for ${flow.companyName}` : '', group.count > 1 ? `Applied ${group.count} times` : ''].filter(Boolean).join(' · ');"));
+  assert.ok(d.includes("const applicantSubtitle = [flow?.companyName ? t('applying for {company}', { company: flow.companyName }) : '', group.count > 1 ? t('Applied {count} times', { count: group.count }) : ''].filter(Boolean).join(' · ');"));
   assert.ok(header.includes('${applicantSubtitle ? `<div class="muted">${esc(applicantSubtitle)}</div>` : \'\'}'));
-  assert.ok(d.includes('<span>Email address</span><a href="mailto:'), 'the e-mail is still shown, once, in Candidate details');
+  assert.ok(d.includes("<span>${t('Email address')}</span><a href=\"mailto:"), 'the e-mail is still shown, once, in Candidate details');
 });
 
 test('Application record shows who is responsible for the job, read only', () => {
   const d = details();
-  const record = d.slice(d.indexOf('<h3>Application record</h3>'), d.indexOf('</section>', d.indexOf('<h3>Application record</h3>')));
-  assert.ok(record.includes('<span>Responsible</span><button type="button" class="applicant-responsible-trigger" id="applicant-responsible"'), 'a Responsible line in the record');
+  const recordStart = d.indexOf("<h3>${t('Application record')}</h3>");
+  const record = d.slice(recordStart, d.indexOf('</section>', recordStart));
+  assert.ok(record.includes("<span>${t('Responsible')}</span><button type=\"button\" class=\"applicant-responsible-trigger\" id=\"applicant-responsible\""), 'a Responsible line in the record');
   assert.equal(/<(input|select)/.test(record), false, 'view only: nothing to edit');
   assert.ok(d.includes("window.PathwayBackend.getFlowResponsibles(applicant.flow_id)"));
-  assert.ok(d.includes("return 'All team members'") || d.includes("'All team members'"), 'a job set to All reads "All team members"');
-  assert.ok(d.includes("personLabel(person, result.people) + (person.isOwner ? ' (owner)' : '')"));
+  assert.ok(d.includes("return t('All team members')") || d.includes("'All team members'"), 'a job set to All reads "All team members"');
+  assert.ok(d.includes("personLabel(person, result.people) + (person.isOwner ? ' ' + t('(owner)') : '')"));
   assert.ok(d.includes(".catch(() => { responsibleNode.closest('.applicant-responsible-item')?.remove(); });"), 'if it cannot be loaded the line disappears instead of showing an error');
   assert.ok(read('builder.js').includes('flowResponsiblesCache.clear();'), 'Refresh reloads it');
 });
@@ -65,7 +66,7 @@ test('phones and other browsers without an inline PDF viewer get the pages drawn
   assert.ok(builder.includes("script.src = 'vendor/pdfjs/pdf.min.js?v=' + PDFJS_VERSION;"), 'loaded from this site, only when needed');
   assert.equal(/https?:\/\/[^'"\s]*pdf(\.worker)?(\.min)?\.js/.test(builder), false, 'no third-party script address');
   assert.ok(builder.includes('await window.PathwayBackend.downloadApplicantResume(applicant.resume_path)'));
-  assert.ok(builder.includes("catch (drawError) { pdfPages.textContent = 'This resume could not be displayed here. Use Download resume to open it.'; }"), 'a failure points to Download resume');
+  assert.ok(builder.includes("catch (drawError) { pdfPages.textContent = t('This resume could not be displayed here. Use Download resume to open it.'); }"), 'a failure points to Download resume');
   assert.ok(backend.includes("client.storage.from('applicant-resumes').download(path)") && backend.includes("path.startsWith('/') || path.includes('..')"), 'same path checks as the signed link');
   assert.ok(read('styles.css').includes('.applicant-resume-preview iframe[hidden]{display:none!important}'), 'the hidden iframe takes no space');
   for (const file of ['vendor/pdfjs/pdf.min.js', 'vendor/pdfjs/pdf.worker.min.js', 'vendor/pdfjs/LICENSE', 'vendor/pdfjs/README.md']) assert.ok(fs.existsSync(path.join(__dirname, '..', file)), file + ' is in the repository');

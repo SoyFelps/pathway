@@ -26,7 +26,7 @@ test('the candidate panel has a Delete candidate button at the bottom that asks 
   assert.ok(builder.indexOf('id="applicant-comments-heading"') < builder.indexOf('id="applicant-delete-row"') && builder.indexOf('id="applicant-delete-row"') < builder.indexOf('class="applicant-mobile-bar"'), 'below the comments, at the end of the panel');
   assert.ok(builder.includes("mountCandidateDeletion(modalRoot, applicant.flow_id, person, group, flow?.jobTitle || '');"));
   const ui = builder.slice(builder.indexOf('function mountCandidateDeletion('), builder.indexOf('function showApplicantDetails('));
-  assert.ok(ui.includes("Delete ' + esc(person.candidate_name) + ' permanently?") && ui.includes('This cannot be undone.') && ui.includes('Yes, delete'));
+  assert.ok(ui.includes("t('Delete {name} permanently?', { name: esc(person.candidate_name) })") && ui.includes('This cannot be undone.') && ui.includes("t('Yes, delete')"));
   assert.ok(ui.includes('window.PathwayBackend.deleteCandidate(flowId, email)'));
-  assert.ok(ui.includes('applicants = applicants.filter(') && ui.includes('closeModal(); renderApplicantBoard(); showToast(\'Candidate deleted.\');'), 'the board updates at once');
+  assert.ok(ui.includes('applicants = applicants.filter(') && ui.includes("closeModal(); renderApplicantBoard(); showToast(t('Candidate deleted.'));"), 'the board updates at once');
 });

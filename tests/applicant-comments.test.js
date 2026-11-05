@@ -44,7 +44,7 @@ test('the backend lists and adds comments for a candidate', () => {
 
 test('the applicant panel has a Team comments section with a plain text box', () => {
   const builder = read('builder.js');
-  assert.ok(builder.includes('id="applicant-comments-heading">Team comments</h3>'));
+  assert.ok(builder.includes("id=\"applicant-comments-heading\">${t('Team comments')}</h3>"));
   assert.ok(builder.includes('<textarea class="text-area" id="applicant-comment-input" maxlength="2000"'));
   assert.ok(builder.includes('mountApplicantComments(modalRoot, applicant.flow_id, person.candidate_email);'), 'keyed by candidate, shared by repeat applications');
   const card = builder.slice(builder.indexOf('function commentHtml('), builder.indexOf('function mountApplicantComments('));
@@ -52,7 +52,7 @@ test('the applicant panel has a Team comments section with a plain text box', ()
   assert.ok(card.indexOf('comment-meta') < card.indexOf('comment-body'), 'a small line with name and time sits above the comment text');
   assert.ok(builder.includes('let html = esc(comment.body);') && card.includes('commentBodyHtml(comment)'), 'the text is escaped before the mentions are highlighted');
   assert.ok(builder.includes("event.key === 'Enter' && (event.ctrlKey || event.metaKey)"), 'Ctrl+Enter sends');
-  assert.ok(builder.includes("'Write a comment first.'"));
+  assert.ok(builder.includes("t('Write a comment first.')"));
   const css = read('styles.css');
   assert.ok(css.includes('.comment-body{') && css.includes('white-space:pre-wrap') && css.includes('.visually-hidden{'));
 });
@@ -63,7 +63,7 @@ test('the legal page lists the team comments as processed candidate data', () =>
 
 test('the comments come last, below Application record', () => {
   const builder = read('builder.js');
-  const record = builder.indexOf('<h3>Application record</h3>'), comments = builder.indexOf('id="applicant-comments-heading"'), bar = builder.indexOf('class="applicant-mobile-bar"');
+  const record = builder.indexOf("<h3>${t('Application record')}</h3>"), comments = builder.indexOf('id="applicant-comments-heading"'), bar = builder.indexOf('class="applicant-mobile-bar"');
   assert.ok(record > 0 && record < comments && comments < bar);
 });
 
@@ -80,7 +80,7 @@ test('a comment can be deleted by its author or the workspace owner only', () =>
   assert.ok(backend.includes(".select('id,author_id,author_name,body,created_at,mentions')"));
   assert.ok(builder.includes('const canDeleteComment = comment => Boolean(isOwner || (comment.authorId && user && comment.authorId === user.id));'));
   assert.ok(builder.includes('canDeleteComment(comment) ?') && builder.includes('data-delete-comment='), 'the button only shows for them');
-  assert.ok(builder.includes('Delete? <button') && builder.includes('data-confirm-delete-comment'), 'a second click confirms');
+  assert.ok(builder.includes("t('Delete?') + ' <button") && builder.includes('data-confirm-delete-comment'), 'a second click confirms');
 });
 
 const mentions = read('supabase/migrations/20261019180000_comment_mentions.sql');

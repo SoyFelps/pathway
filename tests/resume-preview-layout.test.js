@@ -11,7 +11,7 @@ test('the left side of the applicant panel has no resume buttons and no privacy 
   assert.equal(d.includes('applicant-resume-actions'), false, 'no Preview/Hide/Download buttons next to the hiring stage');
   assert.equal(d.includes('applicant-privacy-note'), false);
   assert.equal(d.includes('Resume links are private and expire after two minutes'), false, 'the sentence under Application record is gone');
-  assert.ok(d.includes('<h3>Application record</h3>'), 'the Application record section itself stays');
+  assert.ok(d.includes("<h3>${t('Application record')}</h3>"), 'the Application record section itself stays');
 });
 
 test('with the preview open, Download resume sits next to Close preview', () => {

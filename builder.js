@@ -443,8 +443,10 @@
   // (the database refuses it too), and the transcript and written evaluation of AI interviews are hidden. Only the owner sees these notes.
   const workspaceIsFree = () => { const item = workspace && myWorkspaces.find(entry => entry.id === workspace.id); return Boolean(item) && !item.premiumActive; };
   const FREE_MOVE_NOTE = 'This workspace is on the free plan. Upgrade to Premium to move candidates between stages.';
-  const aiPurgedText = impression => 'This interview is more than 12 months old, so its transcript and written evaluation were deleted from the interview service to save space.'
-    + (impression === 'positive' || impression === 'mixed' || impression === 'negative' ? ' Even though they were deleted, the system recorded that the impression was ' + impression + '.' : '');
+  const aiPurgedText = impression => t('This interview is more than 12 months old, so its transcript and written evaluation were deleted from the interview service to save space.')
+    + (impression === 'positive' ? ' ' + t('Even though they were deleted, the system recorded that the impression was positive.')
+      : impression === 'mixed' ? ' ' + t('Even though they were deleted, the system recorded that the impression was mixed.')
+      : impression === 'negative' ? ' ' + t('Even though they were deleted, the system recorded that the impression was negative.') : '');
   // rows arrive newest first: the first one of a candidate is the interview in play, older cancelled ones are history
   function setAiInterviews(rows) {
     const next = new Map();
@@ -529,13 +531,14 @@
   function mountAiInterviewPanel(host, flowId, email, stage = {}) {
     if (!host) return;
     const B = window.PathwayBackend;
-    const STATE_LABEL = { pending: 'Being prepared', blocked: 'Waiting', invited: 'Sent', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled', abandoned: 'Left before finishing', expired: 'Expired', failed: 'Not sent' };
+    // Texts in the interface language; the state keys come from the server and never change.
+    const STATE_LABEL = { pending: t('Being prepared'), blocked: t('Waiting'), invited: t('Sent'), in_progress: t('In progress'), completed: t('Completed'), cancelled: t('Cancelled'), abandoned: t('Left before finishing'), expired: t('Expired'), failed: t('Not sent') };
     // The only way to send another invitation after one ended without a result, whatever column the candidate is in.
-    const reinviteBlock = row => '<div class="ai-actions">' + button('reinvite', 'Invite again') + '</div><p class="muted">Sends a new e-mail to ' + esc(row.email) + ' with a new link and access code. Moving the card between columns does not send another invitation.</p>';
-    const when = value => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : ''; };
+    const reinviteBlock = row => '<div class="ai-actions">' + button('reinvite', t('Invite again')) + '</div><p class="muted">' + t('Sends a new e-mail to {email} with a new link and access code. Moving the card between columns does not send another invitation.', { email: esc(row.email) }) + '</p>';
+    const when = value => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.getTime()) ? window.PathwayI18n.formatDate(date, { dateStyle: 'medium', timeStyle: 'short' }) : ''; };
     const clock = seconds => Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
     const info = (label, value) => value ? '<div class="applicant-info-item"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>' : '';
-    const impressionItem = row => '<div class="applicant-info-item"><span>Impression</span><strong>' + (aiImpressionLabelled(row.impression) || 'Not available') + '</strong></div>';
+    const impressionItem = row => '<div class="applicant-info-item"><span>' + t('Impression') + '</span><strong>' + (aiImpressionLabelled(row.impression) || t('Not available')) + '</strong></div>';
     let confirming = '';
     let busy = false;
     let timer = null;
@@ -547,69 +550,70 @@
     // replaced by a notice that it is being done, so there is feedback at once and nothing to press twice. null when nothing is going on.
     let working = null;
     const WORKING_TEXT = {
-      reinvite: ['Sending the invitation again…', 'The e-mail goes out in a few seconds. This page updates by itself.'],
-      resend: ['Sending the e-mail again…', 'This takes a few seconds.'],
-      'cancel-yes': ['Cancelling the invitation…', 'This takes a few seconds.'],
-      retry: ['Checking again…', 'The interview goes out in a few seconds if nothing blocks it.']
+      reinvite: [t('Sending the invitation again…'), t('The e-mail goes out in a few seconds. This page updates by itself.')],
+      resend: [t('Sending the e-mail again…'), t('This takes a few seconds.')],
+      'cancel-yes': [t('Cancelling the invitation…'), t('This takes a few seconds.')],
+      retry: [t('Checking again…'), t('The interview goes out in a few seconds if nothing blocks it.')]
     };
     let triedReevaluating = false;
     let evalPolls = 0;
     let lastData = null;
     const conversationHtml = messages => {
       const items = (Array.isArray(messages) ? messages : []).filter(message => message.kind !== 'closing').map(message => {
-        if (message.role === 'ai') return '<div class="ai-msg is-ai"><span class="ai-msg-who">' + (message.kind === 'followup' ? 'Follow-up' : 'Question') + '</span><p>' + esc(message.body || '') + '</p></div>';
+        if (message.role === 'ai') return '<div class="ai-msg is-ai"><span class="ai-msg-who">' + (message.kind === 'followup' ? t('Follow-up') : t('Question')) + '</span><p>' + esc(message.body || '') + '</p></div>';
         const skipped = message.answer_status === 'skipped' || !message.body;
-        return '<div class="ai-msg is-candidate"><span class="ai-msg-who">Candidate' + (!skipped && message.audio_seconds ? ' · ' + esc(clock(message.audio_seconds)) : '') + '</span><p' + (skipped ? ' class="is-skipped"' : '') + '>' + (skipped ? 'Skipped' : esc(message.body)) + '</p></div>';
+        return '<div class="ai-msg is-candidate"><span class="ai-msg-who">' + t('Candidate') + (!skipped && message.audio_seconds ? ' · ' + esc(clock(message.audio_seconds)) : '') + '</span><p' + (skipped ? ' class="is-skipped"' : '') + '>' + (skipped ? t('Skipped') : esc(message.body)) + '</p></div>';
       });
-      return items.length ? '<div class="ai-conversation">' + items.join('') + '</div>' : '<p class="muted">No conversation was saved.</p>';
+      return items.length ? '<div class="ai-conversation">' + items.join('') + '</div>' : '<p class="muted">' + t('No conversation was saved.') + '</p>';
     };
     const button = (action, label, extra = '', disabled = false) => working ? '' : '<button type="button" class="btn btn-sm' + (extra ? ' ' + extra : '') + '" data-ai-action="' + action + '"' + (busy || disabled ? ' disabled' : '') + '>' + esc(label) + '</button>';
     const cancelControl = label => confirming === 'cancel'
-      ? '<span class="ai-confirm">Cancel this invitation? <button type="button" class="btn btn-sm btn-danger" data-ai-action="cancel-yes">Yes, cancel</button><button type="button" class="btn btn-sm" data-ai-action="cancel-no">Keep it</button></span>'
+      ? '<span class="ai-confirm">' + t('Cancel this invitation?') + ' <button type="button" class="btn btn-sm btn-danger" data-ai-action="cancel-yes">' + t('Yes, cancel') + '</button><button type="button" class="btn btn-sm" data-ai-action="cancel-no">' + t('Keep it') + '</button></span>'
       : button('cancel', label, 'btn-danger-ghost');
     const render = (data, errorText = '') => {
       lastData = data;
       const row = data.interview, live = data.live || {};
-      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">AI Interview</span><h3>' + esc(row ? STATE_LABEL[row.state] || row.state : 'No interview') + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-ai-close>Close</button></header>';
+      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">' + t('AI Interview') + '</span><h3>' + esc(row ? STATE_LABEL[row.state] || row.state : t('No interview')) + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-ai-close>' + t('Close') + '</button></header>';
       let body = '';
-      if (!row) body = '<p class="muted">This candidate has no AI interview.</p>';
-      else if (row.state === 'pending') body = '<p>The interview is being prepared. It will be e-mailed to the candidate in a few seconds.</p><div class="ai-actions">' + cancelControl('Cancel') + '</div>';
-      else if (row.state === 'blocked') body = '<p>' + esc((AI_BLOCK_TEXT[row.blockedReason] || ['', 'The interview is waiting to be sent.'])[1]) + '</p><div class="ai-actions">' + button('retry', 'Check again now') + cancelControl('Cancel') + '</div>';
-      else if (row.state === 'failed') body = '<p>The interview could not be sent because the interview service did not answer. Nothing was sent to the candidate.</p><div class="ai-actions">' + button('retry', 'Try again') + '</div>';
+      if (!row) body = '<p class="muted">' + t('This candidate has no AI interview.') + '</p>';
+      else if (row.state === 'pending') body = '<p>' + t('The interview is being prepared. It will be e-mailed to the candidate in a few seconds.') + '</p><div class="ai-actions">' + cancelControl(t('Cancel')) + '</div>';
+      else if (row.state === 'blocked') body = '<p>' + esc(t((AI_BLOCK_TEXT[row.blockedReason] || ['', 'The interview is waiting to be sent.'])[1])) + '</p><div class="ai-actions">' + button('retry', t('Check again now')) + cancelControl(t('Cancel')) + '</div>';
+      else if (row.state === 'failed') body = '<p>' + t('The interview could not be sent because the interview service did not answer. Nothing was sent to the candidate.') + '</p><div class="ai-actions">' + button('retry', t('Try again')) + '</div>';
       else if (row.state === 'invited') {
         const left = typeof live.resendsLeft === 'number' ? live.resendsLeft : null;
-        body = '<div class="applicant-info-grid">' + info('Sent to', row.email) + info('Last e-mail', when(live.lastInviteAt)) + info('Link valid until', when(live.expiresAt)) + (left === null ? '' : info('Re-sends left', String(left))) + '</div><p class="muted">The candidate has not started yet. Re-sending e-mails the same link with a new access code (once a day, up to 3 times).</p><div class="ai-actions">' + button('resend', 'Re-send e-mail', '', left === 0) + cancelControl('Cancel invitation') + '</div>';
-      } else if (row.state === 'in_progress') body = '<p>The candidate is answering the interview right now.</p><div class="applicant-info-grid">' + info('Started', when(live.startedAt)) + '</div><p class="muted">Leaving or refreshing the page cancels the interview automatically.</p>';
-      else if (aiInterviewPurged(row)) body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt)) + impressionItem(row) + '</div><div class="ai-note">' + esc(aiPurgedText(row.impression)) + '</div>';
-      else if (data.locked && row.state === 'completed') body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt)) + impressionItem(row) + '</div><div class="ai-note is-warn"><strong>Upgrade to Premium to see the transcript and the written evaluation of this interview.</strong> The impression above was recorded when the interview ended.</div>';
+        body = '<div class="applicant-info-grid">' + info(t('Sent to'), row.email) + info(t('Last e-mail'), when(live.lastInviteAt)) + info(t('Link valid until'), when(live.expiresAt)) + (left === null ? '' : info(t('Re-sends left'), String(left))) + '</div><p class="muted">' + t('The candidate has not started yet. Re-sending e-mails the same link with a new access code (once a day, up to 3 times).') + '</p><div class="ai-actions">' + button('resend', t('Re-send e-mail'), '', left === 0) + cancelControl(t('Cancel invitation')) + '</div>';
+      } else if (row.state === 'in_progress') body = '<p>' + t('The candidate is answering the interview right now.') + '</p><div class="applicant-info-grid">' + info(t('Started'), when(live.startedAt)) + '</div><p class="muted">' + t('Leaving or refreshing the page cancels the interview automatically.') + '</p>';
+      else if (aiInterviewPurged(row)) body = '<div class="applicant-info-grid">' + info(t('Completed'), when(row.completedAt)) + impressionItem(row) + '</div><div class="ai-note">' + esc(aiPurgedText(row.impression)) + '</div>';
+      else if (data.locked && row.state === 'completed') body = '<div class="applicant-info-grid">' + info(t('Completed'), when(row.completedAt)) + impressionItem(row) + '</div><div class="ai-note is-warn"><strong>' + t('Upgrade to Premium to see the transcript and the written evaluation of this interview.') + '</strong> ' + t('The impression above was recorded when the interview ended.') + '</div>';
       else if (row.state === 'completed') {
         const ready = row.evaluationReady && live.evaluation;
         const working = !ready && (reevaluating === 'sending' || live.evaluating === true);
         if (live.evaluating === true) triedReevaluating = true;
         if (reevaluating === 'running' && live.evaluating !== true) reevaluating = ''; // Witcher stopped: it either wrote the evaluation or failed
-        body = '<div class="applicant-info-grid">' + info('Completed', when(row.completedAt || live.completedAt)) + impressionItem(row) + '</div>'
-          + (ready ? '<h4>Evaluation</h4><p class="ai-evaluation">' + esc(live.evaluation) + '</p>'
-            : working ? '<div class="ai-note is-working" role="status"><strong>Writing the evaluation…</strong> This can take up to a minute. This page updates by itself.</div>'
-            : '<div class="ai-note is-warn"><strong>The evaluation is not ready.</strong> ' + (triedReevaluating ? 'The AI could not write it this time either. You can try again, or read the conversation below.' : 'The AI could not write it automatically. Read the conversation below, or ask for a new evaluation.') + '</div><div class="ai-actions">' + button('reevaluate', 'Write the evaluation again') + '</div>')
-          + '<p class="muted">The impression and the evaluation are written by an AI to help your team. The AI does not decide who moves forward; your team does.</p><h4>Conversation</h4>' + conversationHtml(live.messages);
-      } else if (row.state === 'cancelled') body = (row.cancelReason === 'plan' ? '<p>This interview was cancelled when the workspace was on the free plan, and its link no longer works. Invite this candidate again if you want them to take the AI interview.</p>' : '<p>This invitation was cancelled and its link no longer works.</p>') + reinviteBlock(row);
+        body = '<div class="applicant-info-grid">' + info(t('Completed'), when(row.completedAt || live.completedAt)) + impressionItem(row) + '</div>'
+          + (ready ? '<h4>' + t('Evaluation') + '</h4><p class="ai-evaluation">' + esc(live.evaluation) + '</p>'
+            : working ? '<div class="ai-note is-working" role="status"><strong>' + t('Writing the evaluation…') + '</strong> ' + t('This can take up to a minute. This page updates by itself.') + '</div>'
+            : '<div class="ai-note is-warn"><strong>' + t('The evaluation is not ready.') + '</strong> ' + (triedReevaluating ? t('The AI could not write it this time either. You can try again, or read the conversation below.') : t('The AI could not write it automatically. Read the conversation below, or ask for a new evaluation.')) + '</div><div class="ai-actions">' + button('reevaluate', t('Write the evaluation again')) + '</div>')
+          + '<p class="muted">' + t('The impression and the evaluation are written by an AI to help your team. The AI does not decide who moves forward; your team does.') + '</p><h4>' + t('Conversation') + '</h4>' + conversationHtml(live.messages);
+      } else if (row.state === 'cancelled') body = '<p>' + (row.cancelReason === 'plan' ? t('This interview was cancelled when the workspace was on the free plan, and its link no longer works. Invite this candidate again if you want them to take the AI interview.') : t('This invitation was cancelled and its link no longer works.')) + '</p>' + reinviteBlock(row);
       else if (row.state === 'abandoned') {
         const progress = live.progress || null;
         let where = '';
         if (progress && progress.questionNumber && progress.totalQuestions) {
-          const of = 'question ' + progress.questionNumber + ' of ' + progress.totalQuestions;
-          where = progress.phase === 'followup' ? 'On the follow-up to ' + of : 'On ' + of + (progress.questionText ? ': “' + progress.questionText + '”' : '');
+          const numbers = { number: progress.questionNumber, total: progress.totalQuestions };
+          where = progress.phase === 'followup' ? t('On the follow-up to question {number} of {total}', numbers)
+            : t('On question {number} of {total}', numbers) + (progress.questionText ? ': “' + progress.questionText + '”' : '');
         }
-        body = '<p>The candidate left the interview before finishing, so it was cancelled and the answers were discarded. The same link no longer works.</p>'
-          + '<div class="applicant-info-grid">' + info('Left on', when(live.abandonedAt)) + info('Where they left', where) + '</div>'
-          + '<div class="ai-note is-warn"><strong>Before inviting again:</strong> the candidate has already seen the questions and has had time to think about their answers. If the questions of this job stay the same, a new interview may give this candidate an advantage. Consider changing the questions in the job details first.</div>'
+        body = '<p>' + t('The candidate left the interview before finishing, so it was cancelled and the answers were discarded. The same link no longer works.') + '</p>'
+          + '<div class="applicant-info-grid">' + info(t('Left on'), when(live.abandonedAt)) + info(t('Where they left'), where) + '</div>'
+          + '<div class="ai-note is-warn"><strong>' + t('Before inviting again:') + '</strong> ' + t('the candidate has already seen the questions and has had time to think about their answers. If the questions of this job stay the same, a new interview may give this candidate an advantage. Consider changing the questions in the job details first.') + '</div>'
           + reinviteBlock(row);
       }
-      else if (row.state === 'expired') body = '<p>The invitation expired before the candidate started.</p>' + reinviteBlock(row);
+      else if (row.state === 'expired') body = '<p>' + t('The invitation expired before the candidate started.') + '</p>' + reinviteBlock(row);
       // An interview that is still going on (being prepared, sent, in progress) while the card sits in another column: offer the way back.
       if (working) body = '<div class="ai-note is-working" role="status"><strong>' + esc(working[0]) + '</strong> ' + esc(working[1]) + '</div>' + body;
       const away = !working && row && ['pending', 'blocked', 'invited', 'in_progress'].includes(row.state) && stage.getStage && stage.getStage() !== 'ai_interview' && stage.canMove && stage.canMove();
-      if (away) body += '<div class="ai-note is-warn ai-column-note" role="status"><span>This candidate is not in the AI Interview column of the Kanban.</span><div class="ai-actions">' + button('move-stage', 'Move to AI Interview column') + '</div></div>';
+      if (away) body += '<div class="ai-note is-warn ai-column-note" role="status"><span>' + t('This candidate is not in the AI Interview column of the Kanban.') + '</span><div class="ai-actions">' + button('move-stage', t('Move to AI Interview column')) + '</div></div>';
       host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + (data.liveError ? '<div class="ai-note is-warn">' + esc(data.liveError) + '</div>' : '') + body + '</div>';
       schedule(row, live);
     };
@@ -627,7 +631,7 @@
     };
     const load = async (errorText = '') => {
       try { render(await B.getAiInterviewStatus(flowId, email), errorText); }
-      catch (error) { clearTimeout(timer); host.innerHTML = '<header class="applicant-ai-head"><div><span class="eyebrow">AI Interview</span><h3>Could not load</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-ai-close>Close</button></header><div class="applicant-ai-body"><p>' + esc(error.message || 'Please try again.') + '</p><div class="ai-actions"><button type="button" class="btn btn-sm" data-ai-action="reload">Try again</button></div></div>'; }
+      catch (error) { clearTimeout(timer); host.innerHTML = '<header class="applicant-ai-head"><div><span class="eyebrow">' + t('AI Interview') + '</span><h3>' + t('Could not load') + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-ai-close>' + t('Close') + '</button></header><div class="applicant-ai-body"><p>' + esc(error.message || t('Please try again.')) + '</p><div class="ai-actions"><button type="button" class="btn btn-sm" data-ai-action="reload">' + t('Try again') + '</button></div></div>'; }
     };
     host.addEventListener('click', async event => {
       if (event.target.closest('[data-ai-close]')) { host.closest('.applicant-review-layout')?.classList.remove('is-previewing'); return; }
@@ -657,7 +661,7 @@
           await load();
         } catch (error) {
           reevaluating = ''; busy = false;
-          await load(error.message || 'Something went wrong. Try again.');
+          await load(error.message || t('Something went wrong. Try again.'));
         }
         void refreshAiInterviewTags(true);
         return;
@@ -670,16 +674,16 @@
       confirming = ''; busy = true; working = WORKING_TEXT[action]; render(lastData);
       try {
         const result = await B.aiInterviewAction(names[action], interviewId);
-        if (action === 'resend') showToast(result.emailSent ? 'E-mail sent again with a new access code.' : 'The e-mail could not be sent right now. Try again in a moment.');
-        else if (action === 'cancel-yes') showToast('Invitation cancelled.');
-        else if (action === 'retry') showToast('Checking again. The interview goes out in a few seconds if nothing blocks it.');
+        if (action === 'resend') showToast(result.emailSent ? t('E-mail sent again with a new access code.') : t('The e-mail could not be sent right now. Try again in a moment.'));
+        else if (action === 'cancel-yes') showToast(t('Invitation cancelled.'));
+        else if (action === 'retry') showToast(t('Checking again. The interview goes out in a few seconds if nothing blocks it.'));
         else if (action === 'reinvite') watchAiInterviewTags(); // the card tag follows: "Setting up AI Interview", then "Invite sent"
         busy = false; working = null; // nothing is drawn again until the fresh state arrives below
         await load();
         void refreshAiInterviewTags(true);
       } catch (error) {
         busy = false; confirming = ''; working = null;
-        await load(error.message || 'Something went wrong. Try again.');
+        await load(error.message || t('Something went wrong. Try again.'));
       }
     });
     void load();
@@ -3343,12 +3347,12 @@
   // Who is responsible for each job, as shown (read only) in the applicant panel.
   const flowResponsiblesCache = new Map();
   function flowResponsiblesText(result) {
-    if (!result || result.everyone) return 'All team members';
-    return (result.people || []).map(person => personLabel(person, result.people) + (person.isOwner ? ' (owner)' : '')).join(', ') || 'All team members';
+    if (!result || result.everyone) return t('All team members');
+    return (result.people || []).map(person => personLabel(person, result.people) + (person.isOwner ? ' ' + t('(owner)') : '')).join(', ') || t('All team members');
   }
   // Internal comments on a candidate: who wrote them and when is stored with each one. Add-only.
   const applicantCommentsCache = new Map();
-  const commentTimeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const commentTimeFormat = { format: date => window.PathwayI18n.formatDate(date, { dateStyle: 'medium', timeStyle: 'short' }) };
   const canDeleteComment = comment => Boolean(isOwner || (comment.authorId && user && comment.authorId === user.id));
   function commentBodyHtml(comment) {
     let html = esc(comment.body);
@@ -3359,7 +3363,7 @@
     return html;
   }
   function commentHtml(comment) {
-    return '<article class="comment" data-comment-id="' + esc(comment.id) + '"><p class="comment-meta">' + esc(comment.authorName) + ' · <time datetime="' + esc(comment.createdAt) + '">' + esc(commentTimeFormat.format(new Date(comment.createdAt))) + '</time>' + (canDeleteComment(comment) ? ' · <button type="button" class="comment-delete" data-delete-comment="' + esc(comment.id) + '">Delete</button>' : '') + '</p><p class="comment-body">' + commentBodyHtml(comment) + '</p></article>';
+    return '<article class="comment" data-comment-id="' + esc(comment.id) + '"><p class="comment-meta">' + esc(comment.authorName) + ' · <time datetime="' + esc(comment.createdAt) + '">' + esc(commentTimeFormat.format(new Date(comment.createdAt))) + '</time>' + (canDeleteComment(comment) ? ' · <button type="button" class="comment-delete" data-delete-comment="' + esc(comment.id) + '">' + t('Delete') + '</button>' : '') + '</p><p class="comment-body">' + commentBodyHtml(comment) + '</p></article>';
   }
   function mountApplicantComments(host, flowId, email) {
     const list = host.querySelector('#applicant-comment-list'), form = host.querySelector('#applicant-comment-form');
@@ -3417,16 +3421,16 @@
     }, true);
     const key = flowId + '|' + String(email || '').trim().toLowerCase();
     const paint = comments => {
-      heading.textContent = comments.length ? 'Team comments · ' + comments.length : 'Team comments';
-      list.innerHTML = comments.length ? comments.map(commentHtml).join('') : '<p class="comment-empty">No comments yet.</p>';
+      heading.textContent = comments.length ? t('Team comments') + ' · ' + comments.length : t('Team comments');
+      list.innerHTML = comments.length ? comments.map(commentHtml).join('') : '<p class="comment-empty">' + t('No comments yet.') + '</p>';
     };
     if (applicantCommentsCache.has(key)) paint(applicantCommentsCache.get(key));
     window.PathwayBackend.listApplicantComments(flowId, email)
       .then(comments => { applicantCommentsCache.set(key, comments); if (list.isConnected) paint(comments); })
-      .catch(() => { if (list.isConnected && !applicantCommentsCache.has(key)) list.innerHTML = '<p class="comment-empty is-error">Comments could not be loaded. Refresh the page and try again.</p>'; });
+      .catch(() => { if (list.isConnected && !applicantCommentsCache.has(key)) list.innerHTML = '<p class="comment-empty is-error">' + t('Comments could not be loaded. Refresh the page and try again.') + '</p>'; });
     const send = async () => {
       status.className = 'comment-status'; status.textContent = '';
-      if (!input.value.trim()) { status.className = 'comment-status is-error'; status.textContent = 'Write a comment first.'; return; }
+      if (!input.value.trim()) { status.className = 'comment-status is-error'; status.textContent = t('Write a comment first.'); return; }
       submit.disabled = true;
       try {
         const mentionedIds = [...chosen].filter(([, name]) => input.value.includes('@' + name)).map(([id]) => id);
@@ -3437,7 +3441,7 @@
         input.value = '';
         if (list.isConnected) { paint(comments); list.lastElementChild?.scrollIntoView({ block: 'nearest' }); }
       } catch (error) {
-        status.className = 'comment-status is-error'; status.textContent = error.message || 'Could not add the comment. Please try again.';
+        status.className = 'comment-status is-error'; status.textContent = error.message || t('Could not add the comment. Please try again.');
       } finally { submit.disabled = false; }
     };
     // Deleting asks for a second click right on the comment (the candidate panel is already a dialog).
@@ -3446,7 +3450,7 @@
       const confirmButton = event.target.closest('[data-confirm-delete-comment]');
       const cancelButton = event.target.closest('[data-cancel-delete-comment]');
       if (askButton) {
-        askButton.outerHTML = '<span class="comment-delete-confirm">Delete? <button type="button" class="comment-delete is-danger" data-confirm-delete-comment="' + esc(askButton.dataset.deleteComment) + '">Yes</button> <button type="button" class="comment-delete" data-cancel-delete-comment>Cancel</button></span>';
+        askButton.outerHTML = '<span class="comment-delete-confirm">' + t('Delete?') + ' <button type="button" class="comment-delete is-danger" data-confirm-delete-comment="' + esc(askButton.dataset.deleteComment) + '">' + t('Yes') + '</button> <button type="button" class="comment-delete" data-cancel-delete-comment>' + t('Cancel') + '</button></span>';
       } else if (cancelButton) {
         paint(applicantCommentsCache.get(key) || []);
       } else if (confirmButton) {
@@ -3458,7 +3462,7 @@
           if (list.isConnected) paint(comments);
         } catch (error) {
           confirmButton.disabled = false;
-          status.className = 'comment-status is-error'; status.textContent = 'Could not delete the comment. Refresh the page and try again.';
+          status.className = 'comment-status is-error'; status.textContent = t('Could not delete the comment. Refresh the page and try again.');
         }
       }
     });
@@ -3472,12 +3476,12 @@
     const applicationCount = group.count;
     const email = String(person.candidate_email || '').trim().toLowerCase();
     const showButtons = () => {
-      row.innerHTML = '<div class="applicant-row-actions"><button type="button" class="applicant-export-link" id="export-candidate">Export data</button><button type="button" class="applicant-delete-link" id="delete-candidate">Delete candidate</button></div>';
+      row.innerHTML = '<div class="applicant-row-actions"><button type="button" class="applicant-export-link" id="export-candidate">' + t('Export data') + '</button><button type="button" class="applicant-delete-link" id="delete-candidate">' + t('Delete candidate') + '</button></div>';
       row.querySelector('#delete-candidate').addEventListener('click', showConfirm);
       row.querySelector('#export-candidate').addEventListener('click', async event => {
         const button = event.currentTarget;
         if (button.disabled) return;
-        button.disabled = true; button.textContent = 'Preparing…';
+        button.disabled = true; button.textContent = t('Preparing…');
         try {
           // The AI interview is read live (it is kept by Witcher). If it cannot be read, the export still downloads but says so,
           // so nobody takes an export without the interview for a complete one.
@@ -3496,25 +3500,27 @@
           } catch (interviewError) { interviewMissing = true; }
           const csv = candidateDataToCsv({ person, items: group.items.map(item => ({ ...item, status: applicantStageLabel(item.status) })), jobTitle, stage: applicantStageLabel(group.status), exportedAt: new Date().toISOString(), interview });
           downloadTextFile('pathway-candidate-data-' + new Date().toISOString().slice(0, 10) + '.csv', csv);
-          showToast(interviewMissing ? 'Candidate data downloaded, but the AI interview part could not be loaded. Try the export again to include it.' : 'Candidate data downloaded.', interviewMissing ? 7000 : 2400);
+          showToast(interviewMissing ? t('Candidate data downloaded, but the AI interview part could not be loaded. Try the export again to include it.') : t('Candidate data downloaded.'), interviewMissing ? 7000 : 2400);
         } catch (error) {
-          showToast('Could not prepare the candidate data. Please try again.');
-        } finally { button.disabled = false; button.textContent = 'Export data'; }
+          showToast(t('Could not prepare the candidate data. Please try again.'));
+        } finally { button.disabled = false; button.textContent = t('Export data'); }
       });
     };
     const showConfirm = () => {
-      row.innerHTML = '<div class="applicant-delete-confirm" role="alertdialog" aria-label="Delete this candidate"><p><strong>Delete ' + esc(person.candidate_name) + ' permanently?</strong> This removes ' + (applicationCount > 1 ? 'all ' + applicationCount + ' of their applications' : 'their application') + ', the resume file' + (aiInterviewFor(flowId, email) ? ', their AI interview (answers, evaluation and impression)' : '') + ' and the team comments about them. This cannot be undone.</p><div class="applicant-delete-actions"><button type="button" class="btn btn-sm btn-danger" id="confirm-delete-candidate">Yes, delete</button><button type="button" class="btn btn-sm" id="cancel-delete-candidate">Cancel</button><span class="applicant-delete-status" id="delete-candidate-status" role="status" aria-live="polite"></span></div></div>';
+      const removes = (applicationCount > 1 ? t('all {count} of their applications', { count: applicationCount }) : t('their application'))
+        + (aiInterviewFor(flowId, email) ? t(', the resume file, their AI interview (answers, evaluation and impression) and the team comments about them') : t(', the resume file and the team comments about them'));
+      row.innerHTML = '<div class="applicant-delete-confirm" role="alertdialog" aria-label="' + t('Delete this candidate') + '"><p><strong>' + t('Delete {name} permanently?', { name: esc(person.candidate_name) }) + '</strong> ' + t('This removes {what}. This cannot be undone.', { what: removes }) + '</p><div class="applicant-delete-actions"><button type="button" class="btn btn-sm btn-danger" id="confirm-delete-candidate">' + t('Yes, delete') + '</button><button type="button" class="btn btn-sm" id="cancel-delete-candidate">' + t('Cancel') + '</button><span class="applicant-delete-status" id="delete-candidate-status" role="status" aria-live="polite"></span></div></div>';
       row.querySelector('#cancel-delete-candidate').addEventListener('click', showButtons);
       row.querySelector('#confirm-delete-candidate').addEventListener('click', async event => {
         const button = event.currentTarget, status = row.querySelector('#delete-candidate-status');
-        button.disabled = true; row.querySelector('#cancel-delete-candidate').disabled = true; status.textContent = 'Deleting…';
+        button.disabled = true; row.querySelector('#cancel-delete-candidate').disabled = true; status.textContent = t('Deleting…');
         try {
           await window.PathwayBackend.deleteCandidate(flowId, email);
           applicants = applicants.filter(item => !(item.flow_id === flowId && String(item.candidate_email || '').trim().toLowerCase() === email));
           applicantCommentsCache.delete(flowId + '|' + email);
-          closeModal(); renderApplicantBoard(); showToast('Candidate deleted.');
+          closeModal(); renderApplicantBoard(); showToast(t('Candidate deleted.'));
         } catch (error) {
-          status.textContent = error.message || 'Could not delete the candidate. Please try again.';
+          status.textContent = error.message || t('Could not delete the candidate. Please try again.');
           button.disabled = false; row.querySelector('#cancel-delete-candidate').disabled = false;
         }
       });
@@ -3527,12 +3533,16 @@
     const tab = Math.min(Math.max(Number(tabIndex) || 0, 0), group.count - 1);
     const applicant = group.items[tab];
     const person = group.latest;
-    const tabLabel = (member, index) => `${index === 0 ? 'Latest · ' : ''}${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(member.submitted_at))}`;
+    const I18N = window.PathwayI18n;
+    const tabLabel = (member, index) => `${index === 0 ? t('Latest') + ' · ' : ''}${I18N.formatDate(member.submitted_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+    // Stored in English (country, pronouns); shown in the interface language.
+    const G = window.PathwayGeo;
+    const infoValue = (key, value) => key === 'country' && G ? G.countryLabel(value, I18N.language) : key === 'pronouns' ? t(String(value)) : value;
     const tabs = group.count > 1
-      ? `<div class="applicant-tabs" role="tablist" aria-label="Applications from this candidate">${group.items.map((member, index) => `<button class="applicant-tab" type="button" role="tab" aria-selected="${index === tab}" data-tab="${index}">${esc(tabLabel(member, index))}</button>`).join('')}</div>`
+      ? `<div class="applicant-tabs" role="tablist" aria-label="${t('Applications from this candidate')}">${group.items.map((member, index) => `<button class="applicant-tab" type="button" role="tab" aria-selected="${index === tab}" data-tab="${index}">${esc(tabLabel(member, index))}</button>`).join('')}</div>`
       : '';
     const flow = flows.find(item => item.cloudId === applicant.flow_id) || applicantFlowLabels.find(item => item.cloudId === applicant.flow_id);
-    const applicantSubtitle = [flow?.companyName ? `applying for ${flow.companyName}` : '', group.count > 1 ? `Applied ${group.count} times` : ''].filter(Boolean).join(' · ');
+    const applicantSubtitle = [flow?.companyName ? t('applying for {company}', { company: flow.companyName }) : '', group.count > 1 ? t('Applied {count} times', { count: group.count }) : ''].filter(Boolean).join(' · ');
     const detailFields = Object.entries(applicant.candidate_info || {}).filter(([, value]) => value !== null && value !== '' && value !== undefined);
     const answers = Array.isArray(applicant.responses) ? applicant.responses : [];
     const isPdf = applicant.resume_content_type === 'application/pdf';
@@ -3543,36 +3553,36 @@
     // The AI Interview tab (next to Resume) exists only for a candidate who has an interview.
     const aiRow = aiInterviewFor(applicant.flow_id, person.candidate_email);
     // The tab bar is always there (just "Resume" when there is no AI interview), because it also holds the close button of the panel on wide screens.
-    const rightTabs = `<div class="applicant-right-bar${aiRow ? ' has-ai' : ''}"><div class="applicant-right-tabs" role="tablist" aria-label="${aiRow ? 'Resume and AI interview' : 'Resume'}"><button class="applicant-tab" type="button" role="tab" aria-selected="true" data-right-tab="resume">Resume</button>${aiRow ? '<button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="ai">AI Interview</button>' : ''}</div><button class="modal-x applicant-right-close" data-close aria-label="Close applicant details">×</button></div>`;
-    const aiPane = aiRow ? '<div class="applicant-right-pane is-hidden" data-right-pane="ai"><section class="applicant-ai-panel" id="applicant-ai-panel" aria-label="AI interview"><div class="applicant-ai-loading">Loading the interview…</div></section></div>' : '';
+    const rightTabs = `<div class="applicant-right-bar${aiRow ? ' has-ai' : ''}"><div class="applicant-right-tabs" role="tablist" aria-label="${aiRow ? t('Resume and AI interview') : t('Resume')}"><button class="applicant-tab" type="button" role="tab" aria-selected="true" data-right-tab="resume">${t('Resume')}</button>${aiRow ? `<button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="ai">${t('AI Interview')}</button>` : ''}</div><button class="modal-x applicant-right-close" data-close aria-label="${t('Close applicant details')}">×</button></div>`;
+    const aiPane = aiRow ? `<div class="applicant-right-pane is-hidden" data-right-pane="ai"><section class="applicant-ai-panel" id="applicant-ai-panel" aria-label="${t('AI interview')}"><div class="applicant-ai-loading">${t('Loading the interview…')}</div></section></div>` : '';
 
     setModal(`<div class="applicant-review-layout" data-detail-applicant="${esc(person.id)}" data-detail-tab="${tab}">
-      <section class="applicant-review-left" aria-label="Applicant details">
+      <section class="applicant-review-left" aria-label="${t('Applicant details')}">
         <header class="modal-head applicant-detail-head">
-          <div class="applicant-detail-title"><div class="applicant-avatar" aria-hidden="true">${esc(initials(person.candidate_name))}</div><div><div class="eyebrow" style="margin-bottom:5px">${esc(flow?.jobTitle || 'Application')}</div><h2>${esc(person.candidate_name)}</h2>${applicantSubtitle ? `<div class="muted">${esc(applicantSubtitle)}</div>` : ''}</div></div>
-          <button class="modal-x" data-close aria-label="Close applicant details">×</button>
+          <div class="applicant-detail-title"><div class="applicant-avatar" aria-hidden="true">${esc(initials(person.candidate_name))}</div><div><div class="eyebrow" style="margin-bottom:5px">${esc(flow?.jobTitle || t('Application'))}</div><h2>${esc(person.candidate_name)}</h2>${applicantSubtitle ? `<div class="muted">${esc(applicantSubtitle)}</div>` : ''}</div></div>
+          <button class="modal-x" data-close aria-label="${t('Close applicant details')}">×</button>
         </header>
         ${tabs}
         <div class="applicant-review-content">
           <section class="applicant-detail-section applicant-detail-actions-section"><div class="applicant-detail-actions">
-            <label class="applicant-info-item"><span>Hiring stage</span><select class="applicant-status-select" id="applicant-status-select"${workspaceIsFree() ? ' disabled title="Upgrade to Premium to move candidates between stages."' : ''}>${statusOptions}</select>${group.count > 1 ? `<small class="applicant-stage-note">Applies to all ${group.count} applications</small>` : ''}</label>${autoFailReason ? `<p class="applicant-autofail-note"><strong>Moved to Failed automatically:</strong> ${esc(autoFailReason)}</p>` : ''}
+            <label class="applicant-info-item"><span>${t('Hiring stage')}</span><select class="applicant-status-select" id="applicant-status-select"${workspaceIsFree() ? ` disabled title="${t('Upgrade to Premium to move candidates between stages.')}"` : ''}>${statusOptions}</select>${group.count > 1 ? `<small class="applicant-stage-note">${t('Applies to all {count} applications', { count: group.count })}</small>` : ''}</label>${autoFailReason ? `<p class="applicant-autofail-note"><strong>${t('Moved to Failed automatically:')}</strong> ${esc(autoFailReason)}</p>` : ''}
           </div></section>
-          <section class="applicant-detail-section"><h3>Candidate details</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Full name</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>Email address</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(C.infoFieldLabel(key))}</span><strong>${esc(value)}</strong></div>`).join('')}</div></section>
-          <section class="applicant-detail-section"><h3>Application answers · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || 'Application question')}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : '<div class="board-empty">No written answers were submitted for this flow.</div>'}</section>
-          <section class="applicant-detail-section"><h3>Application record</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>Submitted</span><strong>${esc(new Date(applicant.submitted_at).toLocaleString())}</strong></div><div class="applicant-info-item"><span>Privacy notice</span><strong>${esc(applicant.privacy_notice_version || 'Recorded')}</strong></div><div class="applicant-info-item applicant-responsible-item"><span>Responsible</span><button type="button" class="applicant-responsible-trigger" id="applicant-responsible" aria-describedby="applicant-responsible-tip">${esc(flowResponsiblesCache.has(applicant.flow_id) ? flowResponsiblesText(flowResponsiblesCache.get(applicant.flow_id)) : 'Loading…')}</button><div class="applicant-tooltip" id="applicant-responsible-tip" role="tooltip" hidden>These are the people responsible for this job. To change them, edit the job details.</div></div></div></section>
-          <section class="applicant-detail-section applicant-comments" aria-labelledby="applicant-comments-heading"><h3 id="applicant-comments-heading">Team comments</h3><div class="comment-list" id="applicant-comment-list" aria-live="polite"><p class="comment-empty">Loading comments…</p></div><form class="comment-form" id="applicant-comment-form" novalidate><label class="visually-hidden" for="applicant-comment-input">Add a comment</label><textarea class="text-area" id="applicant-comment-input" maxlength="2000" rows="3" placeholder="Write a comment for your team… Type @ to mention someone."></textarea><div class="mention-menu" id="applicant-mention-menu" role="listbox" aria-label="Mention a teammate" hidden></div><div class="comment-form-actions"><span class="comment-status" id="applicant-comment-status" role="status" aria-live="polite"></span><button class="btn btn-primary btn-sm" type="submit" id="applicant-comment-submit">Add comment</button></div></form></section>
+          <section class="applicant-detail-section"><h3>${t('Candidate details')}</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>${t('Full name')}</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>${t('Email address')}</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(t(C.infoFieldLabel(key)))}</span><strong>${esc(infoValue(key, value))}</strong></div>`).join('')}</div></section>
+          <section class="applicant-detail-section"><h3>${t('Application answers')} · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || t('Application question'))}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : `<div class="board-empty">${t('No written answers were submitted for this flow.')}</div>`}</section>
+          <section class="applicant-detail-section"><h3>${t('Application record')}</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>${t('Submitted')}</span><strong>${esc(I18N.formatDate(applicant.submitted_at, { dateStyle: 'medium', timeStyle: 'short' }))}</strong></div><div class="applicant-info-item"><span>${t('Privacy notice')}</span><strong>${esc(applicant.privacy_notice_version || t('Recorded'))}</strong></div><div class="applicant-info-item applicant-responsible-item"><span>${t('Responsible')}</span><button type="button" class="applicant-responsible-trigger" id="applicant-responsible" aria-describedby="applicant-responsible-tip">${esc(flowResponsiblesCache.has(applicant.flow_id) ? flowResponsiblesText(flowResponsiblesCache.get(applicant.flow_id)) : t('Loading…'))}</button><div class="applicant-tooltip" id="applicant-responsible-tip" role="tooltip" hidden>${t('These are the people responsible for this job. To change them, edit the job details.')}</div></div></div></section>
+          <section class="applicant-detail-section applicant-comments" aria-labelledby="applicant-comments-heading"><h3 id="applicant-comments-heading">${t('Team comments')}</h3><div class="comment-list" id="applicant-comment-list" aria-live="polite"><p class="comment-empty">${t('Loading comments…')}</p></div><form class="comment-form" id="applicant-comment-form" novalidate><label class="visually-hidden" for="applicant-comment-input">${t('Add a comment')}</label><textarea class="text-area" id="applicant-comment-input" maxlength="2000" rows="3" placeholder="${t('Write a comment for your team… Type @ to mention someone.')}"></textarea><div class="mention-menu" id="applicant-mention-menu" role="listbox" aria-label="${t('Mention a teammate')}" hidden></div><div class="comment-form-actions"><span class="comment-status" id="applicant-comment-status" role="status" aria-live="polite"></span><button class="btn btn-primary btn-sm" type="submit" id="applicant-comment-submit">${t('Add comment')}</button></div></form></section>
           <section class="applicant-delete-row" id="applicant-delete-row"></section>
         </div>
-        <div class="applicant-mobile-bar">${isPdf ? '<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;Preview resume</button>' : ''}${aiRow ? '<button class="btn" id="mobile-open-ai" type="button">AI Interview</button>' : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;Download resume</button></div>
+        <div class="applicant-mobile-bar">${isPdf ? `<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;${t('Preview resume')}</button>` : ''}${aiRow ? `<button class="btn" id="mobile-open-ai" type="button">${t('AI Interview')}</button>` : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;${t('Download resume')}</button></div>
       </section>
-      <aside class="applicant-review-right" aria-label="Resume preview${aiRow ? ' and AI interview' : ''}">
+      <aside class="applicant-review-right" aria-label="${aiRow ? t('Resume preview and AI interview') : t('Resume preview')}">
         ${rightTabs}
         <div class="applicant-right-body"><div class="applicant-right-pane" data-right-pane="resume">
-        <div class="applicant-preview-empty" id="applicant-preview-empty"><span class="applicant-preview-icon">▧</span><h3>${isPdf ? 'Resume preview' : 'Preview unavailable'}</h3>${isPdf ? '<button class="btn applicant-resume-button" id="preview-applicant-resume" type="button">▧ &nbsp;Preview resume</button>' : '<p>This file type cannot be previewed in the browser. Download the resume to open it.</p><button class="btn applicant-resume-button js-download-resume" type="button">↓ &nbsp;Download resume</button>'}</div>
-        <section class="applicant-resume-preview is-hidden" id="applicant-resume-preview" aria-label="PDF resume preview">
-          <div class="applicant-resume-preview-head"><div><span class="eyebrow">Private document</span><strong title="${esc(filename)}">${esc(filename)}</strong></div><div class="applicant-resume-preview-actions"><button class="btn btn-sm js-download-resume" type="button">↓ &nbsp;Download resume</button><button class="btn btn-sm" id="close-applicant-resume-preview" type="button">Close preview</button></div></div>
-          <iframe id="applicant-resume-frame" title="PDF preview of ${esc(filename)}" loading="lazy" referrerpolicy="no-referrer"></iframe>
-          <div class="applicant-pdf-pages" id="applicant-pdf-pages" role="document" aria-label="PDF preview of ${esc(filename)}" hidden></div>
+        <div class="applicant-preview-empty" id="applicant-preview-empty"><span class="applicant-preview-icon">▧</span><h3>${isPdf ? t('Resume preview') : t('Preview unavailable')}</h3>${isPdf ? `<button class="btn applicant-resume-button" id="preview-applicant-resume" type="button">▧ &nbsp;${t('Preview resume')}</button>` : `<p>${t('This file type cannot be previewed in the browser. Download the resume to open it.')}</p><button class="btn applicant-resume-button js-download-resume" type="button">↓ &nbsp;${t('Download resume')}</button>`}</div>
+        <section class="applicant-resume-preview is-hidden" id="applicant-resume-preview" aria-label="${t('PDF resume preview')}">
+          <div class="applicant-resume-preview-head"><div><span class="eyebrow">${t('Private document')}</span><strong title="${esc(filename)}">${esc(filename)}</strong></div><div class="applicant-resume-preview-actions"><button class="btn btn-sm js-download-resume" type="button">↓ &nbsp;${t('Download resume')}</button><button class="btn btn-sm" id="close-applicant-resume-preview" type="button">${t('Close preview')}</button></div></div>
+          <iframe id="applicant-resume-frame" title="${t('PDF preview of {file}', { file: esc(filename) })}" loading="lazy" referrerpolicy="no-referrer"></iframe>
+          <div class="applicant-pdf-pages" id="applicant-pdf-pages" role="document" aria-label="${t('PDF preview of {file}', { file: esc(filename) })}" hidden></div>
         </section>
         </div>${aiPane}</div>
       </aside>
@@ -3630,16 +3640,16 @@
       if (!trigger) return;
       // The resume may already be open (it stays open while the person looks at the AI interview): just bring it back to the front, on phones too.
       if (!previewPanel.classList.contains('is-hidden')) { reviewLayout.classList.add('is-previewing'); return; }
-      trigger.disabled = true; trigger.textContent = 'Preparing preview…';
+      trigger.disabled = true; trigger.textContent = t('Preparing preview…');
       try {
         if (needsDrawnPdf()) {
           const blob = await window.PathwayBackend.downloadApplicantResume(applicant.resume_path);
-          previewFrame.hidden = true; pdfPages.hidden = false; pdfPages.textContent = 'Loading the resume…';
+          previewFrame.hidden = true; pdfPages.hidden = false; pdfPages.textContent = t('Loading the resume…');
           previewPlaceholder.classList.add('is-hidden');
           previewPanel.classList.remove('is-hidden');
           reviewLayout.classList.add('is-previewing');
           try { await drawPdfPages(pdfPages, blob); }
-          catch (drawError) { pdfPages.textContent = 'This resume could not be displayed here. Use Download resume to open it.'; }
+          catch (drawError) { pdfPages.textContent = t('This resume could not be displayed here. Use Download resume to open it.'); }
         } else {
           const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path);
           previewFrame.hidden = false; pdfPages.hidden = true;
@@ -3648,8 +3658,8 @@
           previewPanel.classList.remove('is-hidden');
           reviewLayout.classList.add('is-previewing');
         }
-      } catch (error) { showToast(`Could not preview resume: ${error.message || 'please retry'}`); }
-      finally { if (trigger.isConnected) { trigger.disabled = false; trigger.innerHTML = '▧ &nbsp;Preview resume'; } }
+      } catch (error) { showToast(t('Could not preview resume: {reason}', { reason: error.message || t('please retry') })); }
+      finally { if (trigger.isConnected) { trigger.disabled = false; trigger.innerHTML = '▧ &nbsp;' + t('Preview resume'); } }
     };
     // The resume loads by itself on wide screens, which must not pull the person away from the AI Interview tab they asked for.
     previewButton?.addEventListener('click', () => { showRightPane('resume'); void loadPreview(previewButton); });
@@ -3660,20 +3670,20 @@
       const button = event.currentTarget;
       const tab = window.open('about:blank', '_blank');
       if (tab) tab.opener = null;
-      button.disabled = true; button.textContent = 'Preparing download…';
+      button.disabled = true; button.textContent = t('Preparing download…');
       try {
         const url = await window.PathwayBackend.getApplicantResumeUrl(applicant.resume_path, true, filename);
         if (tab) tab.location.replace(url);
-        else { await navigator.clipboard.writeText(url); showToast('Secure download link copied. It expires in two minutes.'); }
+        else { await navigator.clipboard.writeText(url); showToast(t('Secure download link copied. It expires in two minutes.')); }
       } catch (error) {
         if (tab) tab.close();
-        showToast(`Could not download resume: ${error.message || 'please retry'}`);
-      } finally { if (button.isConnected) { button.disabled = false; button.innerHTML = '↓ &nbsp;Download resume'; } }
+        showToast(t('Could not download resume: {reason}', { reason: error.message || t('please retry') }));
+      } finally { if (button.isConnected) { button.disabled = false; button.innerHTML = '↓ &nbsp;' + t('Download resume'); } }
     }));
   }
   async function doSignOut() {
     try { await window.PathwayBackend.signOut(); flows = []; companies = []; applicants = []; workspace = null; myWorkspaces = []; user = null; setRoute('login'); window.PathwayAuth.renderAuth(); }
-    catch (error) { showToast(`Could not sign out: ${error.message || 'please retry'}`); }
+    catch (error) { showToast(t('Could not sign out: {reason}', { reason: error.message || t('please retry') })); }
   }
 
   function showNewFlow() {

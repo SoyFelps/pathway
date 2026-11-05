@@ -91,9 +91,9 @@ test('the detail panel shows one tab per application and one stage for the candi
   const details = builder.slice(builder.indexOf('function showApplicantDetails('), builder.indexOf('async function doSignOut('));
   assert.ok(details.includes('const group = C.groupApplicants(applicants)'));
   assert.ok(details.includes('role="tablist"') && details.includes('role="tab"') && details.includes('aria-selected='));
-  assert.ok(details.includes("index === 0 ? 'Latest · ' : ''"), 'the newest application is labelled and first');
-  assert.ok(details.includes('Applied ${group.count} times'));
-  assert.ok(details.includes('Applies to all ${group.count} applications'));
+  assert.ok(details.includes("index === 0 ? t('Latest') + ' · ' : ''"), 'the newest application is labelled and first');
+  assert.ok(details.includes("t('Applied {count} times', { count: group.count })"));
+  assert.ok(details.includes("t('Applies to all {count} applications', { count: group.count })"));
   assert.ok(details.includes('group.status === stage.key'), 'the stage select shows the candidate\'s stage');
   assert.ok(details.includes('data-detail-tab="${tab}"'), 'the open tab survives a refresh of the panel');
   assert.ok(details.includes('getApplicantResumeUrl(applicant.resume_path'), 'resume actions use the selected application');

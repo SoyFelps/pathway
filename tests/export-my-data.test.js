@@ -82,7 +82,7 @@ test('"Export data" on a candidate builds one CSV with the application data held
 
 test('the candidate panel offers Export data next to Delete candidate', () => {
   const ui = builder.slice(builder.indexOf('function mountCandidateDeletion('), builder.indexOf('function showApplicantDetails('));
-  assert.ok(ui.includes('id="export-candidate">Export data</button>') && ui.includes('id="delete-candidate">Delete candidate</button>'));
+  assert.ok(ui.includes("id=\"export-candidate\">' + t('Export data') + '</button>") && ui.includes("id=\"delete-candidate\">' + t('Delete candidate') + '</button>"));
   assert.equal(ui.includes('listApplicantComments'), false, 'the export does not even read the comments');
   assert.ok(ui.includes('candidateDataToCsv({ person, items: group.items'));
   assert.ok(ui.includes("'pathway-candidate-data-'"), 'the file name has no personal data');
