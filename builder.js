@@ -1,6 +1,8 @@
 /* Pathway static flow builder. */
 (function () {
   const C = window.PathwayCore;
+  // Interface language (i18n.js): every visible text goes through t()/tn() with the English text as the key.
+  const { t, tn } = window.PathwayI18n;
   const root = document.getElementById('app');
   const modalRoot = document.getElementById('modal-root');
   const toast = document.getElementById('toast');
@@ -879,21 +881,21 @@
   // The workspace selector in the header (custom, not a native select).
   function workspaceSwitcherHtml() {
     if (!workspace) {
-      return '<div class="ws-switch"><button type="button" class="ws-switch-btn" disabled aria-disabled="true"><span class="ws-switch-mark" aria-hidden="true">–</span><span class="ws-switch-name">No workspace</span></button></div>';
+      return `<div class="ws-switch"><button type="button" class="ws-switch-btn" disabled aria-disabled="true"><span class="ws-switch-mark" aria-hidden="true">–</span><span class="ws-switch-name">${t('No workspace')}</span></button></div>`;
     }
     const labels = workspaceLabels();
     const options = myWorkspaces.map(item => {
       const current = item.id === workspace.id;
-      return `<button type="button" class="ws-option${current ? ' is-current' : ''}" role="menuitemradio" aria-checked="${current}" data-ws-id="${esc(item.id)}"><span class="ws-switch-mark" aria-hidden="true">${esc(workspaceMark(item.name))}</span><span class="ws-option-name">${esc(labels.get(item.id) || item.name)}</span><span class="ws-badge">${item.isOwner ? 'Owner' : 'Member'}</span>${item.premiumActive ? '<span class="ws-badge ws-badge-premium">Premium</span>' : ''}${current ? CHECK_MARK : ''}</button>`;
+      return `<button type="button" class="ws-option${current ? ' is-current' : ''}" role="menuitemradio" aria-checked="${current}" data-ws-id="${esc(item.id)}"><span class="ws-switch-mark" aria-hidden="true">${esc(workspaceMark(item.name))}</span><span class="ws-option-name">${esc(labels.get(item.id) || item.name)}</span><span class="ws-badge">${item.isOwner ? t('Owner') : t('Member')}</span>${item.premiumActive ? '<span class="ws-badge ws-badge-premium">Premium</span>' : ''}${current ? CHECK_MARK : ''}</button>`;
     }).join('');
     const label = labels.get(workspace.id) || workspace.name;
-    return `<div class="ws-switch" id="ws-switch"><button type="button" class="ws-switch-btn" id="ws-switch-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="ws-switch-panel" title="${esc(label)}"><span class="ws-switch-mark" aria-hidden="true">${esc(workspaceMark(workspace.name))}</span><span class="ws-switch-name">${esc(label)}</span>${CHEVRON}</button><div class="ws-switch-panel" id="ws-switch-panel" role="menu" aria-label="Your workspaces" hidden><div class="ws-switch-caption">Your workspaces</div>${options}<div class="ws-switch-sep" role="separator"></div><button type="button" class="ws-new" id="ws-new" role="menuitem"><span class="ws-new-plus" aria-hidden="true">+</span>New workspace</button></div></div>`;
+    return `<div class="ws-switch" id="ws-switch"><button type="button" class="ws-switch-btn" id="ws-switch-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="ws-switch-panel" title="${esc(label)}"><span class="ws-switch-mark" aria-hidden="true">${esc(workspaceMark(workspace.name))}</span><span class="ws-switch-name">${esc(label)}</span>${CHEVRON}</button><div class="ws-switch-panel" id="ws-switch-panel" role="menu" aria-label="${t('Your workspaces')}" hidden><div class="ws-switch-caption">${t('Your workspaces')}</div>${options}<div class="ws-switch-sep" role="separator"></div><button type="button" class="ws-new" id="ws-new" role="menuitem"><span class="ws-new-plus" aria-hidden="true">+</span>${t('New workspace')}</button></div></div>`;
   }
 
   // The user's name in the header opens a small menu: Settings and Sign out.
   function headerUserHtml() {
     const name = personName(myProfile);
-    return `<div class="user-menu" id="user-menu"><button type="button" class="user-menu-btn" id="user-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="user-menu-panel" title="${esc(user.email || '')}"><span class="user-menu-avatar" aria-hidden="true">${esc(workspaceMark(name || user.email || '?'))}</span><span class="auth-user">${esc(name || user.email || '—')}</span>${CHEVRON}</button><div class="user-menu-panel" id="user-menu-panel" role="menu" hidden><div class="user-menu-email">${esc(user.email || '')}</div><button type="button" class="user-menu-item" role="menuitem" data-user-menu="settings">Settings</button><button type="button" class="user-menu-item" role="menuitem" data-user-menu="signout">Sign out</button></div></div>`;
+    return `<div class="user-menu" id="user-menu"><button type="button" class="user-menu-btn" id="user-menu-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="user-menu-panel" title="${esc(user.email || '')}"><span class="user-menu-avatar" aria-hidden="true">${esc(workspaceMark(name || user.email || '?'))}</span><span class="auth-user">${esc(name || user.email || '—')}</span>${CHEVRON}</button><div class="user-menu-panel" id="user-menu-panel" role="menu" hidden><div class="user-menu-email">${esc(user.email || '')}</div><button type="button" class="user-menu-item" role="menuitem" data-user-menu="settings">${t('Settings')}</button><button type="button" class="user-menu-item" role="menuitem" data-user-menu="signout">${t('Sign out')}</button></div></div>`;
   }
 
   function closeHeaderMenus(except = null) {
@@ -986,7 +988,7 @@
       await window.PathwayBackend.selectWorkspace(workspaceId);
       await openWorkspaceDashboard(workspaceId);
     } catch (error) {
-      showToast(error.message || 'Could not switch workspace. Please try again.');
+      showToast(error.message || t('Could not switch workspace. Please try again.'));
       try { myWorkspaces = await window.PathwayBackend.listMyWorkspaces(); refreshHeaderSwitcher(); } catch (_) { /* the next page load refreshes the list */ }
     }
   }
@@ -999,8 +1001,8 @@
     const atLimit = OWNED_COUNT() >= MAX_OWNED_WORKSPACES;
     // At the limit there is nothing to fill in: only the explanation (in red) and a Close button.
     setModal(atLimit
-      ? `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">New workspace</div><h2>Workspace limit reached</h2></div><button class="modal-x" data-close aria-label="Close">×</button></div><p class="workspace-limit-note" role="alert">You can own up to ${MAX_OWNED_WORKSPACES} workspaces. Delete one you no longer need to create another.</p><div class="modal-actions"><button class="btn" type="button" data-close>Close</button></div>`
-      : `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">New workspace</div><h2>Create a workspace</h2><p>Each workspace has its own jobs, candidates, team and plan. You can switch between them at any time.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="new-workspace-form" novalidate><div class="field-group"><label for="new-workspace-name">Workspace name</label><input class="text-input" id="new-workspace-name" name="name" maxlength="120" autocomplete="organization" placeholder="e.g. Northstar Studio" required></div><p class="settings-delete-error" id="new-workspace-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" id="create-workspace" type="submit">Create workspace</button></div></form>`);
+      ? `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('New workspace')}</div><h2>${t('Workspace limit reached')}</h2></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><p class="workspace-limit-note" role="alert">${t('You can own up to {max} workspaces. Delete one you no longer need to create another.', { max: MAX_OWNED_WORKSPACES })}</p><div class="modal-actions"><button class="btn" type="button" data-close>${t('Close')}</button></div>`
+      : `<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('New workspace')}</div><h2>${t('Create a workspace')}</h2><p>${t('Each workspace has its own jobs, candidates, team and plan. You can switch between them at any time.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><form id="new-workspace-form" novalidate><div class="field-group"><label for="new-workspace-name">${t('Workspace name')}</label><input class="text-input" id="new-workspace-name" name="name" maxlength="120" autocomplete="organization" placeholder="${t('e.g. Northstar Studio')}" required></div><p class="settings-delete-error" id="new-workspace-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" type="button" data-close>${t('Cancel')}</button><button class="btn btn-primary" id="create-workspace" type="submit">${t('Create workspace')}</button></div></form>`);
     if (atLimit) return;
     const form = modalRoot.querySelector('#new-workspace-form');
     const input = form.querySelector('#new-workspace-name');
@@ -1010,21 +1012,21 @@
     form.addEventListener('submit', async event => {
       event.preventDefault();
       const name = input.value.trim();
-      if (!name || button.disabled) { errorBox.textContent = 'Enter a name for your workspace.'; errorBox.hidden = false; return; }
-      button.disabled = true; input.disabled = true; button.textContent = 'Creating…'; errorBox.hidden = true;
+      if (!name || button.disabled) { errorBox.textContent = t('Enter a name for your workspace.'); errorBox.hidden = false; return; }
+      button.disabled = true; input.disabled = true; button.textContent = t('Creating…'); errorBox.hidden = true;
       try {
         await window.PathwayBackend.createWorkspace(name);
         closeModal();
         await openWorkspaceDashboard();
       } catch (error) {
-        errorBox.textContent = error.message || 'The workspace could not be created. Please try again.';
-        errorBox.hidden = false; button.disabled = false; input.disabled = false; button.textContent = 'Create workspace';
+        errorBox.textContent = error.message || t('The workspace could not be created. Please try again.');
+        errorBox.hidden = false; button.disabled = false; input.disabled = false; button.textContent = t('Create workspace');
       }
     });
   }
 
   function showRenameWorkspace(item) {
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">Rename workspace</div><h2>Rename ${esc(workspaceLabel(item))}</h2><p>Only you, as the owner, can rename it. The new name appears for everyone on the team.</p></div><button class="modal-x" data-close aria-label="Close">×</button></div><form id="rename-workspace-form" novalidate><div class="field-group"><label for="rename-workspace-name">Workspace name</label><input class="text-input" id="rename-workspace-name" maxlength="120" autocomplete="organization" required value="${esc(item.name)}"></div><p class="settings-delete-error" id="rename-workspace-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" type="button" data-close>Cancel</button><button class="btn btn-primary" id="save-workspace-name" type="submit">Save name</button></div></form>`);
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Rename workspace')}</div><h2>${t('Rename {name}', { name: esc(workspaceLabel(item)) })}</h2><p>${t('Only you, as the owner, can rename it. The new name appears for everyone on the team.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><form id="rename-workspace-form" novalidate><div class="field-group"><label for="rename-workspace-name">${t('Workspace name')}</label><input class="text-input" id="rename-workspace-name" maxlength="120" autocomplete="organization" required value="${esc(item.name)}"></div><p class="settings-delete-error" id="rename-workspace-error" role="alert" hidden></p><div class="modal-actions"><button class="btn" type="button" data-close>${t('Cancel')}</button><button class="btn btn-primary" id="save-workspace-name" type="submit">${t('Save name')}</button></div></form>`);
     const input = modalRoot.querySelector('#rename-workspace-name');
     const errorBox = modalRoot.querySelector('#rename-workspace-error');
     const button = modalRoot.querySelector('#save-workspace-name');
@@ -1032,8 +1034,8 @@
     modalRoot.querySelector('#rename-workspace-form').addEventListener('submit', async event => {
       event.preventDefault();
       const name = input.value.trim();
-      if (!name) { errorBox.textContent = 'Enter a name for your workspace.'; errorBox.hidden = false; return; }
-      button.disabled = true; button.textContent = 'Saving…'; errorBox.hidden = true;
+      if (!name) { errorBox.textContent = t('Enter a name for your workspace.'); errorBox.hidden = false; return; }
+      button.disabled = true; button.textContent = t('Saving…'); errorBox.hidden = true;
       try {
         const saved = await window.PathwayBackend.renameWorkspace(item.id, name);
         const newName = saved?.name || name;
@@ -1042,10 +1044,10 @@
         closeModal(); refreshHeaderSwitcher();
         if (root.querySelector('.settings-page')) renderSettings();
         else if (root.querySelector('.my-team-page')) void renderMyTeam();
-        showToast('Workspace renamed.');
+        showToast(t('Workspace renamed.'));
       } catch (error) {
-        errorBox.textContent = error.message || 'The workspace could not be renamed.';
-        errorBox.hidden = false; button.disabled = false; button.textContent = 'Save name';
+        errorBox.textContent = error.message || t('The workspace could not be renamed.');
+        errorBox.hidden = false; button.disabled = false; button.textContent = t('Save name');
       }
     });
   }
@@ -1054,14 +1056,14 @@
   function renderNoWorkspace() {
     currentId = null; selectedId = null;
     setRoute('dashboard');
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('')}<main class="my-team-page"><section class="team-empty-state no-workspace-state"><div class="eyebrow">No workspace yet</div><h1>You are not in a workspace</h1><p>Create a workspace for your company, or open an invitation link from a team to join theirs. Your account stays yours either way.</p><button class="btn btn-primary" id="empty-create-workspace" type="button" data-new-workspace>Create a workspace</button></section></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('')}<main class="my-team-page"><section class="team-empty-state no-workspace-state"><div class="eyebrow">${t('No workspace yet')}</div><h1>${t('You are not in a workspace')}</h1><p>${t('Create a workspace for your company, or open an invitation link from a team to join theirs. Your account stays yours either way.')}</p><button class="btn btn-primary" id="empty-create-workspace" type="button" data-new-workspace>${t('Create a workspace')}</button></section></main></div></div>`;
     bindSidebar();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); renderNoWorkspace(); });
   }
 
   function renderSidebar(active) {
-    if (!workspace) return `<aside class="app-sidebar" aria-label="Account navigation"><div class="sidebar-caption">Account</div><button class="sidebar-link ${active === 'settings' ? 'active' : ''}" data-route="settings"><span class="sidebar-icon" aria-hidden="true">${ICONS.settings}</span>Settings</button></aside>`;
-    return `<aside class="app-sidebar" aria-label="Workspace navigation"><div class="sidebar-caption">Workspace</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">${ICONS.dashboard}</span>Dashboard</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>Applicants</button>${hasPermission('view_reports') ? `<button class="sidebar-link ${active === 'reports' ? 'active' : ''}" data-route="reports"><span class="sidebar-icon" aria-hidden="true">${ICONS.reports}</span>Reports</button>` : ''}${hasPermission('diversity') ? `<button class="sidebar-link ${active === 'diversity' ? 'active' : ''}" data-route="diversity"><span class="sidebar-icon" aria-hidden="true">${ICONS.diversity}</span>Diversity</button>` : ''}${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.team}</span>My Team</button>` : ''}${hasPermission('flows') ? `<button class="sidebar-link ${active === 'my-companies' ? 'active' : ''}" data-route="my-companies"><span class="sidebar-icon" aria-hidden="true">${ICONS.companies}</span>My Companies</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">${ICONS.plan}</span>My Plan</button>` : ''}</aside>`;
+    if (!workspace) return `<aside class="app-sidebar" aria-label="${t('Account navigation')}"><div class="sidebar-caption">${t('Account')}</div><button class="sidebar-link ${active === 'settings' ? 'active' : ''}" data-route="settings"><span class="sidebar-icon" aria-hidden="true">${ICONS.settings}</span>${t('Settings')}</button></aside>`;
+    return `<aside class="app-sidebar" aria-label="${t('Workspace navigation')}"><div class="sidebar-caption">${t('Workspace')}</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">${ICONS.dashboard}</span>${t('Dashboard')}</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>${t('Applicants')}</button>${hasPermission('view_reports') ? `<button class="sidebar-link ${active === 'reports' ? 'active' : ''}" data-route="reports"><span class="sidebar-icon" aria-hidden="true">${ICONS.reports}</span>${t('Reports')}</button>` : ''}${hasPermission('diversity') ? `<button class="sidebar-link ${active === 'diversity' ? 'active' : ''}" data-route="diversity"><span class="sidebar-icon" aria-hidden="true">${ICONS.diversity}</span>${t('Diversity')}</button>` : ''}${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.team}</span>${t('My Team')}</button>` : ''}${hasPermission('flows') ? `<button class="sidebar-link ${active === 'my-companies' ? 'active' : ''}" data-route="my-companies"><span class="sidebar-icon" aria-hidden="true">${ICONS.companies}</span>${t('My Companies')}</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">${ICONS.plan}</span>${t('My Plan')}</button>` : ''}</aside>`;
   }
 
   function bindSidebar() {
@@ -1301,12 +1303,12 @@
   }
 
   function renderPlanControl() {
-    const premiumPill = '<span class="status-pill" title="Your workspace can publish job flows"><span class="status-dot"></span>Premium</span>';
+    const premiumPill = `<span class="status-pill" title="${t('Your workspace can publish job flows')}"><span class="status-dot"></span>Premium</span>`;
     // Members see the tag too (but never the upgrade button, which belongs to the owner).
     if (!isOwner) return subscription?.active ? premiumPill : '';
     return subscription?.active
       ? premiumPill
-      : '<button class="btn btn-sm btn-lime" id="upgrade-to-publish">Upgrade to publish</button>';
+      : `<button class="btn btn-sm btn-lime" id="upgrade-to-publish">${t('Upgrade to publish')}</button>`;
   }
 
   function bindPlanControl() {
@@ -2556,9 +2558,9 @@
     const label = labels.get(item.id) || item.name;
     const current = workspace && item.id === workspace.id;
     const actions = item.isOwner
-      ? `<button class="btn btn-sm" type="button" data-ws-rename="${esc(item.id)}">Rename</button><button class="btn btn-sm btn-danger" type="button" data-ws-delete="${esc(item.id)}">Delete</button>`
-      : `<button class="btn btn-sm btn-danger" type="button" data-ws-leave="${esc(item.id)}">Leave</button>`;
-    return `<li class="settings-workspace-row"><span class="ws-switch-mark" aria-hidden="true">${esc(workspaceMark(item.name))}</span><div class="settings-workspace-main"><strong>${esc(label)}</strong>${label !== item.name ? `<small>Real name: ${esc(item.name)}</small>` : ''}<span class="settings-workspace-tags"><span class="ws-badge">${item.isOwner ? 'Owner' : 'Member'}</span><span class="ws-badge${item.premiumActive ? ' ws-badge-premium' : ''}">${item.premiumActive ? 'Premium' : 'Free'}</span>${current ? '<span class="ws-badge ws-badge-current">Current</span>' : ''}</span></div><div class="settings-workspace-actions">${actions}</div></li>`;
+      ? `<button class="btn btn-sm" type="button" data-ws-rename="${esc(item.id)}">${t('Rename')}</button><button class="btn btn-sm btn-danger" type="button" data-ws-delete="${esc(item.id)}">${t('Delete')}</button>`
+      : `<button class="btn btn-sm btn-danger" type="button" data-ws-leave="${esc(item.id)}">${t('Leave')}</button>`;
+    return `<li class="settings-workspace-row"><span class="ws-switch-mark" aria-hidden="true">${esc(workspaceMark(item.name))}</span><div class="settings-workspace-main"><strong>${esc(label)}</strong>${label !== item.name ? `<small>${t('Real name: {name}', { name: esc(item.name) })}</small>` : ''}<span class="settings-workspace-tags"><span class="ws-badge">${item.isOwner ? t('Owner') : t('Member')}</span><span class="ws-badge${item.premiumActive ? ' ws-badge-premium' : ''}">${item.premiumActive ? 'Premium' : t('Free')}</span>${current ? `<span class="ws-badge ws-badge-current">${t('Current')}</span>` : ''}</span></div><div class="settings-workspace-actions">${actions}</div></li>`;
   }
   function renderSettings() {
     currentId = null; selectedId = null;
@@ -2568,23 +2570,56 @@
     const memberOnly = myWorkspaces.filter(item => !item.isOwner);
     const atLimit = ownedNames.length >= MAX_OWNED_WORKSPACES;
     const deleteAccountNote = ownedNames.length
-      ? `This also deletes ${ownedNames.length === 1 ? 'your workspace' : `all ${ownedNames.length} workspaces you own`} and all their data, and immediately cancels ${ownedNames.length === 1 ? 'its' : 'their'} subscription${ownedNames.length === 1 ? '' : 's'}.`
-      : 'The workspaces you belong to, their flows, candidates and subscriptions will remain for their owners and teams.';
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">Your account</div><h1>Settings</h1><p>Your details and every workspace you belong to.</p></div></div><section class="settings-card" aria-labelledby="settings-profile-heading"><div class="settings-card-heading"><div><h2 id="settings-profile-heading">Name</h2></div><button class="btn" id="settings-profile-edit" type="button">Edit</button></div><div id="settings-profile-body"></div></section><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">Account</h2><p>This detail is read-only.</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>Email address</span><strong>${esc(user.email || '—')}</strong><small>Your sign-in email.</small></div></div></section><section class="settings-card settings-workspaces-card" aria-labelledby="settings-workspaces-heading"><div class="settings-card-heading"><div><h2 id="settings-workspaces-heading">Workspaces</h2><p>${ownedNames.length} of ${MAX_OWNED_WORKSPACES} owned${memberOnly.length ? ` · member of ${memberOnly.length}` : ''}. Switch between them from the header.</p></div><button class="btn" type="button" data-new-workspace ${atLimit ? 'disabled title="You can own up to 5 workspaces."' : ''}>+ New workspace</button></div>${myWorkspaces.length ? `<ul class="settings-workspace-list">${myWorkspaces.map(item => settingsWorkspaceRowHtml(item, labels)).join('')}</ul>` : '<p class="settings-workspace-empty">You are not in any workspace yet.</p>'}</section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>Sign out</h2><p>End your current Pathway session on this device.</p></div><button class="btn" id="settings-signout" type="button">Sign out</button></div></section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>Delete account</h2><p>${esc(deleteAccountNote)}</p></div><button class="btn btn-danger" id="settings-delete-account" type="button">Delete account</button></div></section><div class="settings-footer-row"><p class="settings-legal-note">Legal questions? Check our <a href="legal.html#terms" target="_blank" rel="noopener">Terms of Use</a> and <a href="legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p><button type="button" class="settings-link-button" id="settings-download-data">Download my data</button></div></main></div></div>`;
+      ? tn('This also deletes your workspace and all its data, and immediately cancels its subscription.', 'This also deletes all {count} workspaces you own and all their data, and immediately cancels their subscriptions.', ownedNames.length)
+      : t('The workspaces you belong to, their flows, candidates and subscriptions will remain for their owners and teams.');
+    const workspacesSummary = memberOnly.length
+      ? t('{owned} of {max} owned · member of {count}. Switch between them from the header.', { owned: ownedNames.length, max: MAX_OWNED_WORKSPACES, count: memberOnly.length })
+      : t('{owned} of {max} owned. Switch between them from the header.', { owned: ownedNames.length, max: MAX_OWNED_WORKSPACES });
+    const I18N = window.PathwayI18n;
+    const languageOptions = [`<option value="">${t('Automatic ({language})', { language: I18N.NAMES[I18N.browserLanguage()] })}</option>`]
+      .concat(I18N.SUPPORTED.map(code => `<option value="${code}" lang="${code}">${I18N.NAMES[code]}</option>`))
+      .join('');
+    const legalNote = t('Legal questions? Check our {terms} and {privacy}.', {
+      terms: `<a href="legal.html#terms" target="_blank" rel="noopener">${t('Terms of Use')}</a>`,
+      privacy: `<a href="legal.html#privacy" target="_blank" rel="noopener">${t('Privacy Policy')}</a>`
+    });
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#" id="brand-home"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('settings')}<main class="settings-page"><div class="settings-heading"><div><div class="eyebrow">${t('Your account')}</div><h1>${t('Settings')}</h1><p>${t('Your details and every workspace you belong to.')}</p></div></div><section class="settings-card" aria-labelledby="settings-profile-heading"><div class="settings-card-heading"><div><h2 id="settings-profile-heading">${t('Name')}</h2></div><button class="btn" id="settings-profile-edit" type="button">${t('Edit')}</button></div><div id="settings-profile-body"></div></section><section class="settings-card settings-language-card" aria-labelledby="settings-language-heading"><div class="settings-card-heading"><div><h2 id="settings-language-heading">${t('Language')}</h2><p>${t('The language Pathway uses for you. Candidates see each job in the job’s own language.')}</p></div><select class="select-input settings-language-select" id="settings-language" aria-labelledby="settings-language-heading">${languageOptions}</select></div><p class="settings-profile-status" id="settings-language-status" role="status" aria-live="polite"></p></section><section class="settings-card" aria-labelledby="settings-account-heading"><div class="settings-card-heading"><div><h2 id="settings-account-heading">${t('Account')}</h2><p>${t('This detail is read-only.')}</p></div></div><div class="settings-info-grid"><div class="settings-info-item"><span>${t('Email address')}</span><strong>${esc(user.email || '—')}</strong><small>${t('Your sign-in email.')}</small></div></div></section><section class="settings-card settings-workspaces-card" aria-labelledby="settings-workspaces-heading"><div class="settings-card-heading"><div><h2 id="settings-workspaces-heading">${t('Workspaces')}</h2><p>${workspacesSummary}</p></div><button class="btn" type="button" data-new-workspace ${atLimit ? `disabled title="${t('You can own up to {max} workspaces.', { max: MAX_OWNED_WORKSPACES })}"` : ''}>+ ${t('New workspace')}</button></div>${myWorkspaces.length ? `<ul class="settings-workspace-list">${myWorkspaces.map(item => settingsWorkspaceRowHtml(item, labels)).join('')}</ul>` : `<p class="settings-workspace-empty">${t('You are not in any workspace yet.')}</p>`}</section><section class="settings-card settings-session-card"><div class="settings-card-heading"><div><h2>${t('Sign out')}</h2><p>${t('End your current Pathway session on this device.')}</p></div><button class="btn" id="settings-signout" type="button">${t('Sign out')}</button></div></section><section class="settings-card settings-account-delete-card"><div class="settings-card-heading"><div><h2>${t('Delete account')}</h2><p>${esc(deleteAccountNote)}</p></div><button class="btn btn-danger" id="settings-delete-account" type="button">${t('Delete account')}</button></div></section><div class="settings-footer-row"><p class="settings-legal-note">${legalNote}</p><button type="button" class="settings-link-button" id="settings-download-data">${t('Download my data')}</button></div></main></div></div>`;
     bindSidebar(); bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); if (!workspace) renderNoWorkspace(); else hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
     root.querySelector('#settings-signout')?.addEventListener('click', doSignOut);
+    // Language: saved in the person's profile, then the page reloads so every screen is drawn in the new language.
+    const languageSelect = root.querySelector('#settings-language');
+    const languageStatus = root.querySelector('#settings-language-status');
+    languageSelect.value = I18N.preference || '';
+    languageSelect.addEventListener('change', async () => {
+      const chosen = languageSelect.value || null;
+      languageSelect.disabled = true;
+      languageStatus.className = 'settings-profile-status'; languageStatus.textContent = t('Saving…');
+      try {
+        const saved = await window.PathwayBackend.updateMyLanguage(chosen);
+        if (myProfile) myProfile = { ...myProfile, uiLanguage: saved };
+        I18N.setPreference(saved);
+        await flushPendingWork();
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#settings`);
+        window.location.reload();
+      } catch (error) {
+        languageSelect.value = I18N.preference || '';
+        languageSelect.disabled = false;
+        languageStatus.className = 'settings-profile-status is-error';
+        languageStatus.textContent = error.message || t('Could not save your language. Please try again.');
+      }
+    });
     root.querySelector('#settings-download-data')?.addEventListener('click', async event => {
       const button = event.currentTarget;
       if (button.disabled) return;
       const label = button.textContent;
-      button.disabled = true; button.textContent = 'Preparing…';
+      button.disabled = true; button.textContent = t('Preparing…');
       try {
         const data = await window.PathwayBackend.exportMyData();
         downloadTextFile('pathway-my-data-' + new Date().toISOString().slice(0, 10) + '.csv', myDataToCsv(data));
-        showToast('Your data was downloaded.');
+        showToast(t('Your data was downloaded.'));
       } catch (error) {
-        showToast('Could not prepare your data. Please try again.');
+        showToast(t('Could not prepare your data. Please try again.'));
       } finally { button.disabled = false; button.textContent = label; }
     });
     const profileBody = root.querySelector('#settings-profile-body'), profileEdit = root.querySelector('#settings-profile-edit');
@@ -2594,7 +2629,7 @@
     };
     const showProfileForm = () => {
       profileEdit.hidden = true;
-      profileBody.innerHTML = '<form id="settings-profile-form" class="settings-profile-form" novalidate><div class="field-row"><div class="field-group"><label for="settings-first-name">First name</label><input class="text-input" id="settings-first-name" name="firstName" maxlength="60" autocomplete="given-name" required value="' + esc(myProfile?.firstName || '') + '"></div><div class="field-group"><label for="settings-last-name">Last name</label><input class="text-input" id="settings-last-name" name="lastName" maxlength="60" autocomplete="family-name" required value="' + esc(myProfile?.lastName || '') + '"></div></div><div class="settings-profile-actions"><button class="btn btn-primary" type="submit" id="settings-profile-save">Save name</button><button class="btn" type="button" id="settings-profile-cancel">Cancel</button><span class="settings-profile-status" id="settings-profile-status" role="status" aria-live="polite"></span></div></form>';
+      profileBody.innerHTML = '<form id="settings-profile-form" class="settings-profile-form" novalidate><div class="field-row"><div class="field-group"><label for="settings-first-name">' + t('First name') + '</label><input class="text-input" id="settings-first-name" name="firstName" maxlength="60" autocomplete="given-name" required value="' + esc(myProfile?.firstName || '') + '"></div><div class="field-group"><label for="settings-last-name">' + t('Last name') + '</label><input class="text-input" id="settings-last-name" name="lastName" maxlength="60" autocomplete="family-name" required value="' + esc(myProfile?.lastName || '') + '"></div></div><div class="settings-profile-actions"><button class="btn btn-primary" type="submit" id="settings-profile-save">' + t('Save name') + '</button><button class="btn" type="button" id="settings-profile-cancel">' + t('Cancel') + '</button><span class="settings-profile-status" id="settings-profile-status" role="status" aria-live="polite"></span></div></form>';
       root.querySelector('#settings-first-name').focus();
       root.querySelector('#settings-profile-cancel').addEventListener('click', () => showProfileView());
       root.querySelector('#settings-profile-form').addEventListener('submit', async event => {
@@ -2602,15 +2637,15 @@
         const status = root.querySelector('#settings-profile-status'), button = root.querySelector('#settings-profile-save');
         const first = root.querySelector('#settings-first-name').value, last = root.querySelector('#settings-last-name').value;
         status.className = 'settings-profile-status'; status.textContent = '';
-        if (!first.trim() || !last.trim()) { status.className = 'settings-profile-status is-error'; status.textContent = 'Enter your first and last name.'; return; }
+        if (!first.trim() || !last.trim()) { status.className = 'settings-profile-status is-error'; status.textContent = t('Enter your first and last name.'); return; }
         button.disabled = true;
         try {
           myProfile = await window.PathwayBackend.updateMyProfile(first, last);
           peopleLoadedAt = 0; flowResponsiblesCache.clear();
           const headerUser = root.querySelector('.topbar .auth-user'); if (headerUser) headerUser.textContent = personName(myProfile) || user.email;
-          showProfileView('Name saved.');
+          showProfileView(t('Name saved.'));
         } catch (error) {
-          status.className = 'settings-profile-status is-error'; status.textContent = error.message || 'Could not save your name. Please try again.';
+          status.className = 'settings-profile-status is-error'; status.textContent = error.message || t('Could not save your name. Please try again.');
           button.disabled = false;
         }
       });
@@ -4208,6 +4243,8 @@
     myWorkspaces = context.workspaces || [];
     user = context.user;
     myProfile = context.profile || null;
+    // The language saved in the profile wins (empty = browser language); it is applied before the first screen is drawn.
+    if (myProfile) window.PathwayI18n.setPreference(myProfile.uiLanguage || null);
     isOwner = Boolean(context.isOwner);
     teamMember = context.teamMember || null;
     subscription = context.subscription || { status: 'free', active: false, currentPeriodEnd: null, cancelAtPeriodEnd: false };

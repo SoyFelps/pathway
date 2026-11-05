@@ -47,7 +47,7 @@ test('sign-up (also by invitation) asks for first and last name and sends them a
 
 test('the backend reads and saves the profile and passes names through', () => {
   const backend = read('backend.js');
-  assert.ok(backend.includes("from('profiles').select('first_name,last_name')"));
+  assert.ok(backend.includes("from('profiles').select('first_name,last_name,ui_language')"));
   assert.ok(backend.includes("from('profiles').update({ first_name: first, last_name: last })"));
   assert.ok(backend.includes('getMyProfile,') && backend.includes('updateMyProfile,'));
   assert.equal((backend.match(/user, profile,/g) || []).length, 3, 'all three signed-in session shapes carry the profile');
@@ -80,7 +80,7 @@ test('Settings shows the name read-only and opens the fields only after Edit', (
   const form = builder.slice(builder.indexOf('const showProfileForm ='), builder.indexOf("profileEdit.addEventListener('click', showProfileForm)"));
   assert.ok(form.includes('id="settings-first-name"') && form.includes('id="settings-last-name"') && form.includes('id="settings-profile-cancel"'));
   assert.ok(form.includes('window.PathwayBackend.updateMyProfile(first, last)'));
-  assert.ok(form.includes("status.textContent = 'Enter your first and last name.'"));
+  assert.ok(form.includes("status.textContent = t('Enter your first and last name.')"));
   assert.ok(builder.includes('myProfile = context.profile || null;'));
 });
 
@@ -118,7 +118,9 @@ test('the My Team notice for workspaces without Premium says "No team access"', 
 test('Settings ends with a line linking the Terms of Use and the Privacy Policy', () => {
   const builder = read('builder.js');
   const settings = builder.slice(builder.indexOf('function renderSettings()'), builder.indexOf('window.PathwayAuth.start('));
-  assert.ok(settings.includes('Legal questions? Check our <a href="legal.html#terms" target="_blank" rel="noopener">Terms of Use</a> and <a href="legal.html#privacy" target="_blank" rel="noopener">Privacy Policy</a>.'));
+  assert.ok(settings.includes("t('Legal questions? Check our {terms} and {privacy}.'"));
+  assert.ok(settings.includes('<a href="legal.html#terms" target="_blank" rel="noopener">${t(\'Terms of Use\')}</a>'));
+  assert.ok(settings.includes('<a href="legal.html#privacy" target="_blank" rel="noopener">${t(\'Privacy Policy\')}</a>'));
   assert.ok(settings.indexOf('settings-delete-account') < settings.indexOf('settings-legal-note'), 'it comes after the last card');
   const legal = read('legal.html');
   assert.ok(legal.includes('id="terms"') && legal.includes('id="privacy"'), 'the anchors exist on the legal page');

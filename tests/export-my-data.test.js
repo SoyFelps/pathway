@@ -23,8 +23,8 @@ test('the export function only reads the caller\'s own rows and leaves out other
 
 test('Settings has a "Download my data" link next to the legal line', () => {
   const settings = builder.slice(builder.indexOf('function renderSettings()'), builder.indexOf('window.PathwayAuth.start('));
-  assert.ok(settings.includes('<div class="settings-footer-row"><p class="settings-legal-note">Legal questions?'));
-  assert.ok(settings.includes('id="settings-download-data">Download my data</button>'));
+  assert.ok(settings.includes('<div class="settings-footer-row"><p class="settings-legal-note">${legalNote}</p>') && settings.includes("t('Legal questions? Check our {terms} and {privacy}.'"));
+  assert.ok(settings.includes("id=\"settings-download-data\">${t('Download my data')}</button>"));
   assert.ok(settings.includes('window.PathwayBackend.exportMyData()') && settings.includes("'pathway-my-data-'"));
   assert.ok(read('backend.js').includes("client.rpc('export_my_data')") && read('backend.js').includes('exportMyData,'));
 });

@@ -155,10 +155,10 @@ test('My Team shows up to three included seats, defaults permissions on, and sup
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=mw3-20261105r/);
-  assert.match(html, /backend\.js\?v=mw3-20261105r/);
-  assert.match(html, /builder\.js\?v=mw3-20261105r/);
-  assert.match(html, /styles\.css\?v=mw3-20261105r/);
+  assert.match(html, /auth\.js\?v=mw3-20261105s/);
+  assert.match(html, /backend\.js\?v=mw3-20261105s/);
+  assert.match(html, /builder\.js\?v=mw3-20261105s/);
+  assert.match(html, /styles\.css\?v=mw3-20261105s/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
@@ -189,10 +189,11 @@ test('My Team sidebar uses a two-person icon, distinct from the single-person Ap
 
 test('My Companies appears immediately below My Team in the sidebar', () => {
   const sidebar = read('builder.js').split('function renderSidebar(active) {')[1].split('\n  }')[0];
-  const teamEnd = sidebar.indexOf('My Team</button>') + 'My Team</button>'.length;
+  const teamLabel = "${t('My Team')}</button>";
+  const teamEnd = sidebar.indexOf(teamLabel) + teamLabel.length;
   const nextLink = sidebar.indexOf('data-route="', teamEnd);
   const companiesLink = sidebar.indexOf('data-route="my-companies"', teamEnd);
-  assert.ok(teamEnd > 'My Team</button>'.length - 1);
+  assert.ok(teamEnd > teamLabel.length - 1);
   assert.ok(companiesLink >= 0, 'My Companies link must be present after My Team');
   assert.equal(nextLink, companiesLink);
 });

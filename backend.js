@@ -234,9 +234,21 @@
     const { data: authData } = await client.auth.getSession();
     const userId = authData?.session?.user?.id;
     if (!userId) return null;
-    const { data, error } = await client.from('profiles').select('first_name,last_name').eq('user_id', userId).maybeSingle();
+    const { data, error } = await client.from('profiles').select('first_name,last_name,ui_language').eq('user_id', userId).maybeSingle();
     if (error) throw error;
-    return data ? { firstName: data.first_name, lastName: data.last_name } : null;
+    return data ? { firstName: data.first_name, lastName: data.last_name, uiLanguage: data.ui_language || null } : null;
+  }
+  // Interface language of the signed-in person: 'en', 'pt-BR', 'es', or null (follow the browser).
+  async function updateMyLanguage(code) {
+    await requireSession();
+    const value = code ? String(code) : null;
+    if (value !== null && !['en', 'pt-BR', 'es'].includes(value)) throw new Error('This language is not available.');
+    const { data: authData } = await client.auth.getSession();
+    const userId = authData?.session?.user?.id;
+    const { data, error } = await client.from('profiles').update({ ui_language: value }).eq('user_id', userId).select('ui_language').maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('Could not save your language. Please refresh and try again.');
+    return data.ui_language || null;
   }
   async function updateMyProfile(firstName, lastName) {
     await requireSession();
@@ -246,10 +258,10 @@
     if (first.length > 60 || last.length > 60) throw new Error('Each name can have at most 60 characters.');
     const { data: authData } = await client.auth.getSession();
     const userId = authData?.session?.user?.id;
-    const { data, error } = await client.from('profiles').update({ first_name: first, last_name: last }).eq('user_id', userId).select('first_name,last_name').maybeSingle();
+    const { data, error } = await client.from('profiles').update({ first_name: first, last_name: last }).eq('user_id', userId).select('first_name,last_name,ui_language').maybeSingle();
     if (error) throw error;
     if (!data) throw new Error('Could not save your name. Please refresh and try again.');
-    return { firstName: data.first_name, lastName: data.last_name };
+    return { firstName: data.first_name, lastName: data.last_name, uiLanguage: data.ui_language || null };
   }
   async function getFlowResponsibles(flowId) {
     await requireSession();
@@ -1100,6 +1112,7 @@
     listCommentMentions,
     markCommentMentionsSeen,
     updateMyProfile,
+    updateMyLanguage,
     listTeamOverview,
     getWorkspaceReport,
     getReportJobs,

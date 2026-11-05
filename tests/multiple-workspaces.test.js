@@ -85,8 +85,8 @@ test('the header selector is a custom accessible menu with an owner/member badge
   assert.match(builder, /function workspaceSwitcherHtml\(\)/);
   assert.match(builder, /role="menuitemradio" aria-checked=/);
   assert.match(builder, /aria-haspopup="menu" aria-expanded="false"/);
-  assert.match(builder, /No workspace<\/span><\/button>/);
-  assert.match(builder, /New workspace<\/button>/);
+  assert.match(builder, /\$\{t\('No workspace'\)\}<\/span><\/button>/);
+  assert.match(builder, /\$\{t\('New workspace'\)\}<\/button>/);
   assert.match(builder, /event\.key === 'Escape'/);
   assert.match(builder, /ArrowDown/);
   assert.doesNotMatch(builder, /<select[^>]*ws-switch/);
@@ -105,7 +105,7 @@ test('switching saves the choice, waits for pending saves, reloads and lands on 
 
 test('New workspace modal warns at the limit of 5 and creating goes through the checked database function', () => {
   assert.match(builder, /const MAX_OWNED_WORKSPACES = 5/);
-  assert.match(builder, /You can own up to \$\{MAX_OWNED_WORKSPACES\} workspaces\./);
+  assert.match(builder, /t\('You can own up to \{max\} workspaces\. Delete one you no longer need to create another\.', \{ max: MAX_OWNED_WORKSPACES \}\)/);
   assert.match(backend, /client\.rpc\('create_workspace', \{ p_name: cleanName \}\)/);
   assert.doesNotMatch(backend, /from\('workspaces'\)\.insert/);
 });

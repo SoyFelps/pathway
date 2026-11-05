@@ -15,7 +15,7 @@ test('Settings opens from the user menu in the header (not from the sidebar) and
   assert.doesNotMatch(withWorkspace, /data-route="settings"/, 'with a workspace, Settings is only in the user menu');
   assert.match(sidebar, /if \(!workspace\) return `<aside[\s\S]*data-route="settings"/, 'without a workspace the sidebar offers only Settings');
   assert.match(builder, /Email address/);
-  assert.match(builder, /<h2 id="settings-account-heading">Account<\/h2>/);
+  assert.match(builder, /<h2 id="settings-account-heading">\$\{t\('Account'\)\}<\/h2>/);
   assert.match(builder, /id="settings-signout"[\s\S]*?doSignOut/);
   assert.match(builder, /else if \(requestedPage === 'settings'\) renderSettings\(\)/);
 });
@@ -84,8 +84,8 @@ test('late signed Stripe events cannot recreate a deleted workspace subscription
 
 test('Settings uses a fresh cache version for frontend assets', () => {
   const html = read('index.html');
-  assert.match(html, /styles\.css\?v=mw3-20261105r/);
-  assert.match(html, /backend\.js\?v=mw3-20261105r/);
-  assert.match(html, /auth\.js\?v=mw3-20261105r/);
-  assert.match(html, /builder\.js\?v=mw3-20261105r/);
+  assert.match(html, /styles\.css\?v=mw3-20261105s/);
+  assert.match(html, /backend\.js\?v=mw3-20261105s/);
+  assert.match(html, /auth\.js\?v=mw3-20261105s/);
+  assert.match(html, /builder\.js\?v=mw3-20261105s/);
 });
