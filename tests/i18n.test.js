@@ -215,7 +215,7 @@ test('the public page and the editor preview follow the job language, never the 
   assert.match(candidate, /G\.enhanceForm\(form, tr\)/);
   assert.ok(read('builder.js').includes("{ preview: true, onFinish: finish, language: flow.interviewLanguage || null }"), 'the editor preview uses the job language');
   const html = read('apply.html');
-  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261106a"></script>`);
+  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261106b"></script>`);
   for (const file of ['locales/pt-BR.js', 'locales/es.js', 'i18n.js']) assert.ok(at(file) > 0 && at(file) < at('candidate.js'), `${file} loads before candidate.js`);
 });
 
@@ -242,7 +242,7 @@ test('the confirmation e-mail is written in the job language; English stays exac
 
 test('the hiring app loads the dictionaries and i18n.js before the app code, and Settings saves the language in the profile', () => {
   const html = read('index.html');
-  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261106a"></script>`);
+  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261106b"></script>`);
   for (const file of ['locales/pt-BR.js', 'locales/es.js', 'i18n.js']) assert.ok(at(file) > 0, `${file} is loaded`);
   assert.ok(at('i18n.js') < at('backend.js') && at('i18n.js') < at('auth.js') && at('i18n.js') < at('builder.js'));
   const builder = read('builder.js');
@@ -278,4 +278,11 @@ test('the standard board stages and the AI interview tags of the cards are trans
     assert.deepEqual(missing, [], `${code} is missing stage or tag texts`);
   }
   assert.match(builder, /standardApplicantStages\.forEach\(stage => \{ const english = stage\.label; Object\.defineProperty\(stage, 'label', \{ get: \(\) => t\(english\), enumerable: true \}\); \}\);/);
+});
+
+test('on a phone the header upgrade button uses a short label, so longer languages do not wrap it onto three lines', () => {
+  const builder = read('builder.js');
+  assert.ok(builder.includes(`id="upgrade-to-publish" aria-label="\${t('Upgrade to publish')}"><span class="upgrade-long">\${t('Upgrade to publish')}</span><span class="upgrade-short">\${t('Upgrade')}</span>`));
+  const css = read('styles.css');
+  assert.ok(css.includes('.upgrade-short{display:none}@media(max-width:760px){#upgrade-to-publish .upgrade-long{display:none}#upgrade-to-publish .upgrade-short{display:inline}}'));
 });

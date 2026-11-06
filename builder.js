@@ -1324,7 +1324,7 @@
     if (!isOwner) return subscription?.active ? premiumPill : '';
     return subscription?.active
       ? premiumPill
-      : `<button class="btn btn-sm btn-lime" id="upgrade-to-publish">${t('Upgrade to publish')}</button>`;
+      : `<button class="btn btn-sm btn-lime" id="upgrade-to-publish" aria-label="${t('Upgrade to publish')}"><span class="upgrade-long">${t('Upgrade to publish')}</span><span class="upgrade-short">${t('Upgrade')}</span></button>`;
   }
 
   function bindPlanControl() {

@@ -957,3 +957,6 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .settings-language-select{width:auto;min-width:230px;flex-shrink:0}.settings-language-card .settings-profile-status:empty{display:none}.settings-language-card .settings-profile-status{margin:10px 0 0}
 @media(max-width:620px){.settings-language-select{width:100%;min-width:0}}
 .auth-language{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:11px;color:var(--muted)}.auth-language .select-input{width:auto;min-width:190px;padding-top:6px;padding-bottom:6px;font-size:12px}
+
+/* Header upgrade button: short label on phones (i18n phase 5) */
+.upgrade-short{display:none}@media(max-width:760px){#upgrade-to-publish .upgrade-long{display:none}#upgrade-to-publish .upgrade-short{display:inline}}

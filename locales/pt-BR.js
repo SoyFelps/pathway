@@ -1688,5 +1688,7 @@
   'Your subscription status could not be checked.': 'Não foi possível verificar a situação da sua assinatura.',
   'Your workspace access could not be checked.': 'Não foi possível verificar seu acesso ao workspace.',
   'Your workspace already has an active subscription.': 'Seu workspace já tem uma assinatura ativa.',
-  'Your workspace could not be verified.': 'Não foi possível verificar seu workspace.'
+  'Your workspace could not be verified.': 'Não foi possível verificar seu workspace.',
+  // Phase 5 (short labels for phones)
+  'Upgrade': 'Assinar'
 };

@@ -482,7 +482,7 @@
   'By signing in, you agree to our {terms} and {privacy}.': 'Al iniciar sesión, aceptas nuestros {terms} y nuestra {privacy}.',
   'Step {number}': 'Paso {number}',
   'Fixed start': 'Inicio fijo',
-  'Your details': 'Tus datos',
+  'Your details': 'Sus datos',
   'Name · Email · Resume': 'Nombre · Correo · Currículum',
   'Short answer': 'Respuesta corta',
   'Tell us about your experience': 'Cuéntanos tu experiencia',
@@ -1688,5 +1688,7 @@
   'Your subscription status could not be checked.': 'No se pudo revisar el estado de tu suscripción.',
   'Your workspace access could not be checked.': 'No se pudo revisar tu acceso al espacio de trabajo.',
   'Your workspace already has an active subscription.': 'Tu espacio de trabajo ya tiene una suscripción activa.',
-  'Your workspace could not be verified.': 'No se pudo verificar tu espacio de trabajo.'
+  'Your workspace could not be verified.': 'No se pudo verificar tu espacio de trabajo.',
+  // Phase 5 (short labels for phones)
+  'Upgrade': 'Suscríbete'
 };
