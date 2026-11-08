@@ -3488,11 +3488,7 @@
       + `<button class="btn btn-sm btn-danger" type="button" id="select-delete">${t('Delete')}</button><button class="btn btn-sm" type="button" id="select-clear">${t('Clear selection')}</button>`;
     bar.querySelector('#select-move').addEventListener('change', event => { const stage = event.target.value; event.target.value = ''; if (stage) void bulkMove(selectedGroups(), stage); });
     bar.querySelector('#select-delete').addEventListener('click', () => confirmBulkDelete(selectedGroups()));
-    bar.querySelector('#select-clear').addEventListener('click', () => {
-      selectedCandidates.clear(); lastPickedKey = '';
-      const content = root.querySelector('#applicants-content');
-      if (content) syncSelectionUi(content);
-    });
+    bar.querySelector('#select-clear').addEventListener('click', () => setSelectMode(false)); // clearing the selection also leaves select mode
   }
   const setSelectionBarBusy = busy => root.querySelectorAll('#select-bar button, #select-bar select').forEach(item => { item.disabled = busy; });
 

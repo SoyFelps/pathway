@@ -111,3 +111,7 @@ test('the Applicants board has a select mode: pick cards or whole columns, then 
   const worker = fs.readFileSync(path.join(__dirname, '..', 'supabase/functions/ai-interview-webhook/logic.ts'), 'utf8');
   assert.ok(worker.includes('export const TICK_BATCH = 10;'), 'the queue the confirmation text describes (10 invitations per 10-second tick)');
 });
+
+test('"Clear selection" in the action bar also leaves select mode', () => {
+  assert.ok(read('builder.js').includes("bar.querySelector('#select-clear').addEventListener('click', () => setSelectMode(false));"));
+});
