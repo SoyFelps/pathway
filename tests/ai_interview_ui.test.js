@@ -246,7 +246,7 @@ test('free plan (owner decisions 2026-11-01): stage moves locked with a note, tr
   assert.ok(builder.includes("'This workspace is on the free plan. Upgrade to Premium to move candidates between stages.'"));
   assert.ok(builder.includes("if (workspaceIsFree()) { showToast(t(FREE_MOVE_NOTE), 6000); return; }"), 'moveApplicant refuses on the free plan');
   assert.ok(builder.includes("const freeNote = isOwner && workspaceIsFree()"), 'the note above the board is for the owner only');
-  assert.ok(builder.includes("draggable=\"${workspaceIsFree() ? 'false' : 'true'}\"") && builder.includes('id="applicant-status-select"${workspaceIsFree()'));
+  assert.ok(builder.includes("draggable=\"${workspaceIsFree() || selectMode ? 'false' : 'true'}\"") && builder.includes('id="applicant-status-select"${workspaceIsFree()'));
   assert.ok(builder.includes("data.locked && row.state === 'completed'") && builder.includes('Upgrade to Premium to see the transcript and the written evaluation of this interview.'));
   assert.ok(builder.includes('This interview was cancelled when the workspace was on the free plan, and its link no longer works. Invite this candidate again if you want them to take the AI interview.'));
   assert.ok(builder.includes("getAiInterviewStatus(flowId, email, 'export')"), 'the candidate data export stays complete');

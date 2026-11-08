@@ -1756,11 +1756,13 @@
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
     flowResponsiblesCache.clear();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body is-board">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">${t('Hiring workspace')}</div><h1>${t('Applicants')}</h1><p>${t('Review applications and move candidates through your hiring stages.')}</p></div><div class="applicants-tools">${hasPermission('flows') ? `<select id="applicant-responsible-filter" class="applicants-filter" aria-label="${t('Filter by responsible')}">${applicantResponsibleOptionsHtml()}</select>` : ''}<div class="job-combobox"><input id="applicant-flow-filter" class="applicants-filter" type="text" role="combobox" aria-expanded="false" aria-controls="applicant-job-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="${t('Filter applicants by job')}" placeholder="${t('Search jobs')}" value="${esc(applicantJobLabel())}"><span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span><ul class="job-combobox-list" id="applicant-job-list" role="listbox" aria-label="${t('Jobs')}" hidden></ul></div><input id="applicant-search" class="applicants-search" type="search" placeholder="${t('Search applicants')}" value="${esc(applicantSearch)}" aria-label="${t('Search applicants')}"><span id="adv-filter-slot" class="adv-filter-slot"></span><button class="btn btn-sm" id="refresh-applicants" title="${t('Refresh applicants')}">↻ ${t('Refresh')}</button>${hasPermission('customize_stages') ? `<button class="btn btn-sm" type="button" id="customize-stages">${t('Customize')}</button>` : ''}</div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>${t('Loading applicants…')}</span></div></div></main></div></div>`;
+    if (!root.querySelector('.applicants-page')) { selectMode = false; selectedCandidates.clear(); } // coming from another page: start in the normal view
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body is-board">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">${t('Hiring workspace')}</div><h1>${t('Applicants')}</h1><p>${t('Review applications and move candidates through your hiring stages.')}</p></div><div class="applicants-tools">${hasPermission('flows') ? `<select id="applicant-responsible-filter" class="applicants-filter" aria-label="${t('Filter by responsible')}">${applicantResponsibleOptionsHtml()}</select>` : ''}<div class="job-combobox"><input id="applicant-flow-filter" class="applicants-filter" type="text" role="combobox" aria-expanded="false" aria-controls="applicant-job-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="${t('Filter applicants by job')}" placeholder="${t('Search jobs')}" value="${esc(applicantJobLabel())}"><span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span><ul class="job-combobox-list" id="applicant-job-list" role="listbox" aria-label="${t('Jobs')}" hidden></ul></div><input id="applicant-search" class="applicants-search" type="search" placeholder="${t('Search applicants')}" value="${esc(applicantSearch)}" aria-label="${t('Search applicants')}"><span id="adv-filter-slot" class="adv-filter-slot"></span><button class="btn btn-sm select-toggle${selectMode ? ' is-active' : ''}" type="button" id="applicant-select-toggle" aria-pressed="${selectMode}">${selectMode ? t('Cancel selection') : t('Select')}</button><button class="btn btn-sm" id="refresh-applicants" title="${t('Refresh applicants')}">↻ ${t('Refresh')}</button>${hasPermission('customize_stages') ? `<button class="btn btn-sm" type="button" id="customize-stages">${t('Customize')}</button>` : ''}</div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>${t('Loading applicants…')}</span></div></div></main></div></div>`;
     bindSidebar();
     bindPlanControl();
     
     bindAdvancedFilter();
+    root.querySelector('#applicant-select-toggle').addEventListener('click', () => setSelectMode(!selectMode));
     const jobCombobox = mountApplicantJobCombobox(root, value => { applicantFilter = value; void renderApplicants(); });
     root.querySelector('#applicant-search').addEventListener('input', event => {
       applicantSearch = event.target.value;
@@ -3288,6 +3290,11 @@
       const flow = flows.find(item => item.cloudId === applicant.flow_id) || applicantFlowLabels.find(item => item.cloudId === applicant.flow_id);
       return `${applicant.candidate_name} ${applicant.candidate_email} ${flow?.jobTitle || ''} ${flow?.companyName || ''}`.toLowerCase().includes(term);
     })));
+    const scope = selectionScopeKey();
+    if (scope !== selectionScope) { selectionScope = scope; selectedCandidates.clear(); lastPickedKey = ''; } // another job, search or filter: the selection starts again
+    const visibleKeys = new Set(visible.map(group => group.key));
+    [...selectedCandidates].forEach(key => { if (!visibleKeys.has(key)) selectedCandidates.delete(key); });
+    boardVisibleGroups = visible;
     const filterName = applicantFilter ? applicantFlowLabels.find(flow => flow.cloudId === applicantFilter)?.jobTitle : '';
     if (!applicants.length && !applicantFilter && !term) {
       const published = flows.filter(flow => flow.publicationStatus === 'published' && flow.activePublishedFlowId);
@@ -3303,21 +3310,25 @@
     // "12 applicants · 14 applications for Cook" (or "across all jobs"); the count goes in bold.
     const summaryCount = tn('{count} applicant', '{count} applicants', visible.length).replace(String(visible.length), `<strong>${visible.length}</strong>`);
     const summaryScope = filterName ? ' ' + t('for {job}', { job: `<strong>${esc(filterName)}</strong>` }) : ' ' + t('across all jobs');
-    content.innerHTML = `${freeNote}<div class="kanban-summary">${summaryCount}${applicationTotal > visible.length ? ` <span class="kanban-summary-extra">· ${tn('{count} application', '{count} applications', applicationTotal)}</span>` : ''}${summaryScope}${applicants.length >= 1000 ? ' · ' + t('Showing the latest 1,000; filter by job to narrow the list.') : ''}</div><section class="kanban-board failed-board${failedColumnOpen ? ' failed-open' : ''}" style="--other-stages:${otherStageCount}" aria-label="${t('Applicant pipeline')}">${stages.map(stage => {
+    content.innerHTML = `${freeNote}<div class="kanban-summary">${summaryCount}${applicationTotal > visible.length ? ` <span class="kanban-summary-extra">· ${tn('{count} application', '{count} applications', applicationTotal)}</span>` : ''}${summaryScope}${selectMode ? ' · <span class="kanban-summary-extra">' + t('Selection mode is on: click candidates to select them, or tick a column to select all of it.') + '</span>' : ''}${applicants.length >= 1000 ? ' · ' + t('Showing the latest 1,000; filter by job to narrow the list.') : ''}</div><section class="kanban-board failed-board${failedColumnOpen ? ' failed-open' : ''}" style="--other-stages:${otherStageCount}" aria-label="${t('Applicant pipeline')}">${stages.map(stage => {
       const cards = visible.filter(group => group.status === stage.key);
+      // In select mode each open column has a checkbox that picks (or drops) every card it lists.
+      const columnBox = () => (selectMode ? `<input type="checkbox" class="column-select" data-select-column="${esc(stage.key)}" aria-label="${esc(t('Select all in {stage}', { stage: stage.label }))}"${cards.length ? '' : ' disabled'}>` : '');
       const cardHtml = group => {
         const applicant = group.latest;
         // A candidate who applied more than once shows a small count in the corner of the card (the full wording is its tooltip).
         const repeat = group.count > 1 ? `<span class="repeat-badge" role="img" aria-label="${t('Applied {count} times', { count: group.count })}" title="${t('This candidate applied {count} times', { count: group.count })}">${group.count}x</span>` : '';
-        return `<article class="applicant-card${group.count > 1 ? ' has-repeat' : ''}" data-applicant="${esc(applicant.id)}" draggable="${workspaceIsFree() ? 'false' : 'true'}" tabindex="0" role="button" aria-label="${t('Review {name}', { name: esc(applicant.candidate_name) })}${group.count > 1 ? ', ' + tn('{count} application', '{count} applications', group.count) : ''}">${repeat}<h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span></span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}</article>`;
+        const picked = selectMode && selectedCandidates.has(group.key);
+        return `<article class="applicant-card${group.count > 1 ? ' has-repeat' : ''}${selectMode ? ' is-selectable' : ''}${picked ? ' is-selected' : ''}" data-applicant="${esc(applicant.id)}" data-ckey="${esc(group.key)}" draggable="${workspaceIsFree() || selectMode ? 'false' : 'true'}" tabindex="0" role="${selectMode ? 'checkbox' : 'button'}"${selectMode ? ` aria-checked="${picked}"` : ''} aria-label="${selectMode ? t('Select {name}', { name: esc(applicant.candidate_name) }) : t('Review {name}', { name: esc(applicant.candidate_name) })}${group.count > 1 ? ', ' + tn('{count} application', '{count} applications', group.count) : ''}">${selectMode ? '<span class="select-box" aria-hidden="true"></span>' : ''}${repeat}<h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span></span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}</article>`;
       };
       if (stage.key === 'failed') {
+        const openHead = `<div class="kanban-column-head"><div class="kanban-column-title">${columnBox()}<span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div>`;
         const head = `<div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div>`;
         if (!failedColumnOpen) return `<section class="kanban-column failed-column is-collapsed" data-stage="failed" aria-label="${esc(stage.label)}">${head}<div class="kanban-column-body"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="false">${t('Open')} &gt;</button><div class="failed-drop">${t('Drag here')}</div></div></section>`;
         const hasFailed = allGroups.some(group => group.status === 'failed');
-        return `<section class="kanban-column failed-column is-open" data-stage="failed" aria-label="${esc(stage.label)}">${head}<div class="kanban-column-body"><div class="failed-actions"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="true">&lt; ${t('Collapse')}</button>${hasFailed ? `<button class="btn btn-sm failed-clear" type="button" data-failed-clear>${t('Clear all failed')}</button>` : ''}</div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : `<div class="board-empty">${t('No applicants here')}</div>`}</div></div></section>`;
+        return `<section class="kanban-column failed-column is-open" data-stage="failed" aria-label="${esc(stage.label)}">${openHead}<div class="kanban-column-body"><div class="failed-actions"><button class="btn btn-sm failed-toggle" type="button" data-failed-toggle aria-expanded="true">&lt; ${t('Collapse')}</button>${hasFailed ? `<button class="btn btn-sm failed-clear" type="button" data-failed-clear>${t('Clear all failed')}</button>` : ''}</div><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : `<div class="board-empty">${t('No applicants here')}</div>`}</div></div></section>`;
       }
-      return `<section class="kanban-column" data-stage="${esc(stage.key)}" aria-label="${esc(stage.label)}"><div class="kanban-column-head"><div class="kanban-column-title"><span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div><div class="kanban-column-body"><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : `<div class="board-empty">${t('No applicants here')}</div>`}</div></div></section>`;
+      return `<section class="kanban-column" data-stage="${esc(stage.key)}" aria-label="${esc(stage.label)}"><div class="kanban-column-head"><div class="kanban-column-title">${columnBox()}<span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div><div class="kanban-column-body"><div class="applicant-list">${cards.length ? cards.map(cardHtml).join('') : `<div class="board-empty">${t('No applicants here')}</div>`}</div></div></section>`;
     }).join('')}</section>`;
     if (saved) {
       const board = content.querySelector('.kanban-board');
@@ -3329,6 +3340,7 @@
     content.querySelector('[data-open-plan]')?.addEventListener('click', renderMyPlan);
     content.querySelectorAll('[data-failed-toggle]').forEach(button => button.addEventListener('click', () => { failedColumnOpen = !failedColumnOpen; renderApplicantBoard(); }));
     content.querySelector('[data-failed-clear]')?.addEventListener('click', confirmClearFailedApplicants);
+    bindSelection(content);
     // Dragging: a green line shows where the card will land among the cards of the column under the pointer.
     let draggedId = '';
     const clearDropMarker = () => content.querySelectorAll('.drop-before, .drop-after').forEach(card => card.classList.remove('drop-before', 'drop-after'));
@@ -3348,9 +3360,10 @@
       cards[Math.min(index, cards.length - 1)].classList.add(index < cards.length ? 'drop-before' : 'drop-after');
     };
     content.querySelectorAll('.applicant-card').forEach(card => {
-      card.addEventListener('click', () => showApplicantDetails(card.dataset.applicant));
-      card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showApplicantDetails(card.dataset.applicant); } });
+      card.addEventListener('click', event => { if (selectMode) toggleCandidate(card, event, content); else showApplicantDetails(card.dataset.applicant); });
+      card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (selectMode) toggleCandidate(card, event, content); else showApplicantDetails(card.dataset.applicant); } });
       card.addEventListener('dragstart', event => {
+        if (selectMode) { event.preventDefault(); return; }
         card.classList.add('dragging');
         draggedId = card.dataset.applicant;
         event.dataTransfer.setData('text/plain', card.dataset.applicant);
@@ -3387,6 +3400,234 @@
         if (current.includes(applicantId) && current.join() === order.join()) return; // dropped where it already was
         void moveApplicant(applicantId, column.dataset.stage, hasList ? order : null);
       });
+    });
+  }
+
+  // ---- Select mode of the Applicants board: pick several candidates (or whole columns) and move or delete them together --------------------
+  // In select mode a card is picked instead of opened and cannot be dragged. A card is a candidate (all of their applications to that job), so
+  // moving or deleting acts on every application. The selection only ever covers cards that are on the board right now: changing the job, the
+  // search or a filter clears it, so nobody deletes something they cannot see.
+  let selectMode = false;
+  const selectedCandidates = new Set();
+  let selectionScope = '';
+  let boardVisibleGroups = [];
+  let lastPickedKey = '';
+  let undoMoveTimer = null;
+  const BULK_REQUEST_IDS = 100; // applications per request when moving (the backend accepts up to 200)
+  const BULK_DELETE_WORKERS = 3; // candidates deleted at the same time
+  const BULK_TYPE_TO_CONFIRM = 10; // deleting more candidates than this asks to type their number
+  // The AI interview worker sends 10 invitations every 10 seconds, one after another (see the ai-interview-webhook function).
+  const AI_INVITES_PER_MINUTE = 60;
+
+  const selectionScopeKey = () => JSON.stringify([applicantFilter, applicantResponsible, applicantSearch.trim(), applicantAdvanced]);
+  function setSelectMode(on) {
+    selectMode = Boolean(on);
+    selectedCandidates.clear();
+    lastPickedKey = '';
+    const button = root.querySelector('#applicant-select-toggle');
+    if (button) { button.classList.toggle('is-active', selectMode); button.setAttribute('aria-pressed', String(selectMode)); button.textContent = selectMode ? t('Cancel selection') : t('Select'); }
+    renderApplicantBoard();
+  }
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && selectMode && !modalRoot.innerHTML && root.querySelector('.applicants-page')) setSelectMode(false);
+  });
+
+  function toggleCandidate(card, event, content) {
+    const key = card.dataset.ckey;
+    const cards = [...card.closest('.kanban-column').querySelectorAll('.applicant-card')];
+    let targets = [card];
+    if (event && event.shiftKey && lastPickedKey) { // Shift+click picks the range from the last card picked in this column
+      const from = cards.findIndex(item => item.dataset.ckey === lastPickedKey);
+      const to = cards.indexOf(card);
+      if (from >= 0) targets = cards.slice(Math.min(from, to), Math.max(from, to) + 1);
+    }
+    const on = !selectedCandidates.has(key);
+    targets.forEach(item => { if (on) selectedCandidates.add(item.dataset.ckey); else selectedCandidates.delete(item.dataset.ckey); });
+    lastPickedKey = key;
+    syncSelectionUi(content);
+  }
+  function syncSelectionUi(content) {
+    content.querySelectorAll('.applicant-card').forEach(card => {
+      const on = selectedCandidates.has(card.dataset.ckey);
+      card.classList.toggle('is-selected', on);
+      card.setAttribute('aria-checked', String(on));
+    });
+    content.querySelectorAll('[data-select-column]').forEach(box => {
+      const cards = [...box.closest('.kanban-column').querySelectorAll('.applicant-card')];
+      const picked = cards.filter(card => selectedCandidates.has(card.dataset.ckey)).length;
+      box.checked = cards.length > 0 && picked === cards.length;
+      box.indeterminate = picked > 0 && picked < cards.length;
+    });
+    paintSelectionBar();
+  }
+  function bindSelection(content) {
+    if (!selectMode) { paintSelectionBar(); return; }
+    content.querySelectorAll('[data-select-column]').forEach(box => box.addEventListener('change', () => {
+      const cards = [...box.closest('.kanban-column').querySelectorAll('.applicant-card')];
+      cards.forEach(card => { if (box.checked) selectedCandidates.add(card.dataset.ckey); else selectedCandidates.delete(card.dataset.ckey); });
+      syncSelectionUi(content);
+    }));
+    syncSelectionUi(content);
+  }
+  const selectedGroups = () => boardVisibleGroups.filter(group => selectedCandidates.has(group.key));
+  function paintSelectionBar() {
+    const page = root.querySelector('.applicants-page');
+    if (!page) return;
+    let bar = page.querySelector('#select-bar');
+    const groups = selectedGroups();
+    if (!selectMode || !groups.length) { bar?.remove(); return; }
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'select-bar'; bar.className = 'select-bar'; bar.setAttribute('role', 'region'); bar.setAttribute('aria-label', t('Selected candidates'));
+      page.appendChild(bar);
+    }
+    const locked = workspaceIsFree();
+    const options = visibleApplicantStages().map(stage => `<option value="${esc(stage.key)}">${esc(stage.label)}</option>`).join('');
+    bar.innerHTML = `<span class="select-bar-count" aria-live="polite">${tn('{count} candidate selected', '{count} candidates selected', groups.length)}</span>`
+      + `<select class="select-input select-bar-move" id="select-move" aria-label="${t('Move selected candidates to')}"${locked ? ` disabled title="${t('Upgrade to Premium to move candidates between stages.')}"` : ''}><option value="">${t('Move to…')}</option>${options}</select>`
+      + `<button class="btn btn-sm btn-danger" type="button" id="select-delete">${t('Delete')}</button><button class="btn btn-sm" type="button" id="select-clear">${t('Clear selection')}</button>`;
+    bar.querySelector('#select-move').addEventListener('change', event => { const stage = event.target.value; event.target.value = ''; if (stage) void bulkMove(selectedGroups(), stage); });
+    bar.querySelector('#select-delete').addEventListener('click', () => confirmBulkDelete(selectedGroups()));
+    bar.querySelector('#select-clear').addEventListener('click', () => {
+      selectedCandidates.clear(); lastPickedKey = '';
+      const content = root.querySelector('#applicants-content');
+      if (content) syncSelectionUi(content);
+    });
+  }
+  const setSelectionBarBusy = busy => root.querySelectorAll('#select-bar button, #select-bar select').forEach(item => { item.disabled = busy; });
+
+  // ---- Moving several candidates ----
+  async function bulkMove(groups, status) {
+    if (workspaceIsFree()) { showToast(t(FREE_MOVE_NOTE), 6000); return; }
+    if (!allApplicantStages().some(stage => stage.key === status)) return;
+    const stageName = reportStageLabel(status);
+    const movers = groups.filter(group => group.status !== status);
+    if (!movers.length) { showToast(t('They are already in {stage}.', { stage: stageName })); return; }
+    if ((status === 'failed' || status === 'ai_interview') && !(await confirmBulkMove(movers.length, status, stageName))) return;
+    await runBulkMove(movers, status, stageName);
+  }
+  // Moving into Failed or AI Interview asks first. AI Interview e-mails each candidate an invitation; the worker sends them in a queue.
+  function confirmBulkMove(count, status, stageName) {
+    return new Promise(resolve => {
+      let answered = false;
+      const finish = value => { if (answered) return; answered = true; modalCloseHook = null; resolve(value); };
+      let note;
+      if (status === 'ai_interview') {
+        const minutes = Math.ceil(count / AI_INVITES_PER_MINUTE);
+        note = t('Each of them will receive an e-mail inviting them to an AI interview. The invitations go out one after another in a queue (about 60 per minute).')
+          + ' ' + (minutes <= 1 ? t('This takes less than a minute.') : tn('This takes about {count} minute.', 'This takes about {count} minutes.', minutes))
+          + ' ' + t('Candidates whose job is not ready for AI interviews (no questions or no language chosen) wait until it is.');
+      } else note = t('They leave the active pipeline. You can move them back later.');
+      setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Move candidates')}</div><h2>${esc(tn('Move {count} candidate to {stage}?', 'Move {count} candidates to {stage}?', count, { stage: stageName }))}</h2><p>${esc(note)}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="modal-actions"><button class="btn btn-sm" type="button" data-close>${t('Cancel')}</button><button class="btn btn-sm btn-primary" type="button" id="bulk-move-confirm">${tn('Move {count} candidate', 'Move {count} candidates', count)}</button></div>`);
+      modalCloseHook = () => finish(false);
+      modalRoot.querySelector('#bulk-move-confirm').addEventListener('click', () => { finish(true); closeModal(); });
+    });
+  }
+  // Applies a stage to many applications, a hundred per request. Returns the ids the database really updated.
+  async function applyStageInChunks(members, status) {
+    const updatedRows = new Map();
+    for (let index = 0; index < members.length; index += BULK_REQUEST_IDS) {
+      const slice = members.slice(index, index + BULK_REQUEST_IDS);
+      try {
+        const rows = await window.PathwayBackend.updateApplicantStatuses(slice.map(member => member.id), status);
+        rows.forEach(row => updatedRows.set(row.id, row));
+      } catch (error) { /* the ones of this request stay where they were; they are reported as not moved */ }
+    }
+    members.forEach(member => {
+      const row = updatedRows.get(member.id);
+      if (row) { member.status = row.status; member.board_position = null; member.updated_at = row.updated_at; }
+    });
+    return updatedRows;
+  }
+  async function runBulkMove(movers, status, stageName) {
+    setSelectionBarBusy(true);
+    showToast(t('Moving…'), 60000);
+    const before = new Map(movers.flatMap(group => group.items).map(member => [member.id, { status: member.status, position: member.board_position ?? null }]));
+    const members = movers.flatMap(group => group.items);
+    const updated = await applyStageInChunks(members, status);
+    const moved = movers.filter(group => group.items.every(member => updated.has(member.id)));
+    const failedCount = movers.length - moved.length;
+    moved.forEach(group => selectedCandidates.delete(group.key));
+    renderApplicantBoard();
+    const parts = [];
+    if (moved.length) parts.push(tn('{count} candidate moved to {stage}.', '{count} candidates moved to {stage}.', moved.length, { stage: stageName }));
+    if (failedCount) parts.push(tn('{count} candidate could not be moved. Press Refresh to update the board.', '{count} candidates could not be moved. Press Refresh to update the board.', failedCount));
+    showToast(parts.join(' '), failedCount ? 7000 : 3000);
+    if (moved.some(group => before.get(group.items[0].id)?.status === 'ai_interview') || status === 'ai_interview') watchAiInterviewTags();
+    // Undo is offered for every move except into AI Interview: its invitations may already have been sent by then.
+    if (moved.length && status !== 'ai_interview') offerUndoMove(moved, before, stageName);
+  }
+  function offerUndoMove(moved, before, stageName) {
+    clearTimeout(undoMoveTimer);
+    document.getElementById('undo-move-bar')?.remove();
+    const bar = document.createElement('div');
+    bar.id = 'undo-move-bar'; bar.className = 'undo-bar'; bar.setAttribute('role', 'status');
+    const text = document.createElement('span');
+    text.textContent = tn('{count} candidate moved to {stage}.', '{count} candidates moved to {stage}.', moved.length, { stage: stageName });
+    const button = document.createElement('button');
+    button.type = 'button'; button.textContent = t('Undo');
+    bar.append(text, button);
+    document.body.appendChild(bar);
+    const remove = () => { clearTimeout(undoMoveTimer); bar.remove(); };
+    undoMoveTimer = setTimeout(remove, 15000);
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      const byStage = new Map();
+      moved.forEach(group => group.items.forEach(member => { const was = before.get(member.id); if (was) byStage.set(was.status, [...(byStage.get(was.status) || []), member]); }));
+      let failed = 0;
+      for (const [stage, list] of byStage) {
+        const rows = await applyStageInChunks(list, stage);
+        failed += list.length - rows.size;
+      }
+      remove();
+      renderApplicantBoard();
+      showToast(failed ? t('Could not undo the move for some candidates. Press Refresh to update the board.') : t('Move undone.'), failed ? 6000 : 2400);
+      if (byStage.has('ai_interview')) watchAiInterviewTags();
+    });
+  }
+
+  // ---- Deleting several candidates ----
+  function confirmBulkDelete(groups) {
+    if (!groups.length) return;
+    const count = groups.length;
+    const applications = groups.reduce((total, group) => total + group.count, 0);
+    const interviews = groups.filter(group => aiInterviewFor(group.latest.flow_id, group.latest.candidate_email)).length;
+    const what = tn('{count} application, its resume file and the team comments about it', '{count} applications, their resume files and the team comments about them', applications)
+      + (interviews ? tn(', plus {count} AI interview (answers, evaluation and impression)', ', plus {count} AI interviews (answers, evaluation and impression)', interviews) : '');
+    const typing = count > BULK_TYPE_TO_CONFIRM;
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Delete candidates')}</div><h2>${tn('Permanently delete {count} candidate?', 'Permanently delete {count} candidates?', count)}</h2><p>${esc(t('This removes {what}. This cannot be undone.', { what }))}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>${typing ? `<label class="bulk-confirm-type"><span>${t('Type {count} to confirm.', { count })}</span><input class="text-input" id="bulk-delete-type" inputmode="numeric" autocomplete="off"></label>` : ''}<div class="auth-error" id="bulk-delete-status" role="status"></div><div class="modal-actions"><button class="btn btn-sm" type="button" data-close id="bulk-delete-cancel">${t('Cancel')}</button><button class="btn btn-sm btn-danger" type="button" id="bulk-delete-confirm"${typing ? ' disabled' : ''}>${tn('Delete {count} candidate', 'Delete {count} candidates', count)}</button></div>`);
+    const confirm = modalRoot.querySelector('#bulk-delete-confirm');
+    const status = modalRoot.querySelector('#bulk-delete-status');
+    const typed = modalRoot.querySelector('#bulk-delete-type');
+    if (typed) typed.addEventListener('input', () => { confirm.disabled = typed.value.trim() !== String(count); });
+    confirm.addEventListener('click', async () => {
+      confirm.disabled = true;
+      modalRoot.querySelector('#bulk-delete-cancel').disabled = true;
+      if (typed) typed.disabled = true;
+      status.classList.add('show');
+      const queue = [...groups];
+      const deleted = [];
+      let finished = 0;
+      status.textContent = t('Deleting… {done} of {total}', { done: 0, total: count });
+      const worker = async () => {
+        while (queue.length) {
+          const group = queue.shift();
+          try { await window.PathwayBackend.deleteCandidate(group.latest.flow_id, group.latest.candidate_email); deleted.push(group); } catch (error) { /* counted below */ }
+          finished++;
+          if (status.isConnected) status.textContent = t('Deleting… {done} of {total}', { done: finished, total: count });
+        }
+      };
+      await Promise.all(Array.from({ length: BULK_DELETE_WORKERS }, worker));
+      const gone = new Set(deleted.map(group => group.key));
+      applicants = applicants.filter(applicant => !gone.has(C.candidateKey(applicant)));
+      gone.forEach(key => selectedCandidates.delete(key));
+      if (modalRoot.querySelector('#bulk-delete-confirm')) closeModal();
+      renderApplicantBoard();
+      const failedCount = count - deleted.length;
+      const parts = [];
+      if (deleted.length) parts.push(tn('{count} candidate deleted.', '{count} candidates deleted.', deleted.length));
+      if (failedCount) parts.push(tn('{count} candidate could not be deleted. Press Refresh to update the board.', '{count} candidates could not be deleted. Press Refresh to update the board.', failedCount));
+      showToast(parts.join(' '), failedCount ? 7000 : 3000);
     });
   }
 

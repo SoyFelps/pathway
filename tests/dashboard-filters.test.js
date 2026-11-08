@@ -80,7 +80,7 @@ test('the Applicants page has an advanced filter: a button with the filter count
   assert.ok(block.includes('row.values.some('), 'values inside a row are alternatives');
   assert.ok(block.includes("if (hasPermission('flows')) types.push('responsible')"), 'responsible needs the job flows');
   assert.ok(builder.includes('advancedMatch(group) && ('), 'the board uses it');
-  assert.ok(builder.includes('bindAdvancedFilter();\n    const jobCombobox'), 'button mounted with the toolbar');
+  assert.ok(builder.includes('bindAdvancedFilter();\n    root.querySelector(\'#applicant-select-toggle\')'), 'button mounted with the toolbar');
   assert.ok(builder.includes("applicantResponsible = ''; applicantAdvanced = [];"), 'cleared on sign-in');
 });
 
@@ -94,4 +94,20 @@ test('the candidate panel has a Logs tab: applications, stage moves with who mad
   assert.ok(backend.includes("select('id,applicant_id,from_status,to_status,kind,changed_at,changed_by')") && backend.includes('listApplicantHistory,'));
   const migration = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261108120000_stage_history_changed_by.sql'), 'utf8');
   assert.ok(migration.includes('add column changed_by uuid references auth.users (id) on delete set null') && migration.includes("'moved', auth.uid()"), 'the database records who moved the candidate');
+});
+
+test('the Applicants board has a select mode: pick cards or whole columns, then move or delete them together', () => {
+  const builder = read('builder.js');
+  assert.ok(builder.includes('id="applicant-select-toggle"') && builder.includes('function setSelectMode(on)'), 'toggle button');
+  assert.ok(builder.includes("if (selectMode) toggleCandidate(card, event, content); else showApplicantDetails(card.dataset.applicant);"), 'in select mode a click picks the card instead of opening it');
+  assert.ok(builder.includes("if (selectMode) { event.preventDefault(); return; }"), 'no dragging in select mode');
+  assert.ok(builder.includes('data-select-column=') && builder.includes("event.shiftKey && lastPickedKey"), 'column checkbox and Shift range');
+  assert.ok(builder.includes('selectedCandidates.clear(); lastPickedKey = \'\'; } // another job, search or filter'), 'the selection starts again when the visible cards change');
+  assert.ok(builder.includes('const selectedGroups = () => boardVisibleGroups.filter('), 'only cards that are on the board can be acted on');
+  assert.ok(builder.includes("(status === 'failed' || status === 'ai_interview') && !(await confirmBulkMove("), 'moving into Failed or AI Interview asks first');
+  assert.ok(builder.includes('const AI_INVITES_PER_MINUTE = 60;'), 'AI invitations are queued by the worker (10 every 10 seconds)');
+  assert.ok(builder.includes("if (moved.length && status !== 'ai_interview') offerUndoMove("), 'undo for moves, not for AI Interview');
+  assert.ok(builder.includes('count > BULK_TYPE_TO_CONFIRM') && builder.includes('Array.from({ length: BULK_DELETE_WORKERS }, worker)'), 'delete asks to type the number for big batches and runs a few at a time');
+  const worker = fs.readFileSync(path.join(__dirname, '..', 'supabase/functions/ai-interview-webhook/logic.ts'), 'utf8');
+  assert.ok(worker.includes('export const TICK_BATCH = 10;'), 'the queue the confirmation text describes (10 invitations per 10-second tick)');
 });
