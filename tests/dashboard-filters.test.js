@@ -64,7 +64,22 @@ test('the Applicants page has a Responsible filter that keeps the candidates of 
   const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
   assert.ok(builder.includes('id="applicant-responsible-filter"'), 'select beside the job filter');
   assert.ok(builder.includes("hasPermission('flows') ? `<select id=\"applicant-responsible-filter\""), 'only shown when the jobs\' responsible lists are known');
-  assert.ok(builder.includes('return !ids.length || ids.includes(applicantResponsible);'), 'a job set to All counts for everyone, like on the Dashboard');
+  assert.ok(builder.includes('return !ids.length || ids.includes(userId);'), 'a job set to All counts for everyone, like on the Dashboard');
   assert.ok(builder.includes('applicantFlowHasResponsible(applicant.flow_id)'), 'the board is narrowed by the responsible of each candidate\'s job');
   assert.ok(builder.includes("applicantSearch = ''; applicantResponsible = '';"), 'reset on sign-in');
+});
+
+test('the Applicants page has an advanced filter: a button with the filter count and a clear cross, combinable rows of type + values', () => {
+  const builder = read('builder.js');
+  const start = builder.indexOf('// ---- Advanced filter of the Applicants page');
+  const block = builder.slice(start, builder.indexOf('// Job filter of the Applicants page:'));
+  assert.ok(start > 0 && block.includes("id=\"applicant-advanced-open\"") && block.includes('id="applicant-advanced-clear"'), 'button and clear cross');
+  assert.ok(block.includes('tn(\'{count} filter applied\', \'{count} filters applied\', count)'), 'the button tells how many filters are applied');
+  for (const type of ['job', 'responsible', 'stage', 'ai', 'date', 'applications', 'country', 'rejection']) assert.ok(block.includes("case '" + type + "':"), type + ' filter type');
+  assert.ok(block.includes('applicantAdvanced.every(row => advMatchGroup(group, row))'), 'different rows must all match');
+  assert.ok(block.includes('row.values.some('), 'values inside a row are alternatives');
+  assert.ok(block.includes("if (hasPermission('flows')) types.push('responsible')"), 'responsible needs the job flows');
+  assert.ok(builder.includes('advancedMatch(group) && ('), 'the board uses it');
+  assert.ok(builder.includes('bindAdvancedFilter();\n    const jobCombobox'), 'button mounted with the toolbar');
+  assert.ok(builder.includes("applicantResponsible = ''; applicantAdvanced = [];"), 'cleared on sign-in');
 });

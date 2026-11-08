@@ -1564,12 +1564,141 @@
     if (people.length && applicantResponsible && !people.some(person => person.userId === applicantResponsible)) applicantResponsible = '';
     return `<option value="">${t('All responsibles')}</option>` + people.map(person => '<option value="' + esc(person.userId) + '"' + (applicantResponsible === person.userId ? ' selected' : '') + '>' + esc(personLabel(person)) + (person.isOwner ? ' ' + t('(owner)') : '') + '</option>').join('');
   }
-  function applicantFlowHasResponsible(flowId) {
-    if (!applicantResponsible) return true;
+  function applicantFlowHasResponsible(flowId, userId = applicantResponsible) {
+    if (!userId) return true;
     const flow = flows.find(item => item.cloudId === flowId);
     if (!flow) return false;
     const ids = currentResponsibleIds(flow.responsibleIds);
-    return !ids.length || ids.includes(applicantResponsible);
+    return !ids.length || ids.includes(userId);
+  }
+
+  // ---- Advanced filter of the Applicants page ------------------------------------------------------------------------------
+  // A list of rows, each "type + values". The values of one row are alternatives (any of them); different rows must all hold. It only narrows what the
+  // board shows (the candidates already loaded), it never changes data. Kept in memory like the search box.
+  let applicantAdvanced = [];
+  const FILTER_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>';
+  const advTypeLabels = () => ({ job: t('Job'), responsible: t('Responsible'), stage: t('Stage'), ai: t('AI interview'), date: t('Application date'), applications: t('Applications'), country: t('Country of birth'), rejection: t('Rejection') });
+  function advTypes() {
+    const types = ['job'];
+    if (hasPermission('flows')) types.push('responsible'); // the responsible people of each job are only known to people who see the job flows
+    return types.concat(['stage', 'ai', 'date', 'applications', 'country', 'rejection']);
+  }
+  function advOptions(type) {
+    switch (type) {
+      case 'job': return applicantFlowLabels.filter(flow => flow.cloudId).map(flow => ({ value: flow.cloudId, label: flow.jobTitle || t('Untitled role') }));
+      case 'responsible': return people.map(person => ({ value: person.userId, label: personLabel(person) + (person.isOwner ? ' ' + t('(owner)') : '') }));
+      case 'stage': return visibleApplicantStages().map(stage => ({ value: stage.key, label: stage.label }));
+      case 'ai': return [
+        { value: 'completed', label: t('Completed') }, { value: 'incomplete', label: t('Not completed') }, { value: 'none', label: t('No AI interview') },
+        { value: 'positive', label: t('Positive impression') }, { value: 'mixed', label: t('Mixed impression') }, { value: 'negative', label: t('Negative impression') }
+      ];
+      case 'applications': return [{ value: 'once', label: t('Applied once') }, { value: 'repeat', label: t('Applied more than once') }];
+      case 'country': {
+        const G = window.PathwayGeo;
+        const seen = [...new Set(applicants.map(item => (item.candidate_info || {}).country).filter(value => typeof value === 'string' && value))];
+        return seen.map(value => ({ value, label: G && G.countryLabel ? G.countryLabel(value) : value })).sort((a, b) => a.label.localeCompare(b.label));
+      }
+      case 'rejection': return [{ value: 'auto', label: t('Failed automatically (Auto-fail)') }, { value: 'manual', label: t('Moved to Failed by hand') }];
+      default: return [];
+    }
+  }
+  const advRowActive = row => (row.type === 'date' ? Boolean(row.from || row.to) : row.values.length > 0);
+  // Does this candidate (a group of applications) pass one row of the filter?
+  function advMatchGroup(group, row) {
+    switch (row.type) {
+      case 'job': return group.items.some(item => row.values.includes(item.flow_id));
+      case 'responsible': return group.items.some(item => row.values.some(userId => applicantFlowHasResponsible(item.flow_id, userId)));
+      case 'stage': return row.values.includes(group.status);
+      case 'ai': return group.items.some(item => {
+        const interview = aiInterviewFor(item.flow_id, item.candidate_email);
+        return row.values.some(value => {
+          if (value === 'none') return !interview;
+          if (!interview) return false;
+          if (value === 'completed') return interview.state === 'completed';
+          if (value === 'incomplete') return interview.state !== 'completed';
+          return interview.impression === value;
+        });
+      });
+      case 'date': {
+        const start = row.from ? new Date(row.from + 'T00:00:00').getTime() : -Infinity;
+        const end = row.to ? new Date(row.to + 'T23:59:59.999').getTime() : Infinity;
+        return group.items.some(item => { const time = Date.parse(item.submitted_at); return !Number.isNaN(time) && time >= start && time <= end; });
+      }
+      case 'applications': return row.values.some(value => (value === 'repeat' ? group.count > 1 : group.count === 1));
+      case 'country': return group.items.some(item => row.values.includes((item.candidate_info || {}).country));
+      case 'rejection': {
+        if (group.status !== 'failed') return false;
+        const automatic = group.items.some(item => item.auto_fail_reason);
+        return row.values.some(value => (value === 'auto' ? automatic : !automatic));
+      }
+      default: return true;
+    }
+  }
+  const advancedMatch = group => applicantAdvanced.every(row => advMatchGroup(group, row));
+  function advancedButtonHtml() {
+    const count = applicantAdvanced.length;
+    const label = count ? tn('{count} filter applied', '{count} filters applied', count) : t('Advanced filters');
+    return `<span class="adv-filter${count ? ' is-active' : ''}"><button class="adv-filter-btn" type="button" id="applicant-advanced-open" aria-label="${label}" title="${label}">${FILTER_ICON}${count ? `<span class="adv-count">${count}</span>` : ''}</button>${count ? `<button class="adv-filter-clear" type="button" id="applicant-advanced-clear" aria-label="${t('Clear all filters')}" title="${t('Clear all filters')}">×</button>` : ''}</span>`;
+  }
+  function bindAdvancedFilter() {
+    const slot = root.querySelector('#adv-filter-slot');
+    if (!slot) return;
+    slot.innerHTML = advancedButtonHtml();
+    slot.querySelector('#applicant-advanced-open').addEventListener('click', () => { void openAdvancedFilter(); });
+    slot.querySelector('#applicant-advanced-clear')?.addEventListener('click', () => { applicantAdvanced = []; bindAdvancedFilter(); renderApplicantBoard({ resetScroll: true }); });
+  }
+  async function openAdvancedFilter() {
+    await refreshPeople();
+    const types = advTypes();
+    const labels = advTypeLabels();
+    const emptyRow = type => ({ type, values: [], from: '', to: '' });
+    let draft = applicantAdvanced.map(row => ({ type: row.type, values: [...row.values], from: row.from || '', to: row.to || '' }));
+    if (!draft.length) draft = [emptyRow(types[0])];
+    const rowHtml = (row, index) => {
+      const taken = new Set(draft.filter((other, position) => position !== index).map(other => other.type));
+      const typeOptions = types.filter(type => type === row.type || !taken.has(type)).map(type => `<option value="${type}"${type === row.type ? ' selected' : ''}>${esc(labels[type])}</option>`).join('');
+      let editor;
+      if (row.type === 'date') {
+        editor = `<div class="adv-dates"><label><span>${t('From')}</span><input class="text-input" type="date" data-adv-from value="${esc(row.from)}"></label><label><span>${t('To')}</span><input class="text-input" type="date" data-adv-to value="${esc(row.to)}"></label></div>`;
+      } else {
+        const options = advOptions(row.type);
+        editor = options.length
+          ? `<div class="adv-options">${options.map(option => `<label class="adv-option"><input type="checkbox" data-adv-value value="${esc(option.value)}"${row.values.includes(option.value) ? ' checked' : ''}><span>${esc(option.label)}</span></label>`).join('')}</div>`
+          : `<p class="adv-empty">${t('Nothing to choose from yet.')}</p>`;
+      }
+      return `<div class="adv-row" data-adv-row="${index}"><div class="adv-row-head"><select class="select-input" data-adv-type aria-label="${t('Filter type')}">${typeOptions}</select><button class="adv-remove" type="button" data-adv-remove aria-label="${t('Remove filter')}" title="${t('Remove filter')}">×</button></div>${editor}</div>`;
+    };
+    setModal(`<div id="adv-filter-modal"><div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Applicants')}</div><h2>${t('Advanced filters')}</h2><p>${t('Combine filters to narrow the board. Several values inside one filter are alternatives; different filters must all match.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div id="adv-rows"></div><button class="btn btn-sm adv-add" type="button" id="adv-add">＋ ${t('Add filter')}</button><div class="auth-error" id="adv-error" role="alert"></div><div class="modal-actions adv-actions"><button class="btn btn-sm adv-clear-all" type="button" id="adv-clear-all">${t('Clear all')}</button><button class="btn btn-sm" type="button" data-close>${t('Cancel')}</button><button class="btn btn-sm btn-primary" type="button" id="adv-apply">${t('Apply filters')}</button></div></div>`);
+    const showError = text => { const box = modalRoot.querySelector('#adv-error'); if (box) { box.textContent = text || ''; box.classList.toggle('show', Boolean(text)); } };
+    const paint = () => {
+      showError('');
+      modalRoot.querySelector('#adv-rows').innerHTML = draft.map(rowHtml).join('');
+      modalRoot.querySelector('#adv-add').disabled = draft.length >= types.length;
+      modalRoot.querySelectorAll('[data-adv-row]').forEach(node => {
+        const index = Number(node.dataset.advRow);
+        const row = draft[index];
+        node.querySelector('[data-adv-type]').addEventListener('change', event => { row.type = event.target.value; row.values = []; row.from = ''; row.to = ''; paint(); });
+        node.querySelector('[data-adv-remove]').addEventListener('click', () => { draft.splice(index, 1); if (!draft.length) draft.push(emptyRow(types[0])); paint(); });
+        node.querySelectorAll('[data-adv-value]').forEach(box => box.addEventListener('change', () => { row.values = [...node.querySelectorAll('[data-adv-value]:checked')].map(item => item.value); }));
+        node.querySelector('[data-adv-from]')?.addEventListener('input', event => { row.from = event.target.value; });
+        node.querySelector('[data-adv-to]')?.addEventListener('input', event => { row.to = event.target.value; });
+      });
+    };
+    modalRoot.querySelector('#adv-add').addEventListener('click', () => {
+      const used = new Set(draft.map(row => row.type));
+      const next = types.find(type => !used.has(type));
+      if (next) { draft.push(emptyRow(next)); paint(); }
+    });
+    modalRoot.querySelector('#adv-clear-all').addEventListener('click', () => { draft = [emptyRow(types[0])]; paint(); });
+    modalRoot.querySelector('#adv-apply').addEventListener('click', () => {
+      const next = draft.filter(advRowActive);
+      if (next.some(row => row.type === 'date' && row.from && row.to && row.from > row.to)) { showError(t('The start date must be before the end date.')); return; }
+      applicantAdvanced = next;
+      closeModal();
+      bindAdvancedFilter();
+      renderApplicantBoard({ resetScroll: true });
+    });
+    paint();
   }
 
   // Job filter of the Applicants page: a select you can type in (the list narrows as you type; arrows + Enter also work).
@@ -1628,10 +1757,11 @@
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
     flowResponsiblesCache.clear();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body is-board">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">${t('Hiring workspace')}</div><h1>${t('Applicants')}</h1><p>${t('Review applications and move candidates through your hiring stages.')}</p></div><div class="applicants-tools">${hasPermission('flows') ? `<select id="applicant-responsible-filter" class="applicants-filter" aria-label="${t('Filter by responsible')}">${applicantResponsibleOptionsHtml()}</select>` : ''}<div class="job-combobox"><input id="applicant-flow-filter" class="applicants-filter" type="text" role="combobox" aria-expanded="false" aria-controls="applicant-job-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="${t('Filter applicants by job')}" placeholder="${t('Search jobs')}" value="${esc(applicantJobLabel())}"><span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span><ul class="job-combobox-list" id="applicant-job-list" role="listbox" aria-label="${t('Jobs')}" hidden></ul></div><input id="applicant-search" class="applicants-search" type="search" placeholder="${t('Search applicants')}" value="${esc(applicantSearch)}" aria-label="${t('Search applicants')}"><button class="btn btn-sm" id="refresh-applicants" title="${t('Refresh applicants')}">↻ ${t('Refresh')}</button>${hasPermission('customize_stages') ? `<button class="btn btn-sm" type="button" id="customize-stages">${t('Customize')}</button>` : ''}</div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>${t('Loading applicants…')}</span></div></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body is-board">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">${t('Hiring workspace')}</div><h1>${t('Applicants')}</h1><p>${t('Review applications and move candidates through your hiring stages.')}</p></div><div class="applicants-tools">${hasPermission('flows') ? `<select id="applicant-responsible-filter" class="applicants-filter" aria-label="${t('Filter by responsible')}">${applicantResponsibleOptionsHtml()}</select>` : ''}<div class="job-combobox"><input id="applicant-flow-filter" class="applicants-filter" type="text" role="combobox" aria-expanded="false" aria-controls="applicant-job-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="${t('Filter applicants by job')}" placeholder="${t('Search jobs')}" value="${esc(applicantJobLabel())}"><span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span><ul class="job-combobox-list" id="applicant-job-list" role="listbox" aria-label="${t('Jobs')}" hidden></ul></div><input id="applicant-search" class="applicants-search" type="search" placeholder="${t('Search applicants')}" value="${esc(applicantSearch)}" aria-label="${t('Search applicants')}"><span id="adv-filter-slot" class="adv-filter-slot"></span><button class="btn btn-sm" id="refresh-applicants" title="${t('Refresh applicants')}">↻ ${t('Refresh')}</button>${hasPermission('customize_stages') ? `<button class="btn btn-sm" type="button" id="customize-stages">${t('Customize')}</button>` : ''}</div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>${t('Loading applicants…')}</span></div></div></main></div></div>`;
     bindSidebar();
     bindPlanControl();
     
+    bindAdvancedFilter();
     const jobCombobox = mountApplicantJobCombobox(root, value => { applicantFilter = value; void renderApplicants(); });
     root.querySelector('#applicant-search').addEventListener('input', event => {
       applicantSearch = event.target.value;
@@ -3155,7 +3285,7 @@
     root.querySelector('#customize-stages')?.addEventListener('click', () => openCustomizeStages());
     const term = applicantSearch.trim().toLowerCase();
     const allGroups = C.groupApplicants(applicants);
-    const visible = allGroups.filter(group => (!applicantResponsible || group.items.some(applicant => applicantFlowHasResponsible(applicant.flow_id))) && (!term || group.items.some(applicant => {
+    const visible = allGroups.filter(group => advancedMatch(group) && (!applicantResponsible || group.items.some(applicant => applicantFlowHasResponsible(applicant.flow_id))) && (!term || group.items.some(applicant => {
       const flow = flows.find(item => item.cloudId === applicant.flow_id) || applicantFlowLabels.find(item => item.cloudId === applicant.flow_id);
       return `${applicant.candidate_name} ${applicant.candidate_email} ${flow?.jobTitle || ''} ${flow?.companyName || ''}`.toLowerCase().includes(term);
     })));
@@ -4342,7 +4472,7 @@
     subscription = context.subscription || { status: 'free', active: false, currentPeriodEnd: null, cancelAtPeriodEnd: false };
     flows = context.flows;
     companies = context.companies || [];
-    applicants = []; applicantFilter = ''; applicantSearch = ''; applicantResponsible = '';
+    applicants = []; applicantFilter = ''; applicantSearch = ''; applicantResponsible = ''; applicantAdvanced = [];
     flowFilters = { search: '', company: '', responsible: '' };
     startNotifications();
     const requestedPage = window.location.hash.replace(/^#/, '');
