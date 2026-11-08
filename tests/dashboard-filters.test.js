@@ -59,3 +59,12 @@ test('the arrow colour stays equal to the --text-subtle token (a data-URI image 
   const token = css.match(/--text-subtle:(#[0-9a-fA-F]{6})/)[1].slice(1);
   assert.ok(css.includes("stroke=%27%23" + token + "%27"), 'update the arrow stroke in the select rule when --text-subtle changes');
 });
+
+test('the Applicants page has a Responsible filter that keeps the candidates of that person\'s jobs', () => {
+  const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  assert.ok(builder.includes('id="applicant-responsible-filter"'), 'select beside the job filter');
+  assert.ok(builder.includes("hasPermission('flows') ? `<select id=\"applicant-responsible-filter\""), 'only shown when the jobs\' responsible lists are known');
+  assert.ok(builder.includes('return !ids.length || ids.includes(applicantResponsible);'), 'a job set to All counts for everyone, like on the Dashboard');
+  assert.ok(builder.includes('applicantFlowHasResponsible(applicant.flow_id)'), 'the board is narrowed by the responsible of each candidate\'s job');
+  assert.ok(builder.includes("applicantSearch = ''; applicantResponsible = '';"), 'reset on sign-in');
+});

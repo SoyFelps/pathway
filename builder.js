@@ -45,6 +45,7 @@
   let applicantFilter = '';
   let failedColumnOpen = false;
   let applicantSearch = '';
+  let applicantResponsible = '';
   let boardConfig = { customStages: [], order: [], enabled: {} };
   let currentCardSummaryRequest = 0;
   let paymentHistoryOpen = false;
@@ -1557,6 +1558,20 @@
     }
   }
 
+  // Responsible filter of the Applicants page: keeps the candidates of the jobs that person is responsible for (a job set to "All" counts for everyone,
+  // as on the Dashboard). It needs the jobs' responsible lists, which only people who can see the job flows have.
+  function applicantResponsibleOptionsHtml() {
+    if (people.length && applicantResponsible && !people.some(person => person.userId === applicantResponsible)) applicantResponsible = '';
+    return `<option value="">${t('All responsibles')}</option>` + people.map(person => '<option value="' + esc(person.userId) + '"' + (applicantResponsible === person.userId ? ' selected' : '') + '>' + esc(personLabel(person)) + (person.isOwner ? ' ' + t('(owner)') : '') + '</option>').join('');
+  }
+  function applicantFlowHasResponsible(flowId) {
+    if (!applicantResponsible) return true;
+    const flow = flows.find(item => item.cloudId === flowId);
+    if (!flow) return false;
+    const ids = currentResponsibleIds(flow.responsibleIds);
+    return !ids.length || ids.includes(applicantResponsible);
+  }
+
   // Job filter of the Applicants page: a select you can type in (the list narrows as you type; arrows + Enter also work).
   function applicantJobOptions() {
     return [{ value: '', label: t('All jobs') }, ...applicantFlowLabels.filter(flow => flow.cloudId).map(flow => ({ value: flow.cloudId, label: flow.jobTitle || t('Untitled role') }))];
@@ -1613,7 +1628,7 @@
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
     flowResponsiblesCache.clear();
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body is-board">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">${t('Hiring workspace')}</div><h1>${t('Applicants')}</h1><p>${t('Review applications and move candidates through your hiring stages.')}</p></div><div class="applicants-tools"><div class="job-combobox"><input id="applicant-flow-filter" class="applicants-filter" type="text" role="combobox" aria-expanded="false" aria-controls="applicant-job-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="${t('Filter applicants by job')}" placeholder="${t('Search jobs')}" value="${esc(applicantJobLabel())}"><span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span><ul class="job-combobox-list" id="applicant-job-list" role="listbox" aria-label="${t('Jobs')}" hidden></ul></div><input id="applicant-search" class="applicants-search" type="search" placeholder="${t('Search applicants')}" value="${esc(applicantSearch)}" aria-label="${t('Search applicants')}"><button class="btn btn-sm" id="refresh-applicants" title="${t('Refresh applicants')}">↻ ${t('Refresh')}</button>${hasPermission('customize_stages') ? `<button class="btn btn-sm" type="button" id="customize-stages">${t('Customize')}</button>` : ''}</div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>${t('Loading applicants…')}</span></div></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body is-board">${renderSidebar('applicants')}<main class="applicants-page"><div class="applicants-heading"><div><div class="eyebrow">${t('Hiring workspace')}</div><h1>${t('Applicants')}</h1><p>${t('Review applications and move candidates through your hiring stages.')}</p></div><div class="applicants-tools"><div class="job-combobox"><input id="applicant-flow-filter" class="applicants-filter" type="text" role="combobox" aria-expanded="false" aria-controls="applicant-job-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="${t('Filter applicants by job')}" placeholder="${t('Search jobs')}" value="${esc(applicantJobLabel())}"><span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg></span><ul class="job-combobox-list" id="applicant-job-list" role="listbox" aria-label="${t('Jobs')}" hidden></ul></div>${hasPermission('flows') ? `<select id="applicant-responsible-filter" class="applicants-filter" aria-label="${t('Filter by responsible')}">${applicantResponsibleOptionsHtml()}</select>` : ''}<input id="applicant-search" class="applicants-search" type="search" placeholder="${t('Search applicants')}" value="${esc(applicantSearch)}" aria-label="${t('Search applicants')}"><button class="btn btn-sm" id="refresh-applicants" title="${t('Refresh applicants')}">↻ ${t('Refresh')}</button>${hasPermission('customize_stages') ? `<button class="btn btn-sm" type="button" id="customize-stages">${t('Customize')}</button>` : ''}</div></div><div id="applicants-content"><div class="loading-card"><span class="brand-mark">↗</span><span>${t('Loading applicants…')}</span></div></div></main></div></div>`;
     bindSidebar();
     bindPlanControl();
     
@@ -1621,6 +1636,14 @@
     root.querySelector('#applicant-search').addEventListener('input', event => {
       applicantSearch = event.target.value;
       renderApplicantBoard({ resetScroll: true });
+    });
+    root.querySelector('#applicant-responsible-filter')?.addEventListener('change', event => {
+      applicantResponsible = event.target.value;
+      renderApplicantBoard({ resetScroll: true });
+    });
+    void refreshPeople().then(() => {
+      const select = root.querySelector('#applicant-responsible-filter');
+      if (select && select.isConnected) { select.innerHTML = applicantResponsibleOptionsHtml(); select.value = applicantResponsible; }
     });
     root.querySelector('#refresh-applicants').addEventListener('click', () => { void renderApplicants(); });
     try {
@@ -3132,10 +3155,10 @@
     root.querySelector('#customize-stages')?.addEventListener('click', () => openCustomizeStages());
     const term = applicantSearch.trim().toLowerCase();
     const allGroups = C.groupApplicants(applicants);
-    const visible = allGroups.filter(group => !term || group.items.some(applicant => {
+    const visible = allGroups.filter(group => (!applicantResponsible || group.items.some(applicant => applicantFlowHasResponsible(applicant.flow_id))) && (!term || group.items.some(applicant => {
       const flow = flows.find(item => item.cloudId === applicant.flow_id) || applicantFlowLabels.find(item => item.cloudId === applicant.flow_id);
       return `${applicant.candidate_name} ${applicant.candidate_email} ${flow?.jobTitle || ''} ${flow?.companyName || ''}`.toLowerCase().includes(term);
-    }));
+    })));
     const filterName = applicantFilter ? applicantFlowLabels.find(flow => flow.cloudId === applicantFilter)?.jobTitle : '';
     if (!applicants.length && !applicantFilter && !term) {
       const published = flows.filter(flow => flow.publicationStatus === 'published' && flow.activePublishedFlowId);
@@ -4319,7 +4342,7 @@
     subscription = context.subscription || { status: 'free', active: false, currentPeriodEnd: null, cancelAtPeriodEnd: false };
     flows = context.flows;
     companies = context.companies || [];
-    applicants = []; applicantFilter = ''; applicantSearch = '';
+    applicants = []; applicantFilter = ''; applicantSearch = ''; applicantResponsible = '';
     flowFilters = { search: '', company: '', responsible: '' };
     startNotifications();
     const requestedPage = window.location.hash.replace(/^#/, '');

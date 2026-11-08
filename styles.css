@@ -960,3 +960,4 @@ body:has(#canvas-stage) .toast{bottom:80px}
 
 /* Header upgrade button: short label on phones (i18n phase 5) */
 .upgrade-short{display:none}@media(max-width:760px){#upgrade-to-publish .upgrade-long{display:none}#upgrade-to-publish .upgrade-short{display:inline}}
+.applicants-tools select.applicants-filter{flex:0 1 190px;width:auto;min-width:150px}@media(max-width:760px){.applicants-tools select.applicants-filter{flex:1 1 100%}}
