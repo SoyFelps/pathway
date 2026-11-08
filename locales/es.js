@@ -1715,6 +1715,17 @@
   '{count} filter applied': '{count} filtro aplicado',
   '{count} filters applied': '{count} filtros aplicados',
   'Add a filter by clicking the button below. You can combine more than one filter.': 'Añade un filtro haciendo clic en el botón de abajo. Puedes combinar más de un filtro.',
+  // Logs tab of the candidate panel
+  'Loading the history…': 'Cargando el historial…',
+  'Application submitted': 'Postulación enviada',
+  'From {stage}': 'Desde {stage}',
+  'By {name}': 'Por {name}',
+  'a former team member': 'un ex miembro del equipo',
+  'Moved to {stage}': 'Movido a {stage}',
+  'Failed automatically when applying': 'Descartado automáticamente al postularse',
+  'Everything that happened to this candidate, newest first.': 'Todo lo que ocurrió con este candidato, del más reciente al más antiguo.',
+  'The history could not be loaded.': 'No se pudo cargar el historial.',
+  'Logs': 'Registros',
   // Phase 5 (short labels for phones)
   'Upgrade': 'Suscríbete'
 };

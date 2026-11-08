@@ -3706,6 +3706,49 @@
     };
     showButtons();
   }
+  // Logs tab of the candidate panel: everything that happened to the candidate, newest first (applications, moves between stages with who made
+  // them, and the AI interview). Moves made before the "who" was recorded show no name.
+  async function mountApplicantLogs(host, group) {
+    if (!host) return;
+    const I18N = window.PathwayI18n;
+    host.innerHTML = `<p class="applicant-logs-empty">${t('Loading the history…')}</p>`;
+    try {
+      const [history] = await Promise.all([window.PathwayBackend.listApplicantHistory(group.items.map(item => item.id)), refreshPeople()]);
+      if (!host.isConnected) return;
+      const events = [];
+      group.items.forEach(item => events.push({ at: item.submitted_at, tone: 'start', title: t('Application submitted'), detail: '' }));
+      const seen = new Set(); // moving a candidate writes one entry per application: show it once
+      history.forEach(entry => {
+        const key = [entry.changedAt, entry.kind, entry.from, entry.to].join('|');
+        if (seen.has(key)) return;
+        seen.add(key);
+        if (entry.kind === 'moved') {
+          const parts = [];
+          if (entry.from) parts.push(t('From {stage}', { stage: esc(reportStageLabel(entry.from)) }));
+          if (entry.changedBy) {
+            const person = people.find(item => item.userId === entry.changedBy);
+            parts.push(t('By {name}', { name: esc(person ? personLabel(person) : t('a former team member')) }));
+          }
+          events.push({ at: entry.changedAt, tone: 'move', title: t('Moved to {stage}', { stage: esc(reportStageLabel(entry.to)) }), detail: parts.join(' · ') });
+        } else if (entry.kind === 'submitted' && entry.to === 'failed') {
+          const reason = (group.items.find(item => item.id === entry.applicantId) || {}).auto_fail_reason || '';
+          events.push({ at: entry.changedAt, tone: 'fail', title: t('Failed automatically when applying'), detail: reason ? esc(autoFailReasonText(reason)) : '' });
+        }
+      });
+      const ai = aiInterviewFor(group.latest.flow_id, group.latest.candidate_email);
+      if (ai) {
+        const label = state => t(aiInterviewTag({ state })[0]);
+        if (['invited', 'in_progress', 'completed', 'abandoned', 'expired'].includes(ai.state) && ai.sendAt) events.push({ at: ai.sendAt, tone: 'ai', title: label('invited'), detail: '' });
+        if (ai.state === 'completed') events.push({ at: ai.completedAt || ai.updatedAt, tone: 'ai', title: label('completed'), detail: AI_IMPRESSION_LABELS[ai.impression] ? esc(t(AI_IMPRESSION_LABELS[ai.impression])) : '' });
+        else if (['in_progress', 'abandoned', 'expired', 'cancelled', 'failed'].includes(ai.state)) events.push({ at: ai.updatedAt, tone: 'ai', title: label(ai.state), detail: '' });
+      }
+      const time = event => { const value = Date.parse(event.at); return Number.isNaN(value) ? 0 : value; };
+      events.sort((a, b) => time(b) - time(a));
+      host.innerHTML = `<p class="applicant-logs-intro">${t('Everything that happened to this candidate, newest first.')}</p><ol class="log-timeline">${events.map(event => `<li class="log-item is-${event.tone}"><span class="log-dot" aria-hidden="true"></span><div class="log-body"><strong>${event.title}</strong>${event.detail ? `<span class="log-detail">${event.detail}</span>` : ''}<time datetime="${esc(event.at || '')}">${event.at ? esc(I18N.formatDate(event.at, { dateStyle: 'medium', timeStyle: 'short' })) : ''}</time></div></li>`).join('')}</ol>`;
+    } catch (error) {
+      if (host.isConnected) host.innerHTML = `<p class="applicant-logs-empty">${t('The history could not be loaded.')}</p>`;
+    }
+  }
   function showApplicantDetails(id, tabIndex = 0) {
     const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === id));
     if (!group) return;
@@ -3732,8 +3775,9 @@
     // The AI Interview tab (next to Resume) exists only for a candidate who has an interview.
     const aiRow = aiInterviewFor(applicant.flow_id, person.candidate_email);
     // The tab bar is always there (just "Resume" when there is no AI interview), because it also holds the close button of the panel on wide screens.
-    const rightTabs = `<div class="applicant-right-bar${aiRow ? ' has-ai' : ''}"><div class="applicant-right-tabs" role="tablist" aria-label="${aiRow ? t('Resume and AI interview') : t('Resume')}"><button class="applicant-tab" type="button" role="tab" aria-selected="true" data-right-tab="resume">${t('Resume')}</button>${aiRow ? `<button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="ai">${t('AI Interview')}</button>` : ''}</div><button class="modal-x applicant-right-close" data-close aria-label="${t('Close applicant details')}">×</button></div>`;
+    const rightTabs = `<div class="applicant-right-bar${aiRow ? ' has-ai' : ''}"><div class="applicant-right-tabs" role="tablist" aria-label="${aiRow ? t('Resume and AI interview') : t('Resume')}"><button class="applicant-tab" type="button" role="tab" aria-selected="true" data-right-tab="resume">${t('Resume')}</button>${aiRow ? `<button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="ai">${t('AI Interview')}</button>` : ''}<button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="logs">${t('Logs')}</button></div><button class="modal-x applicant-right-close" data-close aria-label="${t('Close applicant details')}">×</button></div>`;
     const aiPane = aiRow ? `<div class="applicant-right-pane is-hidden" data-right-pane="ai"><section class="applicant-ai-panel" id="applicant-ai-panel" aria-label="${t('AI interview')}"><div class="applicant-ai-loading">${t('Loading the interview…')}</div></section></div>` : '';
+    const logsPane = `<div class="applicant-right-pane is-hidden" data-right-pane="logs"><section class="applicant-logs-panel" id="applicant-logs-panel" aria-label="${t('Logs')}"></section></div>`;
 
     setModal(`<div class="applicant-review-layout" data-detail-applicant="${esc(person.id)}" data-detail-tab="${tab}">
       <section class="applicant-review-left" aria-label="${t('Applicant details')}">
@@ -3752,7 +3796,7 @@
           <section class="applicant-detail-section applicant-comments" aria-labelledby="applicant-comments-heading"><h3 id="applicant-comments-heading">${t('Team comments')}</h3><div class="comment-list" id="applicant-comment-list" aria-live="polite"><p class="comment-empty">${t('Loading comments…')}</p></div><form class="comment-form" id="applicant-comment-form" novalidate><label class="visually-hidden" for="applicant-comment-input">${t('Add a comment')}</label><textarea class="text-area" id="applicant-comment-input" maxlength="2000" rows="3" placeholder="${t('Write a comment for your team… Type @ to mention someone.')}"></textarea><div class="mention-menu" id="applicant-mention-menu" role="listbox" aria-label="${t('Mention a teammate')}" hidden></div><div class="comment-form-actions"><span class="comment-status" id="applicant-comment-status" role="status" aria-live="polite"></span><button class="btn btn-primary btn-sm" type="submit" id="applicant-comment-submit">${t('Add comment')}</button></div></form></section>
           <section class="applicant-delete-row" id="applicant-delete-row"></section>
         </div>
-        <div class="applicant-mobile-bar">${isPdf ? `<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;${t('Preview resume')}</button>` : ''}${aiRow ? `<button class="btn" id="mobile-open-ai" type="button">${t('AI Interview')}</button>` : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;${t('Download resume')}</button></div>
+        <div class="applicant-mobile-bar"><button class="btn" id="mobile-open-logs" type="button">${t('Logs')}</button>${isPdf ? `<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;${t('Preview resume')}</button>` : ''}${aiRow ? `<button class="btn" id="mobile-open-ai" type="button">${t('AI Interview')}</button>` : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;${t('Download resume')}</button></div>
       </section>
       <aside class="applicant-review-right" aria-label="${aiRow ? t('Resume preview and AI interview') : t('Resume preview')}">
         ${rightTabs}
@@ -3763,7 +3807,7 @@
           <iframe id="applicant-resume-frame" title="${t('PDF preview of {file}', { file: esc(filename) })}" loading="lazy" referrerpolicy="no-referrer"></iframe>
           <div class="applicant-pdf-pages" id="applicant-pdf-pages" role="document" aria-label="${t('PDF preview of {file}', { file: esc(filename) })}" hidden></div>
         </section>
-        </div>${aiPane}</div>
+        </div>${aiPane}${logsPane}</div>
       </aside>
     </div>`);
 
@@ -3796,7 +3840,16 @@
         moveTo: () => moveApplicant(applicant.id, 'ai_interview')
       });
     };
-    modalRoot.querySelectorAll('[data-right-tab]').forEach(button => button.addEventListener('click', () => { if (button.dataset.rightTab === 'ai') openAiTab(); else showRightPane('resume'); }));
+    let logsMounted = false;
+    const openLogsTab = () => {
+      showRightPane('logs');
+      modalRoot.querySelector('.applicant-review-layout')?.classList.add('is-previewing');
+      if (logsMounted) return;
+      logsMounted = true;
+      void mountApplicantLogs(modalRoot.querySelector('#applicant-logs-panel'), group);
+    };
+    modalRoot.querySelectorAll('[data-right-tab]').forEach(button => button.addEventListener('click', () => { if (button.dataset.rightTab === 'ai') openAiTab(); else if (button.dataset.rightTab === 'logs') openLogsTab(); else showRightPane('resume'); }));
+    modalRoot.querySelector('#mobile-open-logs')?.addEventListener('click', openLogsTab);
     modalRoot.querySelector('#mobile-open-ai')?.addEventListener('click', openAiTab);
     if (aiRow && pendingOpenAiTab) { pendingOpenAiTab = false; openAiTab(); }
     modalRoot.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => showApplicantDetails(person.id, Number(button.dataset.tab))));

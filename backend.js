@@ -109,12 +109,12 @@
   const mapAiInterview = row => ({
     id: row.id, workspaceId: row.workspace_id, flowId: row.flow_id, email: row.candidate_email, applicantId: row.applicant_id || null,
     state: row.state, blockedReason: row.blocked_reason || null, sendAt: row.send_at, impression: row.impression || null,
-    evaluationReady: Boolean(row.evaluation_ready), completedAt: row.completed_at || null, createdAt: row.created_at
+    evaluationReady: Boolean(row.evaluation_ready), completedAt: row.completed_at || null, createdAt: row.created_at, updatedAt: row.updated_at || null
   });
   // The state of the AI interviews of the candidates this person may review (the database policy decides which). Newest first.
   async function listAiInterviews(workspaceId, flowId = '') {
     await requireSession();
-    let query = client.from('ai_interviews').select('id,workspace_id,flow_id,candidate_email,applicant_id,state,blocked_reason,send_at,impression,evaluation_ready,completed_at,created_at')
+    let query = client.from('ai_interviews').select('id,workspace_id,flow_id,candidate_email,applicant_id,state,blocked_reason,send_at,impression,evaluation_ready,completed_at,created_at,updated_at')
       .eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(2000);
     if (flowId) query = query.eq('flow_id', flowId);
     const { data, error } = await query;
@@ -957,6 +957,16 @@
     return data;
   }
 
+  // The stage changes of a candidate's applications (who moved it, from where, when), newest first. The database policy lets only people with the Applicants permission read it.
+  async function listApplicantHistory(applicantIds) {
+    await requireSession();
+    const ids = (applicantIds || []).filter(id => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id));
+    if (!ids.length) return [];
+    const { data, error } = await client.from('applicant_stage_history').select('id,applicant_id,from_status,to_status,kind,changed_at,changed_by')
+      .in('applicant_id', ids).order('changed_at', { ascending: false }).limit(500);
+    if (error) throw translatedError(error);
+    return (data || []).map(row => ({ id: row.id, applicantId: row.applicant_id, from: row.from_status || null, to: row.to_status, kind: row.kind, changedAt: row.changed_at, changedBy: row.changed_by || null }));
+  }
   async function updateApplicantStatus(applicantId, status) {
     if (!isApplicantStatus(status)) throw new Error(t('Choose a valid applicant stage.'));
     await requireSession();
@@ -1174,6 +1184,7 @@
     listApplicants,
     countNewApplicants,
     listApplicantFlowLabels,
+    listApplicantHistory,
     updateApplicantStatus,
     updateApplicantStatuses,
     setApplicantOrder,

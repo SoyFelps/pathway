@@ -83,3 +83,15 @@ test('the Applicants page has an advanced filter: a button with the filter count
   assert.ok(builder.includes('bindAdvancedFilter();\n    const jobCombobox'), 'button mounted with the toolbar');
   assert.ok(builder.includes("applicantResponsible = ''; applicantAdvanced = [];"), 'cleared on sign-in');
 });
+
+test('the candidate panel has a Logs tab: applications, stage moves with who made them, and the AI interview, newest first', () => {
+  const builder = read('builder.js');
+  const backend = read('backend.js');
+  assert.ok(builder.includes('data-right-tab="logs"') && builder.includes('data-right-pane="logs"'), 'tab and pane');
+  assert.ok(builder.includes('async function mountApplicantLogs(host, group)'));
+  assert.ok(builder.includes('events.sort((a, b) => time(b) - time(a));'), 'newest first');
+  assert.ok(builder.includes("const key = [entry.changedAt, entry.kind, entry.from, entry.to].join('|');"), 'one move of a candidate with several applications is shown once');
+  assert.ok(backend.includes("select('id,applicant_id,from_status,to_status,kind,changed_at,changed_by')") && backend.includes('listApplicantHistory,'));
+  const migration = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261108120000_stage_history_changed_by.sql'), 'utf8');
+  assert.ok(migration.includes('add column changed_by uuid references auth.users (id) on delete set null') && migration.includes("'moved', auth.uid()"), 'the database records who moved the candidate');
+});
