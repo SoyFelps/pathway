@@ -992,11 +992,10 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .applicant-logs-intro{margin:0 0 18px;font-size:12px;color:var(--text-subtle)}
 .applicant-logs-empty{margin:0;font-size:13px;color:var(--text-subtle)}
 .log-timeline{list-style:none;margin:0;padding:0}
-.log-item{position:relative;display:flex;gap:14px;padding:0 0 20px}
-.log-item::before{content:"";position:absolute;left:5px;top:14px;bottom:0;width:2px;background:var(--line)}
+.log-item{position:relative;display:flex;gap:13px;padding:0 0 20px}
+.log-item::before{content:"";position:absolute;left:4px;top:14px;bottom:0;width:2px;background:var(--line)}
 .log-item:last-child{padding-bottom:0}.log-item:last-child::before{display:none}
-.log-dot{flex:0 0 auto;width:12px;height:12px;margin-top:4px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--surface)}
-.log-item.is-move .log-dot{background:var(--text-subtle)}
+.log-dot{flex:0 0 auto;width:9px;height:9px;margin-top:5px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--surface)}
 .log-body{display:flex;flex-direction:column;gap:3px;min-width:0}
 .log-body strong{font-size:13px;color:var(--text-strong)}
 .log-detail{font-size:12px;color:var(--muted)}
