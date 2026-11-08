@@ -1714,6 +1714,7 @@
   'The start date must be before the end date.': 'La fecha de inicio debe ser anterior a la fecha de fin.',
   '{count} filter applied': '{count} filtro aplicado',
   '{count} filters applied': '{count} filtros aplicados',
+  'Add a filter by clicking the button below. You can combine more than one filter.': 'Añade un filtro haciendo clic en el botón de abajo. Puedes combinar más de un filtro.',
   // Phase 5 (short labels for phones)
   'Upgrade': 'Suscríbete'
 };

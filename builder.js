@@ -1653,7 +1653,6 @@
     const labels = advTypeLabels();
     const emptyRow = type => ({ type, values: [], from: '', to: '' });
     let draft = applicantAdvanced.map(row => ({ type: row.type, values: [...row.values], from: row.from || '', to: row.to || '' }));
-    if (!draft.length) draft = [emptyRow(types[0])];
     const rowHtml = (row, index) => {
       const taken = new Set(draft.filter((other, position) => position !== index).map(other => other.type));
       const typeOptions = types.filter(type => type === row.type || !taken.has(type)).map(type => `<option value="${type}"${type === row.type ? ' selected' : ''}>${esc(labels[type])}</option>`).join('');
@@ -1672,13 +1671,13 @@
     const showError = text => { const box = modalRoot.querySelector('#adv-error'); if (box) { box.textContent = text || ''; box.classList.toggle('show', Boolean(text)); } };
     const paint = () => {
       showError('');
-      modalRoot.querySelector('#adv-rows').innerHTML = draft.map(rowHtml).join('');
+      modalRoot.querySelector('#adv-rows').innerHTML = draft.length ? draft.map(rowHtml).join('') : `<p class="adv-hint">${t('Add a filter by clicking the button below. You can combine more than one filter.')}</p>`;
       modalRoot.querySelector('#adv-add').disabled = draft.length >= types.length;
       modalRoot.querySelectorAll('[data-adv-row]').forEach(node => {
         const index = Number(node.dataset.advRow);
         const row = draft[index];
         node.querySelector('[data-adv-type]').addEventListener('change', event => { row.type = event.target.value; row.values = []; row.from = ''; row.to = ''; paint(); });
-        node.querySelector('[data-adv-remove]').addEventListener('click', () => { draft.splice(index, 1); if (!draft.length) draft.push(emptyRow(types[0])); paint(); });
+        node.querySelector('[data-adv-remove]').addEventListener('click', () => { draft.splice(index, 1); paint(); });
         node.querySelectorAll('[data-adv-value]').forEach(box => box.addEventListener('change', () => { row.values = [...node.querySelectorAll('[data-adv-value]:checked')].map(item => item.value); }));
         node.querySelector('[data-adv-from]')?.addEventListener('input', event => { row.from = event.target.value; });
         node.querySelector('[data-adv-to]')?.addEventListener('input', event => { row.to = event.target.value; });
@@ -1689,7 +1688,7 @@
       const next = types.find(type => !used.has(type));
       if (next) { draft.push(emptyRow(next)); paint(); }
     });
-    modalRoot.querySelector('#adv-clear-all').addEventListener('click', () => { draft = [emptyRow(types[0])]; paint(); });
+    modalRoot.querySelector('#adv-clear-all').addEventListener('click', () => { draft = []; paint(); });
     modalRoot.querySelector('#adv-apply').addEventListener('click', () => {
       const next = draft.filter(advRowActive);
       if (next.some(row => row.type === 'date' && row.from && row.to && row.from > row.to)) { showError(t('The start date must be before the end date.')); return; }

@@ -986,3 +986,4 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .adv-actions .adv-clear-all{margin-right:auto}
 #adv-error{margin-top:12px}
 @media(max-width:760px){.adv-dates{flex-direction:column}}
+.adv-hint{padding:18px 14px;border:1px dashed var(--line);border-radius:10px;text-align:center;font-size:13px;color:var(--text-subtle)}
