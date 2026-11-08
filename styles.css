@@ -961,3 +961,5 @@ body:has(#canvas-stage) .toast{bottom:80px}
 /* Header upgrade button: short label on phones (i18n phase 5) */
 .upgrade-short{display:none}@media(max-width:760px){#upgrade-to-publish .upgrade-long{display:none}#upgrade-to-publish .upgrade-short{display:inline}}
 .applicants-tools select.applicants-filter{flex:0 1 190px;width:auto;min-width:150px}@media(max-width:760px){.applicants-tools select.applicants-filter{flex:1 1 100%}}
+/* magnifier at the right edge of the search fields (Dashboard and Applicants) */
+#flow-search,input.applicants-search{padding-right:40px;background-image:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2716%27 height=%2716%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%23748178%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Ccircle cx=%2711%27 cy=%2711%27 r=%277%27/%3E%3Cpath d=%27m20 20-3.5-3.5%27/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;background-size:16px 16px}
