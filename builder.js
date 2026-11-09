@@ -1421,7 +1421,7 @@
     void (async () => {
       try {
         if (!window.Stripe) throw new Error(t('Stripe.js did not load. Refresh the page and try again.'));
-        const clientSecret = await window.PathwayBackend.createCheckoutSession();
+        const clientSecret = await window.PathwayBackend.createCheckoutSession(chosenPlan);
         if (!root.querySelector('#subscription-checkout-form')) return;
         // The Stripe form speaks the interface language too ('auto' would follow the browser instead).
         const stripe = window.Stripe(stripeConfig.publishableKey, { betas: ['custom_checkout_payment_form_1'], locale: window.PathwayI18n.language === 'pt-BR' ? 'pt-BR' : window.PathwayI18n.language });
@@ -2965,6 +2965,7 @@
     root.querySelector('#cancel-subscription')?.addEventListener('click', showCancelSubscriptionConfirmation);
     root.querySelector('.my-plan-page')?.insertAdjacentHTML('beforeend', planCompareHtml());
     root.querySelectorAll('[data-choose-plan]').forEach(button => button.addEventListener('click', () => openSubscriptionPage(button.dataset.choosePlan)));
+    root.querySelectorAll('[data-change-plan]').forEach(button => button.addEventListener('click', () => showChangePlanConfirmation(button.dataset.changePlan)));
     bindPaymentHistory();
     const paymentMethodRow = root.querySelector('[data-plan-row="method"]');
     const paymentMethodButton = paymentMethodRow?.querySelector('button');
@@ -2984,6 +2985,29 @@
     }
   }
 
+  // Business to Agency on an active subscription (the server charges the prorated difference at once; a refused card changes nothing).
+  function showChangePlanConfirmation(plan) {
+    const target = C.PLANS[plan];
+    if (!target) return;
+    setModal(`<div class="modal-head"><div><h2>${t('Move to {plan}?', { plan: target.name })}</h2><p>${t('Your plan changes now. Stripe charges the difference for the rest of this billing period right away, and renewals are then {price} per month.', { price: target.price })}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="auth-error" id="change-plan-error" role="alert"></div><div class="modal-actions"><button class="btn" data-close>${t('Cancel')}</button><button class="btn btn-primary" id="confirm-change-plan">${t('Move to {plan}', { plan: target.name })}</button></div>`);
+    const confirm = modalRoot.querySelector('#confirm-change-plan');
+    confirm.addEventListener('click', async () => {
+      confirm.disabled = true; confirm.textContent = t('Changing plan…');
+      try {
+        await window.PathwayBackend.changePlan(plan);
+        subscription = await window.PathwayBackend.getSubscriptionState(workspace.id);
+        myWorkspaces = await window.PathwayBackend.listMyWorkspaces();
+        closeModal();
+        renderMyPlan();
+        showToast(t('Plan changed to {plan}.', { plan: target.name }));
+      } catch (error) {
+        const box = modalRoot.querySelector('#change-plan-error');
+        if (box) { box.textContent = error.message || t('The plan could not be changed.'); box.classList.add('show'); }
+        confirm.disabled = false; confirm.textContent = t('Move to {plan}', { plan: target.name });
+      }
+    });
+  }
+
   // The three plans on My Plan. A workspace without a subscription can choose one; changing between Business and Agency arrives with the Stripe phase.
   function planCompareHtml() {
     const current = workspacePlan();
@@ -2992,6 +3016,7 @@
       const label = t('Choose {plan}', { plan: C.PLANS[id].name });
       if (current === id) return `<button class="btn plan-card-action" type="button" disabled>${t('Current plan')}</button>`;
       if (!active) return `<button class="btn btn-primary plan-card-action" type="button" data-choose-plan="${id}">${label}</button>`;
+      if (current === 'business' && id === 'agency' && !subscription.cancelAtPeriodEnd) return `<button class="btn btn-primary plan-card-action" type="button" data-change-plan="${id}">${label}</button>`;
       return `<button class="btn plan-card-action" type="button" disabled title="${t('Changing plans from here is coming soon.')}">${label}</button>`;
     };
     return `<section class="my-plan-compare" aria-labelledby="compare-plans-title"><div class="eyebrow">${t('Plans')}</div><h2 id="compare-plans-title">${t('Compare plans')}</h2><p class="muted">${t('Business is for one company hiring for itself. Agency is for agencies and recruiters hiring for several companies.')}</p>${C.planCardsHtml({ t, tn, esc }, { business: action('business'), agency: action('agency') }, current)}</section>`;

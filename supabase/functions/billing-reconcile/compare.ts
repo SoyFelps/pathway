@@ -13,6 +13,7 @@ export interface StripeSubscription {
   periodEnd: string | null; // ISO, whole seconds
   cancelAtPeriodEnd: boolean;
   workspaceId: string | null; // from the subscription metadata set when the checkout was created
+  plan?: "business" | "agency" | null; // decided by the price of the subscription (null: a price Pathway does not know, the stored plan is left alone)
 }
 
 export interface DatabaseSubscription {
@@ -22,10 +23,20 @@ export interface DatabaseSubscription {
   status: string;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
+  plan?: string;
   updated_at: string;
 }
 
-export interface Change { field: "status" | "current_period_end" | "cancel_at_period_end"; database: unknown; stripe: unknown }
+export interface Change { field: "status" | "current_period_end" | "cancel_at_period_end" | "plan"; database: unknown; stripe: unknown }
+
+/** The plan a Stripe price stands for: the two lookup keys, or the price sold before the plans existed (which counts as Agency). */
+export function planOfPrice(price: { id?: string; lookup_key?: string | null } | null | undefined, legacyPriceId: string): "business" | "agency" | null {
+  if (!price) return null;
+  if (price.lookup_key === "pathway_business_monthly") return "business";
+  if (price.lookup_key === "pathway_agency_monthly") return "agency";
+  if (price.id && price.id === legacyPriceId) return "agency";
+  return null;
+}
 
 export type Finding =
   | { kind: "fix"; workspaceId: string; subscriptionId: string; changes: Change[]; target: StripeSubscription; databaseUpdatedAt: string }
@@ -86,6 +97,7 @@ export function compareSubscriptions(
     if (row.status !== remote.status) changes.push({ field: "status", database: row.status, stripe: remote.status });
     if (toSeconds(row.current_period_end) !== toSeconds(remote.periodEnd)) changes.push({ field: "current_period_end", database: row.current_period_end, stripe: remote.periodEnd });
     if (Boolean(row.cancel_at_period_end) !== Boolean(remote.cancelAtPeriodEnd)) changes.push({ field: "cancel_at_period_end", database: row.cancel_at_period_end, stripe: remote.cancelAtPeriodEnd });
+    if (remote.plan && row.plan && row.plan !== remote.plan) changes.push({ field: "plan", database: row.plan, stripe: remote.plan });
     if (!changes.length) { summary.inSync++; continue; }
     if (now.getTime() - Date.parse(row.updated_at) < RECENT_UPDATE_GRACE_MS) { summary.skippedRecent++; continue; }
     findings.push({ kind: "fix", workspaceId: row.workspace_id, subscriptionId: remote.id, changes, target: remote, databaseUpdatedAt: row.updated_at });

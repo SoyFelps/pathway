@@ -154,9 +154,9 @@ test('payment history is authenticated, paginated, and restricted to verified Pa
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=mw3-20261109c/);
-  assert.match(html, /builder\.js\?v=mw3-20261109c/);
-  assert.match(html, /styles\.css\?v=mw3-20261109c/);
+  assert.match(html, /backend\.js\?v=mw3-20261109d/);
+  assert.match(html, /builder\.js\?v=mw3-20261109d/);
+  assert.match(html, /styles\.css\?v=mw3-20261109d/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);
@@ -169,7 +169,7 @@ test('upgrade opens Stripe Checkout directly and sends the active Supabase acces
   const builder = read('builder.js');
   const backend = read('backend.js');
   assert.match(builder, /addEventListener\('click', openSubscriptionPage\)/);
-  assert.match(builder, /const clientSecret = await window\.PathwayBackend\.createCheckoutSession\(\)/);
+  assert.match(builder, /const clientSecret = await window\.PathwayBackend\.createCheckoutSession\(chosenPlan\)/);
   assert.doesNotMatch(builder, /Continue to secure checkout|id="start-checkout"/);
   assert.match(backend, /Authorization: `Bearer \$\{session\.access_token\}`/);
 });
@@ -180,13 +180,13 @@ test('Checkout Session is server-created as a recurring embedded form using the 
     'ui_mode: "form"', 'mode: "subscription"', 'billing_address_collection: "auto"',
     'phone_number_collection: { enabled: false }', 'automatic_tax: { enabled: false }',
     'payment_method_collection: "always"', 'submit_type: "auto"',
-    'integration_identifier: "custom_embedded_web_0001"', 'STRIPE_PRICE_ID', 'price_1UKFrzLxHJwAlJp9n6W70f8k',
+    'integration_identifier: "custom_embedded_web_0001"', 'pathway_business_monthly', 'pathway_agency_monthly', 'lookup_keys: [PRICE_LOOKUP_KEYS[plan]]',
     'client_secret: session.client_secret', 'custom_checkout_payment_form_preview=v1'
   ]) assert.ok(edge.includes(value), `missing configured Stripe value: ${value}`);
   assert.match(edge, /auth\.getUser\(bearer\)/);
   assert.ok(edge.includes('match(/^Bearer\\s+(.+)$/i)'), 'billing must parse a normal Bearer authorization header');
   assert.ok(!edge.includes('match(/^Bearer\\\\s+(.+)$/i)'), 'billing must not match a literal backslash-s sequence');
-  assert.match(edge, /subscription_data: \{ metadata: \{ workspace_id: workspace\.id \} \}/);
+  assert.match(edge, /subscription_data: \{ metadata: \{ workspace_id: workspace\.id, plan: requestedPlan \} \}/);
   assert.doesNotMatch(edge, /sk_(?:test|live)_[A-Za-z0-9]+/);
 });
 

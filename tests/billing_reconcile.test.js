@@ -136,3 +136,34 @@ test('the migration: two private tables, a kick function that only calls the fun
   assert.ok(!/sk_(test|live)_|whsec_|api[_-]?key/i.test(sql.replace(/--.*$/gm, '')), 'no secret is ever stored in the database');
   assert.ok(read('supabase/config.toml').includes('[functions.billing-reconcile]'));
 });
+
+test('plans: the plan of a subscription comes from its price (lookup keys, the old price counts as Agency, an unknown price changes nothing)', async () => {
+  const { planOfPrice, compareSubscriptions } = await compare();
+  const LEGACY = 'price_legacy';
+  assert.equal(planOfPrice({ id: 'price_a', lookup_key: 'pathway_business_monthly' }, LEGACY), 'business');
+  assert.equal(planOfPrice({ id: 'price_b', lookup_key: 'pathway_agency_monthly' }, LEGACY), 'agency');
+  assert.equal(planOfPrice({ id: LEGACY, lookup_key: null }, LEGACY), 'agency', 'the US$ 24.90 price sold before the plans');
+  assert.equal(planOfPrice({ id: 'price_other', lookup_key: null }, LEGACY), null);
+  assert.equal(planOfPrice(null, LEGACY), null);
+  // an upgrade the webhook missed is corrected; an unknown price (plan null) and a database without a plan are left alone
+  const fix = compareSubscriptions([db({ plan: 'business', updated_at: OLD })], [st({ plan: 'agency' })], new Set(), NOW).findings;
+  assert.equal(fix.length, 1);
+  assert.deepEqual(fix[0].changes, [{ field: 'plan', database: 'business', stripe: 'agency' }]);
+  assert.deepEqual(compareSubscriptions([db({ plan: 'agency', updated_at: OLD })], [st({ plan: null })], new Set(), NOW).findings, []);
+  assert.deepEqual(compareSubscriptions([db({ updated_at: OLD })], [st({ plan: 'agency' })], new Set(), NOW).findings, []);
+});
+
+test('plans: checkout and plan change are decided by the server, the webhook and the reconciliation write the plan from the price', () => {
+  const billing = read('supabase/functions/billing/index.ts');
+  assert.ok(billing.includes('const PRICE_LOOKUP_KEYS = { business: "pathway_business_monthly", agency: "pathway_agency_monthly" } as const;'));
+  assert.ok(billing.includes('if (body && (body.plan === "business" || body.plan === "agency")) requestedPlan = body.plan;'), 'only the two plan names are accepted');
+  assert.ok(billing.includes('proration_behavior: "always_invoice"') && billing.includes('payment_behavior: "error_if_incomplete"'), 'a refused card changes nothing');
+  assert.ok(billing.includes('if (requestedPlan !== "agency") return fail(req, 409, "Moving to a smaller plan is scheduled from My Plan.");'), 'smaller plans are never changed here');
+  const webhook = read('supabase/functions/billing-webhook/index.ts');
+  assert.ok(webhook.includes('...(planOfSubscription(subscription) ? { plan: planOfSubscription(subscription) } : {}),'));
+  assert.ok(webhook.includes('pathway_business_monthly: "business", pathway_agency_monthly: "agency"'));
+  const reconcile = read('supabase/functions/billing-reconcile/index.ts');
+  assert.ok(reconcile.includes('...(target.plan ? { plan: target.plan } : {})'));
+  const backend = read('backend.js');
+  assert.ok(backend.includes("body: billingBody({ action: 'changePlan', plan: plan === 'agency' ? 'agency' : 'business' })"));
+});

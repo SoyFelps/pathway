@@ -17,8 +17,10 @@ const envJsonValue = (name: string): string => {
   catch { return ""; }
 };
 const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY") || "";
-// This public Stripe Price ID is a test-mode fallback; override it via an Edge Function secret for production.
-const stripePriceId = Deno.env.get("STRIPE_PRICE_ID") || "price_1UKFrzLxHJwAlJp9n6W70f8k";
+// Plans (plano-planos.md): the two prices are found by their Stripe lookup key, so the same code works in every Stripe account (staging sandbox,
+// the test area and, later, live mode). The server decides the price: the browser only says which plan it wants.
+const PRICE_LOOKUP_KEYS = { business: "pathway_business_monthly", agency: "pathway_agency_monthly" } as const;
+type Plan = keyof typeof PRICE_LOOKUP_KEYS;
 const appUrl = Deno.env.get("PATHWAY_APP_URL") || "https://soyfelps.github.io/pathway/";
 const RESUME_BUCKET = "applicant-resumes";
 const STORAGE_LIST_LIMIT = 100;
@@ -46,6 +48,11 @@ function response(req: Request, status: number, body: unknown) {
 
 function fail(req: Request, status: number, message: string) {
   return response(req, status, { error: message });
+}
+
+async function priceIdForPlan(plan: Plan): Promise<string | null> {
+  const found = await stripe!.prices.list({ lookup_keys: [PRICE_LOOKUP_KEYS[plan]], active: true, limit: 1 });
+  return found.data[0]?.id || null;
 }
 
 function stripeObjectId(value: unknown): string | null {
@@ -139,16 +146,18 @@ Deno.serve(async (req: Request) => {
   let requestedWorkspaceId = "";
   // The language of Stripe's page for updating the card: the person's interface language (Stripe's own choice otherwise).
   let portalLocale: "en" | "pt-BR" | "es" | "auto" = "auto";
+  let requestedPlan: Plan = "business";
   try {
     const body = await req.json();
     if (body && typeof body.action === "string") action = body.action;
     if (body && typeof body.starting_after === "string") startingAfter = body.starting_after;
     if (body && typeof body.workspaceId === "string") requestedWorkspaceId = body.workspaceId.trim();
     if (body && (body.locale === "en" || body.locale === "pt-BR" || body.locale === "es")) portalLocale = body.locale;
+    if (body && (body.plan === "business" || body.plan === "agency")) requestedPlan = body.plan;
   } catch {
     return fail(req, 400, "The request body must be valid JSON.");
   }
-  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer" && action !== "listPaymentHistory" && action !== "deleteWorkspace") return fail(req, 400, "This billing action is not supported.");
+  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer" && action !== "listPaymentHistory" && action !== "changePlan" && action !== "deleteWorkspace") return fail(req, 400, "This billing action is not supported.");
 
   const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
   if (!bearer) return fail(req, 401, "Sign in to manage your subscription.");
@@ -166,7 +175,7 @@ Deno.serve(async (req: Request) => {
   if (!workspace) return fail(req, 403, "Your workspace could not be verified.");
 
   const { data: existing, error: subscriptionError } = await admin
-    .from("workspace_subscriptions").select("status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id")
+    .from("workspace_subscriptions").select("status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id,plan")
     .eq("workspace_id", workspace.id).maybeSingle();
   if (subscriptionError) return fail(req, 503, "Your subscription status could not be checked.");
   const periodEnd = existing?.current_period_end ? Date.parse(existing.current_period_end) : 0;
@@ -475,10 +484,53 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // Business to Agency: the plan changes now and Stripe charges the difference for the rest of the period right away. If the card is refused
+  // nothing changes. (Moving to a smaller plan is a scheduled change with its own warning, not done here.)
+  if (action === "changePlan") {
+    if (!existing?.stripe_subscription_id) return fail(req, 409, "No active subscription was found for this workspace.");
+    if (existing.status !== "active" || periodEnd <= Date.now()) return fail(req, 409, "Only an active subscription can change plan.");
+    if (existing.cancel_at_period_end) return fail(req, 409, "Remove the scheduled cancellation before changing plan.");
+    if (requestedPlan !== "agency") return fail(req, 409, "Moving to a smaller plan is scheduled from My Plan.");
+    if (existing.plan === "agency") return fail(req, 409, "Your workspace is already on the Agency plan.");
+    try {
+      const current = await stripe.subscriptions.retrieve(existing.stripe_subscription_id);
+      if (current.status !== "active" || stripeObjectId(current.customer) !== existing.stripe_customer_id) {
+        return fail(req, 409, "The Stripe subscription no longer matches this workspace's active plan.");
+      }
+      if (current.metadata?.workspace_id !== workspace.id) {
+        return fail(req, 403, "The Stripe subscription could not be verified for this workspace.");
+      }
+      const item = current.items.data[0];
+      if (!item || current.items.data.length !== 1) return fail(req, 409, "The Stripe subscription has an unexpected shape.");
+      const priceId = await priceIdForPlan("agency");
+      if (!priceId) return fail(req, 503, "Checkout is not configured yet.");
+      const updated = await stripe.subscriptions.update(existing.stripe_subscription_id, {
+        items: [{ id: item.id, price: priceId }],
+        proration_behavior: "always_invoice",
+        payment_behavior: "error_if_incomplete",
+        metadata: { ...current.metadata, plan: "agency" },
+      });
+      const { error: syncError } = await admin.from("workspace_subscriptions").update({ plan: "agency" }).eq("workspace_id", workspace.id);
+      if (syncError) {
+        console.error("The plan was changed in Stripe but could not be synced to Pathway", syncError);
+        return fail(req, 503, "Stripe moved your plan, but Pathway is still syncing. Refresh the page in a moment.");
+      }
+      return response(req, 200, { plan: "agency", status: updated.status });
+    } catch (error) {
+      console.error("Stripe plan change failed", error);
+      return fail(req, 502, "Stripe could not change the plan. Please check the card and try again.");
+    }
+  }
+
   if (existing?.status === "active" && periodEnd > Date.now()) {
     return fail(req, 409, "Your workspace already has an active subscription.");
   }
-  if (!stripePriceId) return fail(req, 503, "Checkout is not configured yet.");
+  let checkoutPriceId: string | null = null;
+  try { checkoutPriceId = await priceIdForPlan(requestedPlan); } catch (error) {
+    console.error("Stripe price lookup failed", error);
+    return fail(req, 502, "The subscription checkout could not be started.");
+  }
+  if (!checkoutPriceId) return fail(req, 503, "Checkout is not configured yet.");
 
   try {
     const returnUrl = new URL("index.html", appUrl);
@@ -492,13 +544,13 @@ Deno.serve(async (req: Request) => {
       payment_method_collection: "always",
       submit_type: "auto",
       integration_identifier: "custom_embedded_web_0001",
-      line_items: [{ price: stripePriceId, quantity: 1 }],
+      line_items: [{ price: checkoutPriceId, quantity: 1 }],
       return_url: returnUrl.href,
       customer: existing?.stripe_customer_id || undefined,
       customer_email: existing?.stripe_customer_id ? undefined : auth.user.email || undefined,
       client_reference_id: workspace.id,
-      metadata: { workspace_id: workspace.id },
-      subscription_data: { metadata: { workspace_id: workspace.id } },
+      metadata: { workspace_id: workspace.id, plan: requestedPlan },
+      subscription_data: { metadata: { workspace_id: workspace.id, plan: requestedPlan } },
     });
     if (!session.client_secret) return fail(req, 502, "Stripe did not return a Checkout form secret.");
     return response(req, 200, { client_secret: session.client_secret });

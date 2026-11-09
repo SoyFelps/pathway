@@ -361,7 +361,8 @@
     };
   }
 
-  async function createCheckoutSession() {
+  // The plan being bought ('business' or 'agency'); the server decides the price from it.
+  async function createCheckoutSession(plan) {
     const session = await requireSession();
     // The return from Stripe reopens the workspace being paid for: remember it now (best effort).
     if (currentWorkspaceId) { try { await callTeam({ action: 'setLastWorkspace', workspaceId: currentWorkspaceId }); } catch (_) { /* the checkout itself still works */ } }
@@ -370,7 +371,7 @@
       result = await fetch(BILLING_FUNCTION, {
         method: 'POST',
         headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: billingBody({})
+        body: billingBody({ plan: plan === 'agency' ? 'agency' : 'business' })
       });
     } catch (_) {
       throw new Error(t('Could not reach the billing service. Check your connection and try again.'));
@@ -500,6 +501,25 @@
     if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('The updated payment method could not be applied to this subscription.'));
     if (payload.payment_method == null) throw new Error(t('Stripe did not confirm a card for this subscription.'));
     return payload.payment_method;
+  }
+
+  // Business to Agency on an active subscription: the plan changes now and Stripe charges the difference for the rest of the period.
+  async function changePlan(plan) {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(BILLING_FUNCTION, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: billingBody({ action: 'changePlan', plan: plan === 'agency' ? 'agency' : 'business' })
+      });
+    } catch (_) {
+      throw new Error(t('Could not reach the billing service. Check your connection and try again.'));
+    }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t('The plan could not be changed.'));
+    return payload;
   }
 
   async function cancelSubscriptionAtPeriodEnd() {
@@ -1164,6 +1184,7 @@
     deleteWorkspace,
     deleteAccount,
     createCheckoutSession,
+    changePlan,
     createPaymentMethodUpdateSession,
     getCurrentPaymentMethodSummary,
     listPaymentHistory,

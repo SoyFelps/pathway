@@ -215,7 +215,7 @@ test('the public page and the editor preview follow the job language, never the 
   assert.match(candidate, /G\.enhanceForm\(form, tr\)/);
   assert.ok(read('builder.js').includes("{ preview: true, onFinish: finish, language: flow.interviewLanguage || null }"), 'the editor preview uses the job language');
   const html = read('apply.html');
-  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261109c"></script>`);
+  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261109d"></script>`);
   for (const file of ['locales/pt-BR.js', 'locales/es.js', 'i18n.js']) assert.ok(at(file) > 0 && at(file) < at('candidate.js'), `${file} loads before candidate.js`);
 });
 
@@ -242,7 +242,7 @@ test('the confirmation e-mail is written in the job language; English stays exac
 
 test('the hiring app loads the dictionaries and i18n.js before the app code, and Settings saves the language in the profile', () => {
   const html = read('index.html');
-  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261109c"></script>`);
+  const at = name => html.indexOf(`<script src="${name}?v=mw3-20261109d"></script>`);
   for (const file of ['locales/pt-BR.js', 'locales/es.js', 'i18n.js']) assert.ok(at(file) > 0, `${file} is loaded`);
   assert.ok(at('i18n.js') < at('backend.js') && at('i18n.js') < at('auth.js') && at('i18n.js') < at('builder.js'));
   const builder = read('builder.js');

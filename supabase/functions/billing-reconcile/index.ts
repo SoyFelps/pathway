@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@^22";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { compareSubscriptions, type DatabaseSubscription, type Finding, hasAccess, reportText, type StripeSubscription } from "./compare.ts";
+import { compareSubscriptions, type DatabaseSubscription, type Finding, hasAccess, planOfPrice, reportText, type StripeSubscription } from "./compare.ts";
 
 // Daily check that the subscriptions in the database say what Stripe says. A database job wakes this function once a day (07:00 UTC).
 // Stripe is the source of truth: a difference is corrected here the same way the webhook would have (the subscription fields, and the job
@@ -18,6 +18,8 @@ const envJsonValue = (name: string): string => {
   catch { return ""; }
 };
 const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY") || "";
+// The price Pathway sold before the plans existed (US$ 24.90) counts as Agency (owner decision, 2026-11-09).
+const LEGACY_PRICE_ID = Deno.env.get("STRIPE_PRICE_ID") || "price_1UKFrzLxHJwAlJp9n6W70f8k";
 const projectUrl = Deno.env.get("SUPABASE_URL") || "";
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || envJsonValue("SUPABASE_SECRET_KEYS");
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
@@ -46,6 +48,15 @@ function periodEndSeconds(subscription: Record<string, unknown>): number | null 
   return typeof direct === "number" && Number.isFinite(direct) ? direct : null;
 }
 
+function planOfSubscriptionItems(subscription: Record<string, unknown>): "business" | "agency" | null {
+  const items = (subscription.items as { data?: Array<{ price?: { id?: string; lookup_key?: string | null } }> } | undefined)?.data || [];
+  for (const item of items) {
+    const plan = planOfPrice(item.price, LEGACY_PRICE_ID);
+    if (plan) return plan;
+  }
+  return null;
+}
+
 function snapshot(subscription: Record<string, unknown>): StripeSubscription {
   const end = periodEndSeconds(subscription);
   const metadata = (subscription.metadata ?? {}) as Record<string, string>;
@@ -56,6 +67,7 @@ function snapshot(subscription: Record<string, unknown>): StripeSubscription {
     periodEnd: end === null ? null : new Date(end * 1000).toISOString(),
     cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
     workspaceId: metadata.workspace_id || null,
+    plan: planOfSubscriptionItems(subscription),
   };
 }
 
@@ -82,7 +94,7 @@ async function apply(finding: Finding, now: Date): Promise<string> {
   if (finding.kind === "fix") {
     // Only if nobody changed the row since it was read: if the webhook got there first, there is nothing left to do.
     const { data, error } = await admin!.from("workspace_subscriptions")
-      .update({ status: target.status, current_period_end: target.periodEnd, cancel_at_period_end: target.cancelAtPeriodEnd })
+      .update({ status: target.status, current_period_end: target.periodEnd, cancel_at_period_end: target.cancelAtPeriodEnd, ...(target.plan ? { plan: target.plan } : {}) })
       .eq("workspace_id", finding.workspaceId).eq("stripe_subscription_id", finding.subscriptionId).eq("updated_at", finding.databaseUpdatedAt)
       .select("workspace_id");
     if (error) throw error;
@@ -95,6 +107,7 @@ async function apply(finding: Finding, now: Date): Promise<string> {
       status: target.status,
       current_period_end: target.periodEnd,
       cancel_at_period_end: target.cancelAtPeriodEnd,
+      ...(target.plan ? { plan: target.plan } : {}),
     }, { onConflict: "workspace_id", ignoreDuplicates: true });
     if (error) throw error;
   }
@@ -129,7 +142,7 @@ async function run(): Promise<Response> {
   if (startError) throw startError;
   try {
     const { data: rows, error } = await admin!.from("workspace_subscriptions")
-      .select("workspace_id,stripe_customer_id,stripe_subscription_id,status,current_period_end,cancel_at_period_end,updated_at");
+      .select("workspace_id,stripe_customer_id,stripe_subscription_id,status,current_period_end,cancel_at_period_end,plan,updated_at");
     if (error) throw error;
     const remote = await listStripeSubscriptions();
     const database = (rows ?? []) as DatabaseSubscription[];

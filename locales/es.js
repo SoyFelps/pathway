@@ -1775,6 +1775,20 @@
   'Everything in Business': 'Todo lo de Business',
   'Up to {count} teammates at no extra seat charge, with the permissions you choose': 'Hasta {count} personas en el equipo sin costo extra, con los permisos que elijas',
   '{count} company': { one: '{count} empresa', other: '{count} empresas' },
+  // Plans, phase 3 (changing plan, Stripe messages)
+  'Move to {plan}?': '¿Cambiar a {plan}?',
+  'Your plan changes now. Stripe charges the difference for the rest of this billing period right away, and renewals are then {price} per month.': 'Tu plan cambia ahora. Stripe cobra de inmediato la diferencia del resto de este período, y las renovaciones pasan a ser de {price} al mes.',
+  'Move to {plan}': 'Cambiar a {plan}',
+  'Changing plan…': 'Cambiando de plan…',
+  'Plan changed to {plan}.': 'Plan cambiado a {plan}.',
+  'The plan could not be changed.': 'No se pudo cambiar el plan.',
+  'Moving to a smaller plan is scheduled from My Plan.': 'El cambio a un plan menor se programa desde Mi plan.',
+  'Only an active subscription can change plan.': 'Solo una suscripción activa puede cambiar de plan.',
+  'Remove the scheduled cancellation before changing plan.': 'Quita la cancelación programada antes de cambiar de plan.',
+  'Stripe could not change the plan. Please check the card and try again.': 'Stripe no pudo cambiar el plan. Revisa la tarjeta e inténtalo de nuevo.',
+  'Stripe moved your plan, but Pathway is still syncing. Refresh the page in a moment.': 'Stripe cambió tu plan, pero Pathway aún se está sincronizando. Actualiza la página en un momento.',
+  'The Stripe subscription has an unexpected shape.': 'La suscripción en Stripe tiene un formato inesperado.',
+  'Your workspace is already on the Agency plan.': 'Tu espacio de trabajo ya está en el plan Agency.',
   // Phase 5 (short labels for phones)
   'Upgrade': 'Suscríbete'
 };

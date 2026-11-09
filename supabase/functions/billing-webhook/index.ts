@@ -24,10 +24,25 @@ type SubscriptionSnapshot = {
   customer: string | { id: string } | null;
   status: string;
   current_period_end?: number;
-  items?: { data?: Array<{ current_period_end?: number }> };
+  items?: { data?: Array<{ current_period_end?: number; price?: { id?: string; lookup_key?: string | null } }> };
   cancel_at_period_end?: boolean;
   metadata?: Record<string, string>;
 };
+
+// The plan of a subscription is decided by its price (plano-planos.md), never by what a browser sent. The price Pathway sold before the plans
+// existed (US$ 24.90) counts as Agency (owner decision, 2026-11-09). An unknown price leaves the stored plan alone.
+const PLAN_BY_LOOKUP_KEY: Record<string, "business" | "agency"> = { pathway_business_monthly: "business", pathway_agency_monthly: "agency" };
+const LEGACY_PRICE_ID = Deno.env.get("STRIPE_PRICE_ID") || "price_1UKFrzLxHJwAlJp9n6W70f8k";
+function planOfSubscription(subscription: SubscriptionSnapshot): "business" | "agency" | null {
+  for (const item of subscription.items?.data || []) {
+    const price = item.price;
+    if (!price) continue;
+    const byKey = price.lookup_key ? PLAN_BY_LOOKUP_KEY[price.lookup_key] : undefined;
+    if (byKey) return byKey;
+    if (price.id && price.id === LEGACY_PRICE_ID) return "agency";
+  }
+  return null;
+}
 
 function objectId(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -79,6 +94,7 @@ async function syncSubscription(subscription: SubscriptionSnapshot, workspaceId:
     status,
     current_period_end: periodEnd,
     cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
+    ...(planOfSubscription(subscription) ? { plan: planOfSubscription(subscription) } : {}),
   }, { onConflict: "workspace_id" });
   if (error) throw error;
 
