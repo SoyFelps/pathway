@@ -678,7 +678,7 @@
     const { data, error } = await client.rpc('list_my_workspaces');
     if (error) throw new Error(error.message || t('Your workspaces could not be loaded.'));
     return (data || []).map(row => ({
-      id: row.workspace_id, name: row.name, createdAt: row.created_at, isOwner: Boolean(row.is_owner), isLast: Boolean(row.is_last), premiumActive: Boolean(row.premium_active)
+      id: row.workspace_id, name: row.name, createdAt: row.created_at, isOwner: Boolean(row.is_owner), isLast: Boolean(row.is_last), premiumActive: Boolean(row.premium_active), plan: ['business', 'agency'].includes(row.plan) ? row.plan : (row.premium_active ? 'agency' : 'free')
     }));
   }
   // Remembers the choice on the server (the next sign-in opens it). The page reloads afterwards, so nothing of the old workspace stays in memory.

@@ -64,10 +64,10 @@ test('job details are shown only when the fixed candidate-details node is select
   assert.match(inspector, /companyOptionsHtml\(flow\.companyId/);
 });
 
-test('My Companies is permission-gated, limited to three profiles, and exposes capped image uploads', () => {
+test('My Companies is permission-gated, limited by the plan, and exposes capped image uploads', () => {
   assert.match(builder, /data-route="my-companies"/);
   assert.match(builder, /function renderMyCompanies\(\)/);
-  assert.match(builder, /companies\.length >= 3/);
+  assert.match(builder, /companies\.length >= companyLimit\(\)/);
   assert.match(builder, /type="file" accept="image\/png,image\/jpeg,image\/webp"/);
   assert.match(builder, /Maximum 2 MB/);
   assert.match(builder, /company\.logoUrl/);

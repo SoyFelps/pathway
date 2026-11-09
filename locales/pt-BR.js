@@ -403,7 +403,7 @@
   'Expires {date}': 'Expira em {date}',
   'Copy invitation link': 'Copiar link de convite',
   'Revoke': 'Revogar',
-  'Manage access to {workspace}. Premium includes up to 3 additional members at no extra seat charge.': 'Gerencie o acesso a {workspace}. O Premium inclui até 3 membros adicionais sem custo extra por pessoa.',
+  'Manage access to {workspace}. Your plan includes up to {count} additional members at no extra seat charge.': 'Gerencie o acesso a {workspace}. O seu plano inclui até {count} membros adicionais sem custo extra por pessoa.',
   'See who has access to {workspace}.': 'Veja quem tem acesso a {workspace}.',
   'member seats in use': 'lugares de membro em uso',
   'No team access': 'Sem acesso da equipe',
@@ -414,7 +414,7 @@
   'Invite a teammate': 'Convidar alguém para a equipe',
   'Create a private link and share it directly. Pathway will not send an email.': 'Crie um link privado e envie você mesmo. O Pathway não manda e-mail.',
   'An active Premium plan is required to invite additional members.': 'É preciso um plano Premium ativo para convidar mais membros.',
-  'All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.': 'Os 3 lugares de membro estão em uso. Remova um membro ou revogue um convite para liberar um lugar.',
+  'All {count} member seats are in use. Remove a member or revoke an invitation to free a seat.': 'Os {count} lugares de membro estão em uso. Remova um membro ou revogue um convite para liberar um lugar.',
   'Work email': 'E-mail de trabalho',
   'teammate@company.com': 'colega@empresa.com',
   'Access for this teammate': 'Acesso desta pessoa',
@@ -1173,8 +1173,6 @@
   // Reports, Diversity, My Companies, exports and messages (phase 3.4)
   'Company profile': 'Perfil da empresa',
   'Choose a company to represent a job on its public application page.': 'Escolha uma empresa para representar uma vaga na página pública de candidatura.',
-  '{count} / 3 companies': '{count} / 3 empresas',
-  'You can add up to three companies.': 'Você pode adicionar até três empresas.',
   'New company': 'Nova empresa',
   'Your companies': 'Suas empresas',
   'No companies yet': 'Nenhuma empresa ainda',
@@ -1198,7 +1196,6 @@
   'Company description': 'Descrição da empresa',
   'Tell candidates about the company: what it does, its culture, what it is like to work there…': 'Conte aos candidatos sobre a empresa: o que ela faz, sua cultura, como é trabalhar lá…',
   'Shown to candidates on the job page · up to 3,000 characters': 'Aparece para os candidatos na página da vaga · até 3.000 caracteres',
-  'You can add up to three companies to your workspace.': 'Você pode adicionar até três empresas ao seu workspace.',
   'Details are shown to candidates when this company is selected for a job.': 'Os dados aparecem para os candidatos quando esta empresa é escolhida para uma vaga.',
   'Save company': 'Salvar empresa',
   'Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.': 'Escolha um logo PNG, JPG ou WebP de até 2 MB.',
@@ -1760,6 +1757,11 @@
   'Delete {count} candidate': { one: 'Excluir {count} candidato', other: 'Excluir {count} candidatos' },
   '{count} candidate deleted.': { one: '{count} candidato excluído.', other: '{count} candidatos excluídos.' },
   '{count} candidate could not be deleted. Press Refresh to update the board.': { one: '{count} candidato não pôde ser excluído. Clique em Atualizar para atualizar o quadro.', other: '{count} candidatos não puderam ser excluídos. Clique em Atualizar para atualizar o quadro.' },
+  // Plans, phase 1 (company and seat limits depend on the plan)
+  '{count} / {max} companies': '{count} / {max} empresas',
+  'The Agency plan includes up to 10 companies.': 'O plano Agency inclui até 10 empresas.',
+  'Your plan includes one company. Upgrade to Agency to add up to 10.': 'Seu plano inclui uma empresa. Faça upgrade para o Agency para adicionar até 10.',
+  'This workspace already uses all the team member seats of its plan.': 'Este workspace já usa todos os lugares de membro do seu plano.',
   // Phase 5 (short labels for phones)
   'Upgrade': 'Assinar'
 };

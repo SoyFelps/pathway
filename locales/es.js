@@ -403,7 +403,7 @@
   'Expires {date}': 'Vence el {date}',
   'Copy invitation link': 'Copiar enlace de invitación',
   'Revoke': 'Revocar',
-  'Manage access to {workspace}. Premium includes up to 3 additional members at no extra seat charge.': 'Gestiona el acceso a {workspace}. Premium incluye hasta 3 miembros adicionales sin costo extra por persona.',
+  'Manage access to {workspace}. Your plan includes up to {count} additional members at no extra seat charge.': 'Gestiona el acceso a {workspace}. Tu plan incluye hasta {count} miembros adicionales sin costo extra por persona.',
   'See who has access to {workspace}.': 'Mira quién tiene acceso a {workspace}.',
   'member seats in use': 'plazas de miembro en uso',
   'No team access': 'Sin acceso del equipo',
@@ -414,7 +414,7 @@
   'Invite a teammate': 'Invitar a alguien al equipo',
   'Create a private link and share it directly. Pathway will not send an email.': 'Crea un enlace privado y compártelo tú. Pathway no envía correos.',
   'An active Premium plan is required to invite additional members.': 'Se necesita un plan Premium activo para invitar a más miembros.',
-  'All 3 member seats are in use. Remove a member or revoke an invitation to free a seat.': 'Las 3 plazas de miembro están en uso. Quita a un miembro o revoca una invitación para liberar una plaza.',
+  'All {count} member seats are in use. Remove a member or revoke an invitation to free a seat.': 'Las {count} plazas de miembro están en uso. Quita a un miembro o revoca una invitación para liberar una plaza.',
   'Work email': 'Correo de trabajo',
   'teammate@company.com': 'colega@empresa.com',
   'Access for this teammate': 'Acceso de esta persona',
@@ -1173,8 +1173,6 @@
   // Reports, Diversity, My Companies, exports and messages (phase 3.4)
   'Company profile': 'Perfil de la empresa',
   'Choose a company to represent a job on its public application page.': 'Elige una empresa para representar una vacante en su página pública de postulación.',
-  '{count} / 3 companies': '{count} / 3 empresas',
-  'You can add up to three companies.': 'Puedes agregar hasta tres empresas.',
   'New company': 'Nueva empresa',
   'Your companies': 'Tus empresas',
   'No companies yet': 'Aún no hay empresas',
@@ -1198,7 +1196,6 @@
   'Company description': 'Descripción de la empresa',
   'Tell candidates about the company: what it does, its culture, what it is like to work there…': 'Cuéntales a los candidatos sobre la empresa: qué hace, su cultura, cómo es trabajar allí…',
   'Shown to candidates on the job page · up to 3,000 characters': 'Se muestra a los candidatos en la página de la vacante · hasta 3.000 caracteres',
-  'You can add up to three companies to your workspace.': 'Puedes agregar hasta tres empresas a tu espacio de trabajo.',
   'Details are shown to candidates when this company is selected for a job.': 'Los datos se muestran a los candidatos cuando esta empresa se elige para una vacante.',
   'Save company': 'Guardar empresa',
   'Choose a PNG, JPG, or WebP logo that is 2 MB or smaller.': 'Elige un logo PNG, JPG o WebP de hasta 2 MB.',
@@ -1760,6 +1757,11 @@
   'Delete {count} candidate': { one: 'Eliminar {count} candidato', other: 'Eliminar {count} candidatos' },
   '{count} candidate deleted.': { one: '{count} candidato eliminado.', other: '{count} candidatos eliminados.' },
   '{count} candidate could not be deleted. Press Refresh to update the board.': { one: '{count} candidato no se pudo eliminar. Pulsa Actualizar para actualizar el tablero.', other: '{count} candidatos no se pudieron eliminar. Pulsa Actualizar para actualizar el tablero.' },
+  // Plans, phase 1 (company and seat limits depend on the plan)
+  '{count} / {max} companies': '{count} / {max} empresas',
+  'The Agency plan includes up to 10 companies.': 'El plan Agency incluye hasta 10 empresas.',
+  'Your plan includes one company. Upgrade to Agency to add up to 10.': 'Tu plan incluye una empresa. Mejora al plan Agency para agregar hasta 10.',
+  'This workspace already uses all the team member seats of its plan.': 'Este espacio de trabajo ya usa todos los lugares de miembro de su plan.',
   // Phase 5 (short labels for phones)
   'Upgrade': 'Suscríbete'
 };

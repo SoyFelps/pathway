@@ -11,6 +11,9 @@ const APP_ORIGINS = new Set([
   "http://127.0.0.1:5500",
 ]);
 const TOKEN_RE = /^[a-f0-9]{64}$/i;
+// Team seats by plan (plano-planos.md): the database enforces them (plan_seat_limit); the screen shows them.
+const SEAT_LIMITS: Record<string, number> = { business: 3, agency: 6 };
+const seatLimitFor = (plan?: string) => SEAT_LIMITS[plan || ""] ?? 3;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function envJsonValue(name: string): string {
@@ -124,15 +127,15 @@ async function getWorkspaceContext(userId: string, requestedId = "") {
   }
   if (ownedWorkspace) {
     const { data: subscription, error } = await admin.from("workspace_subscriptions")
-      .select("status,current_period_end").eq("workspace_id", ownedWorkspace.id).maybeSingle();
+      .select("status,current_period_end,plan").eq("workspace_id", ownedWorkspace.id).maybeSingle();
     if (error) throw error;
     const premiumActive = subscription?.status === "active" && Date.parse(subscription.current_period_end || "") > Date.now();
-    return { workspace: ownedWorkspace, isOwner: true, member: null, premiumActive };
+    return { workspace: ownedWorkspace, isOwner: true, member: null, premiumActive, plan: premiumActive ? String(subscription?.plan || "") : "free" };
   }
-  if (!member) return { workspace: null, isOwner: false, member: null, premiumActive: false };
+  if (!member) return { workspace: null, isOwner: false, member: null, premiumActive: false, plan: "free" };
   const [{ data: workspace, error: workspaceError }, { data: subscription, error: subscriptionError }] = await Promise.all([
     admin.from("workspaces").select("id,name,created_at,owner_id").eq("id", member.workspace_id).maybeSingle(),
-    admin.from("workspace_subscriptions").select("status,current_period_end").eq("workspace_id", member.workspace_id).maybeSingle(),
+    admin.from("workspace_subscriptions").select("status,current_period_end,plan").eq("workspace_id", member.workspace_id).maybeSingle(),
   ]);
   if (workspaceError) throw workspaceError;
   if (subscriptionError) throw subscriptionError;
@@ -149,7 +152,7 @@ async function getWorkspaceContext(userId: string, requestedId = "") {
     can_diversity: member.can_diversity,
     created_at: member.created_at,
   };
-  return { workspace: workspace ? { id: workspace.id, name: workspace.name, created_at: workspace.created_at, owner_id: workspace.owner_id } : null, isOwner: false, member: safeMember, premiumActive };
+  return { workspace: workspace ? { id: workspace.id, name: workspace.name, created_at: workspace.created_at, owner_id: workspace.owner_id } : null, isOwner: false, member: safeMember, premiumActive, plan: premiumActive ? String(subscription?.plan || "") : "free" };
 }
 
 async function handle(req: Request): Promise<Response> {
@@ -372,7 +375,7 @@ async function handle(req: Request): Promise<Response> {
         members: membersResult.data || [],
         invitations: invitesResult.data || [],
         seatsUsed: (membersResult.data?.length || 0) + pendingCount,
-        seatLimit: 3,
+        seatLimit: seatLimitFor(context.plan),
       });
     }
 

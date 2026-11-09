@@ -131,11 +131,11 @@ test('team Edge Function separates public invite preview from authenticated memb
   assert.match(edge, /workspace_invitations.*select\("workspace_id,invited_email,expires_at,status"\)/s);
 });
 
-test('My Team shows up to three included seats, defaults permissions on, and supports leave without deleting account', () => {
+test('My Team shows the seats of the plan, defaults permissions on, and supports leave without deleting account', () => {
   const builder = read('builder.js');
   const sql = read('supabase/migrations/20260929150000_my_team.sql');
-  assert.match(builder, /Premium includes up to 3 additional members at no extra seat charge/);
-  assert.match(builder, /data\.seatsUsed >= 3/);
+  assert.match(builder, /Your plan includes up to \{count\} additional members at no extra seat charge/);
+  assert.match(builder, /data\.seatsUsed >= \(data\.seatLimit \|\| 3\)/);
   assert.match(builder, /data-invite-permission="flows" checked/);
   assert.match(builder, /data-invite-permission="applicants" checked/);
   assert.match(builder, /data-invite-permission="team" checked/);
@@ -155,10 +155,10 @@ test('My Team shows up to three included seats, defaults permissions on, and sup
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=mw3-20261108i/);
-  assert.match(html, /backend\.js\?v=mw3-20261108i/);
-  assert.match(html, /builder\.js\?v=mw3-20261108i/);
-  assert.match(html, /styles\.css\?v=mw3-20261108i/);
+  assert.match(html, /auth\.js\?v=mw3-20261109b/);
+  assert.match(html, /backend\.js\?v=mw3-20261109b/);
+  assert.match(html, /builder\.js\?v=mw3-20261109b/);
+  assert.match(html, /styles\.css\?v=mw3-20261109b/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });

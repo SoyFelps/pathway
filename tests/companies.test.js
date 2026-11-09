@@ -52,7 +52,7 @@ test('My Companies page lists profiles, creates them, and selects a profile on f
   const backend = read('backend.js');
   assert.match(builder, /data-route="my-companies"/);
   assert.match(builder, /function renderMyCompanies\(\)/);
-  assert.match(builder, /companies\.length >= 3/);
+  assert.match(builder, /companies\.length >= companyLimit\(\)/);
   assert.match(builder, /window\.PathwayBackend\.createCompany/);
   assert.match(builder, /new-company-id/);
   assert.match(builder, /companyOptionsHtml\(flow\.companyId/);
@@ -103,8 +103,8 @@ test('company edits propagate atomically to linked drafts and active published s
   assert.match(builder, /window\.PathwayBackend\.updateCompany/);
   assert.match(builder, /Company updated in its linked flows/);
   assert.match(styles, /\.company-card-actions/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261108i/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261108i/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261109b/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261109b/);
 });
 
 test('company deletion requires all linked flows removed first and the UI confirms candidate-data loss', () => {
@@ -188,4 +188,21 @@ test('a chosen logo file shows a preview with a remove button instead of the fil
   assert.match(builder, /picker\.classList\.toggle\('has-file', Boolean\(file\)\)/);
   assert.doesNotMatch(builder, /company-file-name|No file chosen/, 'no file name is shown any more');
   assert.match(read('styles.css'), /\.company-logo-picker\.has-file \.company-file-btn\{display:none\}/, 'the chooser is hidden while a file is chosen');
+});
+
+test('plans: the company and team-seat limits depend on the plan (workspace_plans migration, team function, app)', () => {
+  const migration = read('supabase/migrations/20261109120000_workspace_plans.sql');
+  assert.match(migration, /add column plan text not null default 'agency' check \(plan in \('business', 'agency'\)\)/);
+  assert.match(migration, /select case p_plan when 'agency' then 10 else 1 end/, 'companies: free 1, business 1, agency 10');
+  assert.match(migration, /case p_plan when 'agency' then 6 when 'business' then 3 else 0 end/, 'seats: business 3, agency 6');
+  assert.match(migration, />= public\.plan_company_limit\(v_plan\)/);
+  assert.equal((migration.match(/seat_count >= public\.plan_seat_limit\(public\.workspace_plan\(/g) || []).length, 2, 'both team functions use the plan seat limit');
+  assert.match(migration, /drop function public\.list_my_workspaces\(\);[\s\S]*plan text\)/, 'the workspace list returns the plan as its last column');
+  assert.match(migration, /grant execute on function public\.list_my_workspaces\(\) to authenticated, service_role/);
+  assert.match(migration, /revoke all on function public\.workspace_plan\(uuid\) from public, anon, authenticated/);
+  const team = read('supabase/functions/team/index.ts');
+  assert.ok(team.includes('const SEAT_LIMITS: Record<string, number> = { business: 3, agency: 6 };') && team.includes('seatLimit: seatLimitFor(context.plan)'));
+  const builder = read('builder.js');
+  assert.ok(builder.includes('const PLAN_COMPANY_LIMITS = { free: 1, business: 1, agency: 10 };'));
+  assert.ok(read('backend.js').includes("plan: ['business', 'agency'].includes(row.plan) ? row.plan : (row.premium_active ? 'agency' : 'free')"));
 });
