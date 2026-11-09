@@ -6,6 +6,7 @@
   // choice made on this screen (kept in the browser and copied to the profile at the first sign-in, see builder.js).
   const I18N = window.PathwayI18n;
   const t = (text, vars) => (I18N ? I18N.t(text, vars) : String(text));
+  const tn = (one, other, count, vars) => (I18N ? I18N.tn(one, other, count, vars) : String(count === 1 ? one : other).replace('{count}', count));
   const esc = value => window.PathwayCore.esc(value);
   let onAuthenticated = null;
   let busy = false;
@@ -80,17 +81,10 @@
       + row(5, t('Review candidates'), t('Candidates upload a resume and get a confirmation e-mail. You see them on a private board, move them between stages and get a notification when new people apply.'), art.review)
       + '</ol>'
       + `<div class="eyebrow auth-info-plans-eyebrow">${t('Plans')}</div><h2 id="plans-title">${t('Start free. Upgrade when you are ready to publish.')}</h2>`
-      + `<p class="auth-info-lead">${t('Building is free. Publishing a job and receiving applications is what Premium is for.')}</p>`
-      + '<div class="plan-grid">'
-      + `<article class="plan-card"><h3>${t('Free')}</h3><div class="plan-price">US$0</div><p class="plan-tagline">${t('Design and test your flows.')}</p><ul class="plan-features">`
-      + feature(t('Visual flow builder with branching steps')) + feature(t('Preview as a candidate')) + feature(t('Everything saved in your private workspace'))
-      + `<li class="plan-missing"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg>${t('Publishing job links')}</li></ul>`
-      + `<button class="btn btn-primary plan-cta" id="start-free" type="button">${t('Start for free')}</button></article>`
-      + `<article class="plan-card plan-card-premium"><h3>Premium</h3><div class="plan-price">US$24.90<span> ${t('/ month')}</span></div><p class="plan-tagline">${t('Publish jobs and hire with your team.')}</p><ul class="plan-features">`
-      + feature(t('Everything in Free')) + feature(t('Public job links that accept applications')) + feature(t('Applicant board with stages and private resume storage'))
-      + feature(t('Confirmation e-mails to candidates and new-application notifications')) + feature(t('Up to 3 teammates at no extra seat charge, with the permissions you choose')) + feature(t('Cancel any time and keep access until the end of the period'))
-      + `</ul><p class="plan-note">${t('Start free and upgrade from My Plan inside the app whenever you are ready to publish.')}</p></article>`
-      + '</div></div></section>';
+      + `<p class="auth-info-lead">${t('Building is free. Publishing a job and receiving applications needs a paid plan.')}</p>`
+      + window.PathwayCore.planCardsHtml({ t, tn, esc }, { free: `<button class="btn btn-primary plan-cta" id="start-free" type="button">${t('Start for free')}</button>` })
+      + `<p class="plan-note">${t('Start free and upgrade from My Plan inside the app whenever you are ready to publish.')}</p>`
+      + '</div></section>';
   }
   function renderAuth(errorMessage = '', successMessage = '') {
     const isInvite = Boolean(inviteToken && invitePreview);
@@ -139,7 +133,7 @@
     }
   }
   function renderInviteAcceptanceFailure(message) {
-    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">${t('Workspace invitation')}</div><h1>${t('Your account is ready.')}</h1><p>${t('Pathway couldn’t finish adding this account to the invited workspace automatically.')}</p></div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">${t('Finish joining your team')}</div><h2>${t('We couldn’t join this workspace')}</h2><div class="auth-error show" role="alert">${esc(message)}</div><p class="auth-card-intro">${t('Try again. If the invitation expired, was revoked, or the workspace no longer has Premium access, ask its manager to send a new invitation.')}</p><button class="btn btn-primary auth-submit" id="retry-team-acceptance" type="button">${t('Try again')}</button><button class="btn btn-quiet auth-submit" id="team-acceptance-signout" type="button">${t('Sign out')}</button></div></section></main>`;
+    root.innerHTML = `<main class="auth-screen"><section class="auth-story"><a class="brand" href="#"><span class="brand-mark">↗</span>pathway<span class="brand-sub">Studio</span></a><div class="auth-story-main"><div class="eyebrow">${t('Workspace invitation')}</div><h1>${t('Your account is ready.')}</h1><p>${t('Pathway couldn’t finish adding this account to the invited workspace automatically.')}</p></div></section><section class="auth-card-wrap"><div class="auth-card"><div class="eyebrow">${t('Finish joining your team')}</div><h2>${t('We couldn’t join this workspace')}</h2><div class="auth-error show" role="alert">${esc(message)}</div><p class="auth-card-intro">${t('Try again. If the invitation expired, was revoked, or the workspace no longer has an active plan, ask its manager to send a new invitation.')}</p><button class="btn btn-primary auth-submit" id="retry-team-acceptance" type="button">${t('Try again')}</button><button class="btn btn-quiet auth-submit" id="team-acceptance-signout" type="button">${t('Sign out')}</button></div></section></main>`;
     root.querySelector('#retry-team-acceptance')?.addEventListener('click', () => window.location.reload());
     root.querySelector('#team-acceptance-signout')?.addEventListener('click', async () => {
       await window.PathwayBackend.signOut(); state = { mode: 'signup', workspaceName: '', firstName: '', lastName: '', email: '', password: '' }; clearInviteUrl(); renderAuth();

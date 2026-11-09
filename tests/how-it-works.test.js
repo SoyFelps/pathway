@@ -15,12 +15,16 @@ test('the "How it works" and plans section is added below the existing sign-in s
   for (const word of ['Build your flow', 'Branch on answers', 'Preview as a candidate', 'Publish and share', 'Review candidates']) assert.ok(html.includes(word), word);
 });
 
-test('the plans compare Free and Premium and match what the product does', () => {
+test('the plans compare Free, Business and Agency and match what the product does', () => {
   const auth = read('auth.js');
   const html = auth.slice(auth.indexOf('function howItWorksHtml()'), auth.indexOf('function renderAuth('));
-  assert.ok(html.includes("<h3>${t('Free')}</h3><div class=\"plan-price\">US$0</div>") && html.includes('<h3>Premium</h3><div class="plan-price">US$24.90'));
-  assert.ok(html.includes('Publishing job links'), 'publishing is the thing Free does not include');
-  assert.ok(html.includes('Up to 3 teammates at no extra seat charge'), 'same promise as the README and the My Team page');
+  assert.ok(html.includes('window.PathwayCore.planCardsHtml({ t, tn, esc }'), 'the sign-up page shows the three plan cards');
+  const core = read('pathway.js');
+  assert.ok(core.includes("free: { id: 'free', name: 'Free', price: 'US$ 0', companies: 1, seats: 0 }"));
+  assert.ok(core.includes("business: { id: 'business', name: 'Business', price: 'US$ 24.90', companies: 1, seats: 3 }"));
+  assert.ok(core.includes("agency: { id: 'agency', name: 'Agency', price: 'US$ 200', companies: 10, seats: 6 }"));
+  assert.ok(core.includes('Publishing job links'), 'publishing is the thing Free does not include');
+  assert.ok(core.includes("Up to {count} teammates at no extra seat charge"), 'same promise as the My Team page (the number comes from the plan)');
   assert.ok(read('README.md').includes('US$24.90/month'), 'the price shown matches the documented price');
 });
 

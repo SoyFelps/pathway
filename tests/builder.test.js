@@ -193,7 +193,7 @@ test('each AI interview question has a sparkles button next to the remove button
   assert.match(field, /const others = list\.filter\(\(text, position\) => position !== index && String\(text\)\.trim\(\)\);/, 'the lines in the field now (the draft), without the line being replaced');
   assert.match(field, /list\[index\] = result\.question; paint\(\); syncActions\(\);/, 'the question goes into that line of the draft, to be saved by the person');
   assert.match(field, /We couldn’t generate a question from the job description\. Add more detail about the role and try again\./, 'the notification when there is not enough information');
-  assert.match(field, /Writing questions with AI is part of the Premium plan\./);
+  assert.match(field, /Writing questions with AI needs a paid plan\./);
   assert.match(field, /AI is unavailable right now\. Try again in a moment\./);
 });
 

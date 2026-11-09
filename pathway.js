@@ -299,5 +299,43 @@
     return [example];
   }
 
-  window.PathwayCore = { END_LABEL, lockEndSteps, infoFieldLabel, candidateKey, groupApplicants, STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, flowIsUsable, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
+  // Plans (plano-planos.md). Names and prices are product data and are not translated; the limits mirror the database
+  // (plan_company_limit and plan_seat_limit). Stripe charges the real amount.
+  const PLANS = {
+    free: { id: 'free', name: 'Free', price: 'US$ 0', companies: 1, seats: 0 },
+    business: { id: 'business', name: 'Business', price: 'US$ 24.90', companies: 1, seats: 3 },
+    agency: { id: 'agency', name: 'Agency', price: 'US$ 200', companies: 10, seats: 6 }
+  };
+  // The three plan cards. `view` = { t, tn, esc } of the screen; `actions` = the button html of each card; `current` marks the plan in use.
+  function planCardsHtml(view, actions, current) {
+    const { t, tn, esc } = view;
+    const buttons = actions || {};
+    const check = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+    const item = text => '<li>' + check + esc(text) + '</li>';
+    const companies = id => item(tn('{count} company', '{count} companies', PLANS[id].companies));
+    const seats = id => item(t('Up to {count} teammates at no extra seat charge, with the permissions you choose', { count: PLANS[id].seats }));
+    const features = {
+      free: item(t('Visual flow builder with branching steps')) + item(t('Preview as a candidate')) + item(t('Everything saved in your private workspace')) + companies('free')
+        + '<li class="plan-missing"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg>' + esc(t('Publishing job links')) + '</li>',
+      business: item(t('Everything in Free')) + item(t('Public job links that accept applications')) + item(t('Applicant board with stages and private resume storage'))
+        + item(t('AI interviews and AI-written interview questions')) + item(t('Confirmation e-mails to candidates and new-application notifications'))
+        + companies('business') + seats('business') + item(t('Cancel any time and keep access until the end of the period')),
+      agency: item(t('Everything in Business')) + companies('agency') + seats('agency')
+    };
+    const taglines = {
+      free: t('Design and test your flows.'),
+      business: t('Publish jobs and hire with your team.'),
+      agency: t('For agencies and recruiters hiring for several companies.')
+    };
+    return '<div class="plan-grid plan-grid-three">' + ['free', 'business', 'agency'].map(id => {
+      const plan = PLANS[id];
+      const isCurrent = current === id;
+      return '<article class="plan-card' + (id === 'business' ? ' plan-card-premium' : '') + (isCurrent ? ' plan-card-current' : '') + '" data-plan-card="' + id + '">'
+        + '<h3>' + plan.name + (isCurrent ? ' <span class="plan-current-tag">' + esc(t('Current plan')) + '</span>' : '') + '</h3>'
+        + '<div class="plan-price">' + esc(plan.price) + (id === 'free' ? '' : '<span> ' + esc(t('/ month')) + '</span>') + '</div>'
+        + '<p class="plan-tagline">' + esc(taglines[id]) + '</p><ul class="plan-features">' + features[id] + '</ul>' + (buttons[id] || '') + '</article>';
+    }).join('') + '</div>';
+  }
+
+  window.PathwayCore = { PLANS, planCardsHtml, END_LABEL, lockEndSteps, infoFieldLabel, candidateKey, groupApplicants, STORAGE_KEY, ANSWERS_KEY, REQUIRED_FIELDS, OPTIONAL_FIELDS, FIELD_META, clone, uid, esc, isDigitsOnlyAnswer, createNode, flowIsUsable, createFlow, createSampleFlow, normalizeFlow, nextNode, startAfterInfo, encodeFlow, decodeFlow, saveFlows, loadFlows };
 })();

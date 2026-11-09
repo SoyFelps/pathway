@@ -25,7 +25,7 @@ test('the questions of a job are cleaned the way the database wants them and are
 
 test('the card shows the interview tag and badge, and the candidate panel gets an AI Interview tab next to Resume', () => {
   assert.ok(builder.includes('aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))'));
-  for (const label of ['Setting up AI Interview', 'Invite sent for AI Interview', 'AI Interview completed', 'AI Interview left', 'AI Interview expired', 'AI Interview cancelled', 'AI Interview not sent', 'AI Interview in progress', 'Add interview questions', 'Premium needed']) {
+  for (const label of ['Setting up AI Interview', 'Invite sent for AI Interview', 'AI Interview completed', 'AI Interview left', 'AI Interview expired', 'AI Interview cancelled', 'AI Interview not sent', 'AI Interview in progress', 'Add interview questions', 'Plan needed']) {
     assert.ok(builder.includes(label), label);
   }
   assert.ok(builder.includes('data-right-tab="resume"') && builder.includes('data-right-tab="ai"'));
@@ -243,11 +243,11 @@ test('the panel row carries createdAt, which the 12-month rule needs', () => {
 
 test('free plan (owner decisions 2026-11-01): stage moves locked with a note, transcript and evaluation hidden, plan cancellation explained', () => {
   assert.ok(builder.includes("const workspaceIsFree = () =>") && builder.includes('!item.premiumActive'));
-  assert.ok(builder.includes("'This workspace is on the free plan. Upgrade to Premium to move candidates between stages.'"));
+  assert.ok(builder.includes("'This workspace is on the free plan. Upgrade your plan to move candidates between stages.'"));
   assert.ok(builder.includes("if (workspaceIsFree()) { showToast(t(FREE_MOVE_NOTE), 6000); return; }"), 'moveApplicant refuses on the free plan');
   assert.ok(builder.includes("const freeNote = isOwner && workspaceIsFree()"), 'the note above the board is for the owner only');
   assert.ok(builder.includes("draggable=\"${workspaceIsFree() || selectMode ? 'false' : 'true'}\"") && builder.includes('id="applicant-status-select"${workspaceIsFree()'));
-  assert.ok(builder.includes("data.locked && row.state === 'completed'") && builder.includes('Upgrade to Premium to see the transcript and the written evaluation of this interview.'));
+  assert.ok(builder.includes("data.locked && row.state === 'completed'") && builder.includes('Upgrade your plan to see the transcript and the written evaluation of this interview.'));
   assert.ok(builder.includes('This interview was cancelled when the workspace was on the free plan, and its link no longer works. Invite this candidate again if you want them to take the AI interview.'));
   assert.ok(builder.includes("getAiInterviewStatus(flowId, email, 'export')"), 'the candidate data export stays complete');
   const backend = fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8');

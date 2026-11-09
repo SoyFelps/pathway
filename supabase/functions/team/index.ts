@@ -190,7 +190,7 @@ async function handle(req: Request): Promise<Response> {
     ]);
     if (workspaceError || subscriptionError) return fail(req, 503, "This invitation could not be checked.");
     const premiumActive = subscription?.status === "active" && Date.parse(subscription.current_period_end || "") > Date.now();
-    if (!premiumActive || !workspace) return fail(req, 403, "This workspace no longer has active Premium access. Ask its owner to restore Premium.");
+    if (!premiumActive || !workspace) return fail(req, 403, "This workspace no longer has an active plan. Ask its owner to restore it.");
     return response(req, 200, { workspaceName: workspace.name, invitedEmail: invitation.invited_email, expiresAt: invitation.expires_at });
   }
 
@@ -281,7 +281,7 @@ async function handle(req: Request): Promise<Response> {
     if (body.action === "createInvitation") {
       const permissionDenied = requireManager();
       if (permissionDenied instanceof Response) return permissionDenied;
-      if (!context.premiumActive) return fail(req, 403, "An active Premium plan is required to invite team members.");
+      if (!context.premiumActive) return fail(req, 403, "An active plan is required to invite team members.");
       let appUrl: URL;
       try { appUrl = new URL(cleanText(body.appUrl, 500)); }
       catch { return fail(req, 400, "The Pathway return address is invalid."); }
@@ -312,7 +312,7 @@ async function handle(req: Request): Promise<Response> {
     if (body.action === "getInvitationLink") {
       const permissionDenied = requireManager();
       if (permissionDenied instanceof Response) return permissionDenied;
-      if (!context.premiumActive) return fail(req, 403, "An active Premium plan is required to access invitation links.");
+      if (!context.premiumActive) return fail(req, 403, "An active plan is required to access invitation links.");
       const invitationId = cleanText(body.invitationId, 64);
       if (!UUID_RE.test(invitationId)) return fail(req, 400, "Choose a valid invitation.");
       let appUrl: URL;

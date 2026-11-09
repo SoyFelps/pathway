@@ -18,13 +18,13 @@ test('free accounts see upgrade controls instead of publish actions across edito
   assert.match(builder, /subscription-benefit/);
   assert.match(builder, /subscription-checkout-form/);
   assert.match(builder, /Back to workspace/);
-  assert.match(builder, /US\$ 24\.90/);
+  assert.match(builder, /planPrice\(chosenPlan\)/, 'the subscription page shows the price of the plan being sold');
   assert.match(builder, /Payments are simulated; no real charge will be made/);
   assert.doesNotMatch(builder, /showSubscriptionModal/);
   assert.match(builder, /function refreshSubscriptionAfterCheckout\(\)/);
   assert.match(builder, /getSubscriptionState\(workspace\.id\)/);
-  assert.match(builder, /Premium is active\. You can now publish job flows\./);
-  assert.match(builder, /<span class="status-dot"><\/span>Premium/);
+  assert.match(builder, /Your plan is active\. You can now publish job flows\./);
+  assert.match(builder, /<span class="status-dot"><\/span>\$\{esc\(planName\(workspacePlan\(\)\)\)\}/);
 });
 
 test('My Plan shows account status and requires confirmation before scheduling cancellation', () => {
@@ -54,7 +54,7 @@ test('My Plan shows account status and requires confirmation before scheduling c
   assert.match(builder, /Automatic renewal will resume/);
   assert.match(builder, /keepPremiumSubscription\(\)/);
   assert.match(builder, /Schedule cancellation/);
-  assert.match(builder, /keep Premium access and published job links until/);
+  assert.match(builder, /keep your plan and published job links until/);
   assert.match(builder, /Pathway will turn off renewal with Stripe/);
   assert.match(builder, /cancelSubscriptionAtPeriodEnd\(\)/);
   assert.match(builder, /Cancellation scheduled/);
@@ -154,9 +154,9 @@ test('payment history is authenticated, paginated, and restricted to verified Pa
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=mw3-20261109b/);
-  assert.match(html, /builder\.js\?v=mw3-20261109b/);
-  assert.match(html, /styles\.css\?v=mw3-20261109b/);
+  assert.match(html, /backend\.js\?v=mw3-20261109c/);
+  assert.match(html, /builder\.js\?v=mw3-20261109c/);
+  assert.match(html, /styles\.css\?v=mw3-20261109c/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);

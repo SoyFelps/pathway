@@ -80,7 +80,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (!(await mayEditJobs(authData.user.id, workspaceId))) return fail(req, 403, "forbidden", "You are not allowed to edit jobs in this workspace.");
-    if (!(await premiumActive(workspaceId))) return fail(req, 403, "premium_required", "Writing questions with AI is part of the Premium plan.");
+    if (!(await premiumActive(workspaceId))) return fail(req, 403, "premium_required", "Writing questions with AI needs a paid plan.");
     const result = await createQuestion({ jobTitle: body.jobTitle, description: body.description, existing: body.existing }, { apiKey: geminiKey });
     return response(req, 200, result);
   } catch (error) {

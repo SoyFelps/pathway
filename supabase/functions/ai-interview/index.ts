@@ -137,7 +137,7 @@ async function actionResend(req: Request, userClient: SupabaseClient, body: Reco
   const row = await visibleRow(userClient, body);
   if (!row) return fail(req, 404, "The interview was not found.");
   if (row.state !== "invited" || !row.witcher_interview_id) return fail(req, 409, "The e-mail can only be re-sent before the candidate starts.");
-  if (!(await premiumActive(row.workspace_id))) return fail(req, 402, "Re-sending needs an active Premium plan.");
+  if (!(await premiumActive(row.workspace_id))) return fail(req, 402, "Re-sending needs an active plan.");
   const result = await callWitcher(witcher, "resend", { externalId: row.id });
   if (!result.ok) return fail(req, result.status === 409 ? 409 : 502, witcherErrorMessage(result.json.error), { code: result.json.error ?? null, retryAt: result.json.retryAt ?? null });
   return response(req, 200, { ok: true, emailSent: result.json.emailSent === true, resendsLeft: result.json.resendsLeft ?? null, lastInviteAt: result.json.lastInviteAt ?? null });
@@ -172,7 +172,7 @@ async function actionReevaluate(req: Request, userClient: SupabaseClient, body: 
   const row = await visibleRow(userClient, body);
   if (!row) return fail(req, 404, "The interview was not found.");
   if (row.state !== "completed" || !row.witcher_interview_id) return fail(req, 409, witcherErrorMessage("not_reevaluable"));
-  if (!(await premiumActive(row.workspace_id))) return fail(req, 402, "Redoing an evaluation needs an active Premium plan.");
+  if (!(await premiumActive(row.workspace_id))) return fail(req, 402, "Redoing an evaluation needs an active plan.");
   const result = await callWitcher(witcher, "reevaluate", { externalId: row.id });
   if (!result.ok) return fail(req, result.status === 409 ? 409 : 502, witcherErrorMessage(result.json.error), { code: result.json.error ?? null });
   return response(req, 202, { ok: true, reevaluating: true });
@@ -188,7 +188,7 @@ async function actionReinvite(req: Request, userClient: SupabaseClient, body: Re
   if (latestError) throw latestError;
   if (!latest || latest.id !== row.id) return fail(req, 409, "There is already a newer interview for this candidate. Refresh and look at it.");
   if (!["cancelled", "abandoned", "expired"].includes(row.state)) return fail(req, 409, "A new invitation can only be sent after the earlier one was cancelled, left or expired.");
-  if (!(await premiumActive(row.workspace_id))) return fail(req, 402, "Inviting needs an active Premium plan.");
+  if (!(await premiumActive(row.workspace_id))) return fail(req, 402, "Inviting needs an active plan.");
   const { data: application, error: applicationError } = await admin!.from("applicants").select("id")
     .eq("flow_id", row.flow_id).ilike("candidate_email", row.candidate_email.replace(/[\\%_]/g, (character: string) => `\\${character}`))
     .order("submitted_at", { ascending: false }).limit(1).maybeSingle();

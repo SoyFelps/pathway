@@ -337,7 +337,7 @@
   async function getSubscriptionState(workspaceId) {
     const session = await requireSession();
     const { data, error } = await client.from('workspace_subscriptions')
-      .select('status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id')
+      .select('status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id,plan')
       .eq('workspace_id', workspaceId).maybeSingle();
     if (error) throw translatedError(error);
     const currentPeriodEnd = data?.current_period_end ? Date.parse(data.current_period_end) : 0;
@@ -347,7 +347,7 @@
       if (membership) {
         const team = await callTeam({ action: 'context', workspaceId });
         if (team.workspace?.id === workspaceId && team.isMember) {
-          return { status: team.premiumActive ? 'active' : 'expired', currentPeriodEnd: null, cancelAtPeriodEnd: false, hasBillingHistory: false, active: Boolean(team.premiumActive) };
+          return { status: team.premiumActive ? 'active' : 'expired', currentPeriodEnd: null, cancelAtPeriodEnd: false, hasBillingHistory: false, active: Boolean(team.premiumActive), plan: team.plan || null };
         }
       }
     }
@@ -356,7 +356,8 @@
       currentPeriodEnd: data?.current_period_end || null,
       cancelAtPeriodEnd: Boolean(data?.cancel_at_period_end),
       hasBillingHistory: Boolean(data?.stripe_customer_id && data?.stripe_subscription_id),
-      active: data?.status === 'active' && currentPeriodEnd > Date.now()
+      active: data?.status === 'active' && currentPeriodEnd > Date.now(),
+      plan: data?.plan || null
     };
   }
 
@@ -707,7 +708,7 @@
       }
       const team = await callTeam({ action: 'context', workspaceId: chosen.id });
       if (team.workspace) {
-        const subscription = { status: team.premiumActive ? 'active' : 'expired', currentPeriodEnd: null, cancelAtPeriodEnd: false, hasBillingHistory: false, active: Boolean(team.premiumActive) };
+        const subscription = { status: team.premiumActive ? 'active' : 'expired', currentPeriodEnd: null, cancelAtPeriodEnd: false, hasBillingHistory: false, active: Boolean(team.premiumActive), plan: team.plan || null };
         const member = team.member || {};
         const [flows, companies] = team.premiumActive && member.can_flows ? await Promise.all([listFlows(team.workspace.id), listCompanies(team.workspace.id)]) : [[], []];
         return { session: authData.session, user, profile, workspace: team.workspace, workspaces, subscription, flows, companies, isOwner: false, teamMember: member, canCreateWorkspace: false };

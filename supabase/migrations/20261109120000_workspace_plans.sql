@@ -111,7 +111,7 @@ begin
   end if;
   perform 1 from public.workspaces w where w.id = invitation.workspace_id for update;
   if not public.workspace_has_active_subscription(invitation.workspace_id) then
-    raise exception 'This workspace no longer has an active Premium plan. Ask its owner to restore Premium before accepting.' using errcode = '42501';
+    raise exception 'This workspace no longer has an active plan. Ask its owner to restore it before accepting.' using errcode = '42501';
   end if;
   if exists (select 1 from public.workspaces w where w.id = invitation.workspace_id and w.owner_id = actor)
      or exists (select 1 from public.workspace_members m where m.workspace_id = invitation.workspace_id and m.user_id = actor) then
@@ -157,7 +157,7 @@ begin
     raise exception 'You do not have permission to manage this team.' using errcode = '42501';
   end if;
   if not public.workspace_has_active_subscription(p_workspace_id) then
-    raise exception 'An active Premium plan is required to add team members.' using errcode = '42501';
+    raise exception 'An active plan is required to add team members.' using errcode = '42501';
   end if;
   if normalized_email = (select lower(u.email) from auth.users u where u.id = workspace_owner) then
     raise exception 'The workspace owner is already part of this team.' using errcode = '22023';

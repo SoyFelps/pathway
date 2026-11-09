@@ -537,7 +537,7 @@ async function deleteFailedApplicants(req: Request, body: Record<string, unknown
   const flowId = String(body.flowId || "");
   if (flowId && !UUID_RE.test(flowId)) return fail(req, 400, "This job flow is invalid.");
 
-  const resolved = await resolveApplicantsWorkspace(req, auth.user.id, body.workspaceId, flowId, "Active Premium access is required to manage shared applicants.");
+  const resolved = await resolveApplicantsWorkspace(req, auth.user.id, body.workspaceId, flowId, "An active plan is required to manage shared applicants.");
   if (resolved instanceof Response) return resolved;
   const workspaceId = resolved.workspaceId;
 
@@ -688,7 +688,7 @@ Deno.serve(async (req: Request) => {
     if (!bearer) return fail(req, 401, "Sign in to review applicants.");
     const { data: auth, error: authError } = await admin.auth.getUser(bearer);
     if (authError || !auth.user) return fail(req, 401, "Your session expired. Sign in again.");
-    const resolved = await resolveApplicantsWorkspace(req, auth.user.id, body.workspaceId, "", "Active Premium access is required to review shared applicants.");
+    const resolved = await resolveApplicantsWorkspace(req, auth.user.id, body.workspaceId, "", "An active plan is required to review shared applicants.");
     if (resolved instanceof Response) return resolved;
     const workspaceId = resolved.workspaceId;
     const { data: flowLabels, error: flowError } = await admin.from("application_flows")
