@@ -59,7 +59,7 @@ test('My Companies page lists profiles, creates them, and selects a profile on f
   assert.match(builder, /flow\.companyProfile = companySnapshot\(company\)/);
   assert.match(builder, /C\.createFlow\(company\?\.name \|\| workspace\.name/);
   assert.match(backend, /async function listCompanies\(workspaceId\)/);
-  assert.match(backend, /\.limit\(3\)/);
+  assert.match(backend, /\.limit\(10\)/);
   assert.match(backend, /async function createCompany\(input, workspace\)/);
   assert.match(backend, /company_id: companyId \|\| null/);
 });
@@ -103,8 +103,8 @@ test('company edits propagate atomically to linked drafts and active published s
   assert.match(builder, /window\.PathwayBackend\.updateCompany/);
   assert.match(builder, /Company updated in its linked flows/);
   assert.match(styles, /\.company-card-actions/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261109d/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261109d/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261109f/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261109f/);
 });
 
 test('company deletion requires all linked flows removed first and the UI confirms candidate-data loss', () => {

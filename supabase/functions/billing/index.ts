@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@^22";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { deleteCompaniesExcept } from "./plan-cleanup.ts";
 
 const STRIPE_API_VERSION = "2026-03-25.dahlia; custom_checkout_payment_form_preview=v1";
 const APP_ORIGINS = new Set([
@@ -48,6 +49,20 @@ function response(req: Request, status: number, body: unknown) {
 
 function fail(req: Request, status: number, message: string) {
   return response(req, status, { error: message });
+}
+
+// The scheduled downgrade of a workspace (plano-planos.md, phase 4a): at most one pending change.
+async function pendingDowngrade(workspaceId: string) {
+  const { data, error } = await admin!.from("workspace_plan_changes")
+    .select("id,keep_company_id,effective_at,status,stripe_schedule_id").eq("workspace_id", workspaceId).in("status", ["scheduled", "running"]).maybeSingle();
+  if (error) throw error;
+  return data as { id: string; keep_company_id: string | null; effective_at: string; status: string; stripe_schedule_id: string | null } | null;
+}
+// Takes the subscription out of its Stripe schedule (what was scheduled stops; the subscription itself is untouched).
+async function releaseSchedule(scheduleId: string | null | undefined): Promise<void> {
+  if (!scheduleId) return;
+  try { await stripe!.subscriptionSchedules.release(scheduleId); }
+  catch (error) { console.error("Stripe schedule release failed (it may already be released)", error); }
 }
 
 async function priceIdForPlan(plan: Plan): Promise<string | null> {
@@ -147,6 +162,8 @@ Deno.serve(async (req: Request) => {
   // The language of Stripe's page for updating the card: the person's interface language (Stripe's own choice otherwise).
   let portalLocale: "en" | "pt-BR" | "es" | "auto" = "auto";
   let requestedPlan: Plan = "business";
+  let keepCompanyId = "";
+  let confirmed = false;
   try {
     const body = await req.json();
     if (body && typeof body.action === "string") action = body.action;
@@ -154,10 +171,12 @@ Deno.serve(async (req: Request) => {
     if (body && typeof body.workspaceId === "string") requestedWorkspaceId = body.workspaceId.trim();
     if (body && (body.locale === "en" || body.locale === "pt-BR" || body.locale === "es")) portalLocale = body.locale;
     if (body && (body.plan === "business" || body.plan === "agency")) requestedPlan = body.plan;
+    if (body && typeof body.keepCompanyId === "string") keepCompanyId = body.keepCompanyId.trim();
+    if (body && body.confirmed === true) confirmed = true;
   } catch {
     return fail(req, 400, "The request body must be valid JSON.");
   }
-  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer" && action !== "listPaymentHistory" && action !== "changePlan" && action !== "deleteWorkspace") return fail(req, 400, "This billing action is not supported.");
+  if (action !== "checkout" && action !== "cancelSubscription" && action !== "resumeSubscription" && action !== "createPaymentMethodUpdateSession" && action !== "getPaymentMethodSummary" && action !== "syncPaymentMethodFromCustomer" && action !== "listPaymentHistory" && action !== "changePlan" && action !== "scheduleDowngrade" && action !== "cancelDowngrade" && action !== "resolveCompanyLimit" && action !== "deleteWorkspace") return fail(req, 400, "This billing action is not supported.");
 
   const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
   if (!bearer) return fail(req, 401, "Sign in to manage your subscription.");
@@ -197,6 +216,8 @@ Deno.serve(async (req: Request) => {
           return fail(req, 403, "The Stripe subscription could not be verified for this workspace. The workspace was kept.");
         }
         if (current.status !== "canceled" && current.status !== "incomplete_expired") {
+          const pendingChange = await pendingDowngrade(workspace.id);
+          if (pendingChange) await releaseSchedule(pendingChange.stripe_schedule_id);
           await stripe.subscriptions.cancel(existing.stripe_subscription_id, { invoice_now: false, prorate: false });
         }
         subscriptionCancelled = true;
@@ -309,6 +330,11 @@ Deno.serve(async (req: Request) => {
       }
       if (current.metadata?.workspace_id !== workspace.id) {
         return fail(req, 403, "The Stripe subscription could not be verified for this workspace.");
+      }
+      const pendingChange = await pendingDowngrade(workspace.id);
+      if (pendingChange) {
+        await releaseSchedule(pendingChange.stripe_schedule_id);
+        await admin.from("workspace_plan_changes").update({ status: "cancelled", finished_at: new Date().toISOString() }).eq("id", pendingChange.id);
       }
       const updated = await stripe.subscriptions.update(existing.stripe_subscription_id, { cancel_at_period_end: true });
       return response(req, 200, {
@@ -519,6 +545,105 @@ Deno.serve(async (req: Request) => {
     } catch (error) {
       console.error("Stripe plan change failed", error);
       return fail(req, 502, "Stripe could not change the plan. Please check the card and try again.");
+    }
+  }
+
+  // Agency to Business is scheduled for the end of the period already paid: Stripe changes the price at the renewal (a subscription schedule) and,
+  // once the workspace is on Business, the daily run deletes every company but the one chosen. Nothing is deleted now.
+  if (action === "scheduleDowngrade") {
+    if (!existing?.stripe_subscription_id) return fail(req, 409, "No active subscription was found for this workspace.");
+    if (existing.status !== "active" || periodEnd <= Date.now()) return fail(req, 409, "Only an active subscription can change plan.");
+    if (existing.plan !== "agency") return fail(req, 409, "Only an Agency workspace can move to Business.");
+    if (existing.cancel_at_period_end) return fail(req, 409, "Remove the scheduled cancellation before changing plan.");
+    if (!confirmed) return fail(req, 400, "Confirm the change before it is scheduled.");
+    const { data: companies, error: companiesError } = await admin.from("workspace_companies").select("id").eq("workspace_id", workspace.id);
+    if (companiesError) return fail(req, 503, "The companies of this workspace could not be checked.");
+    const ids = (companies || []).map((company) => company.id as string);
+    let keep: string | null = null;
+    if (ids.length === 1) keep = ids[0];
+    else if (ids.length > 1) {
+      if (!ids.includes(keepCompanyId)) return fail(req, 400, "Choose the company to keep.");
+      keep = keepCompanyId;
+    }
+    try {
+      const pending = await pendingDowngrade(workspace.id);
+      if (pending) {
+        // Already scheduled: only the company to keep can change.
+        const { error: changeError } = await admin.from("workspace_plan_changes").update({ keep_company_id: keep, last_error: null }).eq("id", pending.id);
+        if (changeError) return fail(req, 503, "The scheduled change could not be updated.");
+        return response(req, 200, { effective_at: pending.effective_at, keep_company_id: keep });
+      }
+      const current = await stripe.subscriptions.retrieve(existing.stripe_subscription_id);
+      if (current.status !== "active" || stripeObjectId(current.customer) !== existing.stripe_customer_id) {
+        return fail(req, 409, "The Stripe subscription no longer matches this workspace's active plan.");
+      }
+      if (current.metadata?.workspace_id !== workspace.id) return fail(req, 403, "The Stripe subscription could not be verified for this workspace.");
+      const businessPriceId = await priceIdForPlan("business");
+      if (!businessPriceId) return fail(req, 503, "Checkout is not configured yet.");
+      const schedule = await stripe.subscriptionSchedules.create({ from_subscription: existing.stripe_subscription_id });
+      try {
+        const phase = schedule.phases[0];
+        const defaultPaymentMethod = stripeObjectId(phase.default_payment_method);
+        await stripe.subscriptionSchedules.update(schedule.id, {
+          end_behavior: "release",
+          phases: [
+            {
+              items: phase.items.map((item) => ({ price: stripeObjectId(item.price) as string, quantity: item.quantity ?? 1 })),
+              start_date: phase.start_date,
+              end_date: phase.end_date,
+              ...(defaultPaymentMethod ? { default_payment_method: defaultPaymentMethod } : {}),
+              metadata: { workspace_id: workspace.id, plan: "agency" },
+            },
+            {
+              items: [{ price: businessPriceId, quantity: 1 }],
+              duration: { interval: "month", interval_count: 1 },
+              ...(defaultPaymentMethod ? { default_payment_method: defaultPaymentMethod } : {}),
+              metadata: { workspace_id: workspace.id, plan: "business" },
+            },
+          ],
+        });
+      } catch (scheduleError) {
+        await releaseSchedule(schedule.id);
+        throw scheduleError;
+      }
+      const effectiveAt = existing.current_period_end as string;
+      const { error: insertError } = await admin.from("workspace_plan_changes").insert({
+        workspace_id: workspace.id, target_plan: "business", keep_company_id: keep, effective_at: effectiveAt, stripe_schedule_id: schedule.id, created_by: auth.user.id,
+      });
+      if (insertError) {
+        await releaseSchedule(schedule.id);
+        console.error("The scheduled downgrade could not be recorded", insertError);
+        return fail(req, 503, "The change could not be scheduled. Nothing was changed.");
+      }
+      return response(req, 200, { effective_at: effectiveAt, keep_company_id: keep });
+    } catch (error) {
+      console.error("Stripe downgrade scheduling failed", error);
+      return fail(req, 502, "Stripe could not schedule the change to Business. Nothing was changed.");
+    }
+  }
+
+  if (action === "cancelDowngrade") {
+    const pending = await pendingDowngrade(workspace.id);
+    if (!pending) return fail(req, 409, "No scheduled change was found for this workspace.");
+    if (pending.status === "running") return fail(req, 409, "The change is already being applied.");
+    await releaseSchedule(pending.stripe_schedule_id);
+    const { error: cancelError } = await admin.from("workspace_plan_changes").update({ status: "cancelled", finished_at: new Date().toISOString() }).eq("id", pending.id);
+    if (cancelError) return fail(req, 503, "The scheduled change could not be cancelled. Try again.");
+    return response(req, 200, { cancelled: true });
+  }
+
+  // A workspace that is on Business but still holds more than one company (for example it subscribed to Business again after a lapse) must
+  // choose the company to keep. Only then are the others deleted. The screen calls this again until it says it is finished.
+  if (action === "resolveCompanyLimit") {
+    if (!confirmed) return fail(req, 400, "Confirm the deletion before it starts.");
+    if (!existing || existing.status !== "active" || periodEnd <= Date.now() || existing.plan !== "business") return fail(req, 409, "Only a Business workspace holding more than one company needs to choose.");
+    if (await pendingDowngrade(workspace.id)) return fail(req, 409, "A scheduled change is already waiting for this workspace.");
+    try {
+      const result = await deleteCompaniesExcept(admin, workspace.id, keepCompanyId, Date.now() + 40_000);
+      return response(req, 200, result);
+    } catch (error) {
+      console.error("Company cleanup failed", error);
+      return fail(req, 503, "The companies could not be deleted completely. Nothing else was touched; try again.");
     }
   }
 

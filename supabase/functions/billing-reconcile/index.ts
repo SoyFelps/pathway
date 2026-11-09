@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@^22";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { deleteCompaniesExcept } from "./plan-cleanup.ts";
 import { compareSubscriptions, type DatabaseSubscription, type Finding, hasAccess, planOfPrice, reportText, type StripeSubscription } from "./compare.ts";
 
 // Daily check that the subscriptions in the database say what Stripe says. A database job wakes this function once a day (07:00 UTC).
@@ -78,6 +79,38 @@ async function listStripeSubscriptions(): Promise<StripeSubscription[]> {
     if (found.length >= MAX_SUBSCRIPTIONS) break;
   }
   return found;
+}
+
+/**
+ * The scheduled downgrades from Agency to Business whose date has come (plano-planos.md, phase 4a). Stripe changed the price at the renewal and
+ * the webhook wrote plan = business; only then are the companies that were not chosen deleted, in batches (a big company may take several
+ * runs). A change without a valid company to keep, or whose workspace is not on Business yet, is left alone and tried again on the next run.
+ */
+async function runDueDowngrades(): Promise<{ done: number; waiting: number }> {
+  const summary = { done: 0, waiting: 0 };
+  const { data: due, error } = await admin!.from("workspace_plan_changes")
+    .select("id,workspace_id,keep_company_id,stripe_schedule_id").in("status", ["scheduled", "running"]).lte("effective_at", new Date().toISOString()).limit(20);
+  if (error) throw error;
+  for (const change of due ?? []) {
+    try {
+      if (!change.keep_company_id) { summary.waiting++; await admin!.from("workspace_plan_changes").update({ last_error: "keep_company_missing" }).eq("id", change.id); continue; }
+      const { data: subscription } = await admin!.from("workspace_subscriptions").select("status,plan,current_period_end").eq("workspace_id", change.workspace_id).maybeSingle();
+      const onBusiness = subscription?.status === "active" && subscription.plan === "business" && Date.parse(subscription.current_period_end || "") > Date.now();
+      if (!onBusiness) { summary.waiting++; await admin!.from("workspace_plan_changes").update({ last_error: "not_on_business_yet" }).eq("id", change.id); continue; }
+      await admin!.from("workspace_plan_changes").update({ status: "running", last_error: null }).eq("id", change.id);
+      const result = await deleteCompaniesExcept(admin, change.workspace_id, change.keep_company_id, Date.now() + 30_000);
+      if (result.finished) {
+        if (change.stripe_schedule_id) { try { await stripe!.subscriptionSchedules.release(change.stripe_schedule_id); } catch { /* already released */ } }
+        await admin!.from("workspace_plan_changes").update({ status: "done", finished_at: new Date().toISOString() }).eq("id", change.id);
+        summary.done++;
+      } else summary.waiting++;
+    } catch (cleanupError) {
+      console.error("Scheduled downgrade failed for a workspace:", cleanupError instanceof Error ? cleanupError.message : "unknown error");
+      await admin!.from("workspace_plan_changes").update({ last_error: "cleanup_failed" }).eq("id", change.id);
+      summary.waiting++;
+    }
+  }
+  return summary;
 }
 
 async function takeJobPagesOffline(workspaceId: string) {
@@ -183,6 +216,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return reply(405, { error: "method_not_allowed" });
   if (!stripe || !admin) return reply(503, { error: "not_configured" });
   try {
+    try { await runDueDowngrades(); } catch (downgradeError) { console.error("Scheduled downgrades failed:", downgradeError instanceof Error ? downgradeError.message : "unknown error"); }
     return await run();
   } catch (error) {
     console.error("billing-reconcile error:", error instanceof Error ? error.message : "unknown error");

@@ -2937,7 +2937,7 @@
       : t('You are currently on the Free plan.');
     // The rows are found by data-plan-row (never by their text, which changes with the language).
     const management = premium
-      ? `<section class="plan-management-card"><div class="plan-section-heading"><div><div class="eyebrow">${t('Subscription management')}</div><h2>${t('Billing details')}</h2><p>${t('Manage the payment method and history for this workspace.')}</p></div></div><div class="plan-action-list"><div class="plan-action-row" data-plan-row="history"><div class="plan-action-copy"><strong>${t('Payment history')}</strong><span>${t('View invoices and previous payments.')}</span></div><button class="btn plan-placeholder" disabled>${t('Loading history')}</button></div><div class="plan-action-row" data-plan-row="method"><div class="plan-action-copy"><strong>${t('Payment method')}</strong><span>${t('Change the card used for your subscription.')}</span></div><button class="btn plan-placeholder" disabled>${t('Coming soon')}</button></div><div class="plan-action-row plan-cancel-row"><div class="plan-action-copy"><strong>${t('Cancel subscription')}</strong><span>${subscription.cancelAtPeriodEnd && periodEnd ? t('Your {plan} plan will remain active until {date}.', { plan: planName(currentPlan()), date: esc(periodEnd) }) : periodEnd ? t('Schedule cancellation for the end of your paid period ({date}).', { date: esc(periodEnd) }) : t('Schedule cancellation for the end of your paid period.')}</span></div><button class="btn btn-danger" id="cancel-subscription" ${subscription.cancelAtPeriodEnd ? 'disabled' : ''}>${subscription.cancelAtPeriodEnd ? t('Cancellation scheduled') : t('Cancel subscription')}</button></div></div><p class="plan-placeholder-note">${t('Invoices and receipts are retrieved securely from Stripe. Card details are managed there; Pathway never stores your card number. If you cancel, your plan and published jobs remain active through the date shown above.')}</p></section>`
+      ? `<section class="plan-management-card"><div class="plan-section-heading"><div><div class="eyebrow">${t('Subscription management')}</div><h2>${t('Billing details')}</h2><p>${t('Manage the payment method and history for this workspace.')}</p></div></div><div class="plan-action-list"><div class="plan-action-row" data-plan-row="history"><div class="plan-action-copy"><strong>${t('Payment history')}</strong><span>${t('View invoices and previous payments.')}</span></div><button class="btn plan-placeholder" disabled>${t('Loading history')}</button></div><div class="plan-action-row" data-plan-row="method"><div class="plan-action-copy"><strong>${t('Payment method')}</strong><span>${t('Change the card used for your subscription.')}</span></div><button class="btn plan-placeholder" disabled>${t('Coming soon')}</button></div><div class="plan-action-row plan-cancel-row"><div class="plan-action-copy"><strong>${t('Cancel subscription')}</strong><span>${subscription.cancelAtPeriodEnd && periodEnd ? t('Your {plan} plan will remain active until {date}.', { plan: planName(currentPlan()), date: esc(periodEnd) }) : periodEnd ? t('Schedule cancellation for the end of your paid period ({date}).', { date: esc(periodEnd) }) : t('Schedule cancellation for the end of your paid period.')}</span></div><button class="btn btn-danger" id="cancel-subscription" ${subscription.cancelAtPeriodEnd || planChange ? 'disabled' : ''} ${planChange ? `title="${t('Only one scheduled change at a time.')}"` : ''}>${subscription.cancelAtPeriodEnd ? t('Cancellation scheduled') : t('Cancel subscription')}</button></div></div><p class="plan-placeholder-note">${t('Invoices and receipts are retrieved securely from Stripe. Card details are managed there; Pathway never stores your card number. If you cancel, your plan and published jobs remain active through the date shown above.')}</p></section>`
       : `<section class="plan-free-note"><div class="plan-free-mark" aria-hidden="true">↗</div><div><strong>${t('Build and preview for free')}</strong><p>${t('Create and refine application flows at no cost. Upgrade when you are ready to publish a job.')}</p></div></section>`;
     const freeBenefits = !premium
       ? `<section class="premium-benefits-card"><div class="premium-benefits-heading"><span class="premium-benefits-mark" aria-hidden="true">✦</span><div><div class="eyebrow">${t('Plans')}</div><h2>${t('Everything you need to move from job post to decision')}</h2><p>${t('Publish a role and manage the full applicant journey in Pathway.')}</p></div></div><ul class="premium-benefits-list"><li><span aria-hidden="true">↗</span><div><strong>${t('Publish your job flow')}</strong><p>${t('Turn your application journey into a live job posting.')}</p></div></li><li><span aria-hidden="true">⤴</span><div><strong>${t('Share a public job link')}</strong><p>${t('Send one simple link to candidates wherever you recruit.')}</p></div></li><li><span aria-hidden="true">＋</span><div><strong>${t('Receive applications in Pathway')}</strong><p>${t('Collect candidate details and answers in your workspace.')}</p></div></li><li><span aria-hidden="true">▤</span><div><strong>${t('Review candidates and resumes')}</strong><p>${t('See application responses and preview or download resumes.')}</p></div></li><li><span aria-hidden="true">✓</span><div><strong>${t('Approve or reject candidates')}</strong><p>${t('Organize your pipeline and make hiring decisions as applications come in.')}</p></div></li></ul><button class="btn btn-primary" id="my-plan-benefits-upgrade">${t('Choose a plan')}</button></section>`
@@ -2965,6 +2965,7 @@
     root.querySelector('#cancel-subscription')?.addEventListener('click', showCancelSubscriptionConfirmation);
     root.querySelector('.my-plan-page')?.insertAdjacentHTML('beforeend', planCompareHtml());
     root.querySelectorAll('[data-choose-plan]').forEach(button => button.addEventListener('click', () => openSubscriptionPage(button.dataset.choosePlan)));
+    root.querySelector('[data-downgrade]')?.addEventListener('click', showDowngradeModal);
     root.querySelectorAll('[data-change-plan]').forEach(button => button.addEventListener('click', () => showChangePlanConfirmation(button.dataset.changePlan)));
     bindPaymentHistory();
     const paymentMethodRow = root.querySelector('[data-plan-row="method"]');
@@ -3008,6 +3009,168 @@
     });
   }
 
+  // ---- Scheduled downgrade Agency → Business and the "choose one company" screen (plano-planos.md, phase 4a) ----
+  // `planChange` is the pending change of the workspace (owner only), read from workspace_plan_changes. The banner is painted again after every
+  // screen because the screens replace the whole page (see the observer before PathwayAuth.start).
+  let planChange = null;
+  const overCompanyLimit = () => Boolean(isOwner && workspace && !planChange && subscription?.active && workspacePlan() === 'business' && companies.length > 1);
+  const daysUntil = value => Math.max(0, Math.ceil((Date.parse(value) - Date.now()) / 86400000));
+
+  function planChangeBannerHtml() {
+    if (!isOwner || !workspace) return '';
+    if (planChange) {
+      const keep = companies.find(item => item.id === planChange.keepCompanyId);
+      const date = esc(formatPlanDate(planChange.effectiveAt));
+      const days = tn('{count} day left', '{count} days left', daysUntil(planChange.effectiveAt));
+      const text = keep
+        ? t('Your plan changes to Business on {date} ({days}). Only {company} will be kept: the other companies, with their jobs and candidates, will be deleted.', { date, days, company: '<strong>' + esc(keep.name) + '</strong>' })
+        : t('Your plan changes to Business on {date} ({days}), but no company is chosen to keep. Cancel the change and schedule it again to choose one.', { date, days });
+      return `<div class="plan-change-banner" role="status"><span class="plan-change-text">${text}</span><span class="plan-change-actions"><button class="btn btn-sm" type="button" data-plan-banner="plan">${t('My Plan')}</button><button class="btn btn-sm btn-danger" type="button" data-plan-banner="cancel">${t('Cancel change')}</button></span></div>`;
+    }
+    if (overCompanyLimit()) {
+      return `<div class="plan-change-banner" role="status"><span class="plan-change-text">${t('Your Business plan includes one company, but this workspace has {count}. Choose the one to keep: the others will be deleted with their jobs and candidates.', { count: companies.length })}</span><span class="plan-change-actions"><button class="btn btn-sm btn-primary" type="button" data-plan-banner="choose">${t('Choose company')}</button></span></div>`;
+    }
+    return '';
+  }
+
+  function paintPlanChangeBanner() {
+    root.querySelector('.plan-change-banner')?.remove();
+    const html = planChangeBannerHtml();
+    const bar = root.querySelector('.topbar');
+    if (!html || !bar) return;
+    bar.insertAdjacentHTML('afterend', html);
+    root.querySelector('[data-plan-banner="plan"]')?.addEventListener('click', renderMyPlan);
+    root.querySelector('[data-plan-banner="cancel"]')?.addEventListener('click', showCancelDowngradeConfirmation);
+    root.querySelector('[data-plan-banner="choose"]')?.addEventListener('click', showChooseCompanyModal);
+  }
+
+  async function refreshPlanChange() {
+    planChange = null;
+    if (isOwner && workspace) { try { planChange = await window.PathwayBackend.getPlanChange(workspace.id); } catch (_) { planChange = null; } }
+    paintPlanChangeBanner();
+  }
+
+  function showCancelDowngradeConfirmation() {
+    if (!planChange) return;
+    setModal(`<div class="modal-head"><div><h2>${t('Cancel the change to Business?')}</h2><p>${t('Your workspace stays on the Agency plan and nothing will be deleted.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="auth-error" id="cancel-downgrade-error" role="alert"></div><div class="modal-actions"><button class="btn" data-close>${t('Not now')}</button><button class="btn btn-primary" id="confirm-cancel-downgrade">${t('Cancel the change')}</button></div>`);
+    const button = modalRoot.querySelector('#confirm-cancel-downgrade');
+    button.addEventListener('click', async () => {
+      button.disabled = true; button.textContent = t('Cancelling…');
+      try {
+        await window.PathwayBackend.cancelDowngrade();
+        planChange = null;
+        closeModal();
+        paintPlanChangeBanner();
+        if (root.querySelector('.my-plan-page')) renderMyPlan();
+        showToast(t('The change was cancelled. Your workspace stays on Agency.'));
+      } catch (error) {
+        const box = modalRoot.querySelector('#cancel-downgrade-error');
+        if (box) { box.textContent = error.message || t('The scheduled change could not be cancelled.'); box.classList.add('show'); }
+        button.disabled = false; button.textContent = t('Cancel the change');
+      }
+    });
+  }
+
+  // What would go with each company: its jobs (known here) and their applications (counted by the server rules of the owner).
+  const flowsOfCompany = id => flows.filter(flow => flow.companyId === id && flow.cloudId);
+  const impactText = (jobs, applications) => `${tn('{count} job', '{count} jobs', jobs)} · ${tn('{count} candidate', '{count} candidates', applications)}`;
+  async function fillCompanyImpact(scope) {
+    for (const company of companies) {
+      const target = scope.querySelector(`[data-impact="${company.id}"]`);
+      if (!target) continue;
+      const mine = flowsOfCompany(company.id);
+      try { const counts = await window.PathwayBackend.countCompanyData(mine.map(flow => flow.cloudId)); target.textContent = impactText(mine.length, counts.applications); }
+      catch (_) { target.textContent = tn('{count} job', '{count} jobs', mine.length); }
+    }
+  }
+  const keepOptionsHtml = () => companies.map(company => `<label class="downgrade-option"><input type="radio" name="keep-company" value="${esc(company.id)}"><span><strong>${esc(company.name)}</strong><small data-impact="${esc(company.id)}">${t('Counting…')}</small></span></label>`).join('');
+
+  // Agency → Business, scheduled for the end of the paid period. Nothing is deleted now.
+  function showDowngradeModal() {
+    if (!subscription?.active || workspacePlan() !== 'agency' || planChange) return;
+    const date = formatPlanDate(subscription.currentPeriodEnd);
+    const several = companies.length > 1;
+    const choice = several
+      ? `<p class="downgrade-lead"><strong>${t('Business includes one company. Choose the one to keep:')}</strong></p><div class="downgrade-options" id="downgrade-options">${keepOptionsHtml()}</div><button class="btn btn-sm" type="button" id="downgrade-export" disabled>${t('Download the candidates that will be deleted (CSV)')}</button>`
+      : '';
+    setModal(`<div class="modal-head"><div><h2>${t('Move to Business?')}</h2><p>${t('The change happens on {date}, the end of the period you already paid. Until then you keep everything in Agency.', { date: esc(date || t('the end of your current billing period')) })}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>${choice}<div class="danger-confirm"><strong>${t('Before you confirm:')}</strong> ${several ? t('On that date, every company except the one you chose is permanently deleted, with its jobs, public links, candidates, resumes and AI interviews. This cannot be undone. Companies you create before then are deleted too.') : t('Business includes one company, which is the one you have. Nothing is deleted. Your plan price changes to {price} per month.', { price: C.PLANS.business.price })}</div>${several ? `<div class="field-group"><label for="downgrade-word">${t('Type {word} to confirm.', { word: '<strong>DELETE</strong>' })}</label><input class="text-input" id="downgrade-word" autocomplete="off" autocapitalize="off" spellcheck="false"></div>` : ''}<div class="auth-error" id="downgrade-error" role="alert"></div><div class="modal-actions"><button class="btn" data-close>${t('Keep Agency')}</button><button class="btn btn-danger" id="confirm-downgrade" type="button" ${several ? 'disabled' : ''}>${t('Schedule the change')}</button></div>`);
+    const confirm = modalRoot.querySelector('#confirm-downgrade');
+    const word = modalRoot.querySelector('#downgrade-word');
+    const exportButton = modalRoot.querySelector('#downgrade-export');
+    const chosen = () => modalRoot.querySelector('input[name="keep-company"]:checked')?.value || '';
+    const refresh = () => {
+      if (!several) return;
+      confirm.disabled = !(chosen() && word.value.trim() === 'DELETE');
+      exportButton.disabled = !chosen();
+    };
+    if (several) {
+      void fillCompanyImpact(modalRoot);
+      modalRoot.querySelectorAll('input[name="keep-company"]').forEach(input => input.addEventListener('change', refresh));
+      word.addEventListener('input', refresh);
+      exportButton.addEventListener('click', async () => {
+        const ids = flows.filter(flow => flow.companyId && flow.companyId !== chosen() && flow.cloudId).map(flow => flow.cloudId);
+        exportButton.disabled = true;
+        try {
+          const rows = await window.PathwayBackend.listApplicationsOfFlows(ids);
+          const titleOf = id => flows.find(flow => flow.cloudId === id);
+          const table = [[t('company'), t('job'), t('candidate'), t('email'), t('stage'), t('applied at')]];
+          rows.forEach(row => { const flow = titleOf(row.flow_id); table.push([companies.find(item => item.id === flow?.companyId)?.name || '', flow?.jobTitle || '', row.candidate_name, row.candidate_email, row.status, row.submitted_at]); });
+          downloadTextFile('candidates-to-be-deleted.csv', rowsToCsv(table));
+        } catch (error) { showToast(error.message || t('The file could not be created.')); }
+        exportButton.disabled = !chosen();
+      });
+    }
+    confirm.addEventListener('click', async () => {
+      confirm.disabled = true; confirm.textContent = t('Scheduling…');
+      try {
+        await window.PathwayBackend.scheduleDowngrade(several ? chosen() : (companies[0]?.id || ''));
+        await refreshPlanChange();
+        closeModal();
+        if (root.querySelector('.my-plan-page')) renderMyPlan();
+        showToast(t('Change scheduled for {date}.', { date: formatPlanDate(planChange?.effectiveAt) || date }));
+      } catch (error) {
+        const box = modalRoot.querySelector('#downgrade-error');
+        if (box) { box.textContent = error.message || t('The change to Business could not be scheduled.'); box.classList.add('show'); }
+        confirm.disabled = false; confirm.textContent = t('Schedule the change');
+      }
+    });
+  }
+
+  // A Business workspace that still has more than one company (for example after the scheduled date, or companies created in between).
+  function showChooseCompanyModal() {
+    if (!overCompanyLimit()) return;
+    setModal(`<div class="modal-head"><div><h2>${t('Choose the company to keep')}</h2><p>${t('Your Business plan includes one company. The others are permanently deleted, with their jobs, public links, candidates, resumes and AI interviews. This cannot be undone.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="downgrade-options" id="downgrade-options">${keepOptionsHtml()}</div><div class="field-group"><label for="downgrade-word">${t('Type {word} to confirm.', { word: '<strong>DELETE</strong>' })}</label><input class="text-input" id="downgrade-word" autocomplete="off" autocapitalize="off" spellcheck="false"></div><div class="auth-error" id="downgrade-error" role="alert"></div><div class="modal-actions"><button class="btn" data-close>${t('Not now')}</button><button class="btn btn-danger" id="confirm-downgrade" type="button" disabled>${t('Delete the other companies')}</button></div>`);
+    const confirm = modalRoot.querySelector('#confirm-downgrade');
+    const word = modalRoot.querySelector('#downgrade-word');
+    const chosen = () => modalRoot.querySelector('input[name="keep-company"]:checked')?.value || '';
+    const refresh = () => { confirm.disabled = !(chosen() && word.value.trim() === 'DELETE'); };
+    void fillCompanyImpact(modalRoot);
+    modalRoot.querySelectorAll('input[name="keep-company"]').forEach(input => input.addEventListener('change', refresh));
+    word.addEventListener('input', refresh);
+    confirm.addEventListener('click', async () => {
+      const keepId = chosen();
+      confirm.disabled = true; confirm.textContent = t('Deleting…');
+      try {
+        // The server works in batches: call again until it says it finished.
+        for (let round = 0; round < 60; round += 1) {
+          const result = await window.PathwayBackend.resolveCompanyLimit(keepId);
+          if (result && result.finished) break;
+        }
+        const context = await window.PathwayBackend.listCompanies(workspace.id);
+        companies = context || [];
+        flows = flows.filter(flow => !flow.companyId || flow.companyId === keepId);
+        closeModal();
+        paintPlanChangeBanner();
+        if (root.querySelector('.my-plan-page')) renderMyPlan(); else renderDashboard();
+        showToast(t('Done. Only the chosen company was kept.'));
+      } catch (error) {
+        const box = modalRoot.querySelector('#downgrade-error');
+        if (box) { box.textContent = error.message || t('The companies could not be deleted.'); box.classList.add('show'); }
+        confirm.disabled = false; confirm.textContent = t('Delete the other companies');
+      }
+    });
+  }
+
   // The three plans on My Plan. A workspace without a subscription can choose one; changing between Business and Agency arrives with the Stripe phase.
   function planCompareHtml() {
     const current = workspacePlan();
@@ -3017,7 +3180,8 @@
       if (current === id) return `<button class="btn plan-card-action" type="button" disabled>${t('Current plan')}</button>`;
       if (!active) return `<button class="btn btn-primary plan-card-action" type="button" data-choose-plan="${id}">${label}</button>`;
       if (current === 'business' && id === 'agency' && !subscription.cancelAtPeriodEnd) return `<button class="btn btn-primary plan-card-action" type="button" data-change-plan="${id}">${label}</button>`;
-      return `<button class="btn plan-card-action" type="button" disabled title="${t('Changing plans from here is coming soon.')}">${label}</button>`;
+      if (current === 'agency' && id === 'business' && !subscription.cancelAtPeriodEnd && !planChange) return `<button class="btn plan-card-action" type="button" data-downgrade="1">${label}</button>`;
+      return `<button class="btn plan-card-action" type="button" disabled title="${t('Only one scheduled change at a time.')}">${label}</button>`;
     };
     return `<section class="my-plan-compare" aria-labelledby="compare-plans-title"><div class="eyebrow">${t('Plans')}</div><h2 id="compare-plans-title">${t('Compare plans')}</h2><p class="muted">${t('Business is for one company hiring for itself. Agency is for agencies and recruiters hiring for several companies.')}</p>${C.planCardsHtml({ t, tn, esc }, { business: action('business'), agency: action('agency') }, current)}</section>`;
   }
@@ -4727,6 +4891,7 @@
 
   async function publishFlow() {
     if (!subscription?.active) { openSubscriptionPage(); return; }
+    if (overCompanyLimit()) { showChooseCompanyModal(); return; } // a Business workspace with several companies must keep one first
     const flow = currentFlow();
     C.lockEndSteps(flow);
     try { C.normalizeFlow(flow); }
@@ -4794,6 +4959,7 @@
     showToast(t('You no longer have access to this workspace. Opening another one…'), 4500);
     setTimeout(() => { void openWorkspaceDashboard(); }, 2200);
   });
+  new MutationObserver(() => { if (!root.querySelector('.plan-change-banner')) paintPlanChangeBanner(); }).observe(root, { childList: true });
   window.PathwayAuth.start(context => {
     workspace = context.workspace;
     myWorkspaces = context.workspaces || [];
@@ -4815,6 +4981,8 @@
     applicants = []; applicantFilter = ''; applicantSearch = ''; applicantResponsible = ''; applicantAdvanced = [];
     flowFilters = { search: '', company: '', responsible: '' };
     startNotifications();
+    planChange = null;
+    if (isOwner && workspace) void refreshPlanChange();
     const requestedPage = window.location.hash.replace(/^#/, '');
     const query = new URLSearchParams(window.location.search);
     const checkoutComplete = query.get('checkout') === 'complete';

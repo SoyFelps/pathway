@@ -1024,3 +1024,5 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .my-plan-compare{margin-top:26px}.my-plan-compare h2{margin:0 0 4px}.my-plan-compare>p{margin:0 0 16px}
 .plan-card-action{margin-top:auto}
 .plan-card-action:disabled{opacity:.6;cursor:default}
+.plan-change-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding:10px 20px;background:var(--amber-bg);border-bottom:1px solid var(--amber-border);color:var(--amber-dark);font-size:13px;line-height:1.45}.plan-change-banner strong{color:inherit}.plan-change-actions{display:flex;gap:8px;flex-wrap:wrap}
+.downgrade-options{display:grid;gap:8px;margin:10px 0 14px}.downgrade-option{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}.downgrade-option:has(input:checked){box-shadow:0 0 0 2px var(--mint-strong)}.downgrade-option small{display:block;color:var(--soft);font-size:12px}.downgrade-lead{margin:12px 0 0}

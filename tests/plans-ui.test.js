@@ -31,3 +31,22 @@ test('plans, phase 2: My Plan shows the three plans and the subscription page se
   const backend = read('backend.js');
   assert.ok(backend.includes(".select('status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id,plan')"), 'the subscription state carries the plan');
 });
+
+test('plans, phase 4a: the scheduled downgrade has one shared cleanup, a runner, a table and the screens', () => {
+  assert.equal(read('supabase/functions/billing/plan-cleanup.ts'), read('supabase/functions/billing-reconcile/plan-cleanup.ts'), 'the two plan-cleanup.ts copies must stay identical');
+  const migration = read('supabase/migrations/20261109130000_plan_downgrade.sql');
+  assert.match(migration, /create unique index workspace_plan_changes_one_pending_idx[\s\S]*where status in \('scheduled', 'running'\)/);
+  assert.match(migration, /revoke all on public\.workspace_plan_changes from public, anon, authenticated/);
+  assert.match(migration, /grant all on public\.workspace_plan_changes to service_role/);
+  const reconcile = read('supabase/functions/billing-reconcile/index.ts');
+  assert.match(reconcile, /runDueDowngrades\(\)[\s\S]*return await run\(\)/, 'the runner goes first and never stops the daily comparison');
+  assert.match(reconcile, /subscription\.plan === "business"/, 'nothing is deleted before Stripe moved the subscription to Business');
+  const builder = read('builder.js');
+  assert.match(builder, /function showDowngradeModal/);
+  assert.match(builder, /DELETE/, 'deleting companies needs a typed confirmation');
+  assert.match(builder, /plan-change-banner/);
+  assert.match(builder, /overCompanyLimit\(\)\) \{ showChooseCompanyModal/, 'publishing is blocked while a Business workspace holds several companies');
+  assert.match(builder, /new MutationObserver\(\(\) => \{ if \(!root\.querySelector\('\.plan-change-banner'\)\)/, 'the banner is painted again after every screen');
+  const backend = read('backend.js');
+  for (const name of ['scheduleDowngrade', 'cancelDowngrade', 'resolveCompanyLimit', 'getPlanChange']) assert.match(backend, new RegExp(name + ','));
+});

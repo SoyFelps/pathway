@@ -503,6 +503,59 @@
     return payload.payment_method;
   }
 
+  // The billing function with an action and the usual error handling (the server message is translated by its text).
+  async function billingAction(body, fallbackMessage) {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(BILLING_FUNCTION, {
+        method: 'POST',
+        headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: billingBody(body)
+      });
+    } catch (_) {
+      throw new Error(t('Could not reach the billing service. Check your connection and try again.'));
+    }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok) throw new Error(payload.error ? t(payload.error) : t(fallbackMessage));
+    return payload;
+  }
+  // Agency to Business, scheduled for the end of the period already paid (plano-planos.md, phase 4a). Nothing is deleted when it is scheduled.
+  const scheduleDowngrade = keepCompanyId => billingAction({ action: 'scheduleDowngrade', keepCompanyId: keepCompanyId || '', confirmed: true }, 'The change to Business could not be scheduled.');
+  const cancelDowngrade = () => billingAction({ action: 'cancelDowngrade' }, 'The scheduled change could not be cancelled.');
+  // A Business workspace that still holds more than one company: delete the others after the person chose one. Call again until finished.
+  const resolveCompanyLimit = keepCompanyId => billingAction({ action: 'resolveCompanyLimit', keepCompanyId, confirmed: true }, 'The companies could not be deleted.');
+  // The pending downgrade of the workspace (the owner may read it), or null.
+  async function getPlanChange(workspaceId) {
+    await requireSession();
+    const { data, error } = await client.from('workspace_plan_changes').select('id,keep_company_id,effective_at,status,last_error')
+      .eq('workspace_id', workspaceId).in('status', ['scheduled', 'running']).maybeSingle();
+    if (error) throw translatedError(error);
+    return data ? { id: data.id, keepCompanyId: data.keep_company_id || null, effectiveAt: data.effective_at, status: data.status, lastError: data.last_error || null } : null;
+  }
+  // How much would go with a company: its jobs, applications and AI interviews (the owner reads them with the usual access rules).
+  async function countCompanyData(flowIds) {
+    await requireSession();
+    const ids = (flowIds || []).filter(id => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id));
+    if (!ids.length) return { applications: 0, interviews: 0 };
+    const [applications, interviews] = await Promise.all([
+      client.from('applicants').select('id', { count: 'exact', head: true }).in('flow_id', ids),
+      client.from('ai_interviews').select('id', { count: 'exact', head: true }).in('flow_id', ids)
+    ]);
+    if (applications.error) throw translatedError(applications.error);
+    return { applications: applications.count || 0, interviews: interviews.error ? 0 : (interviews.count || 0) };
+  }
+  // Every application of some jobs, for the CSV a person takes before deleting a company (the details of one candidate stay in "Export data").
+  async function listApplicationsOfFlows(flowIds) {
+    await requireSession();
+    const ids = (flowIds || []).filter(id => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id));
+    if (!ids.length) return [];
+    const { data, error } = await client.from('applicants').select('flow_id,candidate_name,candidate_email,status,submitted_at').in('flow_id', ids).order('submitted_at', { ascending: false }).limit(5000);
+    if (error) throw translatedError(error);
+    return data || [];
+  }
+
   // Business to Agency on an active subscription: the plan changes now and Stripe charges the difference for the rest of the period.
   async function changePlan(plan) {
     const session = await requireSession();
@@ -568,7 +621,7 @@
   async function listCompanies(workspaceId) {
     await requireSession();
     const { data, error } = await client.from('workspace_companies').select('id,workspace_id,name,description,logo_path,primary_color,created_at')
-      .eq('workspace_id', workspaceId).order('created_at', { ascending: true }).limit(3);
+      .eq('workspace_id', workspaceId).order('created_at', { ascending: true }).limit(10); // the Agency plan holds up to 10
     if (error) throw translatedError(error);
     return (data || []).map(companyRecord);
   }
@@ -1185,6 +1238,12 @@
     deleteAccount,
     createCheckoutSession,
     changePlan,
+    scheduleDowngrade,
+    cancelDowngrade,
+    resolveCompanyLimit,
+    getPlanChange,
+    countCompanyData,
+    listApplicationsOfFlows,
     createPaymentMethodUpdateSession,
     getCurrentPaymentMethodSummary,
     listPaymentHistory,
