@@ -17,7 +17,7 @@ test('confirmation e-mail is written in English and names the role and the compa
   }
   assert.match(mail.text, /Thank you for applying/);
   assert.match(mail.text, /Please do not reply/);
-  assert.equal(mail.fromName, 'CoreFront via Pathway');
+  assert.equal(mail.fromName, 'CoreFront via Nellio');
 });
 
 test('candidate-controlled values cannot inject HTML or e-mail headers', async () => {
@@ -33,7 +33,7 @@ test('candidate-controlled values cannot inject HTML or e-mail headers', async (
   assert.match(mail.html, /&lt;img/);
   assert.equal(/[<>"@,]/.test(mail.fromName), false);
   assert.equal(safeDisplayName('"><x>'), 'x');
-  assert.equal(safeDisplayName('   '), 'Pathway');
+  assert.equal(safeDisplayName('   '), 'Nellio');
 });
 
 test('missing or oversized values fall back to safe defaults', async () => {

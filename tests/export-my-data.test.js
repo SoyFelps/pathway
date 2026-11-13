@@ -94,13 +94,13 @@ test('the legal page explains the self-service data rights tools', () => {
   const html = read('legal.html');
   assert.ok(html.includes('<strong>download a copy of their data</strong>') && html.includes('never includes passwords'));
   assert.ok(html.includes('<strong>export the application data held about a candidate</strong>') && html.includes('<strong>delete a candidate</strong>'));
-  assert.ok(html.includes('The employer can export or permanently delete your application data from within Pathway.'));
+  assert.ok(html.includes('The employer can export or permanently delete your application data from within Nellio.'));
   assert.ok(html.includes('Candidates’ requests.') && html.includes('“Export data” button') && html.includes('“Delete candidate” button'));
   assert.ok(html.includes('(“Download my data”)') && html.includes('(“Export data”)'));
   assert.ok(html.includes('Version 2026-10-26-v9'));
 });
 
-test('internal comments stay inside Pathway: not in the database export, and the legal page says so', () => {
+test('internal comments stay inside Nellio: not in the database export, and the legal page says so', () => {
   const sql = read('supabase/migrations/20261019230000_export_my_data_without_comments.sql');
   assert.ok(sql.includes('create or replace function public.export_my_data()'));
   assert.equal(/commentsWritten|applicant_comments/.test(sql.replace(/^--.*$/gm, '')), false, 'the function no longer reads comments');

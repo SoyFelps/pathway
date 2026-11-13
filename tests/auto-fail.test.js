@@ -123,7 +123,7 @@ test('the hiring team sees why a candidate was moved to Failed', () => {
 test('the legal page explains answer-based auto-fail and keeps human responsibility with the employer', () => {
   const html = read('legal.html');
   assert.ok(html.includes('when an answer is marked “auto-fail” or a number is below a minimum you set'));
-  assert.ok(html.includes('Pathway does not send automatic rejection messages'));
+  assert.ok(html.includes('Nellio does not send automatic rejection messages'));
   assert.ok(html.includes('automatically place an application in a “Failed” list'));
   assert.ok(html.includes('LGPD art. 20 and GDPR art. 22'));
   assert.ok(html.includes('Version 2026-10-26-v9'));

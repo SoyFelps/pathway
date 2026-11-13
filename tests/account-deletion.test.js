@@ -19,7 +19,7 @@ test('Settings and workspace setup expose the shared password-confirmed account 
 
 test('confirmation explains the distinct owner/member outcomes and never submits without a password', () => {
   const auth = read('auth.js');
-  assert.match(auth, /deletes your Pathway account and workspace[\s\S]*candidate applications, private resumes/i);
+  assert.match(auth, /deletes your Nellio account and workspace[\s\S]*candidate applications, private resumes/i);
   assert.match(auth, /Any subscription attached to the workspace will be canceled immediately/i);
   assert.match(auth, /workspace, job flows, candidate applications, private resumes, and subscription remain/i);
   assert.match(auth, /if \(submitting \|\| !passwordInput\.value\) return/);
@@ -99,8 +99,8 @@ test('delete-account Edge Function is explicitly JWT-protected and frontend asse
   const config = read('supabase/config.toml');
   const html = read('index.html');
   assert.match(config, /\[functions\.delete-account\]\s*\nverify_jwt = true/);
-  assert.match(html, /styles\.css\?v=mw3-20261109f/);
-  assert.match(html, /backend\.js\?v=mw3-20261109f/);
-  assert.match(html, /auth\.js\?v=mw3-20261109f/);
-  assert.match(html, /builder\.js\?v=mw3-20261109f/);
+  assert.match(html, /styles\.css\?v=mw3-20261113a/);
+  assert.match(html, /backend\.js\?v=mw3-20261113a/);
+  assert.match(html, /auth\.js\?v=mw3-20261113a/);
+  assert.match(html, /builder\.js\?v=mw3-20261113a/);
 });

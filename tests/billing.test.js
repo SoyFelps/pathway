@@ -55,14 +55,14 @@ test('My Plan shows account status and requires confirmation before scheduling c
   assert.match(builder, /keepPremiumSubscription\(\)/);
   assert.match(builder, /Schedule cancellation/);
   assert.match(builder, /keep your plan and published job links until/);
-  assert.match(builder, /Pathway will turn off renewal with Stripe/);
+  assert.match(builder, /Nellio will turn off renewal with Stripe/);
   assert.match(builder, /cancelSubscriptionAtPeriodEnd\(\)/);
   assert.match(builder, /Cancellation scheduled/);
   const start = builder.indexOf('function renderMyPlan()');
   const end = builder.indexOf('function renderApplicantBoard(', start);
   const planScreen = builder.slice(start, end);
   assert.doesNotMatch(planScreen, /plan-state-chip/);
-  for (const benefit of ['Publish your job flow', 'Share a public job link', 'Receive applications in Pathway', 'Review candidates and resumes', 'Approve or reject candidates']) {
+  for (const benefit of ['Publish your job flow', 'Share a public job link', 'Receive applications in Nellio', 'Review candidates and resumes', 'Approve or reject candidates']) {
     assert.ok(planScreen.includes(benefit), `missing Free-plan Premium benefit: ${benefit}`);
   }
   assert.match(planScreen, /id="my-plan-benefits-upgrade"/);
@@ -122,7 +122,7 @@ test('payment-method summary is authenticated, uses Stripe default-method preced
   assert.doesNotMatch(builder, /card\.number|card\.cvc/);
 });
 
-test('payment history is authenticated, paginated, and restricted to verified Pathway subscriptions', () => {
+test('payment history is authenticated, paginated, and restricted to verified Nellio subscriptions', () => {
   const edge = read('supabase/functions/billing/index.ts');
   const backend = read('backend.js');
   const builder = read('builder.js');
@@ -154,9 +154,9 @@ test('payment history is authenticated, paginated, and restricted to verified Pa
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=mw3-20261109f/);
-  assert.match(html, /builder\.js\?v=mw3-20261109f/);
-  assert.match(html, /styles\.css\?v=mw3-20261109f/);
+  assert.match(html, /backend\.js\?v=mw3-20261113a/);
+  assert.match(html, /builder\.js\?v=mw3-20261113a/);
+  assert.match(html, /styles\.css\?v=mw3-20261113a/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);

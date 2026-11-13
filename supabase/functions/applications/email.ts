@@ -32,11 +32,11 @@ const COPY: Record<Language, {
     greeting: (name) => `Hi ${name},`,
     thanks: (job, company) => `Thank you for applying for ${job} at ${company}. This message confirms that your application and resume were received.`,
     review: (company) => `The hiring team at ${company} will review your application and contact you if they would like to move forward.`,
-    automated: (company) => `This is an automated message sent by Pathway on behalf of ${company}. Please do not reply to this e-mail.`,
+    automated: (company) => `This is an automated message sent by Nellio on behalf of ${company}. Please do not reply to this e-mail.`,
     eyebrow: "Application received",
     heading: (name) => `Thanks for applying, ${name}.`,
     confirmHtml: (job, company) => `We confirm that your application for <strong>${job}</strong> at <strong>${company}</strong> and your resume were received.`,
-    footer: (company) => `Automated message sent by Pathway on behalf of ${company}. Please do not reply to this e-mail.`,
+    footer: (company) => `Automated message sent by Nellio on behalf of ${company}. Please do not reply to this e-mail.`,
   },
   pt: {
     htmlLang: "pt-BR", fallbackName: "", fallbackJob: "a vaga em aberto", fallbackCompany: "a equipe de contratação",
@@ -44,11 +44,11 @@ const COPY: Record<Language, {
     greeting: (name) => name ? `Olá, ${name},` : "Olá,",
     thanks: (job, company) => `Obrigado por se candidatar para ${job} – ${company}. Esta mensagem confirma que sua candidatura e seu currículo foram recebidos.`,
     review: (company) => `A equipe de contratação de ${company} vai avaliar sua candidatura e entrará em contato se quiser seguir com o processo.`,
-    automated: (company) => `Esta é uma mensagem automática enviada pelo Pathway em nome de ${company}. Por favor, não responda a este e-mail.`,
+    automated: (company) => `Esta é uma mensagem automática enviada pelo Nellio em nome de ${company}. Por favor, não responda a este e-mail.`,
     eyebrow: "Candidatura recebida",
     heading: (name) => name ? `Obrigado por se candidatar, ${name}.` : "Obrigado por se candidatar.",
     confirmHtml: (job, company) => `Confirmamos que sua candidatura para <strong>${job}</strong> – <strong>${company}</strong> e seu currículo foram recebidos.`,
-    footer: (company) => `Mensagem automática enviada pelo Pathway em nome de ${company}. Por favor, não responda a este e-mail.`,
+    footer: (company) => `Mensagem automática enviada pelo Nellio em nome de ${company}. Por favor, não responda a este e-mail.`,
   },
   es: {
     htmlLang: "es", fallbackName: "", fallbackJob: "la vacante", fallbackCompany: "el equipo de selección",
@@ -56,11 +56,11 @@ const COPY: Record<Language, {
     greeting: (name) => name ? `Hola, ${name}:` : "Hola:",
     thanks: (job, company) => `Gracias por postularse para ${job} – ${company}. Este mensaje confirma que recibimos su postulación y su currículum.`,
     review: (company) => `El equipo de selección de ${company} revisará su postulación y se pondrá en contacto con usted si desea avanzar en el proceso.`,
-    automated: (company) => `Este es un mensaje automático enviado por Pathway en nombre de ${company}. Por favor, no responda a este correo.`,
+    automated: (company) => `Este es un mensaje automático enviado por Nellio en nombre de ${company}. Por favor, no responda a este correo.`,
     eyebrow: "Postulación recibida",
     heading: (name) => name ? `Gracias por postularse, ${name}.` : "Gracias por postularse.",
     confirmHtml: (job, company) => `Confirmamos que recibimos su postulación para <strong>${job}</strong> – <strong>${company}</strong> y su currículum.`,
-    footer: (company) => `Mensaje automático enviado por Pathway en nombre de ${company}. Por favor, no responda a este correo.`,
+    footer: (company) => `Mensaje automático enviado por Nellio en nombre de ${company}. Por favor, no responda a este correo.`,
   },
 };
 
@@ -98,7 +98,7 @@ export function escapeHtml(value: string): string {
 
 /** Display name for the From header: no quotes, angle brackets or other characters that could break the header. */
 export function safeDisplayName(value: string): string {
-  return singleLine(value, 60).replace(/["<>@\\,;:()[\]]/g, "").trim() || "Pathway";
+  return singleLine(value, 60).replace(/["<>@\\,;:()[\]]/g, "").trim() || "Nellio";
 }
 
 export function buildConfirmationEmail(input: ConfirmationInput): ConfirmationEmail {
@@ -148,5 +148,5 @@ export function buildConfirmationEmail(input: ConfirmationInput): ConfirmationEm
   </body>
 </html>`;
 
-  return { subject, text, html, fromName: safeDisplayName(`${company} via Pathway`) };
+  return { subject, text, html, fromName: safeDisplayName(`${company} via Nellio`) };
 }

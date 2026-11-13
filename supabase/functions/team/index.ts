@@ -284,9 +284,9 @@ async function handle(req: Request): Promise<Response> {
       if (!context.premiumActive) return fail(req, 403, "An active plan is required to invite team members.");
       let appUrl: URL;
       try { appUrl = new URL(cleanText(body.appUrl, 500)); }
-      catch { return fail(req, 400, "The Pathway return address is invalid."); }
+      catch { return fail(req, 400, "The Nellio return address is invalid."); }
       if (!APP_ORIGINS.has(appUrl.origin) || appUrl.username || appUrl.password || appUrl.search || appUrl.hash || !/(?:^|\/)(?:index\.html|pathway\/)?$/.test(appUrl.pathname)) {
-        return fail(req, 400, "The Pathway return address is not allowed.");
+        return fail(req, 400, "The Nellio return address is not allowed.");
       }
       const email = cleanText(body.email).toLowerCase();
       const permissions = normalizePermissions(body.permissions);
@@ -317,9 +317,9 @@ async function handle(req: Request): Promise<Response> {
       if (!UUID_RE.test(invitationId)) return fail(req, 400, "Choose a valid invitation.");
       let appUrl: URL;
       try { appUrl = new URL(cleanText(body.appUrl, 500)); }
-      catch { return fail(req, 400, "The Pathway return address is invalid."); }
+      catch { return fail(req, 400, "The Nellio return address is invalid."); }
       if (!APP_ORIGINS.has(appUrl.origin) || appUrl.username || appUrl.password || appUrl.search || appUrl.hash || !/(?:^|\/)(?:index\.html|pathway\/)?$/.test(appUrl.pathname)) {
-        return fail(req, 400, "The Pathway return address is not allowed.");
+        return fail(req, 400, "The Nellio return address is not allowed.");
       }
       const { data: existing, error: lookupError } = await admin.from("workspace_invitations")
         .select("id,token_hash,encrypted_token").eq("id", invitationId).eq("workspace_id", workspaceId).eq("status", "pending")

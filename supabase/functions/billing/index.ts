@@ -224,7 +224,7 @@ Deno.serve(async (req: Request) => {
         const { error: syncError } = await admin.from("workspace_subscriptions")
           .update({ status: "canceled", current_period_end: new Date().toISOString(), cancel_at_period_end: false })
           .eq("workspace_id", workspace.id);
-        if (syncError) return fail(req, 503, "Stripe canceled the subscription, but Pathway could not finish workspace cleanup. The workspace was kept; retry deletion.");
+        if (syncError) return fail(req, 503, "Stripe canceled the subscription, but Nellio could not finish workspace cleanup. The workspace was kept; retry deletion.");
       } catch (error) {
         console.error("Stripe immediate cancellation during workspace deletion failed", error);
         return fail(req, 502, "Stripe could not cancel the subscription. The workspace was kept; retry deletion before deleting it.");
@@ -372,7 +372,7 @@ Deno.serve(async (req: Request) => {
         .eq("workspace_id", workspace.id);
       if (syncError) {
         console.error("Subscription renewal was restored in Stripe but could not be synced to Pathway", syncError);
-        return fail(req, 503, "Stripe restored your renewal, but Pathway is still syncing. Refresh the page in a moment.");
+        return fail(req, 503, "Stripe restored your renewal, but Nellio is still syncing. Refresh the page in a moment.");
       }
       return response(req, 200, {
         status: updated.status,
@@ -539,7 +539,7 @@ Deno.serve(async (req: Request) => {
       const { error: syncError } = await admin.from("workspace_subscriptions").update({ plan: "agency" }).eq("workspace_id", workspace.id);
       if (syncError) {
         console.error("The plan was changed in Stripe but could not be synced to Pathway", syncError);
-        return fail(req, 503, "Stripe moved your plan, but Pathway is still syncing. Refresh the page in a moment.");
+        return fail(req, 503, "Stripe moved your plan, but Nellio is still syncing. Refresh the page in a moment.");
       }
       return response(req, 200, { plan: "agency", status: updated.status });
     } catch (error) {

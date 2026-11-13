@@ -83,7 +83,7 @@ test('a Customize button opens a modal that turns stages on and off; Failed, New
   assert.match(migration, /check \(status in \('failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'\)\)/);
   assert.match(migration, /public\.workspace_user_has_permission\(workspace_id, 'applicants'\)/);
   assert.match(read('styles.css'), /\.stage-option\.is-locked\{cursor:not-allowed\}/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261109f/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261113a/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -158,22 +158,22 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=mw3-20261109f/);
-  assert.match(read('index.html'), /pathway\.js\?v=mw3-20261109f/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261109f/);
-  assert.match(read('index.html'), /candidate\.js\?v=mw3-20261109f/);
-  assert.match(read('apply.html'), /styles\.css\?v=mw3-20261109f/);
-  assert.match(read('index.html'), /styles\.css\?v=mw3-20261109f/);
-  assert.match(read('apply.html'), /backend\.js\?v=mw3-20261109f/);
+  assert.match(read('apply.html'), /pathway\.js\?v=mw3-20261113a/);
+  assert.match(read('index.html'), /pathway\.js\?v=mw3-20261113a/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261113a/);
+  assert.match(read('index.html'), /candidate\.js\?v=mw3-20261113a/);
+  assert.match(read('apply.html'), /styles\.css\?v=mw3-20261113a/);
+  assert.match(read('index.html'), /styles\.css\?v=mw3-20261113a/);
+  assert.match(read('apply.html'), /backend\.js\?v=mw3-20261113a/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
-test('Pathway brand in candidate details and questions returns to app home', () => {
+test('Nellio brand in candidate details and questions returns to app home', () => {
   const candidate = read('candidate.js');
   const auth = read('auth.js');
   const builder = read('builder.js');
-  assert.equal((candidate.match(/<a class="brand" href="\.\/" aria-label="\$\{t\('Pathway home'\)\}">/g) || []).length, 2);
-  assert.doesNotMatch(candidate, /<a class="brand" href="#" aria-label="Pathway">/);
+  assert.equal((candidate.match(/<a class="brand" href="\.\/" aria-label="\$\{t\('Nellio home'\)\}">/g) || []).length, 2);
+  assert.doesNotMatch(candidate, /<a class="brand" href="#" aria-label="Nellio">/);
   assert.match(auth, /if \(context\.session\)[\s\S]*?onAuthenticated\(context\); return;[\s\S]*?renderAuth\(\);/);
   assert.match(builder, /else renderDashboard\(\);/);
 });

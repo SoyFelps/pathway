@@ -26,7 +26,7 @@ test('plans, phase 2: My Plan shows the three plans and the subscription page se
   assert.ok(builder.includes('function planCompareHtml()') && builder.includes("root.querySelector('.my-plan-page')?.insertAdjacentHTML('beforeend', planCompareHtml());"));
   assert.ok(builder.includes("C.planCardsHtml({ t, tn, esc }, { business: action('business'), agency: action('agency') }, current)"));
   assert.ok(builder.includes("function openSubscriptionPage(plan) {\n    chosenPlan = plan === 'agency' ? 'agency' : 'business';"));
-  assert.ok(builder.includes("t('Pathway {plan} subscription', { plan: planName(chosenPlan) })"));
+  assert.ok(builder.includes("t('Nellio {plan} subscription', { plan: planName(chosenPlan) })"));
   assert.ok(builder.includes("${esc(planPrice(chosenPlan))}"));
   const backend = read('backend.js');
   assert.ok(backend.includes(".select('status,current_period_end,cancel_at_period_end,stripe_customer_id,stripe_subscription_id,plan')"), 'the subscription state carries the plan');

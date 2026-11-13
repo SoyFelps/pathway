@@ -21,7 +21,7 @@ test('under the main button, people agree to the Terms of Use and Privacy Policy
 test('legal.html holds the Terms of Use, Privacy Policy, Data Processing Terms and the provider list', () => {
   const html = read('legal.html');
   for (const id of ['terms', 'privacy', 'processing', 'subprocessors']) assert.ok(html.includes(`<article id="${id}"`), `section ${id}`);
-  assert.ok(html.includes('<title>Terms of Use and Privacy Policy · Pathway</title>'));
+  assert.ok(html.includes('<title>Terms of Use and Privacy Policy · Nellio</title>'));
   assert.ok(html.includes('Version 2026-10-26-v9'));
 });
 

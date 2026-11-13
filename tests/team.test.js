@@ -60,7 +60,7 @@ test('invitation auth accepts the invited email, allows existing-account sign-in
   assert.match(read('builder.js'), /Create a workspace/);
   assert.doesNotMatch(auth, /already belongs to a workspace|renderInviteConflict/);
   assert.match(auth, /You can belong to several workspaces and create your own whenever you like\./);
-  assert.match(auth, /After confirmation, Pathway will add you to the invited workspace automatically/);
+  assert.match(auth, /After confirmation, Nellio will add you to the invited workspace automatically/);
   assert.doesNotMatch(auth, /reopen the copied invitation link to finish joining/i);
   assert.match(backend, /pathway_team_invite_pending/);
   assert.match(backend, /emailRedirectTo: window\.location\.origin \+ window\.location\.pathname/);
@@ -155,10 +155,10 @@ test('My Team shows the seats of the plan, defaults permissions on, and supports
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=mw3-20261109f/);
-  assert.match(html, /backend\.js\?v=mw3-20261109f/);
-  assert.match(html, /builder\.js\?v=mw3-20261109f/);
-  assert.match(html, /styles\.css\?v=mw3-20261109f/);
+  assert.match(html, /auth\.js\?v=mw3-20261113a/);
+  assert.match(html, /backend\.js\?v=mw3-20261113a/);
+  assert.match(html, /builder\.js\?v=mw3-20261113a/);
+  assert.match(html, /styles\.css\?v=mw3-20261113a/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
