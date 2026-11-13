@@ -6,6 +6,20 @@
   const root = document.getElementById('app');
   const modalRoot = document.getElementById('modal-root');
   const toast = document.getElementById('toast');
+  // Copies text to the clipboard. Some browsers (embedded ones, or pages without permission) refuse the Clipboard API: then a hidden field and the
+  // older copy command are tried. It throws when nothing worked, so callers keep their "select the link" fallback.
+  async function copyText(text) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try { await navigator.clipboard.writeText(text); return; } catch (_) { /* try the older way below */ }
+    }
+    const field = document.createElement('textarea');
+    field.value = text; field.setAttribute('readonly', '');
+    field.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+    document.body.appendChild(field);
+    let copied = false;
+    try { field.select(); field.setSelectionRange(0, text.length); copied = document.execCommand('copy'); } finally { field.remove(); }
+    if (!copied) throw new Error('Clipboard access is unavailable.');
+  }
   const ICONS = {
     published: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9S14.5 18.3 12 21c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>',
     flows: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
@@ -2618,7 +2632,7 @@
       setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Invitation created')}</div><h2>${t('Share this secure link.')}</h2><p>${t('The link is unique, can be used once, and expires in 7 days. It works only for {email}.', { email: `<strong>${esc(email)}</strong>` })}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><label class="form-label" for="team-invite-link">${t('Invitation link')}</label><input class="text-input" id="team-invite-link" readonly value="${esc(result.url)}"><div class="modal-actions"><button class="btn" data-close>${t('Done')}</button><button class="btn btn-primary" id="copy-team-invite">${t('Copy invitation link')}</button></div>`);
       modalRoot.querySelector('#copy-team-invite').addEventListener('click', async () => {
         const input = modalRoot.querySelector('#team-invite-link');
-        try { await navigator.clipboard.writeText(result.url); showToast(t('Invitation link copied.')); closeModal(); }
+        try { await copyText(result.url); showToast(t('Invitation link copied.')); closeModal(); }
         catch (_) { input.focus(); input.select(); showToast(t('Link selected. Copy it to your clipboard.')); }
       });
       void renderMyTeam();
@@ -2675,7 +2689,7 @@
       setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Pending invitation')}</div><h2>${t('Copy the invitation link.')}</h2><p>${t('This link is for {email}.', { email: `<strong>${esc(email)}</strong>` })} ${esc(detail)}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><label class="form-label" for="team-invite-link">${t('Invitation link')}</label><input class="text-input" id="team-invite-link" readonly value="${esc(result.url)}"><div class="modal-actions"><button class="btn" data-close>${t('Done')}</button><button class="btn btn-primary" id="copy-team-invite">${t('Copy invitation link')}</button></div>`);
       modalRoot.querySelector('#copy-team-invite').addEventListener('click', async () => {
         const input = modalRoot.querySelector('#team-invite-link');
-        try { await navigator.clipboard.writeText(result.url); showToast(t('Invitation link copied.')); closeModal(); }
+        try { await copyText(result.url); showToast(t('Invitation link copied.')); closeModal(); }
         catch (_) { input.focus(); input.select(); showToast(t('Link selected. Copy it to your clipboard.')); }
       });
     } catch (error) {
@@ -4862,15 +4876,14 @@
     try { link = window.PathwayBackend.getPublishedJobUrl(flow); }
     catch (error) { showToast(t(error.message || 'This flow has no active public link.')); return; }
     try {
-      if (!navigator.clipboard?.writeText) throw new Error('Clipboard access is unavailable.');
-      await navigator.clipboard.writeText(link);
+      await copyText(link);
       if (closeOnSuccess) closeModal();
       showToast(t('Public job link copied.'));
     } catch (_) {
       setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Public job link')}</div><h2>${t('Copy this link to share the role.')}</h2><p>${t('This URL opens the published candidate experience.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><input class="text-input" id="job-link-fallback" aria-label="${t('Public job link')}" readonly value="${esc(link)}"><div class="modal-actions"><button class="btn btn-primary" id="copy-job-link-fallback">${t('Copy job link')}</button></div>`);
       const input = modalRoot.querySelector('#job-link-fallback'); input.focus(); input.select();
       modalRoot.querySelector('#copy-job-link-fallback').addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(link); closeModal(); showToast(t('Public job link copied.')); }
+        try { await copyText(link); closeModal(); showToast(t('Public job link copied.')); }
         catch (_) { input.focus(); input.select(); showToast(t('Link selected. Copy it to your clipboard.')); }
       });
     }
@@ -4908,7 +4921,7 @@
     catch (error) { if (publishButton) { publishButton.disabled = false; publishButton.textContent = t('Publish') + ' ↗'; } showToast(error.message || t('This application could not be published.')); return; }
     setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Published snapshot')}</div><h2>${t('Your job page is ready to share.')}</h2><p>${t('Candidates see the currently published version. Use Publish changes to update this same job link after editing.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div><div class="publish-link" id="share-url">${esc(link)}</div><div class="modal-actions"><button class="btn" id="open-link">${t('Open candidate page')}</button><button class="btn btn-primary" id="copy-link">${ICONS.copy} &nbsp;${t('Copy link')}</button></div>`);
     modalRoot.querySelector('#copy-link').addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(link); showToast(t('Application link copied.')); closeModal(); }
+      try { await copyText(link); showToast(t('Application link copied.')); closeModal(); }
       catch (_) { const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(modalRoot.querySelector('#share-url')); selection.removeAllRanges(); selection.addRange(range); showToast(t('Select and copy the highlighted link.')); }
     });
     modalRoot.querySelector('#open-link').addEventListener('click', () => window.open(link, '_blank', 'noopener'));
