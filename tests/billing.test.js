@@ -154,9 +154,9 @@ test('payment history is authenticated, paginated, and restricted to verified Ne
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=mw3-20261113b/);
-  assert.match(html, /builder\.js\?v=mw3-20261113b/);
-  assert.match(html, /styles\.css\?v=mw3-20261113b/);
+  assert.match(html, /backend\.js\?v=mw3-20261113c/);
+  assert.match(html, /builder\.js\?v=mw3-20261113c/);
+  assert.match(html, /styles\.css\?v=mw3-20261113c/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);
@@ -247,7 +247,8 @@ test('database gates block direct publication without active billing and public 
 
 test('Stripe server secrets and live configuration requirements are documented without committing secret keys', () => {
   const todo = read('STRIPE_INTEGRATION_TODO.md');
-  const config = read('stripe-config.js');
+  // The COMMITTED file is what is checked: a developer's local copy may hold another account's publishable key (the staging Stripe) and is hidden from git.
+  const config = require('node:child_process').execFileSync('git', ['show', 'HEAD:stripe-config.js'], { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
   assert.match(todo, /STRIPE_SECRET_KEY/);
   assert.match(todo, /STRIPE_PRICE_ID/);
   assert.match(todo, /STRIPE_WEBHOOK_SECRET/);

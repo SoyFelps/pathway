@@ -1383,6 +1383,8 @@
       try {
         subscription = await window.PathwayBackend.getSubscriptionState(workspace.id);
         if (subscription.active) {
+          // The plan shown in the header, the company limit and the free-plan locks come from the list of workspaces, so it is read again too.
+          try { myWorkspaces = await window.PathwayBackend.listMyWorkspaces(); } catch (_) { /* the next screen load reads it again */ }
           if (subscriptionReturnPage === 'my-plan') renderMyPlan();
           else renderDashboard();
           showToast(t('Your plan is active. You can now publish job flows.'));

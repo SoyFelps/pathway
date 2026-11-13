@@ -50,3 +50,10 @@ test('plans, phase 4a: the scheduled downgrade has one shared cleanup, a runner,
   const backend = read('backend.js');
   for (const name of ['scheduleDowngrade', 'cancelDowngrade', 'resolveCompanyLimit', 'getPlanChange']) assert.match(backend, new RegExp(name + ','));
 });
+
+test('plans: after a checkout the list of workspaces is read again, so the header plan, the company limit and the free-plan locks follow the new plan', () => {
+  const builder = read('builder.js');
+  const body = builder.slice(builder.indexOf('async function refreshSubscriptionAfterCheckout'), builder.indexOf('function renderSubscriptionPage'));
+  assert.match(body, /myWorkspaces = await window\.PathwayBackend\.listMyWorkspaces\(\)/);
+  assert.ok(body.indexOf('listMyWorkspaces') < body.indexOf('renderMyPlan()'), 'the list is read before the screen is drawn');
+});
