@@ -256,6 +256,17 @@
     if (!data) throw new Error(t('Could not save your language. Please refresh and try again.'));
     return data.ui_language || null;
   }
+  // Keeps a copy of the interface language in the sign-in account (user metadata), because the e-mails of Supabase Auth (password reset) can only read
+  // that, not the profile. Called when the app opens and when the language is changed. Never blocks or fails the app.
+  async function syncAuthLanguage(code) {
+    try {
+      if (!['en', 'pt-BR', 'es'].includes(code)) return;
+      const { data: authData } = await client.auth.getSession();
+      const user = authData?.session?.user;
+      if (!user || (user.user_metadata && user.user_metadata.ui_language === code)) return;
+      await client.auth.updateUser({ data: { ui_language: code } });
+    } catch (_) { /* the e-mails fall back to the three languages together */ }
+  }
   async function updateMyProfile(firstName, lastName) {
     await requireSession();
     const first = String(firstName || '').replace(/\s+/g, ' ').trim();
@@ -1203,6 +1214,7 @@
     markCommentMentionsSeen,
     updateMyProfile,
     updateMyLanguage,
+    syncAuthLanguage,
     listTeamOverview,
     getWorkspaceReport,
     getReportJobs,
@@ -1286,7 +1298,8 @@
       email,
       password,
       options: {
-        data: inviteToken ? { pathway_team_invite_pending: true, pathway_team_invite_hash: await sha256Hex(inviteToken), first_name: firstName, last_name: lastName } : { workspace_name: workspaceName, first_name: firstName, last_name: lastName },
+        // ui_language: the language chosen on the sign-up screen; the e-mail templates of Supabase Auth (confirm sign-up, reset password) read it to write in that language.
+        data: inviteToken ? { pathway_team_invite_pending: true, pathway_team_invite_hash: await sha256Hex(inviteToken), first_name: firstName, last_name: lastName, ui_language: window.PathwayI18n.language } : { workspace_name: workspaceName, first_name: firstName, last_name: lastName, ui_language: window.PathwayI18n.language },
         emailRedirectTo: window.location.origin + window.location.pathname
       }
     })

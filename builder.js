@@ -2827,6 +2827,7 @@
         const saved = await window.PathwayBackend.updateMyLanguage(chosen);
         if (myProfile) myProfile = { ...myProfile, uiLanguage: saved };
         I18N.setPreference(saved);
+        await window.PathwayBackend.syncAuthLanguage(I18N.language);
         await flushPendingWork();
         window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#settings`);
         window.location.reload();
@@ -4988,6 +4989,7 @@
       window.PathwayBackend.updateMyLanguage(chosen).catch(() => { /* kept in the browser; Settings can save it later */ });
     }
     if (myProfile) window.PathwayI18n.setPreference(myProfile.uiLanguage || null);
+    window.PathwayBackend.syncAuthLanguage(window.PathwayI18n.language); // for the language of the account e-mails (password reset); fire and forget
     isOwner = Boolean(context.isOwner);
     teamMember = context.teamMember || null;
     subscription = context.subscription || { status: 'free', active: false, currentPeriodEnd: null, cancelAtPeriodEnd: false };

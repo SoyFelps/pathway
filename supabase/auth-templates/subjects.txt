@@ -1,0 +1,8 @@
+Subjects for Supabase Auth, Emails, Templates (paste into the Subject field of each template).
+The subject field accepts the same template language as the body. If the dashboard refuses the conditions, use the plain subject "Nellio" (the body is still in the right language).
+
+[Confirm sign up]
+{{ if .Data.ui_language }}{{ if eq .Data.ui_language "pt-BR" }}Confirme sua conta Nellio{{ else if eq .Data.ui_language "es" }}Confirma tu cuenta de Nellio{{ else }}Confirm your Nellio account{{ end }}{{ else }}Confirm your Nellio account · Confirme sua conta Nellio · Confirma tu cuenta de Nellio{{ end }}
+
+[Reset password]
+{{ if .Data.ui_language }}{{ if eq .Data.ui_language "pt-BR" }}Redefina sua senha do Nellio{{ else if eq .Data.ui_language "es" }}Restablece tu contraseña de Nellio{{ else }}Reset your Nellio password{{ end }}{{ else }}Reset your Nellio password · Redefina sua senha do Nellio · Restablece tu contraseña de Nellio{{ end }}

@@ -133,3 +133,16 @@ test('a responsible-only change also ignores the browser timestamp stored inside
   assert.ok(sql.includes('new.updated_at := old.updated_at;') && sql.includes('new.updated_at := now();'));
   assert.equal(/\bgrant\b|\brevoke\b/i.test(sql.replace(/^--.*$/gm, '')), false, 'create or replace keeps the existing grants');
 });
+
+test('the language chosen at sign-up and the saved one travel with the account, so the Auth e-mails can be written in it', () => {
+  const backend = read('backend.js'), builder = read('builder.js');
+  // both sign-up shapes (own workspace and invitation) carry ui_language
+  assert.equal((backend.match(/ui_language: window\.PathwayI18n\.language/g) || []).length, 2);
+  // the copy in the account is refreshed when the app opens and when the language is changed, and it can never break the app
+  assert.ok(backend.includes('async function syncAuthLanguage(code)') && backend.includes('syncAuthLanguage,'));
+  assert.ok(backend.includes("client.auth.updateUser({ data: { ui_language: code } })"));
+  assert.ok(builder.includes('window.PathwayBackend.syncAuthLanguage(window.PathwayI18n.language);'));
+  assert.ok(builder.includes('await window.PathwayBackend.syncAuthLanguage(I18N.language);'));
+  const sync = backend.slice(backend.indexOf('async function syncAuthLanguage'), backend.indexOf('async function updateMyProfile'));
+  assert.ok(sync.includes('catch (_)'));
+});
