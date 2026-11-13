@@ -315,7 +315,7 @@
     return payload;
   }
 
-  async function deleteAccount(password) {
+  async function deleteAccount(password, captchaToken = '') {
     if (typeof password !== 'string' || !password.length) throw new Error(t('Enter your password to confirm account deletion.'));
     const session = await requireSession();
     let result;
@@ -323,7 +323,7 @@
       result = await fetch(DELETE_ACCOUNT_FUNCTION, {
         method: 'POST',
         headers: { apikey: config.publishableKey, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
+        body: JSON.stringify({ password, ...(captchaToken ? { captchaToken } : {}) })
       });
     } catch (_) {
       throw new Error(t('Could not reach the account service. Check your connection and try again.'));
@@ -1160,11 +1160,12 @@
     if (error) throw translatedError(error);
   }
 
-  async function sendPasswordReset(email) {
+  async function sendPasswordReset(email, captchaToken = '') {
     const cleanEmail = String(email || '').trim();
     if (!cleanEmail) throw new Error(t('Enter your work email address.'));
     const { error } = await client.auth.resetPasswordForEmail(cleanEmail, {
-      redirectTo: window.location.origin + window.location.pathname
+      redirectTo: window.location.origin + window.location.pathname,
+      ...(captchaToken ? { captchaToken } : {})
     });
     if (error) throw translatedError(error);
   }
@@ -1293,14 +1294,15 @@
     updatePassword,
     signOutLocal,
     consumePasswordRecovery,
-    signIn: (email, password) => client.auth.signInWithPassword({ email, password }),
-    signUp: async (email, password, workspaceName, inviteToken = '', firstName = '', lastName = '') => client.auth.signUp({
+    signIn: (email, password, captchaToken = '') => client.auth.signInWithPassword({ email, password, ...(captchaToken ? { options: { captchaToken } } : {}) }),
+    signUp: async (email, password, workspaceName, inviteToken = '', firstName = '', lastName = '', captchaToken = '') => client.auth.signUp({
       email,
       password,
       options: {
         // ui_language: the language chosen on the sign-up screen; the e-mail templates of Supabase Auth (confirm sign-up, reset password) read it to write in that language.
         data: inviteToken ? { pathway_team_invite_pending: true, pathway_team_invite_hash: await sha256Hex(inviteToken), first_name: firstName, last_name: lastName, ui_language: window.PathwayI18n.language } : { workspace_name: workspaceName, first_name: firstName, last_name: lastName, ui_language: window.PathwayI18n.language },
-        emailRedirectTo: window.location.origin + window.location.pathname
+        emailRedirectTo: window.location.origin + window.location.pathname,
+        ...(captchaToken ? { captchaToken } : {})
       }
     })
   };

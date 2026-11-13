@@ -1026,3 +1026,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .plan-card-action:disabled{opacity:.6;cursor:default}
 .plan-change-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding:10px 20px;background:var(--amber-bg);border-bottom:1px solid var(--amber-border);color:var(--amber-dark);font-size:13px;line-height:1.45}.plan-change-banner strong{color:inherit}.plan-change-actions{display:flex;gap:8px;flex-wrap:wrap}
 .downgrade-options{display:grid;gap:8px;margin:10px 0 14px}.downgrade-option{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}.downgrade-option:has(input:checked){box-shadow:0 0 0 2px var(--mint-strong)}.downgrade-option small{display:block;color:var(--soft);font-size:12px}.downgrade-lead{margin:12px 0 0}
+
+/* Security check (Cloudflare Turnstile) on the account screens: invisible unless Cloudflare asks for a human check. */
+.auth-captcha { display: flex; justify-content: center; margin: 0 0 12px; }
+.auth-captcha:empty { display: none; }

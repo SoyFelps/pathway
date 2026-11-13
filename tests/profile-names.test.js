@@ -41,7 +41,7 @@ test('sign-up (also by invitation) asks for first and last name and sends them a
   assert.ok(auth.includes('autocomplete="given-name"') && auth.includes('autocomplete="family-name"'));
   assert.ok(auth.includes("Enter your first and last name."));
   assert.ok(auth.includes('state.firstName, state.lastName'));
-  assert.match(backend, /signUp: async \(email, password, workspaceName, inviteToken = '', firstName = '', lastName = ''\)/);
+  assert.match(backend, /signUp: async \(email, password, workspaceName, inviteToken = '', firstName = '', lastName = '', captchaToken = ''\)/);
   assert.ok(backend.includes('pathway_team_invite_pending: true, pathway_team_invite_hash: await sha256Hex(inviteToken), first_name: firstName') && backend.includes('workspace_name: workspaceName, first_name: firstName'));
 });
 

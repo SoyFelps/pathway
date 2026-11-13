@@ -29,9 +29,9 @@ test('confirmation explains the distinct owner/member outcomes and never submits
 test('browser sends the password only to the authenticated delete-account function, then clears local session', () => {
   const backend = read('backend.js');
   assert.match(backend, /const DELETE_ACCOUNT_FUNCTION = .*functions\/v1\/delete-account/);
-  assert.match(backend, /async function deleteAccount\(password\)/);
+  assert.match(backend, /async function deleteAccount\(password, captchaToken = ''\)/);
   assert.match(backend, /Authorization: `Bearer \$\{session\.access_token\}`/);
-  assert.match(backend, /JSON\.stringify\(\{ password \}\)/);
+  assert.match(backend, /JSON\.stringify\(\{ password, \.\.\.\(captchaToken \? \{ captchaToken \} : \{\}\) \}\)/);
   assert.match(backend, /signOut\(\{ scope: 'local' \}\)/);
   assert.match(backend, /deleteAccount,/);
 });
@@ -39,7 +39,7 @@ test('browser sends the password only to the authenticated delete-account functi
 test('account deletion request uses only headers allowed by the Edge Function CORS preflight', () => {
   const backend = read('backend.js');
   const edge = read('supabase/functions/delete-account/index.ts');
-  const start = backend.indexOf('async function deleteAccount(password)');
+  const start = backend.indexOf('async function deleteAccount(password');
   const end = backend.indexOf('async function createWorkspace', start);
   const request = backend.slice(start, end);
   assert.ok(start >= 0 && end > start);
@@ -99,8 +99,8 @@ test('delete-account Edge Function is explicitly JWT-protected and frontend asse
   const config = read('supabase/config.toml');
   const html = read('index.html');
   assert.match(config, /\[functions\.delete-account\]\s*\nverify_jwt = true/);
-  assert.match(html, /styles\.css\?v=mw3-20261113e/);
-  assert.match(html, /backend\.js\?v=mw3-20261113e/);
-  assert.match(html, /auth\.js\?v=mw3-20261113e/);
-  assert.match(html, /builder\.js\?v=mw3-20261113e/);
+  assert.match(html, /styles\.css\?v=mw3-20261113f/);
+  assert.match(html, /backend\.js\?v=mw3-20261113f/);
+  assert.match(html, /auth\.js\?v=mw3-20261113f/);
+  assert.match(html, /builder\.js\?v=mw3-20261113f/);
 });

@@ -84,6 +84,8 @@ Deno.serve(async (req: Request) => {
   }
   const password = typeof body.password === "string" ? body.password : "";
   if (!password || password.length > 1024) return fail(req, 400, "Enter your password to confirm account deletion.");
+  // The security check (Cloudflare Turnstile) token of the browser, forwarded to Supabase Auth: when its CAPTCHA protection is on, the password check below is refused without it.
+  const captchaToken = typeof body.captchaToken === "string" ? body.captchaToken.slice(0, 2048) : "";
 
   const bearer = req.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] || "";
   if (!bearer) return fail(req, 401, "Sign in again before deleting your account.");
@@ -95,7 +97,7 @@ Deno.serve(async (req: Request) => {
   const verifier = createClient(projectUrl, publicKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
   let verifiedUserId = "";
   try {
-    const { data, error } = await verifier.auth.signInWithPassword({ email: auth.user.email, password });
+    const { data, error } = await verifier.auth.signInWithPassword({ email: auth.user.email, password, ...(captchaToken ? { options: { captchaToken } } : {}) });
     if (error) {
       const status = Number((error as { status?: number }).status || 0);
       if (status === 429) return fail(req, 429, "Too many password attempts. Wait a moment and try again.");
