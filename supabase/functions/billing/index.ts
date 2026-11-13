@@ -7,6 +7,7 @@ import { sendDowngradeNotice } from "./downgrade-email.ts";
 const STRIPE_API_VERSION = "2026-03-25.dahlia; custom_checkout_payment_form_preview=v1";
 const APP_ORIGINS = new Set([
   "https://soyfelps.github.io",
+  "https://nellio.app",
   "http://localhost:8765",
   "http://127.0.0.1:8765",
   "http://localhost:8000",

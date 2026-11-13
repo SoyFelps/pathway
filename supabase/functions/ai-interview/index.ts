@@ -10,6 +10,7 @@ import { updateFromWitcher, witcherErrorMessage } from "./logic.ts";
 
 const APP_ORIGINS = new Set([
   "https://soyfelps.github.io",
+  "https://nellio.app",
   "http://localhost:8765",
   "http://127.0.0.1:8765",
   "http://localhost:8000",

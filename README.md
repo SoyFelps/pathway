@@ -75,7 +75,7 @@ Both run inside the `applications` Edge Function (`supabase/functions/applicatio
 
 - The public Turnstile **site key** lives in `turnstile-config.js` (safe for the browser). The candidate page requests a token at the moment of submission, because tokens expire after five minutes and work once. An empty site key disables the widget.
 - **Rollout order matters:** publish the site key before setting `TURNSTILE_SECRET_KEY`, otherwise the live form is rejected until the page catches up.
-- Turnstile allows `soyfelps.github.io` and `localhost`. Cloudflare publishes dummy site and secret keys for automated tests; the real widget needs a human click when it decides a browser looks automated.
+- Turnstile allows `soyfelps.github.io`, `nellio.app` and `localhost`. Cloudflare publishes dummy site and secret keys for automated tests; the real widget needs a human click when it decides a browser looks automated.
 - The page never reveals whether an e-mail address has applied before, so the form cannot be used to find out who applied where.
 
 ## Deployment
