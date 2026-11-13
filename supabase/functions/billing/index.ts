@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@^22";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { deleteCompaniesExcept } from "./plan-cleanup.ts";
+import { sendDowngradeNotice } from "./downgrade-email.ts";
 
 const STRIPE_API_VERSION = "2026-03-25.dahlia; custom_checkout_payment_form_preview=v1";
 const APP_ORIGINS = new Set([
@@ -23,6 +24,9 @@ const stripeSecret = Deno.env.get("STRIPE_SECRET_KEY") || "";
 const PRICE_LOOKUP_KEYS = { business: "pathway_business_monthly", agency: "pathway_agency_monthly" } as const;
 type Plan = keyof typeof PRICE_LOOKUP_KEYS;
 const appUrl = Deno.env.get("PATHWAY_APP_URL") || "https://soyfelps.github.io/pathway/";
+// Notices about a scheduled downgrade go out through Resend (phase 4b); without the key nothing is sent and nothing fails.
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
+const EMAIL_FROM_ADDRESS = Deno.env.get("EMAIL_FROM") || "onboarding@resend.dev";
 const RESUME_BUCKET = "applicant-resumes";
 const STORAGE_LIST_LIMIT = 100;
 const MAX_STORAGE_PAGES_PER_FOLDER = 10000;
@@ -607,14 +611,20 @@ Deno.serve(async (req: Request) => {
         throw scheduleError;
       }
       const effectiveAt = existing.current_period_end as string;
-      const { error: insertError } = await admin.from("workspace_plan_changes").insert({
+      const { data: created, error: insertError } = await admin.from("workspace_plan_changes").insert({
         workspace_id: workspace.id, target_plan: "business", keep_company_id: keep, effective_at: effectiveAt, stripe_schedule_id: schedule.id, created_by: auth.user.id,
-      });
+      }).select("id,workspace_id,keep_company_id,effective_at").single();
       if (insertError) {
         await releaseSchedule(schedule.id);
         console.error("The scheduled downgrade could not be recorded", insertError);
         return fail(req, 503, "The change could not be scheduled. Nothing was changed.");
       }
+      // The confirmation e-mail is best effort: whatever happens to it, the change is already scheduled.
+      try {
+        if (created && await sendDowngradeNotice(admin, created, "confirmation", { resendKey: RESEND_API_KEY, emailFrom: EMAIL_FROM_ADDRESS, appUrl })) {
+          await admin.from("workspace_plan_changes").update({ confirmation_sent_at: new Date().toISOString() }).eq("id", created.id);
+        }
+      } catch (noticeError) { console.error("Confirmation notice could not be recorded", noticeError instanceof Error ? noticeError.name : "unknown error"); }
       return response(req, 200, { effective_at: effectiveAt, keep_company_id: keep });
     } catch (error) {
       console.error("Stripe downgrade scheduling failed", error);

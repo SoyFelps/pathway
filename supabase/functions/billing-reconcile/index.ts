@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import Stripe from "npm:stripe@^22";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { deleteCompaniesExcept } from "./plan-cleanup.ts";
+import { type NoticeKind, sendDowngradeNotice } from "./downgrade-email.ts";
 import { compareSubscriptions, type DatabaseSubscription, type Finding, hasAccess, planOfPrice, reportText, type StripeSubscription } from "./compare.ts";
 
 // Daily check that the subscriptions in the database say what Stripe says. A database job wakes this function once a day (07:00 UTC).
@@ -25,6 +26,7 @@ const projectUrl = Deno.env.get("SUPABASE_URL") || "";
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || envJsonValue("SUPABASE_SECRET_KEYS");
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const EMAIL_FROM_ADDRESS = Deno.env.get("EMAIL_FROM") || "onboarding@resend.dev";
+const APP_URL = Deno.env.get("PATHWAY_APP_URL") || "https://soyfelps.github.io/pathway/";
 const REPORT_TO = Deno.env.get("RECONCILE_REPORT_TO") || ""; // who gets the report: decided later, nothing is sent while it is empty
 const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: STRIPE_API_VERSION as never }) : null;
 const admin = projectUrl && serviceKey
@@ -111,6 +113,32 @@ async function runDueDowngrades(): Promise<{ done: number; waiting: number }> {
     }
   }
   return summary;
+}
+
+/**
+ * The reminders of a scheduled downgrade (phase 4b): one in the last 7 days and one in the last 2 days before the date. The job runs once a day, so
+ * each window is met by exactly one run. A change scheduled inside a window needs no reminder for it (the confirmation e-mail has just said it).
+ * A failed e-mail is simply tried again on the next run and never touches the downgrade itself.
+ */
+async function runDowngradeReminders(): Promise<void> {
+  const DAY = 86_400_000;
+  const now = Date.now();
+  const { data: pending, error } = await admin!.from("workspace_plan_changes")
+    .select("id,workspace_id,keep_company_id,effective_at,created_at,notice_week_sent_at,notice_day_sent_at").eq("status", "scheduled").gt("effective_at", new Date(now).toISOString()).limit(200);
+  if (error) throw error;
+  for (const change of pending ?? []) {
+    const effective = Date.parse(change.effective_at);
+    const created = Date.parse(change.created_at);
+    const left = effective - now;
+    const jobs: Array<{ kind: NoticeKind; column: string }> = [];
+    if (left <= 2 * DAY && !change.notice_day_sent_at && created <= effective - 2 * DAY) jobs.push({ kind: "day", column: "notice_day_sent_at" });
+    else if (left <= 7 * DAY && left > 2 * DAY && !change.notice_week_sent_at && created <= effective - 7 * DAY) jobs.push({ kind: "week", column: "notice_week_sent_at" });
+    for (const job of jobs) {
+      if (await sendDowngradeNotice(admin, change, job.kind, { resendKey: RESEND_API_KEY, emailFrom: EMAIL_FROM_ADDRESS, appUrl: APP_URL })) {
+        await admin!.from("workspace_plan_changes").update({ [job.column]: new Date().toISOString() }).eq("id", change.id);
+      }
+    }
+  }
 }
 
 async function takeJobPagesOffline(workspaceId: string) {
@@ -216,6 +244,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return reply(405, { error: "method_not_allowed" });
   if (!stripe || !admin) return reply(503, { error: "not_configured" });
   try {
+    try { await runDowngradeReminders(); } catch (reminderError) { console.error("Downgrade reminders failed:", reminderError instanceof Error ? reminderError.message : "unknown error"); }
     try { await runDueDowngrades(); } catch (downgradeError) { console.error("Scheduled downgrades failed:", downgradeError instanceof Error ? downgradeError.message : "unknown error"); }
     return await run();
   } catch (error) {
