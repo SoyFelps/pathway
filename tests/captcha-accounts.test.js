@@ -55,3 +55,8 @@ test('the wait between e-mails and the CAPTCHA refusal that Supabase sends in En
   assert.ok(auth.includes("if (/captcha/i.test(message)) return t('We could not confirm that you are not a robot. Please try again.');"));
   for (const file of ['locales/pt-BR.js', 'locales/es.js']) assert.ok(read(file).includes("'For security, wait {seconds} seconds before asking again.':"));
 });
+
+test('the language choice on the account screens sits centred, with room above it', () => {
+  const css = read('styles.css');
+  assert.ok(css.includes('.auth-language{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:40px;'));
+});
