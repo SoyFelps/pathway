@@ -47,3 +47,11 @@ test('the delete-account confirmation never names the technical service behind t
   assert.ok(!modal.includes('Supabase'));
   for (const file of ['locales/pt-BR.js', 'locales/es.js']) assert.ok(!read(file).includes('Supabase Auth'));
 });
+
+test('the wait between e-mails and the CAPTCHA refusal that Supabase sends in English are shown in the language of the screen', () => {
+  const auth = read('auth.js');
+  assert.ok(auth.includes('only request this after (\d+) seconds?'));
+  assert.ok(auth.includes("t('For security, wait {seconds} seconds before asking again.', { seconds: wait[1] })"));
+  assert.ok(auth.includes("if (/captcha/i.test(message)) return t('We could not confirm that you are not a robot. Please try again.');"));
+  for (const file of ['locales/pt-BR.js', 'locales/es.js']) assert.ok(read(file).includes("'For security, wait {seconds} seconds before asking again.':"));
+});

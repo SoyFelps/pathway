@@ -33,6 +33,11 @@
     if (/Invalid login credentials/i.test(message)) return t('That email and password do not match. Check them and try again.');
     if (/User already registered/i.test(message)) return t('An account with this email already exists. Switch to Sign in to accept your invitation.');
     if (/Password should be at least/i.test(message)) return t('Choose a longer password and try again.');
+    // Supabase asks the same address to wait between e-mails: "For security purposes, you can only request this after 12 seconds."
+    const wait = message.match(/only request this after (\d+) seconds?/i);
+    if (wait) return t('For security, wait {seconds} seconds before asking again.', { seconds: wait[1] });
+    // Supabase CAPTCHA protection refused the request (the token was missing, expired or already used).
+    if (/captcha/i.test(message)) return t('We could not confirm that you are not a robot. Please try again.');
     if (/rate limit/i.test(message)) return t('Too many attempts in a short time. Please wait a moment and try again.');
     if (/Failed to fetch|NetworkError/i.test(message)) return t('Could not reach the account service. Check your connection and try again.');
     return t(message);

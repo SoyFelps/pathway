@@ -473,6 +473,7 @@
   'An account with this email already exists. Switch to Sign in to accept your invitation.': 'Já existe uma conta com este e-mail. Vá em Entrar para aceitar o convite.',
   'Choose a longer password and try again.': 'Escolha uma senha mais longa e tente novamente.',
   'Too many attempts in a short time. Please wait a moment and try again.': 'Muitas tentativas em pouco tempo. Aguarde um pouco e tente novamente.',
+  'For security, wait {seconds} seconds before asking again.': 'Por segurança, aguarde {seconds} segundos antes de pedir de novo.',
   'Could not reach the account service. Check your connection and try again.': 'Não foi possível falar com o serviço de contas. Confira sua conexão e tente novamente.',
   'By creating an account, you agree to our {terms} and {privacy}.': 'Ao criar uma conta, você concorda com nossos {terms} e nossa {privacy}.',
   'By signing in, you agree to our {terms} and {privacy}.': 'Ao entrar, você concorda com nossos {terms} e nossa {privacy}.',
