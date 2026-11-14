@@ -39,3 +39,11 @@ test('the widget container takes no room while it is empty', () => {
   const css = read('styles.css');
   assert.ok(css.includes('.auth-captcha:empty { display: none; }'));
 });
+
+test('the delete-account confirmation never names the technical service behind the password check', () => {
+  const auth = read('auth.js');
+  const modal = auth.slice(auth.indexOf('account-delete-warning'), auth.indexOf('account-delete-warning') + 300);
+  assert.ok(modal.includes("t('Confirm with your current password.')"));
+  assert.ok(!modal.includes('Supabase'));
+  for (const file of ['locales/pt-BR.js', 'locales/es.js']) assert.ok(!read(file).includes('Supabase Auth'));
+});

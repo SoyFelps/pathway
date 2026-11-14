@@ -598,7 +598,6 @@
   'This permanently deletes your Nellio account. There is no workspace attached to this account right now. Any pending invitations you sent will be revoked. This action is irreversible.': 'Esto elimina para siempre tu cuenta de Nellio. Ahora no hay ningún espacio de trabajo vinculado a esta cuenta. Las invitaciones pendientes que enviaste se revocarán. Esta acción es irreversible.',
   'Account: {email}': 'Cuenta: {email}',
   'Confirm with your current password.': 'Confirma con tu contraseña actual.',
-  'Nellio verifies it with Supabase Auth and does not store it.': 'Nellio la verifica con Supabase Auth y no la guarda.',
   'Current password': 'Contraseña actual',
   'Keep my account': 'Conservar mi cuenta',
   'Delete account permanently': 'Eliminar la cuenta para siempre',
