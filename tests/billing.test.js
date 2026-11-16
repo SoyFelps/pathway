@@ -10,7 +10,7 @@ test('free accounts see upgrade controls instead of publish actions across edito
   const builder = read('builder.js');
   assert.match(builder, /Upgrade to publish/);
   assert.match(builder, /subscription\?\.active \? t\('Publish'\) : t\('Upgrade to publish'\)/);
-  assert.match(builder, /if \(!subscription\?\.active\) \{ openSubscriptionPage\(\); return; \}/);
+  assert.match(builder, /if \(!subscription\?\.active\) \{ showPlanChoice\(\); return; \}/);
   assert.match(builder, /renderPlanControl\(\)/);
   assert.match(builder, /id="upgrade-to-publish"/);
   assert.match(builder, /function renderSubscriptionPage\(\)/);
@@ -66,7 +66,7 @@ test('My Plan shows account status and requires confirmation before scheduling c
     assert.ok(planScreen.includes(benefit), `missing Free-plan Premium benefit: ${benefit}`);
   }
   assert.match(planScreen, /id="my-plan-benefits-upgrade"/);
-  assert.match(planScreen, /my-plan-benefits-upgrade.*openSubscriptionPage/s);
+  assert.match(planScreen, /my-plan-benefits-upgrade'\)\?\.addEventListener\('click', showPlanChoice\)/);
 });
 
 test('cancellation adapter sends the authenticated period-end cancellation action', () => {
@@ -154,9 +154,9 @@ test('payment history is authenticated, paginated, and restricted to verified Ne
 test('header loads Stripe.js directly and checkout form uses the configured beta', () => {
   const html = read('index.html');
   const builder = read('builder.js');
-  assert.match(html, /backend\.js\?v=mw3-20261113i/);
-  assert.match(html, /builder\.js\?v=mw3-20261113i/);
-  assert.match(html, /styles\.css\?v=mw3-20261113i/);
+  assert.match(html, /backend\.js\?v=mw3-20261116a/);
+  assert.match(html, /builder\.js\?v=mw3-20261116a/);
+  assert.match(html, /styles\.css\?v=mw3-20261116a/);
   assert.match(html, /https:\/\/js\.stripe\.com\/dahlia\/stripe\.js/);
   assert.match(html, /stripe-config\.js/);
   assert.match(builder, /betas: \['custom_checkout_payment_form_1'\]/);
@@ -165,10 +165,10 @@ test('header loads Stripe.js directly and checkout form uses the configured beta
   assert.match(builder, /actions\.confirm\(\{ formConfirmEvent: event \}\)/);
 });
 
-test('upgrade opens Stripe Checkout directly and sends the active Supabase access token', () => {
+test('a chosen plan opens Stripe Checkout and sends the active Supabase access token', () => {
   const builder = read('builder.js');
   const backend = read('backend.js');
-  assert.match(builder, /addEventListener\('click', openSubscriptionPage\)/);
+  assert.match(builder, /closeModal\(\); openSubscriptionPage\(plan\);/);
   assert.match(builder, /const clientSecret = await window\.PathwayBackend\.createCheckoutSession\(chosenPlan\)/);
   assert.doesNotMatch(builder, /Continue to secure checkout|id="start-checkout"/);
   assert.match(backend, /Authorization: `Bearer \$\{session\.access_token\}`/);
@@ -255,4 +255,24 @@ test('Stripe server secrets and live configuration requirements are documented w
   assert.match(todo, /price_1UKFrzLxHJwAlJp9n6W70f8k/);
   assert.match(config, /pk_test_51UK1fJLxHJwAlJp9/);
   assert.doesNotMatch(config, /sk_(?:test|live)_[A-Za-z0-9]+|whsec_[A-Za-z0-9]+/);
+});
+
+test('general upgrade buttons show the plans first and never open a checkout directly', () => {
+  const builder = read('builder.js');
+  // No generic button sends its click event straight to the checkout (it would always choose Business).
+  assert.doesNotMatch(builder, /addEventListener\('click', openSubscriptionPage\)/);
+  assert.doesNotMatch(builder, /openSubscriptionPage\(\)/);
+  for (const id of ['upgrade-to-publish', 'team-upgrade', 'my-plan-upgrade', 'my-plan-benefits-upgrade']) {
+    assert.ok(builder.includes(`root.querySelector('#${id}')?.addEventListener('click', showPlanChoice);`), `${id} must show the plans`);
+  }
+  assert.ok(builder.includes("publishFlow() : showPlanChoice());"));
+  const start = builder.indexOf('function showPlanChoice()');
+  const body = builder.slice(start, builder.indexOf('function returnFromSubscriptionPage()', start));
+  // On My Plan it scrolls to the comparison; elsewhere a modal with the plan cards opens the checkout of the chosen plan.
+  assert.match(body, /\.my-plan-page \.my-plan-compare/);
+  assert.match(body, /scrollIntoView/);
+  assert.match(body, /id="plan-choice-modal"/);
+  assert.match(body, /C\.planCardsHtml\(\{ t, tn, esc \}, \{ business: choose\('business'\), agency: choose\('agency'\) \}, workspacePlan\(\)\)/);
+  assert.match(body, /openSubscriptionPage\(plan\)/);
+  assert.match(read('styles.css'), /\.modal:has\(#plan-choice-modal\)\{width:min\(100%,1000px\)\}/);
 });

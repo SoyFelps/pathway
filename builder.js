@@ -1353,7 +1353,7 @@
   }
 
   function bindPlanControl() {
-    root.querySelector('#upgrade-to-publish')?.addEventListener('click', openSubscriptionPage);
+    root.querySelector('#upgrade-to-publish')?.addEventListener('click', showPlanChoice);
   }
 
   function openSubscriptionPage(plan) {
@@ -1375,6 +1375,23 @@
       subscriptionReturnFlowId = null;
     }
     renderSubscriptionPage();
+  }
+
+  // The general upgrade buttons (header, My Plan, team, publish) never go straight to a checkout: with two paid plans the
+  // person first sees the plans. On My Plan the comparison is already on the page, so it scrolls there; elsewhere a modal
+  // shows the three plans and the chosen one opens the checkout from the page below (so "Back" returns to it).
+  function showPlanChoice() {
+    const compare = root.querySelector('.my-plan-page .my-plan-compare');
+    if (compare) {
+      closeModal();
+      compare.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const heading = compare.querySelector('#compare-plans-title');
+      if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
+      return;
+    }
+    const choose = id => `<button class="btn btn-primary plan-card-action" type="button" data-plan-choice="${id}">${t('Choose {plan}', { plan: C.PLANS[id].name })}</button>`;
+    setModal(`<div class="modal-head" id="plan-choice-modal"><div><div class="eyebrow" style="margin-bottom:8px">${t('Plans')}</div><h2>${t('Choose a plan')}</h2><p>${t('Business is for one company hiring for itself. Agency is for agencies and recruiters hiring for several companies.')}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>${C.planCardsHtml({ t, tn, esc }, { business: choose('business'), agency: choose('agency') }, workspacePlan())}`);
+    modalRoot.querySelectorAll('[data-plan-choice]').forEach(button => button.addEventListener('click', () => { const plan = button.dataset.planChoice; closeModal(); openSubscriptionPage(plan); }));
   }
 
   function returnFromSubscriptionPage() {
@@ -2604,7 +2621,7 @@
       bindSidebar(); bindPlanControl();
       root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); hasPermission('flows') ? renderDashboard() : renderAccessMessage('flows'); });
       
-      root.querySelector('#team-upgrade')?.addEventListener('click', openSubscriptionPage);
+      root.querySelector('#team-upgrade')?.addEventListener('click', showPlanChoice);
       root.querySelector('#team-invite-form')?.addEventListener('submit', event => { void createTeamInvite(event); });
       root.querySelectorAll('[data-remove-member]').forEach(button => button.addEventListener('click', () => confirmRemoveTeamMember(button.dataset.removeMember)));
       root.querySelectorAll('[data-revoke-invitation]').forEach(button => button.addEventListener('click', () => { void revokeTeamInvite(button.dataset.revokeInvitation); }));
@@ -2977,8 +2994,8 @@
     bindPlanControl();
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); renderDashboard(); });
     
-    root.querySelector('#my-plan-upgrade')?.addEventListener('click', openSubscriptionPage);
-    root.querySelector('#my-plan-benefits-upgrade')?.addEventListener('click', openSubscriptionPage);
+    root.querySelector('#my-plan-upgrade')?.addEventListener('click', showPlanChoice);
+    root.querySelector('#my-plan-benefits-upgrade')?.addEventListener('click', showPlanChoice);
     root.querySelector('#cancel-subscription')?.addEventListener('click', showCancelSubscriptionConfirmation);
     root.querySelector('.my-plan-page')?.insertAdjacentHTML('beforeend', planCompareHtml());
     root.querySelectorAll('[data-choose-plan]').forEach(button => button.addEventListener('click', () => openSubscriptionPage(button.dataset.choosePlan)));
@@ -4412,7 +4429,7 @@
       const button = event.currentTarget;
       button.disabled = true; button.textContent = isPublished ? t('Unpublishing…') : t('Opening editor…');
       if (!isPublished) {
-        if (!subscription?.active) { closeModal(); openSubscriptionPage(); return; }
+        if (!subscription?.active) { closeModal(); showPlanChoice(); return; }
         closeModal(); openFlow(id); await publishFlow(); return;
       }
       try {
@@ -4508,7 +4525,7 @@
     root.querySelector('#dashboard-back').addEventListener('click', renderDashboard);
     root.querySelector('#preview-btn').addEventListener('click', openPreview);
     root.querySelector('#copy-job-url')?.addEventListener('click', copyJobUrl);
-    root.querySelector('#publish-btn').addEventListener('click', () => currentFlow()?.publicationStatus === 'published' ? unpublishFlow() : subscription?.active ? publishFlow() : openSubscriptionPage());
+    root.querySelector('#publish-btn').addEventListener('click', () => currentFlow()?.publicationStatus === 'published' ? unpublishFlow() : subscription?.active ? publishFlow() : showPlanChoice());
     root.querySelector('#add-node').addEventListener('click', showNodePicker);
     const workspaceElement = document.getElementById('workspace');
     bindCanvasPan(workspaceElement);
@@ -4906,7 +4923,7 @@
   }
 
   async function publishFlow() {
-    if (!subscription?.active) { openSubscriptionPage(); return; }
+    if (!subscription?.active) { showPlanChoice(); return; }
     if (overCompanyLimit()) { showChooseCompanyModal(); return; } // a Business workspace with several companies must keep one first
     const flow = currentFlow();
     C.lockEndSteps(flow);
