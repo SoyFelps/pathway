@@ -52,18 +52,20 @@ test('a browser that blocks storage still switches theme until the page closes',
   assert.equal(t.window.NellioTheme.set('dark'), 'dark');
 });
 
-test('every app header carries both logos and the theme shows one; the Settings screen has the Appearance choice in three languages', () => {
+test('every app header carries both logos and the theme shows one; the light / dark button has its texts in three languages', () => {
   const builder = read('builder.js');
   const both = '<img class="brand-logo logo-light" src="brand/nellio-logo.svg" alt="Nellio"><img class="brand-logo logo-dark" src="brand/nellio-logo-white.svg" alt="" aria-hidden="true">';
   assert.ok(builder.split(both).length - 1 >= 14);
   assert.ok(!builder.includes('<img class="brand-logo" src="brand/nellio-logo.svg"'));
-  assert.ok(builder.includes('id="settings-theme"') && builder.includes('window.NellioTheme.set(themeSelect.value)'));
+  assert.ok(builder.includes('id="theme-toggle"') && builder.split('${themeToggleHtml()}</aside>').length - 1 >= 2, 'the button ends both versions of the side menu');
+  assert.ok(builder.includes("window.NellioTheme.set(next)"));
+  assert.ok(!builder.includes('settings-theme'), 'no theme choice in Settings');
   assert.ok(builder.includes("theme: darkTheme ? 'night' : 'stripe'"), 'the card form follows the theme');
   const css = read('styles.css');
   assert.ok(css.includes('.logo-dark{display:none}') && css.includes(':root[data-theme="dark"] .logo-light{display:none}'));
   for (const file of ['locales/pt-BR.js', 'locales/es.js']) {
     const text = read(file);
-    for (const key of ['Appearance', 'Automatic (follows your device)', 'Light', 'Dark']) assert.ok(text.includes("'" + key + "':"), file + ' ' + key);
+    for (const key of ['Switch to light mode', 'Switch to dark mode']) assert.ok(text.includes("'" + key + "':"), file + ' ' + key);
   }
 });
 
@@ -75,4 +77,18 @@ test('the sign-in panel and the lime and red fills keep their colours in both th
   }
   assert.ok(dark.includes('color-scheme:dark'));
   assert.ok(!css.includes('background:white'), 'no hard-coded white backgrounds');
+});
+
+test('the side menu and the top bars use the --chrome colour (#14201A in the dark theme); the page, cards and texts in the dark theme are neutral greys', () => {
+  const css = read('styles.css');
+  const dark = css.match(/:root\[data-theme="dark"\]\{[^}]*\}/)[0];
+  assert.ok(dark.includes('--chrome:#14201a;'));
+  assert.ok(css.includes('.app-sidebar{width:220px;flex:0 0 220px;padding:26px 16px;border-right:1px solid var(--line);background:var(--chrome);'));
+  assert.ok(css.includes('.topbar{height:70px;background:var(--chrome);'));
+  assert.ok(css.includes('--chrome:#ffffff;'), 'the light theme keeps the white bars');
+  for (const name of ['bg-page', 'surface', 'line', 'ink', 'muted']) {
+    const hex = dark.match(new RegExp('--' + name + ':#([0-9a-f]{6});'))[1];
+    const [r, g, b] = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
+    assert.ok(Math.max(r, g, b) - Math.min(r, g, b) <= 6, name + ' is a neutral grey');
+  }
 });
