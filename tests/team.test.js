@@ -155,10 +155,10 @@ test('My Team shows the seats of the plan, defaults permissions on, and supports
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=mw3-20261117a/);
-  assert.match(html, /backend\.js\?v=mw3-20261117a/);
-  assert.match(html, /builder\.js\?v=mw3-20261117a/);
-  assert.match(html, /styles\.css\?v=mw3-20261117a/);
+  assert.match(html, /auth\.js\?v=mw3-20261117b/);
+  assert.match(html, /backend\.js\?v=mw3-20261117b/);
+  assert.match(html, /builder\.js\?v=mw3-20261117b/);
+  assert.match(html, /styles\.css\?v=mw3-20261117b/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
@@ -211,4 +211,11 @@ test('on phones the menu sticks right under the 62px topbar, with no gap above i
   const sidebar = css.match(/@media\(max-width:760px\)\{\.app-sidebar\{position:sticky;top:(\d+)px/);
   assert.ok(topbar && sidebar);
   assert.equal(sidebar[1], topbar[1], 'the sticky offset of the menu equals the phone topbar height');
+});
+
+test('the team page is titled with the workspace name (escaped, numbered like the header), never a fixed "My Team"', () => {
+  const builder = read('builder.js');
+  assert.ok(!builder.includes("<h1>${t('My Team')}</h1>"));
+  assert.equal(builder.split('<h1>${teamPageTitle()}</h1>').length - 1, 2, 'loading and loaded pages');
+  assert.ok(builder.includes("return esc(workspaceLabels().get(workspace.id) || workspace.name || t('My Team'));"));
 });
