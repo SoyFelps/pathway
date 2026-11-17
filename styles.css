@@ -88,6 +88,12 @@
   --shadow-md:rgba(28,56,36,.14);
   --shadow-lg:rgba(18,36,25,.25);
   --overlay:rgba(16,29,21,.47);
+  --green-fade-high:rgba(49,95,74,.78);
+  --green-fade-mid:rgba(49,95,74,.28);
+  --green-fade-low:rgba(49,95,74,.1);
+  --green-fade-none:rgba(49,95,74,0);
+  --surface-fade-high:rgba(255,255,255,.85);
+  --surface-fade-none:rgba(255,255,255,0);
   --overlay-strong:rgba(16,29,21,.56);
   --glass-strong:rgba(255,255,255,.91);
   --glass:rgba(255,255,255,.7);
@@ -1039,3 +1045,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .loading-card .brand-symbol{animation:symbol-pulse 1.3s ease-in-out infinite alternate}
 @keyframes symbol-pulse{to{opacity:.45}}
 @media(max-width:760px){.brand-logo{height:30px}}
+/* Tela de entrada: o painel esquerdo fica quase branco na parte do logo e vai ficando verde escuro embaixo (degradê radial suave). No celular o painel é curto e fica como estava. */
+@media(min-width:761px){
+.auth-story{background:radial-gradient(ellipse 130% 52% at 40% 112%,var(--green-deep) 0%,var(--green-fade-high) 26%,var(--green-fade-mid) 52%,var(--green-fade-low) 76%,var(--green-fade-none) 100%),radial-gradient(ellipse 90% 60% at 15% 0%,var(--surface) 0%,var(--surface-fade-high) 35%,var(--surface-fade-none) 100%)}
+}
