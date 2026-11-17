@@ -16,16 +16,16 @@ test('theme.js is loaded first in the head of the app and not on the candidate o
 
 function loadTheme({ stored, dark, blocked } = {}) {
   const attributes = {}; const meta = { content: '', setAttribute(name, value) { this.content = value; } };
-  const listeners = [];
+  const listeners = []; const clicks = [];
   const store = { ...(stored ? { 'nellio-theme': stored } : {}) };
   const window = {
     matchMedia: () => ({ get matches() { return !!dark.value; }, addEventListener: (type, fn) => listeners.push(fn) }),
     localStorage: blocked ? { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } }
       : { getItem: key => (key in store ? store[key] : null), setItem: (key, value) => { store[key] = value; }, removeItem: key => { delete store[key]; } }
   };
-  const document = { documentElement: { setAttribute: (name, value) => { attributes[name] = value; } }, querySelector: () => meta };
+  const document = { documentElement: { setAttribute: (name, value) => { attributes[name] = value; } }, querySelector: () => meta, querySelectorAll: () => [], addEventListener: (type, fn) => { if (type === 'click') clicks.push(fn); } };
   vm.runInNewContext(read('theme.js'), { window, document });
-  return { window, attributes, meta, store, listeners };
+  return { window, attributes, meta, store, listeners, clicks };
 }
 
 test('Automatic follows the device, Light and Dark are fixed, and the choice is kept in the browser', () => {
@@ -57,8 +57,8 @@ test('every app header carries both logos and the theme shows one; the light / d
   const both = '<img class="brand-logo logo-light" src="brand/nellio-logo.svg" alt="Nellio"><img class="brand-logo logo-dark" src="brand/nellio-logo-white.svg" alt="" aria-hidden="true">';
   assert.ok(builder.split(both).length - 1 >= 14);
   assert.ok(!builder.includes('<img class="brand-logo" src="brand/nellio-logo.svg"'));
-  assert.ok(builder.includes('id="theme-toggle"') && builder.split('${themeToggleHtml()}</aside>').length - 1 >= 2, 'the button ends both versions of the side menu');
-  assert.ok(builder.includes("window.NellioTheme.set(next)"));
+  assert.ok(builder.split('${themeToggleHtml()}</aside>').length - 1 >= 2, 'the button ends both versions of the side menu');
+  assert.equal(read('auth.js').split('<section class="auth-card-wrap">${themeButtonHtml()}').length - 1, 5, 'the button is in the corner of all five sign-in screens');
   assert.ok(!builder.includes('settings-theme'), 'no theme choice in Settings');
   assert.ok(builder.includes("theme: darkTheme ? 'night' : 'stripe'"), 'the card form follows the theme');
   const css = read('styles.css');
@@ -91,4 +91,17 @@ test('the side menu and the top bars use the --chrome colour (#1B1C1C in the dar
     const [r, g, b] = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
     assert.ok(Math.max(r, g, b) - Math.min(r, g, b) <= 6, name + ' is a neutral grey');
   }
+});
+
+test('one click listener in theme.js turns every light / dark button, and the button says what it will do', () => {
+  const t = loadTheme({ dark: { value: false } });
+  assert.equal(t.clicks.length, 1);
+  const html = t.window.NellioTheme.buttonHtml('To light', 'To dark');
+  assert.ok(html.includes('class="theme-toggle"') && html.includes('title="To dark"'), 'in the light theme it offers dark');
+  const button = { closest: selector => (selector === '.theme-toggle' ? button : null) };
+  t.clicks[0]({ target: button });
+  assert.equal(t.attributes['data-theme'], 'dark');
+  assert.ok(t.window.NellioTheme.buttonHtml('To light', 'To dark').includes('title="To light"'), 'in the dark theme it offers light');
+  t.clicks[0]({ target: {} });
+  assert.equal(t.attributes['data-theme'], 'dark', 'a click elsewhere changes nothing');
 });

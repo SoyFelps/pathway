@@ -1101,11 +1101,9 @@
     root.querySelector('#brand-home')?.addEventListener('click', event => { event.preventDefault(); renderNoWorkspace(); });
   }
 
-  // Light / dark button at the bottom of the side menu (theme.js keeps the choice in this browser). It shows the moon in the light theme and the sun in the dark one.
+  // Light / dark button at the bottom of the side menu; theme.js draws it and handles the click (it keeps the choice in this browser).
   function themeToggleHtml() {
-    const dark = !!(window.NellioTheme && window.NellioTheme.resolved() === 'dark');
-    const label = dark ? t('Switch to light mode') : t('Switch to dark mode');
-    return '<button class="theme-toggle" id="theme-toggle" type="button" title="' + label + '" aria-label="' + label + '"><svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>';
+    return window.NellioTheme ? window.NellioTheme.buttonHtml(t('Switch to light mode'), t('Switch to dark mode')) : '';
   }
 
   function renderSidebar(active) {
@@ -1122,13 +1120,6 @@
     root.querySelector('[data-route="my-plan"]')?.addEventListener('click', renderMyPlan);
     root.querySelector('[data-route="my-team"]')?.addEventListener('click', () => { void renderMyTeam(); });
     root.querySelector('[data-route="settings"]')?.addEventListener('click', renderSettings);
-    const themeButton = root.querySelector('#theme-toggle');
-    if (themeButton && window.NellioTheme) themeButton.addEventListener('click', () => {
-      const next = window.NellioTheme.resolved() === 'dark' ? 'light' : 'dark';
-      window.NellioTheme.set(next);
-      const label = next === 'dark' ? t('Switch to light mode') : t('Switch to dark mode');
-      themeButton.title = label; themeButton.setAttribute('aria-label', label);
-    });
   }
 
   function companyCardHtml(company) {
