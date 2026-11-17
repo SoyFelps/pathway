@@ -40,3 +40,44 @@ test('the favicon is the Nellio icon on every page, and the logo CSS is versione
   assert.match(css, /\.brand-symbol\{/);
   assert.ok(read('legal.html').includes('styles.css?v=mw3-20261117i'));
 });
+
+// ---- E-mails (2026-11-17): the logo is a PNG hosted on the Nellio site, because e-mail clients do not show SVG ----
+const EMAIL_LOGO = 'https://nellio.app/brand/nellio-logo-email.png';
+const logoTag = html => html.match(/<img src="https:\/\/nellio\.app\/brand\/nellio-logo-email\.png"[^>]*>/)?.[0] || '';
+
+test('the e-mail logo is a transparent PNG of 360 x 115 pixels', () => {
+  const png = fs.readFileSync(path.join(root, 'brand/nellio-logo-email.png'));
+  assert.equal(png.subarray(1, 4).toString('latin1'), 'PNG');
+  assert.equal(png.readUInt32BE(16), 360);
+  assert.equal(png.readUInt32BE(20), 115);
+  assert.equal(png[25], 6, 'colour type 6 = RGBA, so the background is transparent');
+  assert.ok(png.length < 40 * 1024, 'light file');
+});
+
+test('the candidate confirmation e-mail and the downgrade e-mails start with the logo, in every language', async () => {
+  const { buildConfirmationEmail, LOGO_URL } = await import('../supabase/functions/applications/email.ts');
+  assert.equal(LOGO_URL, EMAIL_LOGO);
+  for (const language of ['en', 'pt', 'es']) {
+    const mail = buildConfirmationEmail({ name: 'Alex', jobTitle: 'Designer', companyName: 'Acme', language });
+    const tag = logoTag(mail.html);
+    assert.ok(tag, `confirmation ${language} has the logo`);
+    assert.match(tag, /width="120" height="38" alt="Nellio"/);
+    assert.ok(mail.html.indexOf('<img') < mail.html.indexOf('<h1'), 'the logo comes before the heading');
+    assert.ok(!mail.text.includes('<img'), 'the plain-text part has no markup');
+  }
+  const { buildDowngradeEmail } = await import('../supabase/functions/billing/downgrade-email.ts');
+  for (const language of ['en', 'pt-BR', 'es']) {
+    const mail = buildDowngradeEmail({ kind: 'confirmation', workspaceName: 'Acme', effectiveAt: '2026-12-09T12:27:29Z', keepCompanyName: 'Keep', removedCompanyNames: ['Old'], planUrl: 'https://example.test/index.html#my-plan', language });
+    assert.ok(logoTag(mail.html), `downgrade ${language} has the logo`);
+  }
+  assert.equal(read('supabase/functions/billing/downgrade-email.ts'), read('supabase/functions/billing-reconcile/downgrade-email.ts'), 'the two copies stay identical');
+});
+
+test('the Supabase Auth templates show the logo instead of the plain "Nellio" label', () => {
+  for (const name of ['confirm-signup', 'reset-password']) {
+    const html = read(`supabase/auth-templates/${name}.html`);
+    assert.ok(logoTag(html), `${name} has the logo`);
+    assert.match(logoTag(html), /alt="Nellio"/);
+    assert.ok(!/text-transform:uppercase;color:#315f4a;font-weight:700;">Nellio<\/p>/.test(html), `${name}: the text label is gone`);
+  }
+});

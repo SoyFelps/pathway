@@ -16,6 +16,9 @@ export interface DowngradeEmailInput {
   planUrl: string; // My Plan in the app
 }
 
+// The logo is a PNG hosted on the Nellio site (e-mail clients do not show SVG).
+const LOGO_IMG = `<img src="https://nellio.app/brand/nellio-logo-email.png" width="120" height="38" alt="Nellio" style="display:block;border:0;outline:none;margin:0 0 24px;">`;
+
 export interface DowngradeEmail { subject: string; text: string; html: string }
 
 const MONTHS_LOCALE: Record<Language, string> = { en: "en-US", pt: "pt-BR", es: "es-ES" };
@@ -127,6 +130,7 @@ export function buildDowngradeEmail(input: DowngradeEmailInput): DowngradeEmail 
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e2e9e4;border-radius:12px;">
             <tr>
               <td style="padding:32px;">
+                ${LOGO_IMG}
                 <p style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#315f4a;font-weight:700;">${escapeHtml(copy.eyebrow(input.kind))}</p>
                 <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#17251e;">${escapeHtml(subject)}</h1>
                 <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#34463a;">${escapeHtml(intro)}</p>

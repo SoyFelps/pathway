@@ -30,7 +30,8 @@ test('plans, phase 4b: no company chosen means no deletion list; one company mea
   assert.match(single.text, /Nothing will be deleted/);
   const hostile = buildDowngradeEmail({ ...base, workspaceName: '<script>x</script>', removedCompanyNames: ['<img src=x onerror=1>'] });
   assert.equal(hostile.html.includes('<script>'), false);
-  assert.equal(hostile.html.includes('<img'), false);
+  // the only <img> allowed is the Nellio logo itself
+  assert.equal(hostile.html.replace(/<img src="[^"]*nellio-logo-email.png"[^>]*>/, "").includes('<img'), false);
   const many = buildDowngradeEmail({ ...base, removedCompanyNames: Array.from({ length: 14 }, (_, index) => 'Company ' + index) });
   assert.match(many.text, /and 4 more/);
 });
