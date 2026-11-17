@@ -41,43 +41,46 @@ test('the favicon is the Nellio icon on every page, and the logo CSS is versione
   assert.ok(read('legal.html').includes('styles.css?v=mw3-20261117i'));
 });
 
-// ---- E-mails (2026-11-17): the logo is a PNG hosted on the Nellio site, because e-mail clients do not show SVG ----
-const EMAIL_LOGO = 'https://nellio.app/brand/nellio-logo-email.png';
-const logoTag = html => html.match(/<img src="https:\/\/nellio\.app\/brand\/nellio-logo-email\.png"[^>]*>/)?.[0] || '';
+// ---- E-mails (2026-11-17): the header is a PNG hosted on the Nellio site (dark green, curved bottom edge, white logo), because e-mail clients do not show SVG ----
+const EMAIL_HEADER = 'https://nellio.app/brand/nellio-email-header.png';
+const headerTag = html => html.match(/<img src="https:\/\/nellio\.app\/brand\/nellio-email-header\.png"[^>]*>/)?.[0] || '';
 
-test('the e-mail logo is a transparent PNG of 360 x 115 pixels', () => {
-  const png = fs.readFileSync(path.join(root, 'brand/nellio-logo-email.png'));
+test('the e-mail header is a transparent PNG of 1040 x 220 pixels', () => {
+  const png = fs.readFileSync(path.join(root, 'brand/nellio-email-header.png'));
   assert.equal(png.subarray(1, 4).toString('latin1'), 'PNG');
-  assert.equal(png.readUInt32BE(16), 360);
-  assert.equal(png.readUInt32BE(20), 115);
-  assert.equal(png[25], 6, 'colour type 6 = RGBA, so the background is transparent');
+  assert.equal(png.readUInt32BE(16), 1040);
+  assert.equal(png.readUInt32BE(20), 220);
+  assert.equal(png[25], 6, 'colour type 6 = RGBA, so the corners and the curve are transparent');
   assert.ok(png.length < 40 * 1024, 'light file');
+  assert.ok(!fs.existsSync(path.join(root, 'brand/nellio-logo-email.png')), 'the first small logo PNG is gone');
 });
 
-test('the candidate confirmation e-mail and the downgrade e-mails start with the logo, in every language', async () => {
-  const { buildConfirmationEmail, LOGO_URL } = await import('../supabase/functions/applications/email.ts');
-  assert.equal(LOGO_URL, EMAIL_LOGO);
+test('the candidate confirmation e-mail and the downgrade e-mails start with the header, in every language', async () => {
+  const { buildConfirmationEmail, HEADER_URL } = await import('../supabase/functions/applications/email.ts');
+  assert.equal(HEADER_URL, EMAIL_HEADER);
   for (const language of ['en', 'pt', 'es']) {
     const mail = buildConfirmationEmail({ name: 'Alex', jobTitle: 'Designer', companyName: 'Acme', language });
-    const tag = logoTag(mail.html);
-    assert.ok(tag, `confirmation ${language} has the logo`);
-    assert.match(tag, /width="120" height="38" alt="Nellio"/);
-    assert.ok(mail.html.indexOf('<img') < mail.html.indexOf('<h1'), 'the logo comes before the heading');
+    const tag = headerTag(mail.html);
+    assert.ok(tag, `confirmation ${language} has the header`);
+    assert.match(tag, /width="520" height="110" alt="Nellio"/);
+    assert.equal(mail.html.split('<img').length - 1, 1, 'the header is the only image');
+    assert.ok(mail.html.indexOf('<img') < mail.html.indexOf('<h1'), 'the header comes before the heading');
     assert.ok(!mail.text.includes('<img'), 'the plain-text part has no markup');
   }
   const { buildDowngradeEmail } = await import('../supabase/functions/billing/downgrade-email.ts');
   for (const language of ['en', 'pt-BR', 'es']) {
     const mail = buildDowngradeEmail({ kind: 'confirmation', workspaceName: 'Acme', effectiveAt: '2026-12-09T12:27:29Z', keepCompanyName: 'Keep', removedCompanyNames: ['Old'], planUrl: 'https://example.test/index.html#my-plan', language });
-    assert.ok(logoTag(mail.html), `downgrade ${language} has the logo`);
+    assert.ok(headerTag(mail.html), `downgrade ${language} has the header`);
   }
   assert.equal(read('supabase/functions/billing/downgrade-email.ts'), read('supabase/functions/billing-reconcile/downgrade-email.ts'), 'the two copies stay identical');
 });
 
-test('the Supabase Auth templates show the logo instead of the plain "Nellio" label', () => {
+test('the Supabase Auth templates start with the header', () => {
   for (const name of ['confirm-signup', 'reset-password']) {
     const html = read(`supabase/auth-templates/${name}.html`);
-    assert.ok(logoTag(html), `${name} has the logo`);
-    assert.match(logoTag(html), /alt="Nellio"/);
+    assert.ok(headerTag(html), `${name} has the header`);
+    assert.match(headerTag(html), /alt="Nellio"/);
+    assert.ok(html.indexOf('nellio-email-header.png') < html.indexOf('<h1'), 'the header comes before the heading');
     assert.ok(!/text-transform:uppercase;color:#315f4a;font-weight:700;">Nellio<\/p>/.test(html), `${name}: the text label is gone`);
   }
 });

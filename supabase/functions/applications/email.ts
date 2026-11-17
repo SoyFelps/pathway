@@ -64,9 +64,8 @@ const COPY: Record<Language, {
   },
 };
 
-// The logo is a PNG hosted on the Nellio site (e-mail clients do not show SVG). Width 120 x height 38 on screen, 360 x 115 in the file for sharp screens.
-export const LOGO_URL = "https://nellio.app/brand/nellio-logo-email.png";
-const LOGO_IMG = `<img src="${LOGO_URL}" width="120" height="38" alt="Nellio" style="display:block;border:0;outline:none;margin:0 0 24px;">`;
+// The header of the e-mail is a PNG hosted on the Nellio site (e-mail clients do not show SVG): dark green with a curved bottom edge and the white logo. 1040 x 220 in the file, shown at 520 x 110.
+export const HEADER_URL = "https://nellio.app/brand/nellio-email-header.png";
 
 export function emailLanguage(value: unknown): Language {
   return value === "pt" || value === "es" ? value : "en";
@@ -133,8 +132,12 @@ export function buildConfirmationEmail(input: ConfirmationInput): ConfirmationEm
         <td align="center">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e2e9e4;border-radius:12px;">
             <tr>
+              <td style="padding:0;line-height:0;font-size:0;">
+                <img src="${HEADER_URL}" width="520" height="110" alt="Nellio" style="display:block;width:100%;max-width:520px;height:auto;border:0;outline:none;">
+              </td>
+            </tr>
+            <tr>
               <td style="padding:32px;">
-                ${LOGO_IMG}
                 <p style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#315f4a;font-weight:700;">${copy.eyebrow}</p>
                 <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#17251e;">${copy.heading(n)}</h1>
                 <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#34463a;">${copy.confirmHtml(j, c)}</p>

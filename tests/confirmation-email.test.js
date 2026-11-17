@@ -28,8 +28,8 @@ test('candidate-controlled values cannot inject HTML or e-mail headers', async (
     companyName: 'Evil <Co>" , <a@b.c>',
   });
   assert.equal(/[\r\n]/.test(mail.subject), false);
-  // the only <img> allowed is the Nellio logo itself (an injected one would be escaped)
-  assert.equal(mail.html.replace(/<img src="[^"]*nellio-logo-email.png"[^>]*>/, "").includes('<img'), false);
+  // the only <img> allowed is the Nellio header itself (an injected one would be escaped)
+  assert.equal(mail.html.replace(/<img src="[^"]*nellio-email-header.png"[^>]*>/, "").includes('<img'), false);
   assert.equal(mail.html.includes('<a@b.c>'), false);
   assert.match(mail.html, /&lt;img/);
   assert.equal(/[<>"@,]/.test(mail.fromName), false);
