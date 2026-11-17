@@ -9,13 +9,25 @@ test('colours are defined once as design tokens in :root and used through var()'
   const css = read('styles.css');
   const root = css.match(/:root\{[^}]*\}/)?.[0];
   assert.ok(root, ':root token block exists');
-  const outside = css.replace(root, '');
+  // The dark theme block redefines the same tokens; it is the only other place raw colours may live.
+  const dark = css.match(/:root\[data-theme="dark"\]\{[^}]*\}/)?.[0];
+  assert.ok(dark, 'dark theme token block exists');
+  const outside = css.replace(root, '').replace(dark, '');
   const raw = outside.match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g) || [];
   assert.deepEqual(raw, [], 'styles.css must use var(--token) instead of raw colours; add or reuse a token in :root');
   const defined = new Set([...root.matchAll(/--([a-z0-9-]+):/g)].map(match => match[1]));
   const used = [...outside.matchAll(/var\(--([a-z0-9-]+)\)/g)].map(match => match[1]);
   const missing = [...new Set(used.filter(name => !defined.has(name)))];
   assert.deepEqual(missing, [], 'every var(--token) used in styles.css is defined in :root');
+});
+
+test('the dark theme only redefines tokens that exist in the light theme', () => {
+  const css = read('styles.css');
+  const root = css.match(/:root{[^}]*}/)[0];
+  const dark = css.match(/:root\[data-theme="dark"\]\{[^}]*\}/)[0];
+  const light = new Set([...root.matchAll(/--([a-z0-9-]+):/g)].map(m => m[1]));
+  const unknown = [...dark.matchAll(/--([a-z0-9-]+):/g)].map(m => m[1]).filter(name => !light.has(name));
+  assert.deepEqual(unknown, []);
 });
 
 test('inline UI colours in the app scripts come from tokens', () => {

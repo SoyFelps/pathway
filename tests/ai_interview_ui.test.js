@@ -53,7 +53,7 @@ test('finished interviews ring the bell, and opening one lands on the AI Intervi
 });
 
 test('the new styles use colour tokens only', () => {
-  const block = css.slice(css.indexOf('/* AI Interview (Witcher)'));
+  const block = css.slice(css.indexOf('/* AI Interview (Witcher)'), css.indexOf('/* Dark theme (2026-11-17)'));
   assert.ok(block.includes('.applicant-card-ai{'));
   assert.equal(/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(block), false);
   assert.ok(css.includes('--positive-bg:') && css.includes('--positive-text:'));
@@ -170,7 +170,7 @@ test('an interview still going on while the candidate sits in another column sho
 
 test('on computer screens the applicants board is as tall as the window and scrolls inside itself, so both scroll bars stay in view', () => {
   assert.ok(builder.includes('<div class="workspace-body is-board">${renderSidebar(\'applicants\')}<main class="applicants-page">'));
-  const block = css.slice(css.indexOf('/* Applicants board: on a computer screen'));
+  const block = css.slice(css.indexOf('/* Applicants board: on a computer screen'), css.indexOf('/* Dark theme (2026-11-17)'));
   assert.ok(block.includes('@media(min-width:761px)'), 'phones keep the old page scroll');
   assert.ok(block.includes('.workspace-body.is-board{height:calc(100vh - 70px);height:calc(100dvh - 70px);'), 'the area is exactly the window minus the top bar');
   assert.ok(block.includes('.workspace-body.is-board .kanban-board{flex:1 1 auto;min-height:300px;overflow:auto;'), 'the board is the scrolling area, in both directions');

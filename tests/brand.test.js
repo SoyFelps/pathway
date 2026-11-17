@@ -24,7 +24,7 @@ test('every screen shows the new logo instead of the old arrow mark with the wor
   assert.ok(read('builder.js').split('src="brand/nellio-logo.svg"').length - 1 >= 14, 'every app header uses the logo');
   // o painel verde escuro das telas de entrada usa o logo branco
   assert.equal(read('auth.js').split('<section class="auth-story"><a class="brand" href="#"><img class="brand-logo" src="brand/nellio-logo-white.svg"').length - 1, 5);
-  assert.ok(read('styles.css').includes('.auth-story{background:var(--green);color:var(--surface)}'));
+  assert.ok(read('styles.css').includes('.auth-story{background:var(--panel);color:var(--on-panel)}'));
   assert.ok(read('candidate.js').includes('src="brand/nellio-logo.svg"'));
   assert.ok(read('legal.html').includes('src="brand/nellio-logo.svg"'));
   // the symbol is for the favicon and brand files only: no symbol on loading or empty screens
@@ -39,7 +39,7 @@ test('the favicon is the Nellio icon on every page, and the logo CSS is versione
   const css = read('styles.css');
   assert.match(css, /\.brand-logo\{display:block;height:36px;width:auto\}/);
   assert.ok(!css.includes('.brand-symbol'));
-  assert.ok(read('legal.html').includes('styles.css?v=mw3-20261117l'));
+  assert.ok(read('legal.html').includes('styles.css?v=mw3-20261117m'));
 });
 
 // ---- E-mails (2026-11-17): the header is a PNG hosted on the Nellio site (dark green, curved bottom edge, white logo), because e-mail clients do not show SVG ----

@@ -47,7 +47,7 @@ test('the responsible people explain themselves: tooltip on hover, or for 5 seco
   assert.ok(tip.includes("event.key === 'Escape'") && tip.includes("addEventListener('blur', hide)"), 'Escape and leaving the field also close it');
   assert.ok(d.includes("bindInfoTooltip(responsibleNode, modalRoot.querySelector('#applicant-responsible-tip'))"));
   const css = read('styles.css');
-  assert.ok(css.includes('.applicant-tooltip[hidden]{display:none}') && css.includes('background:var(--forest);color:var(--surface)'), 'drawn with colour tokens');
+  assert.ok(css.includes('.applicant-tooltip[hidden]{display:none}') && css.includes('background:var(--forest);color:var(--on-fill)'), 'drawn with colour tokens');
   assert.ok(d.includes('role="tooltip"') && d.includes('aria-describedby="applicant-responsible-tip"'), 'announced to screen readers');
 });
 

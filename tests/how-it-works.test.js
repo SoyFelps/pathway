@@ -39,7 +39,7 @@ test('"Start for free" returns to the top and opens the create-account form', ()
 
 test('the section is styled with colour tokens only and keeps the existing screen as it was', () => {
   const css = read('styles.css');
-  const block = css.slice(css.indexOf('/* Sign-in screen: "How it works" and plans */'));
+  const block = css.slice(css.indexOf('/* Sign-in screen: "How it works" and plans */'), css.indexOf('/* Dark theme (2026-11-17)'));
   assert.ok(block.includes('.plan-card-premium{background:var(--surface);border:2px solid var(--green)}'));
   assert.equal(/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(block), false);
   assert.ok(read('auth.js').includes("<h1>${t('Hiring made organized')}</h1>"), 'the headline from the previous change is intact');
