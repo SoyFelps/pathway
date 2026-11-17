@@ -79,10 +79,10 @@ test('the sign-in panel and the lime and red fills keep their colours in both th
   assert.ok(!css.includes('background:white'), 'no hard-coded white backgrounds');
 });
 
-test('the side menu and the top bars use the --chrome colour (#14201A in the dark theme); the page, cards and texts in the dark theme are neutral greys', () => {
+test('the side menu and the top bars use the --chrome colour (#1B1C1C in the dark theme); the page, cards and texts in the dark theme are neutral greys', () => {
   const css = read('styles.css');
   const dark = css.match(/:root\[data-theme="dark"\]\{[^}]*\}/)[0];
-  assert.ok(dark.includes('--chrome:#14201a;'));
+  assert.ok(dark.includes('--chrome:#1b1c1c;'));
   assert.ok(css.includes('.app-sidebar{width:220px;flex:0 0 220px;padding:26px 16px;border-right:1px solid var(--line);background:var(--chrome);'));
   assert.ok(css.includes('.topbar{height:70px;background:var(--chrome);'));
   assert.ok(css.includes('--chrome:#ffffff;'), 'the light theme keeps the white bars');
