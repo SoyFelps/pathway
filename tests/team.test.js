@@ -155,10 +155,10 @@ test('My Team shows the seats of the plan, defaults permissions on, and supports
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=mw3-20261116a/);
-  assert.match(html, /backend\.js\?v=mw3-20261116a/);
-  assert.match(html, /builder\.js\?v=mw3-20261116a/);
-  assert.match(html, /styles\.css\?v=mw3-20261116a/);
+  assert.match(html, /auth\.js\?v=mw3-20261117a/);
+  assert.match(html, /backend\.js\?v=mw3-20261117a/);
+  assert.match(html, /builder\.js\?v=mw3-20261117a/);
+  assert.match(html, /styles\.css\?v=mw3-20261117a/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
@@ -189,7 +189,8 @@ test('My Team sidebar uses a two-person icon, distinct from the single-person Ap
 
 test('My Companies appears immediately below My Team in the sidebar', () => {
   const sidebar = read('builder.js').split('function renderSidebar(active) {')[1].split('\n  }')[0];
-  const teamLabel = "${t('My Team')}</button>";
+  // The team link is labelled "Workspace" in the sidebar (owner, 2026-11-17); the page itself is still titled My Team.
+  const teamLabel = "${ICONS.team}</span>${t('Workspace')}</button>";
   const teamEnd = sidebar.indexOf(teamLabel) + teamLabel.length;
   const nextLink = sidebar.indexOf('data-route="', teamEnd);
   const companiesLink = sidebar.indexOf('data-route="my-companies"', teamEnd);
