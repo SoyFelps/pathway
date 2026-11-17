@@ -1035,9 +1035,6 @@ body:has(#canvas-stage) .toast{bottom:80px}
 
 /* Marca Nellio (logo N1-G, 2026-11-17): o logo e o símbolo são imagens SVG da pasta brand/ */
 .brand-logo{display:block;height:36px;width:auto}
-.brand-symbol{display:block;width:30px;height:30px;flex:none}
-.loading-card .brand-symbol{animation:symbol-pulse 1.3s ease-in-out infinite alternate}
-@keyframes symbol-pulse{to{opacity:.45}}
 @media(max-width:760px){.brand-logo{height:30px}}
 
 /* Telas de entrada (2026-11-17): painel esquerdo em verde escuro, com o logo branco e textos brancos */

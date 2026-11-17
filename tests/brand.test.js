@@ -27,8 +27,9 @@ test('every screen shows the new logo instead of the old arrow mark with the wor
   assert.ok(read('styles.css').includes('.auth-story{background:var(--green);color:var(--surface)}'));
   assert.ok(read('candidate.js').includes('src="brand/nellio-logo.svg"'));
   assert.ok(read('legal.html').includes('src="brand/nellio-logo.svg"'));
-  // the loading cards show the symbol alone
-  assert.ok(read('builder.js').includes('src="brand/nellio-symbol.svg"'));
+  // the symbol is for the favicon and brand files only: no symbol on loading or empty screens
+  assert.ok(!read('builder.js').includes('brand-symbol'));
+  assert.ok(!read('auth.js').includes('brand-symbol'));
 });
 
 test('the favicon is the Nellio icon on every page, and the logo CSS is versioned for the legal page too', () => {
@@ -37,8 +38,8 @@ test('the favicon is the Nellio icon on every page, and the logo CSS is versione
   }
   const css = read('styles.css');
   assert.match(css, /\.brand-logo\{display:block;height:36px;width:auto\}/);
-  assert.match(css, /\.brand-symbol\{/);
-  assert.ok(read('legal.html').includes('styles.css?v=mw3-20261117i'));
+  assert.ok(!css.includes('.brand-symbol'));
+  assert.ok(read('legal.html').includes('styles.css?v=mw3-20261117j'));
 });
 
 // ---- E-mails (2026-11-17): the header is a PNG hosted on the Nellio site (dark green, curved bottom edge, white logo), because e-mail clients do not show SVG ----

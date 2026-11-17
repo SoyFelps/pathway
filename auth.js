@@ -26,7 +26,7 @@
     inviteToken = '';
   }
   function showLoading() {
-    root.innerHTML = `<main class="loading-screen"><div class="loading-card"><img class="brand-symbol" src="brand/nellio-symbol.svg" alt="" aria-hidden="true"><span>${t('Opening your workspace…')}</span></div></main>`;
+    root.innerHTML = `<main class="loading-screen"><div class="loading-card"><span>${t('Opening your workspace…')}</span></div></main>`;
   }
   function friendlyError(error) {
     const message = String(error && error.message || error || 'Something went wrong.');
@@ -268,7 +268,7 @@
   const UNAVAILABLE_MESSAGE = 'A momentary instability occurred. Please try again in a few seconds.';
   // The settings file or the Supabase library did not load (see backend.js): a plain message and a way to try again.
   function renderUnavailable() {
-    root.innerHTML = '<main class="loading-screen"><div class="loading-card is-error" role="alert"><img class="brand-symbol" src="brand/nellio-symbol.svg" alt="" aria-hidden="true"><span>' + t(UNAVAILABLE_MESSAGE) + '</span><button class="btn btn-primary" id="retry-load" type="button">' + t('Try again') + '</button></div></main>';
+    root.innerHTML = '<main class="loading-screen"><div class="loading-card is-error" role="alert"><span>' + t(UNAVAILABLE_MESSAGE) + '</span><button class="btn btn-primary" id="retry-load" type="button">' + t('Try again') + '</button></div></main>';
     root.querySelector('#retry-load').addEventListener('click', () => window.location.reload());
   }
   async function start(callback) {
