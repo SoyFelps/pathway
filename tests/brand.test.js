@@ -36,5 +36,5 @@ test('the favicon is the Nellio icon on every page, and the logo CSS is versione
   const css = read('styles.css');
   assert.match(css, /\.brand-logo\{display:block;height:36px;width:auto\}/);
   assert.match(css, /\.brand-symbol\{/);
-  assert.ok(read('legal.html').includes('styles.css?v=mw3-20261117f'));
+  assert.ok(read('legal.html').includes('styles.css?v=mw3-20261117g'));
 });

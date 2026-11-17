@@ -89,6 +89,7 @@
   --shadow-lg:rgba(18,36,25,.25);
   --overlay:rgba(16,29,21,.47);
   --green-fade-high:rgba(49,95,74,.78);
+  --green-fade-strong:rgba(49,95,74,.5);
   --green-fade-mid:rgba(49,95,74,.28);
   --green-fade-low:rgba(49,95,74,.1);
   --overlay-strong:rgba(16,29,21,.56);
@@ -1044,5 +1045,5 @@ body:has(#canvas-stage) .toast{bottom:80px}
 @media(max-width:760px){.brand-logo{height:30px}}
 /* Tela de entrada: o painel esquerdo é um degradê radial que parte do canto superior esquerdo (branco, onde está o logo) e vai ficando verde escuro até o canto inferior direito. No celular o painel é curto e fica como estava. */
 @media(min-width:761px){
-.auth-story{background:radial-gradient(circle farthest-corner at 0 0,var(--surface) 0%,var(--surface) 28%,var(--green-fade-low) 56%,var(--green-fade-mid) 80%,var(--green-fade-high) 93%,var(--green-deep) 100%)}
+.auth-story{background:radial-gradient(circle farthest-corner at 0 0,var(--surface) 0%,var(--surface) 28%,var(--green-fade-low) 56%,var(--green-fade-mid) 82%,var(--green-fade-strong) 100%)}
 }
