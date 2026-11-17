@@ -22,7 +22,9 @@ test('every screen shows the new logo instead of the old arrow mark with the wor
     assert.ok(!src.includes('<span class="brand">nellio</span>'), `${file}: no plain text brand left`);
   }
   assert.ok(read('builder.js').split('src="brand/nellio-logo.svg"').length - 1 >= 14, 'every app header uses the logo');
-  assert.ok(read('auth.js').includes('src="brand/nellio-logo.svg"'));
+  // o painel verde escuro das telas de entrada usa o logo branco
+  assert.equal(read('auth.js').split('<section class="auth-story"><a class="brand" href="#"><img class="brand-logo" src="brand/nellio-logo-white.svg"').length - 1, 5);
+  assert.ok(read('styles.css').includes('.auth-story{background:var(--green);color:var(--surface)}'));
   assert.ok(read('candidate.js').includes('src="brand/nellio-logo.svg"'));
   assert.ok(read('legal.html').includes('src="brand/nellio-logo.svg"'));
   // the loading cards show the symbol alone
@@ -36,5 +38,5 @@ test('the favicon is the Nellio icon on every page, and the logo CSS is versione
   const css = read('styles.css');
   assert.match(css, /\.brand-logo\{display:block;height:36px;width:auto\}/);
   assert.match(css, /\.brand-symbol\{/);
-  assert.ok(read('legal.html').includes('styles.css?v=mw3-20261117h'));
+  assert.ok(read('legal.html').includes('styles.css?v=mw3-20261117i'));
 });

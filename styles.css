@@ -1039,3 +1039,11 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .loading-card .brand-symbol{animation:symbol-pulse 1.3s ease-in-out infinite alternate}
 @keyframes symbol-pulse{to{opacity:.45}}
 @media(max-width:760px){.brand-logo{height:30px}}
+
+/* Telas de entrada (2026-11-17): painel esquerdo em verde escuro, com o logo branco e textos brancos */
+.auth-story{background:var(--green);color:var(--surface)}
+.auth-story .eyebrow{color:var(--lime)}
+.auth-story h1{color:var(--surface)}
+.auth-story p{color:var(--mint-strong)}
+.auth-story .auth-feature-list{color:var(--mint-strong)}
+.auth-story .auth-feature span{background:var(--green-deep);color:var(--lime)}
