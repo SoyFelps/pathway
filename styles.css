@@ -1046,13 +1046,13 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .auth-story .auth-feature span{background:var(--green-deep);color:var(--lime)}
 /* Checkout loading (2026-11-17): three green dots bounce one at a time, gather into a spinning ring, then open back into dots, until Stripe is ready. */
 .checkout-wait[hidden]{display:none}
-.checkout-loader{position:relative;width:72px;height:56px;margin:4px auto 14px;animation:checkout-ring-spin 4.8s linear infinite}
-.checkout-loader i{position:absolute;left:50%;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:var(--green-2)}
+.checkout-loader{position:relative;width:56px;height:44px;margin:4px auto 12px;animation:checkout-ring-spin 4.8s linear infinite}
+.checkout-loader i{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:var(--green-2)}
 .checkout-loader i:nth-child(1){animation:checkout-dot-1 4.8s ease-in-out infinite}
 .checkout-loader i:nth-child(2){animation:checkout-dot-2 4.8s ease-in-out infinite}
 .checkout-loader i:nth-child(3){animation:checkout-dot-3 4.8s ease-in-out infinite}
-@keyframes checkout-dot-1{0%,100%{transform:translate(-20px,0)}6%{transform:translate(-20px,-14px)}12%,32%{transform:translate(-20px,0)}40%,84%{transform:translate(-12px,7px)}94%{transform:translate(-20px,0)}}
-@keyframes checkout-dot-2{0%,12%,100%{transform:translate(0,0)}18%{transform:translate(0,-14px)}24%,32%{transform:translate(0,0)}40%,84%{transform:translate(0,-14px)}94%{transform:translate(0,0)}}
-@keyframes checkout-dot-3{0%,24%,100%{transform:translate(20px,0)}30%{transform:translate(20px,-14px)}36%,38%{transform:translate(20px,0)}40%,84%{transform:translate(12px,7px)}94%{transform:translate(20px,0)}}
+@keyframes checkout-dot-1{0%,100%{transform:translate(-15px,0)}6%{transform:translate(-15px,-11px)}12%,32%{transform:translate(-15px,0)}40%,84%{transform:translate(-9px,5.5px)}94%{transform:translate(-15px,0)}}
+@keyframes checkout-dot-2{0%,12%,100%{transform:translate(0,0)}18%{transform:translate(0,-11px)}24%,32%{transform:translate(0,0)}40%,84%{transform:translate(0,-11px)}94%{transform:translate(0,0)}}
+@keyframes checkout-dot-3{0%,24%,100%{transform:translate(15px,0)}30%{transform:translate(15px,-11px)}36%,38%{transform:translate(15px,0)}40%,84%{transform:translate(9px,5.5px)}94%{transform:translate(15px,0)}}
 @keyframes checkout-ring-spin{0%,40%{transform:rotate(0)}84%{transform:rotate(720deg)}100%{transform:rotate(720deg)}}
-@media(prefers-reduced-motion:reduce){.checkout-loader,.checkout-loader i{animation:none}.checkout-loader i:nth-child(1){transform:translate(-20px,0)}.checkout-loader i:nth-child(3){transform:translate(20px,0)}}
+@media(prefers-reduced-motion:reduce){.checkout-loader,.checkout-loader i{animation:none}.checkout-loader i:nth-child(1){transform:translate(-15px,0)}.checkout-loader i:nth-child(3){transform:translate(15px,0)}}
