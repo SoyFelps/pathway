@@ -155,10 +155,10 @@ test('My Team shows the seats of the plan, defaults permissions on, and supports
 test('My Team stylesheet and static page load are versioned for immediate deployment', () => {
   const html = read('index.html');
   const css = read('styles.css');
-  assert.match(html, /auth\.js\?v=mw3-20261118v/);
-  assert.match(html, /backend\.js\?v=mw3-20261118v/);
-  assert.match(html, /builder\.js\?v=mw3-20261118v/);
-  assert.match(html, /styles\.css\?v=mw3-20261118v/);
+  assert.match(html, /auth\.js\?v=mw3-20261118w/);
+  assert.match(html, /backend\.js\?v=mw3-20261118w/);
+  assert.match(html, /builder\.js\?v=mw3-20261118w/);
+  assert.match(html, /styles\.css\?v=mw3-20261118w/);
   assert.match(css, /\/\* My Team \*\//);
   assert.match(css, /\.my-team-page/);
 });
@@ -177,20 +177,21 @@ test('My Team renders loading cards before its list request resolves and ignores
   assert.doesNotMatch(edge, /const \{ data: ownMembership, error: ownError \} = await admin\.from\("workspace_members"\)/);
 });
 
-test('My Team sidebar uses a two-person icon, distinct from the single-person Applicants icon', () => {
+test('the Workspace sidebar item has its own stacked-layers icon, distinct from the other menu icons', () => {
   const builder = read('builder.js');
-  const applicantsIcon = builder.match(/applicants: '(.*?)',\n\s*team:/s)?.[1];
-  const teamIcon = builder.match(/team: '(.*?)',\n\s*dashboard:/s)?.[1];
-  assert.ok(applicantsIcon && teamIcon, 'both sidebar icons must be defined');
-  assert.notEqual(teamIcon, applicantsIcon);
-  assert.equal((teamIcon.match(/<circle/g) || []).length, 2, 'two people');
-  assert.equal((applicantsIcon.match(/<circle/g) || []).length, 1, 'one person');
+  const applicantsIcon = builder.match(/applicants: '(.*?)',\n\s*workspace:/s)?.[1];
+  const workspaceIcon = builder.match(/workspace: '(.*?)',\n\s*dashboard:/s)?.[1];
+  assert.ok(applicantsIcon && workspaceIcon, 'both sidebar icons must be defined');
+  assert.notEqual(workspaceIcon, applicantsIcon);
+  assert.equal((workspaceIcon.match(/<circle/g) || []).length, 0, 'no person any more: it is not the team screen');
+  assert.equal((workspaceIcon.match(/<path/g) || []).length, 3, 'three stacked layers');
+  assert.equal(builder.includes('ICONS.team'), false, 'the old name is gone');
 });
 
 test('My Companies appears immediately below My Team in the sidebar', () => {
   const sidebar = read('builder.js').split('function renderSidebar(active) {')[1].split('\n  }')[0];
   // The team link is labelled "Workspace" in the sidebar (owner, 2026-11-17); the page itself is still titled My Team.
-  const teamLabel = "${ICONS.team}</span>${t('Workspace')}</button>";
+  const teamLabel = "${ICONS.workspace}</span>${t('Workspace')}</button>";
   const teamEnd = sidebar.indexOf(teamLabel) + teamLabel.length;
   const nextLink = sidebar.indexOf('data-route="', teamEnd);
   const companiesLink = sidebar.indexOf('data-route="my-companies"', teamEnd);

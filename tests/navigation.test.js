@@ -35,7 +35,7 @@ test('signing out replaces the old page in the address with #login, so the next 
 test('every sidebar link has a drawn SVG icon (no text symbols)', () => {
   const b = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
   const sidebar = b.slice(b.indexOf('function renderSidebar(active)'), b.indexOf('function bindSidebar()'));
-  for (const name of ['dashboard', 'applicants', 'reports', 'diversity', 'team', 'companies', 'plan', 'settings']) {
+  for (const name of ['dashboard', 'applicants', 'reports', 'diversity', 'workspace', 'companies', 'plan', 'settings']) {
     assert.ok(sidebar.includes('${ICONS.' + name + '}'), name + ' icon in the sidebar');
     assert.match(b, new RegExp("\n    " + name + ": '<svg"), name + ' icon is an SVG');
   }
