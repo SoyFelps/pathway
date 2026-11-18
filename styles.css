@@ -1178,3 +1178,17 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .reports-page .reports-heading,.diversity-page .reports-heading{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:14px}
 .reports-page .reports-heading p,.diversity-page .reports-heading p{max-width:none}
 .reports-page .reports-tools,.diversity-page .reports-tools{width:100%;justify-content:flex-start}
+/* Secondary screens (2026-11-18, owner decision): the same width (1180 px, centred), the same top and side spacing, and the same title and subtitle size, so the title always starts at the same place.
+   The Dashboard and the Applicants page keep their own layout on purpose (they use all the room). Computer screens only: phones keep the rules of each screen. */
+@media(min-width:761px){
+  main.reports-page,main.diversity-page,main.my-team-page,main.companies-page,main.my-plan-page,main.settings-page,main.notifications-page{width:100%;max-width:1180px;margin:0 auto;padding:46px 44px 72px}
+  .reports-heading h1,.my-team-heading h1,.companies-heading h1,.my-plan-heading h1,.settings-heading h1{font:700 40px/1.1 var(--display);letter-spacing:-1.3px;margin:7px 0 8px}
+  .reports-heading p,.my-team-heading p,.companies-heading p,.my-plan-heading p,.settings-heading p{margin:0;font-size:14px;line-height:1.5}
+  .reports-heading,.my-team-heading,.companies-heading,.my-plan-heading,.settings-heading{margin-bottom:22px}
+}
+/* The same on phones (2026-11-18): one top and side spacing and one title size for the secondary screens. */
+@media(max-width:760px){
+  main.reports-page,main.diversity-page,main.my-team-page,main.companies-page,main.my-plan-page,main.settings-page,main.notifications-page{width:100%;max-width:none;margin:0;padding:28px 16px 48px}
+  .reports-heading h1,.my-team-heading h1,.companies-heading h1,.my-plan-heading h1,.settings-heading h1{font:700 30px/1.1 var(--display);letter-spacing:-1px;margin:7px 0 8px}
+  .reports-heading p,.my-team-heading p,.companies-heading p,.my-plan-heading p,.settings-heading p{margin:0;font-size:14px;line-height:1.5}
+}
