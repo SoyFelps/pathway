@@ -136,15 +136,20 @@ export interface CandidateEmailInput {
 
 export interface BuiltEmail { subject: string; text: string; html: string; fromName: string }
 
+/** A line of the details box: label, plain text (used in the text version) and, optionally, short links shown instead of the text in the HTML version. */
+type Row = [string, string] | [string, string, Array<{ label: string; url: string }>];
+
 interface LayoutInput {
-  htmlLang: string; eyebrow: string; heading: string; paragraphs: string[]; rows: Array<[string, string]>;
+  htmlLang: string; eyebrow: string; heading: string; paragraphs: string[]; rows: Row[];
   button?: { url: string; label: string }; footer: string; greeting?: string;
 }
 
 function layout(i: LayoutInput): { html: string; text: string } {
   const rowsHtml = i.rows.length
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;background:#f3f7f4;border-radius:8px;"><tr><td style="padding:16px;font-size:15px;line-height:1.7;color:#17251e;">${
-      i.rows.map(([k, v]) => `<strong>${escapeHtml(k)}:</strong> ${escapeHtml(v).replace(/\n/g, "<br>")}`).join("<br>")}</td></tr></table>`
+      i.rows.map(([k, v, links]) => `<strong>${escapeHtml(k)}:</strong> ${links?.length
+        ? links.map((a) => `<a href="${escapeHtml(a.url)}" style="color:#1f6b4a;font-weight:600;">${escapeHtml(a.label)}</a>`).join(" &middot; ")
+        : escapeHtml(v).replace(/\n/g, "<br>")}`).join("<br>")}</td></tr></table>`
     : "";
   const paragraphs = i.paragraphs.filter(Boolean).map((p) => `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#34463a;">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`).join("\n");
   const button = i.button
@@ -197,7 +202,7 @@ function layout(i: LayoutInput): { html: string; text: string } {
 }
 
 function detailRows(copy: CandidateCopy["labels"], d: InterviewDetails, language: Language): Array<[string, string]> {
-  const rows: Array<[string, string]> = [[copy.when, formatWhen(d.startsAt, d.durationMinutes, d.timeZone, language)]];
+  const rows: Row[] = [[copy.when, formatWhen(d.startsAt, d.durationMinutes, d.timeZone, language)]];
   rows.push([copy.format, d.kind === "online" ? copy.online : copy.inPerson]);
   if (d.kind === "online" && d.meetingLink) rows.push([copy.link, singleLine(d.meetingLink, 500)]);
   if (d.kind === "in_person" && d.address) rows.push([copy.address, singleLine(d.address, 300)]);
@@ -313,8 +318,11 @@ export function buildRecruiterEmail(input: RecruiterEmailInput): BuiltEmail {
     if (message) rows.push([copy.labels.message, message]);
   }
   if (input.kind === "scheduled" && input.calendarLinks) {
-    const links = [input.calendarLinks.google ? `Google: ${input.calendarLinks.google}` : "", input.calendarLinks.outlook ? `Outlook: ${input.calendarLinks.outlook}` : ""].filter(Boolean);
-    if (links.length) rows.push([copy.labels.addToCalendar, links.join("\n")]);
+    // In the HTML the long addresses hide behind two short words; the text version keeps the full addresses.
+    const shown: Array<{ label: string; url: string }> = [];
+    if (input.calendarLinks.google) shown.push({ label: "Google", url: input.calendarLinks.google });
+    if (input.calendarLinks.outlook) shown.push({ label: "Outlook", url: input.calendarLinks.outlook });
+    if (shown.length) rows.push([copy.labels.addToCalendar, shown.map((a) => `${a.label}: ${a.url}`).join("\n"), shown]);
   }
   const built = layout({
     htmlLang: copy.htmlLang,

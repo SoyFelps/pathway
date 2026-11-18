@@ -134,6 +134,11 @@ test('the recruiter is told when the candidate answers, in the recruiter languag
   const scheduled = buildRecruiterEmail({ ...base, kind: 'scheduled', calendarLinks: { google: 'https://calendar.google.com/x', outlook: 'https://outlook.live.com/y' } });
   assert.match(scheduled.text, /Add to my calendar/);
   assert.match(scheduled.text, /calendar\.google\.com/);
+  // In the HTML the long addresses hide behind two short words (owner request, 2026-11-19).
+  assert.match(scheduled.html, />Google<\/a>/);
+  assert.match(scheduled.html, />Outlook<\/a>/);
+  assert.equal(/>https:\/\/calendar\.google\.com/.test(scheduled.html), false, 'the address is not shown as the text of the link');
+  assert.match(scheduled.html, /href="https:\/\/calendar\.google\.com\/x"/);
 });
 
 test('the function checks origin and sign-in, and the candidate actions need only the secret of the link', () => {
