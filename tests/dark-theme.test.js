@@ -9,7 +9,7 @@ const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 // Dark theme (2026-11-17): only the recruiter app; the light theme must stay exactly as it was.
 test('theme.js is loaded first in the head of the app and not on the candidate or legal pages', () => {
   const html = read('index.html');
-  assert.ok(/<script src="theme\.js\?v=[^"]+"><\/script>\s*<link rel="stylesheet" href="styles\.css/.test(html));
+  assert.ok(/<script src="theme\.js\?v=[^"]+"><\/script>\s*(<link rel="preload"[^>]*>\s*)?<link rel="stylesheet" href="styles\.css/.test(html), 'theme.js comes before the styles (a font preload may sit between them)');
   assert.ok(!read('apply.html').includes('theme.js'));
   assert.ok(!read('legal.html').includes('theme.js'));
 });
