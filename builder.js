@@ -370,6 +370,11 @@
       icon = '<span class="notif-row-icon is-mention" aria-hidden="true">@</span>';
       text = notifMentionText(item.authorName);
       sub = esc(item.candidateName) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '');
+    } else if (item.kind === 'candidate_interview') {
+      attrs = 'data-notif-iv="' + esc(item.id) + '" data-notif-iv-flow="' + esc(item.flowId) + '" data-notif-iv-email="' + esc(item.candidateEmail) + '"';
+      icon = '<span class="notif-row-icon is-interview" aria-hidden="true">' + INTERVIEW_ICON.replace('width="11" height="11"', 'width="18" height="18"') + '</span>';
+      text = notifInterviewText(item.state, item.candidateName);
+      sub = esc(item.jobTitle || '');
     } else if (item.kind === 'ai_interview') {
       attrs = 'data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"';
       icon = '<span class="notif-row-icon is-ai" aria-hidden="true">✦</span>';

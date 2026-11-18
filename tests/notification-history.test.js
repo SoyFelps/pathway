@@ -96,3 +96,20 @@ test('the "Last 30 days" toggle uses a drawn chevron icon (not a text glyph) tha
   const css = read('styles.css');
   assert.match(css, /\.notif-section-toggle\[aria-expanded="true"\] \.notif-chevron\{transform:rotate\(90deg\)\}/);
 });
+
+test('everything the bell shows is also on the page: the answers to interview invitations are the fourth kind, with the bell\'s rules', () => {
+  const sql = read('supabase/migrations/20261119140000_notification_history_interviews.sql');
+  const bell = read('supabase/migrations/20261119120000_candidate_interviews.sql');
+  assert.match(sql, /drop function if exists public\.get_notification_history\(uuid, integer\);/);
+  assert.match(sql, /function public\.get_notification_history\(p_workspace_id uuid, p_utc_offset_minutes integer default 0\)/);
+  assert.match(sql, /'candidate_interview'::text/);
+  assert.match(sql, /i\.state in \('confirmed', 'declined', 'reschedule_requested'\)/, 'the same answers as the bell');
+  assert.ok(bell.includes("i.state in ('confirmed', 'declined', 'reschedule_requested')"));
+  assert.match(sql, /s\.notice_at = i\.notice_at/, 'seen = that very answer was opened');
+  assert.match(sql, /cardinality\(f\.responsible_user_ids\) = 0 or auth\.uid\(\) = any \(f\.responsible_user_ids\)/);
+  assert.match(sql, /grant execute on function public\.get_notification_history\(uuid, integer\) to authenticated, service_role;/);
+  const builder = read('builder.js');
+  assert.match(builder, /item\.kind === 'candidate_interview'/);
+  assert.match(builder, /notifInterviewText\(item\.state, item\.candidateName\)/);
+  assert.match(read('backend.js'), /state: row\.state \|\| null/);
+});

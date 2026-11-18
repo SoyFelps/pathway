@@ -228,7 +228,7 @@
     return (data || []).map(row => ({
       kind: row.kind, at: row.event_at, seen: Boolean(row.seen), flowId: row.flow_id, jobTitle: row.job_title || '', companyName: row.company_name || '',
       candidateName: row.candidate_name || '', candidateEmail: row.candidate_email || '', newCount: Number(row.new_count) || 0, authorName: row.author_name || '',
-      impression: row.impression || null, id: row.ref_id || null
+      impression: row.impression || null, id: row.ref_id || null, state: row.state || null
     }));
   }
   async function listFlowNotifications(workspaceId) {

@@ -564,6 +564,7 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .notif-row-icon.is-candidates{background:var(--tint);color:var(--green)}
 .notif-row-icon.is-mention{background:var(--amber-bg);color:var(--amber-text)}
 .notif-row-icon.is-ai{background:var(--tint);color:var(--green-deep)}
+.notif-row-icon.is-interview{background:var(--tint);color:var(--green-deep)}
 .notif-row-body{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
 .notif-row .notif-text{font-size:13px;color:var(--ink);line-height:1.4}
 .notif-row .notif-sub{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
