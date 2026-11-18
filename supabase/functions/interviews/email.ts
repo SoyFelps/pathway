@@ -241,7 +241,7 @@ interface RecruiterCopy {
   kinds: Record<"scheduled" | "confirmed" | "declined" | "reschedule", {
     subject: (name: string, job: string) => string; eyebrow: string; heading: (name: string) => string; intro: (name: string, job: string, company: string) => string;
   }>;
-  labels: CandidateCopy["labels"] & { message: string; suggested: string; addToCalendar: string };
+  labels: CandidateCopy["labels"] & { message: string; suggested: string; addToCalendar: string; email: string };
   button: string;
   footer: string;
 }
@@ -255,7 +255,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       declined: { subject: (n, j) => `${n} cannot attend the interview – ${j}`, eyebrow: "Interview declined", heading: (n) => `${n} cannot attend.`, intro: (n, j, c) => `${n} said they cannot attend the interview for ${j} at ${c}. The candidate was not moved or rejected: it is your decision.` },
       reschedule: { subject: (n, j) => `${n} asked for another time – ${j}`, eyebrow: "Another time requested", heading: (n) => `${n} asked for another time.`, intro: (n, j, c) => `${n} asked for another time for the interview for ${j} at ${c}. Open the candidate and schedule a new time to send a new invitation.` },
     },
-    labels: { when: "When", format: "Format", online: "Online", inPerson: "In person", link: "Meeting link", address: "Address", notes: "Notes", message: "Candidate message", suggested: "Suggested times", addToCalendar: "Add to my calendar" },
+    labels: { when: "When", format: "Format", online: "Online", inPerson: "In person", link: "Meeting link", address: "Address", notes: "Notes", message: "Candidate message", suggested: "Suggested times", addToCalendar: "Add to my calendar", email: "E-mail" },
     button: "Open candidates",
     footer: "Automated message from Nellio. Please do not reply to this e-mail.",
   },
@@ -267,7 +267,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       declined: { subject: (n, j) => `${n} não poderá participar da entrevista – ${j}`, eyebrow: "Entrevista recusada", heading: (n) => `${n} não poderá participar.`, intro: (n, j, c) => `${n} informou que não poderá participar da entrevista para ${j} – ${c}. A pessoa não foi movida nem reprovada: a decisão é sua.` },
       reschedule: { subject: (n, j) => `${n} pediu outro horário – ${j}`, eyebrow: "Pedido de outro horário", heading: (n) => `${n} pediu outro horário.`, intro: (n, j, c) => `${n} pediu outro horário para a entrevista para ${j} – ${c}. Abra o candidato e agende um novo horário para enviar um novo convite.` },
     },
-    labels: { when: "Quando", format: "Formato", online: "Online", inPerson: "Presencial", link: "Link da reunião", address: "Endereço", notes: "Observações", message: "Mensagem do candidato", suggested: "Horários sugeridos", addToCalendar: "Adicionar à minha agenda" },
+    labels: { when: "Quando", format: "Formato", online: "Online", inPerson: "Presencial", link: "Link da reunião", address: "Endereço", notes: "Observações", message: "Mensagem do candidato", suggested: "Horários sugeridos", addToCalendar: "Adicionar à minha agenda", email: "E-mail" },
     button: "Abrir candidatos",
     footer: "Mensagem automática do Nellio. Por favor, não responda a este e-mail.",
   },
@@ -279,7 +279,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       declined: { subject: (n, j) => `${n} no podrá asistir a la entrevista – ${j}`, eyebrow: "Entrevista rechazada", heading: (n) => `${n} no podrá asistir.`, intro: (n, j, c) => `${n} indicó que no podrá asistir a la entrevista para ${j} – ${c}. La persona no fue movida ni rechazada: la decisión es tuya.` },
       reschedule: { subject: (n, j) => `${n} pidió otro horario – ${j}`, eyebrow: "Solicitud de otro horario", heading: (n) => `${n} pidió otro horario.`, intro: (n, j, c) => `${n} pidió otro horario para la entrevista para ${j} – ${c}. Abre el candidato y programa un nuevo horario para enviar una nueva invitación.` },
     },
-    labels: { when: "Cuándo", format: "Formato", online: "En línea", inPerson: "Presencial", link: "Enlace de la reunión", address: "Dirección", notes: "Observaciones", message: "Mensaje del candidato", suggested: "Horarios sugeridos", addToCalendar: "Agregar a mi calendario" },
+    labels: { when: "Cuándo", format: "Formato", online: "En línea", inPerson: "Presencial", link: "Enlace de la reunión", address: "Dirección", notes: "Observaciones", message: "Mensaje del candidato", suggested: "Horarios sugeridos", addToCalendar: "Agregar a mi calendario", email: "Correo" },
     button: "Abrir candidatos",
     footer: "Mensaje automático de Nellio. Por favor, no respondas a este correo.",
   },
@@ -291,6 +291,8 @@ export interface RecruiterEmailInput {
   kind: RecruiterEmailKind;
   language?: unknown;
   candidateName?: unknown;
+  /** Shown in the body (the title shows the name); also the name when the candidate has none. */
+  candidateEmail?: unknown;
   jobTitle?: unknown;
   companyName?: unknown;
   interview: InterviewDetails;
@@ -306,11 +308,14 @@ export interface RecruiterEmailInput {
 export function buildRecruiterEmail(input: RecruiterEmailInput): BuiltEmail {
   const language = emailLanguage(input.language);
   const copy = RECRUITER[language];
-  const name = singleLine(input.candidateName, 120) || "—";
+  const candidateEmail = singleLine(input.candidateEmail, 254);
+  const name = singleLine(input.candidateName, 120) || candidateEmail || "—";
   const job = singleLine(input.jobTitle, 120) || "—";
   const company = singleLine(input.companyName, 80) || "—";
   const k = copy.kinds[input.kind];
   const rows = detailRows(copy.labels, input.interview, language);
+  // The title and the text name the person; the address is in the body, so the team has both.
+  if (candidateEmail) rows.unshift([copy.labels.email, candidateEmail]);
   const message = multiLine(input.message, 1000);
   if (input.kind === "reschedule") {
     const times = (input.suggestedTimes || []).map((t) => singleLine(t, 20).replace("T", " ")).filter(Boolean);

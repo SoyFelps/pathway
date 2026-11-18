@@ -131,6 +131,15 @@ test('the recruiter is told when the candidate answers, in the recruiter languag
   const ask = buildRecruiterEmail({ ...base, kind: 'reschedule', language: 'es', message: 'Puedo el viernes', suggestedTimes: ['2026-12-03T14:00', '2026-12-04T10:30'] });
   assert.match(ask.text, /2026-12-03 14:00/);
   assert.match(ask.text, /Puedo el viernes/);
+  // The title names the person; the e-mail address is in the body (owner request, 2026-11-19).
+  const named = buildRecruiterEmail({ ...base, kind: 'confirmed', candidateName: 'Alex Morgan', candidateEmail: 'alex@example.test' });
+  assert.equal(named.subject, 'Alex Morgan confirmed the interview – Designer');
+  assert.match(named.html, /<h1[^>]*>Alex Morgan confirmed\.<\/h1>/);
+  assert.match(named.html, /<strong>E-mail:<\/strong> alex@example\.test/);
+  assert.match(named.text, /E-mail: alex@example\.test/);
+  assert.equal(/<h1[^>]*>[^<]*alex@example/.test(named.html), false, 'the address is not in the title');
+  const unnamed = buildRecruiterEmail({ ...base, kind: 'confirmed', candidateName: '', candidateEmail: 'alex@example.test' });
+  assert.match(unnamed.html, /<h1[^>]*>alex@example\.test confirmed\.<\/h1>/, 'a candidate without a name is shown by the address');
   const scheduled = buildRecruiterEmail({ ...base, kind: 'scheduled', calendarLinks: { google: 'https://calendar.google.com/x', outlook: 'https://outlook.live.com/y' } });
   assert.match(scheduled.text, /Add to my calendar/);
   assert.match(scheduled.text, /calendar\.google\.com/);

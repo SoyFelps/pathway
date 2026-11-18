@@ -194,7 +194,7 @@ async function notifyRecruiters(ctx: Context, kind: RecruiterEmailKind, keySuffi
     const event = calendarEventOf(ctx);
     for (const person of await recruiterRecipients(ctx)) {
       const mail = buildRecruiterEmail({
-        kind, language: person.language, candidateName: ctx.candidateName || ctx.iv.candidate_email, jobTitle: ctx.jobTitle, companyName: ctx.companyName,
+        kind, language: person.language, candidateName: ctx.candidateName, candidateEmail: ctx.iv.candidate_email, jobTitle: ctx.jobTitle, companyName: ctx.companyName,
         interview: detailsOf(ctx.iv), message: extra.message, suggestedTimes: extra.suggestedTimes, appUrl: `${APP_URL}#applicants`,
         calendarLinks: kind === "scheduled" ? { google: googleCalendarUrl(event), outlook: outlookCalendarUrl(event) } : undefined,
       });
