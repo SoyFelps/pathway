@@ -24,7 +24,7 @@ function loadI18n({ languages = ['en-US'], stored = null } = {}) {
 const TRANSLATED_FILES = ['builder.js', 'candidate.js', 'geo.js', 'auth.js', 'backend.js', 'pathway.js'];
 // Where a dictionary key may come from: t() calls, but also English texts passed to t() as values (field labels, list options,
 // server messages shown through t(error.message)). A key that appears in none of these files is an old, unused translation.
-const SERVER_FILES = ['applications/index.ts', 'billing/index.ts', 'team/index.ts', 'delete-account/index.ts', 'ai-interview/index.ts', 'ai-interview/logic.ts', 'ai-questions/index.ts'].map(file => 'supabase/functions/' + file);
+const SERVER_FILES = ['applications/index.ts', 'billing/index.ts', 'team/index.ts', 'delete-account/index.ts', 'ai-interview/index.ts', 'ai-interview/logic.ts', 'ai-questions/index.ts', 'interviews/index.ts', 'interviews/logic.ts'].map(file => 'supabase/functions/' + file);
 const MIGRATION_FILES = fs.readdirSync(path.join(root, 'supabase/migrations')).filter(name => name.endsWith('.sql')).map(name => 'supabase/migrations/' + name);
 const SOURCE_FILES = ['builder.js', 'candidate.js', 'geo.js', 'auth.js', 'pathway.js', 'backend.js', 'apply.html', ...SERVER_FILES, ...MIGRATION_FILES];
 // The messages the server and the database send (English); the browser translates them by their text (phase 4).
