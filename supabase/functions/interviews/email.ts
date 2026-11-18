@@ -201,7 +201,7 @@ function layout(i: LayoutInput): { html: string; text: string } {
   return { html, text };
 }
 
-function detailRows(copy: CandidateCopy["labels"], d: InterviewDetails, language: Language): Array<[string, string]> {
+function detailRows(copy: CandidateCopy["labels"], d: InterviewDetails, language: Language): Row[] {
   const rows: Row[] = [[copy.when, formatWhen(d.startsAt, d.durationMinutes, d.timeZone, language)]];
   rows.push([copy.format, d.kind === "online" ? copy.online : copy.inPerson]);
   if (d.kind === "online" && d.meetingLink) rows.push([copy.link, singleLine(d.meetingLink, 500)]);
