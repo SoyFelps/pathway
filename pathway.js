@@ -162,12 +162,15 @@
         const options = Array.isArray(node.options) ? node.options.map(String) : [];
         const flagged = Array.isArray(node.autoFailOptions) ? [...new Set(node.autoFailOptions.map(String).filter(option => options.includes(option)))] : [];
         if (flagged.length) node.autoFailOptions = flagged; else delete node.autoFailOptions;
-        delete node.autoFailBelow;
+        delete node.autoFailBelow; delete node.autoFailAbove;
       } else if (node.type === 'shortText') {
         const below = Number(node.autoFailBelow);
         if (node.numericOnly && node.autoFailBelow !== null && node.autoFailBelow !== '' && Number.isInteger(below) && below >= 0 && below <= 1e9) node.autoFailBelow = below; else delete node.autoFailBelow;
+        const above = Number(node.autoFailAbove);
+        if (node.numericOnly && node.autoFailAbove !== null && node.autoFailAbove !== '' && Number.isInteger(above) && above >= 0 && above <= 1e9) node.autoFailAbove = above; else delete node.autoFailAbove;
+        if ('autoFailBelow' in node && 'autoFailAbove' in node) delete node.autoFailAbove; // one rule per question: the original minimum wins
         delete node.autoFailOptions;
-      } else { delete node.autoFailOptions; delete node.autoFailBelow; }
+      } else { delete node.autoFailOptions; delete node.autoFailBelow; delete node.autoFailAbove; }
     });
     const mandatory = normalized.nodes.filter(node => node.type === 'candidateInfo');
     if (mandatory.length !== 1) throw new Error('A flow must contain one candidate information step.');

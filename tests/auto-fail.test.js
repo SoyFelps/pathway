@@ -59,7 +59,7 @@ test('choice questions can mark options as auto-fail, and a number question can 
   const builder = read('builder.js');
   const inspector = builder.slice(builder.indexOf('function drawInspector()'), builder.indexOf('function updateNodeLabel('));
   assert.ok(inspector.includes('class="option-autofail"') && inspector.includes("<span>${t('Auto-fail')}</span>"), 'every option row has an Auto-fail box');
-  assert.ok(inspector.includes('Auto-fail if below') && inspector.includes('id="autofail-below"'));
+  assert.ok(inspector.includes('Auto-fail if below') && inspector.includes('id="autofail-value"') && inspector.includes('id="autofail-mode"'), 'one number field, with the choice below / above');
   assert.ok(inspector.includes("selected.type === 'shortText' && selected.numericOnly ? `<div class=\"field-group autofail-below\">"), 'the number rule only shows when Numbers only is on');
   assert.ok(inspector.includes('delete selected.autoFailBelow'), 'turning Numbers only off removes the rule');
   assert.ok(inspector.includes('does not need to connect to an ending'), 'the option can keep following the normal path');

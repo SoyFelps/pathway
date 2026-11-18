@@ -141,6 +141,7 @@ test('the auto-fail reason written by the server is translated on screen, never 
   const translate = new Function('t', builder.slice(start, end) + '\nreturn autoFailReasonText;')(i18n.t);
   assert.equal(translate('Answered "No" to "Can you travel?"'), 'Respondeu “No” em “Can you travel?”');
   assert.equal(translate('Answered 2 to "Years of experience" (minimum 4)'), 'Respondeu 2 em “Years of experience” (mínimo 4)');
+  assert.equal(translate('Answered 7000 to "Salary" (maximum 6000)'), 'Respondeu 7000 em “Salary” (máximo 6000)');
   assert.equal(translate('Selected "A", "B" for "Skills"; Answered "No" to "Q"'), 'Escolheu “A”, “B” em “Skills”; Respondeu “No” em “Q”');
   assert.equal(translate('Something new'), 'Something new', 'an unknown text is shown as it is');
   const server = read('supabase/functions/applications/index.ts');

@@ -222,6 +222,8 @@ async function validateApplicantSubmission(snapshot: Record<string, unknown>, in
       if (hits.length) autoFailReasons.push(`Selected ${hits.map((item) => `"${cleanName(item, 80)}"`).join(", ")} for "${questionLabel}"`);
     } else if (type === "shortText" && current.numericOnly === true && Number.isInteger(current.autoFailBelow) && Number((answer as string).trim()) < (current.autoFailBelow as number)) {
       autoFailReasons.push(`Answered ${(answer as string).trim().slice(0, 12)} to "${questionLabel}" (minimum ${current.autoFailBelow})`);
+    } else if (type === "shortText" && current.numericOnly === true && Number.isInteger(current.autoFailAbove) && Number((answer as string).trim()) > (current.autoFailAbove as number)) {
+      autoFailReasons.push(`Answered ${(answer as string).trim().slice(0, 12)} to "${questionLabel}" (maximum ${current.autoFailAbove})`);
     }
     const outgoing = edges.filter((edge) => edge.fromNodeId === nodeId);
     const chosenEdge = type === "singleChoice"
