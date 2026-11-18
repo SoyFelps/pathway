@@ -1158,3 +1158,16 @@ body:has(#canvas-stage) .toast{bottom:80px}
 :root[data-theme="dark"] .theme-toggle .icon-sun{display:block}
 :root[data-theme="dark"] .theme-toggle .icon-moon{display:none}
 @media(max-width:760px){.theme-toggle{margin:0 0 0 6px;flex:none}}
+/* Applicants (2026-11-18): the filters sit under the subtitle, in one row, and above the counts and the board (before they were at the right of the title). */
+.applicants-heading{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:14px}
+.applicants-heading .applicants-tools{width:100%;justify-content:flex-start}
+/* Applicants, computer screens (2026-11-18): the jobs field is as wide as the responsible field and the search takes all the space that is left. */
+@media(min-width:761px){.applicants-tools .job-combobox{flex:0 1 190px;min-width:150px}.applicants-tools .applicants-search{flex:1 1 140px}}
+/* Filter lists that replace the browser's own select (2026-11-18): same look as the job filter. The select stays in the page, hidden. */
+.is-upgraded{display:none!important}
+.select-combobox{flex:0 0 220px;min-width:160px}
+.flow-filters .select-combobox{flex:0 1 220px}
+.reports-tools .select-combobox{flex:0 0 190px}
+.rpt-version .select-combobox{width:320px;max-width:100%;flex:none}
+.select-combobox .applicants-filter{cursor:pointer}
+@media(max-width:760px){.reports-tools .select-combobox{flex:1;min-width:0}.flow-filters .select-combobox{flex:1 1 100%}.rpt-jobs-tools .select-combobox{flex:1;min-width:0}}

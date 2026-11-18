@@ -58,12 +58,16 @@
     return changed;
   }
 
-  function createNode(type, x, y) {
+  // `texts` (optional) holds the starting texts already translated by the screen: { shortText, singleChoice, multiChoice, options: [one, two] }.
+  // Without it they are English (tests, sample jobs). They are ordinary text the employer edits, so they are saved as written.
+  function createNode(type, x, y, texts) {
+    const words = texts || {};
+    const starting = Array.isArray(words.options) && words.options.length === 2 ? words.options.map(String) : ['Option one', 'Option two'];
     const base = { id: uid(type), type, x: Math.max(24, x || 0), y: Math.max(24, y || 0), label: '', options: [] };
     if (type === 'candidateInfo') base.label = 'Your details';
-    if (type === 'shortText') { base.label = 'A question for your candidate'; base.numericOnly = false; }
-    if (type === 'singleChoice') { base.label = 'Choose one option'; base.options = ['Option one', 'Option two']; }
-    if (type === 'multiChoice') { base.label = 'Select all that apply'; base.options = ['Option one', 'Option two']; }
+    if (type === 'shortText') { base.label = words.shortText || 'A question for your candidate'; base.numericOnly = false; }
+    if (type === 'singleChoice') { base.label = words.singleChoice || 'Choose one option'; base.options = [...starting]; }
+    if (type === 'multiChoice') { base.label = words.multiChoice || 'Select all that apply'; base.options = [...starting]; }
     if (type === 'end') { base.label = END_LABEL; base.subtype = 'submitted'; }
     return base;
   }

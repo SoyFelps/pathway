@@ -62,8 +62,10 @@ test('the arrow colour stays equal to the --text-subtle token (a data-URI image 
 
 test('the Applicants page has a Responsible filter that keeps the candidates of that person\'s jobs', () => {
   const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
-  assert.ok(builder.includes('id="applicant-responsible-filter"'), 'select beside the job filter');
-  assert.ok(builder.includes("hasPermission('flows') ? `<select id=\"applicant-responsible-filter\""), 'only shown when the jobs\' responsible lists are known');
+  assert.ok(builder.includes('id="applicant-responsible-filter"'), 'field beside the job filter');
+  assert.ok(builder.includes("hasPermission('flows') ? `<div class=\"job-combobox\"><input id=\"applicant-responsible-filter\""), 'only shown when the jobs\' responsible lists are known');
+  assert.equal(builder.includes('<select id="applicant-responsible-filter"'), false, 'the same list as the job filter, not the browser\'s own menu');
+  assert.ok(builder.includes('function mountApplicantResponsibleCombobox(scope, onPick)') && builder.includes('function mountApplicantCombobox(scope, cfg, onPick)'), 'both filters share one list component');
   assert.ok(builder.includes('return !ids.length || ids.includes(userId);'), 'a job set to All counts for everyone, like on the Dashboard');
   assert.ok(builder.includes('applicantFlowHasResponsible(applicant.flow_id)'), 'the board is narrowed by the responsible of each candidate\'s job');
   assert.ok(builder.includes("applicantSearch = ''; applicantResponsible = '';"), 'reset on sign-in');
