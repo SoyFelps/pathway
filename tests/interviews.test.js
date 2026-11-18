@@ -142,14 +142,20 @@ test('the recruiter is told when the candidate answers, in the recruiter languag
   assert.equal(/<h1[^>]*>[^<]*alex@example/.test(named.html), false, 'the address is not in the title');
   const unnamed = buildRecruiterEmail({ ...base, kind: 'confirmed', candidateName: '', candidateEmail: 'alex@example.test' });
   assert.match(unnamed.html, /<h1[^>]*>alex@example\.test confirmed\.<\/h1>/, 'a candidate without a name is shown by the address');
-  const scheduled = buildRecruiterEmail({ ...base, kind: 'scheduled', calendarLinks: { google: 'https://calendar.google.com/x', outlook: 'https://outlook.live.com/y' } });
-  assert.match(scheduled.text, /Add to my calendar/);
-  assert.match(scheduled.text, /calendar\.google\.com/);
+  // The calendar links are only in the notice that the candidate CONFIRMED (owner decision, 2026-11-18); there is no copy when the invitation is sent.
+  const links = { google: 'https://calendar.google.com/x', outlook: 'https://outlook.live.com/y' };
+  const confirmed = buildRecruiterEmail({ ...base, kind: 'confirmed', calendarLinks: links });
+  assert.match(confirmed.text, /Add to my calendar/);
+  assert.match(confirmed.text, /calendar\.google\.com/);
   // In the HTML the long addresses hide behind two short words (owner request, 2026-11-19).
-  assert.match(scheduled.html, />Google<\/a>/);
-  assert.match(scheduled.html, />Outlook<\/a>/);
-  assert.equal(/>https:\/\/calendar\.google\.com/.test(scheduled.html), false, 'the address is not shown as the text of the link');
-  assert.match(scheduled.html, /href="https:\/\/calendar\.google\.com\/x"/);
+  assert.match(confirmed.html, />Google<\/a>/);
+  assert.match(confirmed.html, />Outlook<\/a>/);
+  assert.equal(/>https:\/\/calendar\.google\.com/.test(confirmed.html), false, 'the address is not shown as the text of the link');
+  assert.match(confirmed.html, /href="https:\/\/calendar\.google\.com\/x"/);
+  assert.equal(/Add to my calendar/.test(buildRecruiterEmail({ ...base, kind: 'declined', calendarLinks: links }).text), false, 'no calendar links in a decline');
+  const emailSource = fs.readFileSync(path.join(__dirname, '..', 'supabase/functions/interviews/email.ts'), 'utf8');
+  assert.equal(/scheduled: \{/.test(emailSource), false, 'the recruiter gets no e-mail when the invitation is sent');
+  assert.equal(index.includes('notifyRecruiters(ctx, "scheduled"'), false);
 });
 
 test('the function checks origin and sign-in, and the candidate actions need only the secret of the link', () => {

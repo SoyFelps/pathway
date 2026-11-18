@@ -1,7 +1,7 @@
 // E-mails of the human interview (pure helpers, no Deno or network access, so they can be unit-tested in Node).
 // To the candidate: invitation, update, cancellation and the 24 h / 2 h reminders, in the language of the JOB. NO attachment: one button
 // opens the answer page of the Nellio site (owner decision, 2026-11-19: attachments weigh against a new domain's reputation).
-// To the recruiter: a copy when it is scheduled and a notice when the candidate answers, in the recruiter's own language.
+// To the recruiter: a notice when the candidate answers (no copy when the invitation is sent: nothing is certain until the candidate confirms), in the recruiter's own language.
 // E-mail clients cannot read CSS variables, so the brand colours are written out on purpose (same look as the application e-mail).
 
 export type Language = "en" | "pt" | "es";
@@ -239,7 +239,7 @@ export function buildCandidateEmail(input: CandidateEmailInput): BuiltEmail {
 // To the recruiter
 interface RecruiterCopy {
   htmlLang: string;
-  kinds: Record<"scheduled" | "confirmed" | "declined" | "reschedule", {
+  kinds: Record<"confirmed" | "declined" | "reschedule", {
     subject: (name: string, job: string) => string; eyebrow: string; heading: (name: string) => string; intro: (name: string, job: string, company: string) => string;
   }>;
   labels: CandidateCopy["labels"] & { message: string; suggested: string; addToCalendar: string; email: string };
@@ -251,7 +251,6 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
   en: {
     htmlLang: "en",
     kinds: {
-      scheduled: { subject: (n, j) => `Interview scheduled with ${n} – ${j}`, eyebrow: "Interview scheduled", heading: (n) => `Interview with ${n} scheduled.`, intro: (n, j, c) => `The invitation for ${n} (${j} at ${c}) was sent. You will be told when the candidate answers.` },
       confirmed: { subject: (n, j) => `${n} confirmed the interview – ${j}`, eyebrow: "Interview confirmed", heading: (n) => `${n} confirmed.`, intro: (n, j, c) => `${n} confirmed the interview for ${j} at ${c}.` },
       declined: { subject: (n, j) => `${n} cannot attend the interview – ${j}`, eyebrow: "Interview declined", heading: (n) => `${n} cannot attend.`, intro: (n, j, c) => `${n} said they cannot attend the interview for ${j} at ${c}. The candidate was not moved or rejected: it is your decision.` },
       reschedule: { subject: (n, j) => `${n} asked for another time – ${j}`, eyebrow: "Another time requested", heading: (n) => `${n} asked for another time.`, intro: (n, j, c) => `${n} asked for another time for the interview for ${j} at ${c}. Open the candidate and schedule a new time to send a new invitation.` },
@@ -263,7 +262,6 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
   pt: {
     htmlLang: "pt-BR",
     kinds: {
-      scheduled: { subject: (n, j) => `Entrevista agendada com ${n} – ${j}`, eyebrow: "Entrevista agendada", heading: (n) => `Entrevista com ${n} agendada.`, intro: (n, j, c) => `O convite para ${n} (${j} – ${c}) foi enviado. Você será avisado(a) quando a pessoa responder.` },
       confirmed: { subject: (n, j) => `${n} confirmou a entrevista – ${j}`, eyebrow: "Entrevista confirmada", heading: (n) => `${n} confirmou.`, intro: (n, j, c) => `${n} confirmou a entrevista para ${j} – ${c}.` },
       declined: { subject: (n, j) => `${n} não poderá participar da entrevista – ${j}`, eyebrow: "Entrevista recusada", heading: (n) => `${n} não poderá participar.`, intro: (n, j, c) => `${n} informou que não poderá participar da entrevista para ${j} – ${c}. A pessoa não foi movida nem reprovada: a decisão é sua.` },
       reschedule: { subject: (n, j) => `${n} pediu outro horário – ${j}`, eyebrow: "Pedido de outro horário", heading: (n) => `${n} pediu outro horário.`, intro: (n, j, c) => `${n} pediu outro horário para a entrevista para ${j} – ${c}. Abra o candidato e agende um novo horário para enviar um novo convite.` },
@@ -275,7 +273,6 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
   es: {
     htmlLang: "es",
     kinds: {
-      scheduled: { subject: (n, j) => `Entrevista programada con ${n} – ${j}`, eyebrow: "Entrevista programada", heading: (n) => `Entrevista con ${n} programada.`, intro: (n, j, c) => `Se envió la invitación a ${n} (${j} – ${c}). Te avisaremos cuando responda.` },
       confirmed: { subject: (n, j) => `${n} confirmó la entrevista – ${j}`, eyebrow: "Entrevista confirmada", heading: (n) => `${n} confirmó.`, intro: (n, j, c) => `${n} confirmó la entrevista para ${j} – ${c}.` },
       declined: { subject: (n, j) => `${n} no podrá asistir a la entrevista – ${j}`, eyebrow: "Entrevista rechazada", heading: (n) => `${n} no podrá asistir.`, intro: (n, j, c) => `${n} indicó que no podrá asistir a la entrevista para ${j} – ${c}. La persona no fue movida ni rechazada: la decisión es tuya.` },
       reschedule: { subject: (n, j) => `${n} pidió otro horario – ${j}`, eyebrow: "Solicitud de otro horario", heading: (n) => `${n} pidió otro horario.`, intro: (n, j, c) => `${n} pidió otro horario para la entrevista para ${j} – ${c}. Abre el candidato y programa un nuevo horario para enviar una nueva invitación.` },
@@ -286,7 +283,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
   },
 };
 
-export type RecruiterEmailKind = "scheduled" | "confirmed" | "declined" | "reschedule";
+export type RecruiterEmailKind = "confirmed" | "declined" | "reschedule";
 
 export interface RecruiterEmailInput {
   kind: RecruiterEmailKind;
@@ -302,7 +299,7 @@ export interface RecruiterEmailInput {
   /** Suggested times as written by the candidate, e.g. "2026-12-03T14:00". */
   suggestedTimes?: unknown[];
   appUrl: string;
-  /** "Add to my calendar" links (no attachment), for the copy sent when the interview is scheduled. */
+  /** "Add to my calendar" links (no attachment), only in the notice that the candidate CONFIRMED (a calendar entry makes no sense before that). */
   calendarLinks?: { google?: string; outlook?: string };
 }
 
@@ -323,7 +320,7 @@ export function buildRecruiterEmail(input: RecruiterEmailInput): BuiltEmail {
     if (times.length) rows.push([copy.labels.suggested, times.join("\n")]);
     if (message) rows.push([copy.labels.message, message]);
   }
-  if (input.kind === "scheduled" && input.calendarLinks) {
+  if (input.kind === "confirmed" && input.calendarLinks) {
     // In the HTML the long addresses hide behind two short words; the text version keeps the full addresses.
     const shown: Array<{ label: string; url: string }> = [];
     if (input.calendarLinks.google) shown.push({ label: "Google", url: input.calendarLinks.google });

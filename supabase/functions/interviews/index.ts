@@ -191,12 +191,18 @@ async function recruiterRecipients(ctx: Context): Promise<Array<{ email: string;
 
 async function notifyRecruiters(ctx: Context, kind: RecruiterEmailKind, keySuffix: string, extra: { message?: string | null; suggestedTimes?: string[] } = {}) {
   try {
-    const event = calendarEventOf(ctx);
+    const base = calendarEventOf(ctx);
+    const who = singleLine(ctx.candidateName, 120) || ctx.iv.candidate_email;
     for (const person of await recruiterRecipients(ctx)) {
+      // In the recruiter's own calendar the entry names the candidate (the candidate's entry names the company).
+      const event: CalendarEvent = {
+        ...base, title: eventTitle(person.language, singleLine(ctx.jobTitle, 120), who),
+        description: [`${who} (${ctx.iv.candidate_email})`, base.description].filter(Boolean).join("\n"),
+      };
       const mail = buildRecruiterEmail({
         kind, language: person.language, candidateName: ctx.candidateName, candidateEmail: ctx.iv.candidate_email, jobTitle: ctx.jobTitle, companyName: ctx.companyName,
         interview: detailsOf(ctx.iv), message: extra.message, suggestedTimes: extra.suggestedTimes, appUrl: `${APP_URL}#applicants`,
-        calendarLinks: kind === "scheduled" ? { google: googleCalendarUrl(event), outlook: outlookCalendarUrl(event) } : undefined,
+        calendarLinks: kind === "confirmed" ? { google: googleCalendarUrl(event), outlook: outlookCalendarUrl(event) } : undefined,
       });
       await sendMail(person.email, mail, `interview-recruiter-${kind}/${ctx.iv.id}/${keySuffix}/${person.email}`);
     }
@@ -282,7 +288,6 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
   const ctx = await loadContext(updated.id);
   if (!ctx) return fail(req, 404, "The interview was not found.");
   const sent = await sendToCandidate(ctx, wasFirst ? "invite" : "update", String(updated.sequence));
-  await notifyRecruiters(ctx, "scheduled", String(updated.sequence));
   return response(req, 200, sent ? { interview: recruiterRow(updated), emailSent: true } : { interview: recruiterRow(updated), emailSent: false, warning: "The interview was saved, but the e-mail could not be sent. Use Resend to try again." });
 }
 
