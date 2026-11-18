@@ -313,6 +313,23 @@ async function actionResend(req: Request, userId: string, userClient: SupabaseCl
   return response(req, 200, sent ? { interview: recruiterRow(ctx.iv), emailSent: true } : { interview: recruiterRow(ctx.iv), emailSent: false, warning: "The e-mail could not be sent. Try again." });
 }
 
+/** A new round for a candidate whose earlier interview is over or was cancelled: makes (or finds) the waiting row, ready to be scheduled. */
+async function actionNewRound(req: Request, userClient: SupabaseClient, body: Record<string, unknown>) {
+  const flowId = typeof body.flowId === "string" && UUID_RE.test(body.flowId) ? body.flowId : "";
+  const email = String(body.email ?? "").trim().toLowerCase();
+  if (!flowId || email.length < 3 || email.length > 254) return fail(req, 404, "The candidate was not found.");
+  // The person may review this candidate: the database policy on the applicants decides, not this code.
+  const { data: applicant, error } = await userClient.from("applicants").select("id,workspace_id").eq("flow_id", flowId).ilike("candidate_email", email.replace(/[\\%_]/g, "\\$&")).limit(1).maybeSingle();
+  if (error) throw error;
+  if (!applicant) return fail(req, 404, "The candidate was not found.");
+  if (!(await planActive(applicant.workspace_id))) return fail(req, 402, "An active plan is needed to schedule interviews.");
+  const { data: open } = await admin!.from("candidate_interviews").select("*").eq("flow_id", flowId).eq("candidate_email", email).in("state", ["awaiting_schedule", ...OPEN_STATES]).maybeSingle();
+  if (open) return response(req, 200, { interview: recruiterRow(open) });
+  const { data: created, error: insertError } = await admin!.from("candidate_interviews").insert({ workspace_id: applicant.workspace_id, flow_id: flowId, candidate_email: email, applicant_id: applicant.id, state: "awaiting_schedule" }).select("*").maybeSingle();
+  if (insertError) return databaseFailure(req, insertError);
+  return response(req, 200, { interview: recruiterRow(created) });
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Candidate actions (no sign-in: the secret of the link is the key)
 async function contextFromToken(req: Request, body: Record<string, unknown>): Promise<{ ctx: Context } | Response> {
@@ -401,11 +418,12 @@ Deno.serve(async (req: Request) => {
     if (action === "respond") return await actionRespond(req, body);
     if (action === "calendar") return await actionCalendar(req, body);
     if (action === "tick") return await actionTick(req);
-    if (action === "schedule" || action === "cancel" || action === "resend") {
+    if (action === "schedule" || action === "cancel" || action === "resend" || action === "newRound") {
       const auth = await authenticate(req);
       if (auth instanceof Response) return auth;
       if (action === "schedule") return await actionSchedule(req, auth.userId, auth.userClient, body);
       if (action === "cancel") return await actionCancel(req, auth.userId, auth.userClient, body);
+      if (action === "newRound") return await actionNewRound(req, auth.userClient, body);
       return await actionResend(req, auth.userId, auth.userClient, body);
     }
     return fail(req, 400, "Send a valid request.");

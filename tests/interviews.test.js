@@ -157,7 +157,7 @@ test('the function checks origin and sign-in, and the candidate actions need onl
   const dispatch = index.slice(index.indexOf('Deno.serve('));
   const authAt = dispatch.indexOf('const auth = await authenticate(req)');
   for (const action of ['get', 'respond', 'calendar', 'tick']) assert.ok(dispatch.indexOf(`action === "${action}"`) < authAt, `${action} is answered before sign-in is demanded`);
-  for (const action of ['schedule', 'cancel', 'resend']) assert.ok(dispatch.indexOf(`action === "${action}"`) > -1);
+  for (const action of ['schedule', 'cancel', 'resend', 'newRound']) assert.ok(dispatch.indexOf(`action === "${action}"`) > -1);
   assert.ok(index.includes('await admin!.auth.getUser(token)'), 'the session is verified');
   assert.ok(index.includes('userClient.from("candidate_interviews")'), 'the recruiter sees an interview only if the database policy allows it');
 });

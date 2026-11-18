@@ -248,7 +248,7 @@
   const NOTIF_REFRESH_MS = 60000;
   const BELL_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
   async function refreshNotifications(force = false) {
-    if (!workspace || !hasPermission('applicants')) { notifications = []; mentionNotifs = []; aiNotifs = []; paintNotifications(); return; }
+    if (!workspace || !hasPermission('applicants')) { notifications = []; mentionNotifs = []; aiNotifs = []; interviewNotifs = []; paintNotifications(); return; }
     if (!force && Date.now() - notifLoadedAt < 15000) return;
     try {
       notifications = await window.PathwayBackend.listFlowNotifications(workspace.id);
@@ -256,10 +256,11 @@
     } catch (error) { return; /* keep what we had; the next check tries again */ }
     try { mentionNotifs = await window.PathwayBackend.listCommentMentions(workspace.id); } catch (error) { /* keep what we had */ }
     try { aiNotifs = await window.PathwayBackend.listAiInterviewNotices(workspace.id); } catch (error) { /* keep what we had */ }
+    try { interviewNotifs = await window.PathwayBackend.listCandidateInterviewNotices(workspace.id); } catch (error) { /* keep what we had */ }
     // The notifications page, when open, follows the bell: it is redrawn only if something changed.
     if (root.querySelector('.notifications-page')) void refreshNotificationPage();
     // On the board, the interview tags (sent, completed, badge) follow what happened since the board was loaded.
-    if (root.querySelector('.applicants-page') && !modalRoot.innerHTML) void refreshAiInterviewTags();
+    if (root.querySelector('.applicants-page') && !modalRoot.innerHTML) { void refreshAiInterviewTags(); void refreshInterviewTags(); }
     // Already looking at that job's board: show the new candidates there instead of lighting the bell.
     const onBoard = root.querySelector('.applicants-page') && !modalRoot.innerHTML;
     const showingThatJob = applicantFilter && notifications.some(item => item.flowId === applicantFilter);
@@ -270,14 +271,15 @@
   function paintNotifications() {
     const host = root.querySelector('#notif'); if (!host) return;
     const badge = host.querySelector('.notif-badge'), menu = host.querySelector('.notif-menu'), button = host.querySelector('#notif-bell');
-    const total = notifications.length + mentionNotifs.length + aiNotifs.length;
+    const total = notifications.length + mentionNotifs.length + aiNotifs.length + interviewNotifs.length;
     badge.textContent = total > 9 ? '9+' : String(total);
     badge.hidden = !total;
     button.setAttribute('aria-label', total ? t('Notifications, {count} unread', { count: total }) : t('Notifications'));
     const mentionItems = mentionNotifs.map(item => '<button type="button" class="notif-item" data-notif-mention-flow="' + esc(item.flowId) + '" data-notif-mention-email="' + esc(item.candidateEmail) + '"><span class="notif-text">' + notifMentionText(item.authorName) + '</span><span class="notif-sub">' + esc(item.candidateName) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
     const aiItems = aiNotifs.map(item => '<button type="button" class="notif-item" data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"><span class="notif-text">' + notifAiText(item.candidateName) + '</span><span class="notif-sub">' + notifImpressionText(item.impression) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
+    const interviewItems = interviewNotifs.map(item => '<button type="button" class="notif-item" data-notif-iv="' + esc(item.id) + '" data-notif-iv-flow="' + esc(item.flowId) + '" data-notif-iv-email="' + esc(item.candidateEmail) + '"><span class="notif-text">' + notifInterviewText(item.state, item.candidateName) + '</span><span class="notif-sub">' + esc(item.jobTitle || '') + '</span></button>').join('');
     menu.innerHTML = (total
-      ? aiItems + mentionItems + notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">' + notifJobText(item.jobTitle) + '</span><span class="notif-sub">' + tn('{count} new candidate', '{count} new candidates', item.newCount) + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
+      ? interviewItems + aiItems + mentionItems + notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">' + notifJobText(item.jobTitle) + '</span><span class="notif-sub">' + tn('{count} new candidate', '{count} new candidates', item.newCount) + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
       : `<div class="notif-empty">${t('You are all caught up.')}</div>`) + `<div class="notif-footer"><button type="button" class="notif-see-all" data-notif-all>${t('See all')}</button></div>`;
   }
   // Notification texts, shared by the bell and the notifications page (names are escaped before going into the sentence).
@@ -287,6 +289,14 @@
   const notifImpressionText = impression => !impression ? t('Evaluation pending') : impression === 'positive' ? t('Positive impression') : impression === 'mixed' ? t('Mixed impression') : t('Negative impression');
   // Opens what a notification is about (the bell and the notifications page share this): a finished AI interview, a mention, or a job's new candidates.
   function openNotificationTarget(target) {
+    const interviewNotice = target.closest('[data-notif-iv]');
+    if (interviewNotice) {
+      const noticeId = interviewNotice.dataset.notifIv;
+      interviewNotifs = interviewNotifs.filter(item => item.id !== noticeId); paintNotifications();
+      window.PathwayBackend.markCandidateInterviewNoticeSeen(noticeId).catch(() => {});
+      pendingCandidateOpen = { flowId: interviewNotice.dataset.notifIvFlow, email: String(interviewNotice.dataset.notifIvEmail || '').trim().toLowerCase() };
+      pendingOpenInterviewTab = true; applicantFilter = pendingCandidateOpen.flowId; applicantSearch = ''; void renderApplicants(); return true;
+    }
     const aiNotice = target.closest('[data-notif-ai]');
     if (aiNotice) {
       const noticeId = aiNotice.dataset.notifAi;
@@ -445,8 +455,234 @@
       notifTimer = setInterval(() => { if (document.visibilityState === 'visible') void refreshNotifications(true); }, NOTIF_REFRESH_MS);
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void refreshNotifications(); });
     }
-    notifications = []; aiNotifs = []; notifLoadedAt = 0; mountNotificationBell();
+    notifications = []; aiNotifs = []; interviewNotifs = []; notifLoadedAt = 0; mountNotificationBell();
   }
+  // ---- Human interviews (the Interview column): tag on the card, schedule window, tab in the candidate panel, bell notices -----------
+  // Plan: plano-entrevistas.md. The browser only READS the interviews (database policy); every change goes through the checked
+  // `interviews` function. Moving a card into the column creates a waiting row ("Waiting to be scheduled") by itself; a single move
+  // opens the schedule window, a bulk move (Select mode) does not. Leaving the column never cancels anything.
+  let interviewMap = new Map(); // "jobId|e-mail" -> the interview in play for that candidate (the newest one when none is in play)
+  let interviewSignature = '';
+  let interviewNotifs = [];
+  let pendingOpenInterviewTab = false;
+  const INTERVIEW_OPEN = ['awaiting_schedule', 'invited', 'confirmed', 'declined', 'reschedule_requested'];
+  const INTERVIEW_ON = ['invited', 'confirmed', 'declined', 'reschedule_requested']; // scheduled and not over
+  const interviewFor = (flowId, email) => interviewMap.get(aiInterviewKey(flowId, email)) || null;
+  const INTERVIEW_ICON = '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M8 3.5v4M16 3.5v4M4 10h16"/></svg>';
+  // rows arrive newest first: one in play wins over a finished or cancelled one
+  function setInterviews(rows) {
+    const next = new Map();
+    for (const row of rows) {
+      const key = aiInterviewKey(row.flowId, row.email);
+      const have = next.get(key);
+      if (!have || (!INTERVIEW_OPEN.includes(have.state) && INTERVIEW_OPEN.includes(row.state))) next.set(key, row);
+    }
+    interviewMap = next;
+    interviewSignature = rows.map(row => row.id + row.state + row.sequence + (row.startsAt || '')).join('|');
+  }
+  async function refreshInterviewTags(force = false) {
+    if (!workspace || !hasPermission('applicants')) return;
+    try {
+      const rows = await window.PathwayBackend.listCandidateInterviews(workspace.id, applicantFilter);
+      const before = interviewSignature;
+      setInterviews(rows);
+      if (interviewSignature !== before && root.querySelector('.applicants-page') && (force || !modalRoot.innerHTML)) renderApplicantBoard();
+    } catch (error) { /* keep what the board shows; the next check tries again */ }
+  }
+  // The date and time of an interview as the recruiter who scheduled it wrote it (the interview's own time zone), in the interface language.
+  function interviewWhen(row, options = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) {
+    const date = row && row.startsAt ? new Date(row.startsAt) : null;
+    if (!date || Number.isNaN(date.getTime())) return '';
+    try { return window.PathwayI18n.formatDate(date, { ...options, timeZone: row.timeZone || undefined }); }
+    catch (error) { return window.PathwayI18n.formatDate(date, options); }
+  }
+  // [label, tone] of the small tag on a candidate's card (only while an interview is in play)
+  function interviewTag(row) {
+    switch (row && row.state) {
+      case 'awaiting_schedule': return ['Waiting to be scheduled', 'warn'];
+      case 'invited': return ['Interview invite sent', 'wait'];
+      case 'confirmed': return ['Interview confirmed', 'ok'];
+      case 'declined': return ['Cannot attend the interview', 'warn'];
+      case 'reschedule_requested': return ['Asked for another time', 'warn'];
+      default: return null;
+    }
+  }
+  function interviewCardHtml(row) {
+    const tag = interviewTag(row);
+    if (!tag) return '';
+    const when = row.state === 'invited' || row.state === 'confirmed' ? interviewWhen(row) : '';
+    return '<div class="applicant-card-ai applicant-card-interview ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + INTERVIEW_ICON + '</span><span class="ai-tag-text">' + esc(t(tag[0]) + (when ? ' · ' + when : '')) + '</span></div>';
+  }
+  // The candidate in the board data for a job and e-mail (name and job title for the windows).
+  function interviewCandidate(row) {
+    const group = C.groupApplicants(applicants).find(item => item.latest.flow_id === row.flowId && String(item.latest.candidate_email || '').trim().toLowerCase() === row.email);
+    const flow = flows.find(item => item.cloudId === row.flowId) || applicantFlowLabels.find(item => item.cloudId === row.flowId);
+    return { group, name: group ? group.latest.candidate_name : row.email, jobTitle: (flow && flow.jobTitle) || '' };
+  }
+  function interviewTimeZones(selected) {
+    let zones = [];
+    try { zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []; } catch (error) { zones = []; }
+    if (!zones.length) zones = ['UTC', 'America/Sao_Paulo', 'America/New_York', 'America/Los_Angeles', 'America/Mexico_City', 'America/Bogota', 'America/Argentina/Buenos_Aires', 'Europe/London', 'Europe/Lisbon', 'Europe/Madrid', 'Europe/Paris', 'Asia/Tokyo', 'Australia/Sydney'];
+    if (selected && !zones.includes(selected)) zones.unshift(selected);
+    return zones;
+  }
+  // The "Schedule interview" window: opened after a card is moved into the Interview column, and from the candidate's Interview tab
+  // (schedule, edit, or schedule a new time after the candidate asked for another). Closing it leaves the candidate waiting to be scheduled.
+  // options.afterClose: what to do when the window is closed or the invitation was sent (for example, open the candidate's panel again).
+  function openScheduleInterviewModal(row, options = {}) {
+    const B = window.PathwayBackend;
+    const who = interviewCandidate(row);
+    const editing = INTERVIEW_ON.includes(row.state);
+    const browserZone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (error) { return 'UTC'; } })();
+    const zone = row.timeZone || browserZone;
+    const day = row.localStart ? row.localStart.slice(0, 10) : '';
+    const time = row.localStart ? row.localStart.slice(11, 16) : '';
+    const kind = row.kind || 'online';
+    const minutes = row.durationMinutes || 30;
+    const pad = number => String(number).padStart(2, '0');
+    const isoDay = date => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    const today = new Date();
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate() - 1);
+    const suggested = (row.state === 'reschedule_requested' ? row.proposedTimes : []).map(item => String(item.local || '')).filter(Boolean);
+    const suggestedHtml = suggested.length ? `<div class="field-group"><label>${t('The candidate suggested')}</label><div class="interview-chips">${suggested.map(local => `<button class="btn btn-sm" type="button" data-iv-suggested="${esc(local)}">${esc(local.replace('T', ' '))}</button>`).join('')}</div></div>` : '';
+    const requestNote = row.state === 'reschedule_requested' && row.responseNote ? `<div class="ai-note"><strong>${t('Message from the candidate')}</strong> ${esc(row.responseNote)}</div>` : '';
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Interview')}</div><h2>${editing ? t('Edit interview') : t('Schedule interview')}</h2><p>${esc(who.name)}${who.jobTitle ? ' · ' + esc(who.jobTitle) : ''}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>
+      <form id="schedule-interview-form" novalidate>
+        ${requestNote}${suggestedHtml}
+        <div class="field-group"><label for="iv-kind">${t('Format')}</label><select class="text-input" id="iv-kind"><option value="online"${kind === 'online' ? ' selected' : ''}>${t('Online')}</option><option value="in_person"${kind === 'in_person' ? ' selected' : ''}>${t('In person')}</option></select></div>
+        <div class="field-group" id="iv-link-field"><label for="iv-link">${t('Meeting link')}</label><input class="text-input" id="iv-link" type="url" maxlength="500" placeholder="https://" value="${esc(row.meetingLink || '')}"></div>
+        <div class="field-group" id="iv-address-field" hidden><label for="iv-address">${t('Address')}</label><input class="text-input" id="iv-address" maxlength="300" value="${esc(row.address || '')}"></div>
+        <div class="field-row"><div class="field-group"><label for="iv-day">${t('Day')}</label><input class="text-input" id="iv-day" type="date" min="${isoDay(today)}" max="${isoDay(lastDay)}" value="${esc(day)}"></div><div class="field-group"><label for="iv-time">${t('Time')}</label><input class="text-input" id="iv-time" type="time" value="${esc(time)}"></div></div>
+        <div class="field-group"><label for="iv-zone">${t('Time zone')}</label><select class="text-input" id="iv-zone">${interviewTimeZones(zone).map(name => `<option value="${esc(name)}"${name === zone ? ' selected' : ''}>${esc(name.replace(/_/g, ' '))}</option>`).join('')}</select></div>
+        <div class="field-group"><label for="iv-minutes">${t('Duration (minutes)')}</label><div class="interview-duration"><button class="btn btn-sm" type="button" data-iv-minutes="30">${t('30 min')}</button><button class="btn btn-sm" type="button" data-iv-minutes="60">${t('1 hour')}</button><input class="text-input" id="iv-minutes" type="number" min="5" max="480" step="5" value="${minutes}" aria-label="${t('Duration (minutes)')}"></div></div>
+        <div class="field-group"><label for="iv-notes">${t('Notes for the candidate (optional)')}</label><textarea class="text-area" id="iv-notes" rows="3" maxlength="1000">${esc(row.notes || '')}</textarea></div>
+        <p class="settings-delete-error" id="iv-error" role="alert" hidden></p>
+        <div class="modal-actions"><button class="btn" type="button" data-close>${row.state === 'awaiting_schedule' ? t('Schedule later') : t('Cancel')}</button><button class="btn btn-primary" id="iv-send" type="submit">${editing ? t('Send updated invitation') : t('Send invitation')}</button></div>
+      </form>`);
+    const form = modalRoot.querySelector('#schedule-interview-form');
+    const field = id => form.querySelector('#' + id);
+    const error = field('iv-error');
+    const showKind = () => { const online = field('iv-kind').value === 'online'; field('iv-link-field').hidden = !online; field('iv-address-field').hidden = online; };
+    const markMinutes = () => form.querySelectorAll('[data-iv-minutes]').forEach(button => button.classList.toggle('is-active', button.dataset.ivMinutes === String(field('iv-minutes').value)));
+    showKind(); markMinutes();
+    field('iv-kind').addEventListener('change', showKind);
+    field('iv-minutes').addEventListener('input', markMinutes);
+    form.querySelectorAll('[data-iv-minutes]').forEach(button => button.addEventListener('click', () => { field('iv-minutes').value = button.dataset.ivMinutes; markMinutes(); }));
+    form.querySelectorAll('[data-iv-suggested]').forEach(button => button.addEventListener('click', () => { const [d, h] = button.dataset.ivSuggested.split('T'); field('iv-day').value = d; field('iv-time').value = h; }));
+    modalCloseHook = () => { if (options.afterClose) options.afterClose(); };
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      error.hidden = true;
+      const online = field('iv-kind').value === 'online';
+      if (!field('iv-day').value || !field('iv-time').value) { error.textContent = t('Choose a valid day and time.'); error.hidden = false; return; }
+      const send = field('iv-send');
+      send.disabled = true; send.textContent = t('Sending…');
+      try {
+        const result = await B.scheduleInterview(row.id, {
+          kind: online ? 'online' : 'in_person', localStart: `${field('iv-day').value}T${field('iv-time').value}`, timeZone: field('iv-zone').value,
+          durationMinutes: Number(field('iv-minutes').value), meetingLink: online ? field('iv-link').value : '', address: online ? '' : field('iv-address').value, notes: field('iv-notes').value
+        });
+        showToast(result.emailSent === false ? t(result.warning || 'The interview was saved, but the e-mail could not be sent. Use Resend to try again.') : t('Invitation sent.'), result.emailSent === false ? 6000 : 2400);
+        closeModal(); // runs afterClose
+        void refreshInterviewTags(true);
+      } catch (failure) {
+        send.disabled = false; send.textContent = editing ? t('Send updated invitation') : t('Send invitation');
+        error.textContent = failure.message || t('Something went wrong. Please try again.'); error.hidden = false;
+      }
+    });
+  }
+  // After a SINGLE move into the Interview column (drag, or the stage list of the candidate panel): the waiting row exists already (a
+  // database trigger made it), so offer the schedule window. A candidate who already has a scheduled interview is left alone.
+  async function offerInterviewScheduling(applicantId, reopenDetails) {
+    const group = C.groupApplicants(applicants).find(item => item.items.some(member => member.id === applicantId));
+    if (!group) return;
+    await refreshInterviewTags(true);
+    const row = interviewFor(group.latest.flow_id, group.latest.candidate_email);
+    if (!row || row.state !== 'awaiting_schedule' || !root.querySelector('.applicants-page')) return;
+    const afterClose = () => { if (reopenDetails) { pendingOpenInterviewTab = true; showApplicantDetails(group.latest.id); } };
+    openScheduleInterviewModal(row, { afterClose });
+  }
+  const INTERVIEW_STATE_LABEL = () => ({ awaiting_schedule: t('Waiting to be scheduled'), invited: t('Invite sent'), confirmed: t('Confirmed'), declined: t('Cannot attend'), reschedule_requested: t('Asked for another time'), cancelled: t('Cancelled'), finished: t('Finished') });
+  const INTERVIEW_EVENT_LABEL = () => ({ scheduled: t('Invitation sent'), updated: t('Invitation updated'), cancelled: t('Interview cancelled'), resent: t('E-mail sent again'), confirmed: t('Candidate confirmed'), declined: t('Candidate cannot attend'), reschedule_requested: t('Candidate asked for another time'), reminder_24h: t('Reminder sent (24 hours before)'), reminder_2h: t('Reminder sent (2 hours before)'), finished: t('Interview time passed') });
+  // The Interview tab of a candidate: what is scheduled, what the candidate answered, what the recruiter can still do, and the history.
+  // stage.getStage() says in which column the candidate is; stage.close() goes back to the resume tab.
+  function mountInterviewPanel(host, flowId, email, stage = {}) {
+    if (!host) return;
+    const B = window.PathwayBackend;
+    let confirming = false;
+    let busy = false;
+    const info = (label, value) => value ? '<div class="applicant-info-item"><span>' + esc(label) + '</span><strong>' + value + '</strong></div>' : '';
+    const button = (action, label, extra = '') => '<button type="button" class="btn btn-sm' + (extra ? ' ' + extra : '') + '" data-iv-action="' + action + '"' + (busy ? ' disabled' : '') + '>' + esc(label) + '</button>';
+    const wanted = String(email || '').trim().toLowerCase();
+    const render = (rows, events, errorText = '') => {
+      const mine = rows.filter(item => item.flowId === flowId && item.email === wanted);
+      const row = mine.find(item => INTERVIEW_OPEN.includes(item.state)) || mine[0] || null;
+      const labels = INTERVIEW_STATE_LABEL();
+      let body = '';
+      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">' + t('Interview') + '</span><h3>' + esc(row ? labels[row.state] || row.state : t('No interview')) + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-iv-close>' + t('Close') + '</button></header>';
+      if (!row) body = '<p class="muted">' + t('This candidate has no interview yet. Moving the card to the Interview column creates one.') + '</p>';
+      else if (row.state === 'awaiting_schedule') body = '<p>' + t('This interview has not been scheduled yet. The candidate receives an e-mail invitation as soon as you schedule it.') + '</p><div class="ai-actions">' + button('schedule', t('Schedule interview'), 'btn-primary') + '</div>';
+      else if (row.state === 'cancelled' || row.state === 'finished') {
+        body = '<p>' + (row.state === 'cancelled' ? t('This interview was cancelled.') : t('This interview already took place.')) + '</p><div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'medium', timeStyle: 'short' }))) + '</div><div class="ai-actions">' + button('new', t('Schedule another interview'), 'btn-primary') + '</div>';
+      } else {
+        const text = { invited: t('Waiting for the candidate to answer.'), confirmed: t('The candidate confirmed that they can attend.'), declined: t('The candidate said they cannot attend. Nothing was changed on the board: moving or rejecting the candidate is your decision.'), reschedule_requested: t('The candidate asked for another time. Schedule a new time to send a new invitation.') }[row.state];
+        const requested = row.state === 'reschedule_requested'
+          ? ((row.proposedTimes.length ? '<div class="applicant-info-grid">' + info(t('Suggested times'), row.proposedTimes.map(item => esc(String(item.local || '').replace('T', ' '))).join('<br>')) + '</div>' : '') + (row.responseNote ? '<div class="ai-note"><strong>' + t('Message from the candidate') + '</strong> ' + esc(row.responseNote) + '</div>' : ''))
+          : (row.state === 'declined' && row.responseNote ? '<div class="ai-note"><strong>' + t('Message from the candidate') + '</strong> ' + esc(row.responseNote) + '</div>' : '');
+        const away = stage.getStage && stage.getStage() !== 'interview' ? '<p class="muted">' + t('This candidate is not in the Interview column any more. The interview is still on, and the reminders still go out, until you cancel it here.') + '</p>' : '';
+        const cancelControl = confirming
+          ? '<span class="ai-confirm">' + t('Cancel this interview?') + ' <button type="button" class="btn btn-sm btn-danger" data-iv-action="cancel-yes">' + t('Yes, cancel') + '</button><button type="button" class="btn btn-sm" data-iv-action="cancel-no">' + t('Keep it') + '</button></span>'
+          : button('cancel', t('Cancel interview'), 'btn-danger-ghost');
+        body = '<p>' + esc(text) + '</p><div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>')
+          + info(t('Format'), row.kind === 'online' ? t('Online') : t('In person')) + info(t('Duration'), row.durationMinutes ? esc(tn('{count} minute', '{count} minutes', row.durationMinutes)) : '')
+          + (row.kind === 'online' ? info(t('Meeting link'), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '') : info(t('Address'), esc(row.address || '')))
+          + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>' + requested + away
+          + '<div class="ai-actions">' + button('schedule', row.state === 'reschedule_requested' ? t('Schedule a new time') : t('Edit interview'), row.state === 'reschedule_requested' ? 'btn-primary' : '') + (row.state === 'declined' ? '' : button('resend', t('Re-send e-mail'))) + cancelControl + '</div>';
+      }
+      const history = events.length ? '<h4>' + t('History') + '</h4><ul class="interview-history">' + events.map(item => '<li><span>' + esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>' : '';
+      host.innerHTML = head + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + history;
+      host.dataset.interviewId = row ? row.id : '';
+      host._interviewRow = row;
+    };
+    const load = async (errorText = '') => {
+      try {
+        const rows = await B.listCandidateInterviews(workspace.id, flowId);
+        const mine = rows.filter(item => item.flowId === flowId && item.email === wanted);
+        const current = mine.find(item => INTERVIEW_OPEN.includes(item.state)) || mine[0] || null;
+        const events = current ? await B.listCandidateInterviewEvents(current.id).catch(() => []) : [];
+        render(rows, events, errorText);
+      } catch (failure) { host.innerHTML = '<div class="ai-note is-warn" role="alert">' + esc(failure.message || t('Something went wrong. Try again.')) + '</div>'; }
+    };
+    host.addEventListener('click', async event => {
+      if (event.target.closest('[data-iv-close]')) { if (stage.close) stage.close(); return; }
+      const control = event.target.closest('[data-iv-action]');
+      if (!control || busy) return;
+      const row = host._interviewRow;
+      const action = control.dataset.ivAction;
+      if (action === 'schedule' && row) { openScheduleInterviewModal(row, { afterClose: () => { pendingOpenInterviewTab = true; const open = C.groupApplicants(applicants).find(item => item.latest.flow_id === flowId && String(item.latest.candidate_email || '').trim().toLowerCase() === wanted); if (open) showApplicantDetails(open.latest.id); } }); return; }
+      if (action === 'cancel') { confirming = true; void load(); return; }
+      if (action === 'cancel-no') { confirming = false; void load(); return; }
+      busy = true;
+      try {
+        if (action === 'new') {
+          const created = await B.startInterviewRound(flowId, wanted);
+          busy = false;
+          openScheduleInterviewModal(created, { afterClose: () => { pendingOpenInterviewTab = true; const open = C.groupApplicants(applicants).find(item => item.latest.flow_id === flowId && String(item.latest.candidate_email || '').trim().toLowerCase() === wanted); if (open) showApplicantDetails(open.latest.id); } });
+          return;
+        }
+        if (action === 'resend' && row) { const result = await B.resendInterview(row.id); showToast(result.emailSent === false ? t(result.warning || 'The e-mail could not be sent. Try again.') : t('E-mail sent again.')); }
+        else if (action === 'cancel-yes' && row) { confirming = false; const result = await B.cancelInterview(row.id); showToast(result.emailSent === false ? t(result.warning || 'The interview was cancelled, but the e-mail could not be sent.') : t('Interview cancelled.')); }
+        busy = false;
+        await load();
+        void refreshInterviewTags(true);
+      } catch (failure) { busy = false; confirming = false; await load(failure.message || t('Something went wrong. Try again.')); }
+    });
+    void load();
+  }
+  const notifInterviewText = (state, candidate) => {
+    const name = '<strong>' + esc(candidate) + '</strong>';
+    return state === 'confirmed' ? t('{name} confirmed the interview', { name }) : state === 'declined' ? t('{name} cannot attend the interview', { name }) : t('{name} asked for another time for the interview', { name });
+  };
   // ---- AI interview: tags on the cards, the tab in the candidate panel, the questions of a job -------------------------------
   const aiInterviewKey = (flowId, email) => flowId + '|' + String(email || '').trim().toLowerCase();
   const aiInterviewFor = (flowId, email) => aiInterviewMap.get(aiInterviewKey(flowId, email)) || null;
@@ -1873,14 +2109,16 @@
         if (!root.querySelector('.applicants-page')) return;
         jobCombobox.sync();
       }
-      const [loadedApplicants, loadedBoardConfig, loadedInterviews] = await Promise.all([
+      const [loadedApplicants, loadedBoardConfig, loadedInterviews, loadedHumanInterviews] = await Promise.all([
         window.PathwayBackend.listApplicants(workspace.id, applicantFilter),
         window.PathwayBackend.getBoardConfig(workspace.id).catch(() => null),
-        window.PathwayBackend.listAiInterviews(workspace.id, applicantFilter).catch(() => null)
+        window.PathwayBackend.listAiInterviews(workspace.id, applicantFilter).catch(() => null),
+        window.PathwayBackend.listCandidateInterviews(workspace.id, applicantFilter).catch(() => null)
       ]);
       applicants = loadedApplicants;
       if (loadedBoardConfig) boardConfig = loadedBoardConfig;
       if (loadedInterviews) setAiInterviews(loadedInterviews);
+      if (loadedHumanInterviews) setInterviews(loadedHumanInterviews);
       if (!root.querySelector('.applicants-page')) return;
       renderApplicantBoard();
       if (pendingCandidateOpen) {
@@ -3626,7 +3864,7 @@
         // A candidate who applied more than once shows a small count in the corner of the card (the full wording is its tooltip).
         const repeat = group.count > 1 ? `<span class="repeat-badge" role="img" aria-label="${t('Applied {count} times', { count: group.count })}" title="${t('This candidate applied {count} times', { count: group.count })}">${group.count}x</span>` : '';
         const picked = selectMode && selectedCandidates.has(group.key);
-        return `<article class="applicant-card${group.count > 1 ? ' has-repeat' : ''}${selectMode ? ' is-selectable' : ''}${picked ? ' is-selected' : ''}" data-applicant="${esc(applicant.id)}" data-ckey="${esc(group.key)}" draggable="${workspaceIsFree() || selectMode ? 'false' : 'true'}" tabindex="0" role="${selectMode ? 'checkbox' : 'button'}"${selectMode ? ` aria-checked="${picked}"` : ''} aria-label="${selectMode ? t('Select {name}', { name: esc(applicant.candidate_name) }) : t('Review {name}', { name: esc(applicant.candidate_name) })}${group.count > 1 ? ', ' + tn('{count} application', '{count} applications', group.count) : ''}">${selectMode ? '<span class="select-box" aria-hidden="true"></span>' : ''}${repeat}<h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span></span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}</article>`;
+        return `<article class="applicant-card${group.count > 1 ? ' has-repeat' : ''}${selectMode ? ' is-selectable' : ''}${picked ? ' is-selected' : ''}" data-applicant="${esc(applicant.id)}" data-ckey="${esc(group.key)}" draggable="${workspaceIsFree() || selectMode ? 'false' : 'true'}" tabindex="0" role="${selectMode ? 'checkbox' : 'button'}"${selectMode ? ` aria-checked="${picked}"` : ''} aria-label="${selectMode ? t('Select {name}', { name: esc(applicant.candidate_name) }) : t('Review {name}', { name: esc(applicant.candidate_name) })}${group.count > 1 ? ', ' + tn('{count} application', '{count} applications', group.count) : ''}">${selectMode ? '<span class="select-box" aria-hidden="true"></span>' : ''}${repeat}<h3 class="applicant-card-name">${esc(applicant.candidate_name)}</h3><div class="applicant-card-email">${esc(applicant.candidate_email)}</div><div class="applicant-card-meta"><span class="applicant-card-tags"><span class="resume-chip">↧ ${esc((applicant.resume_filename || 'Resume').split('.').pop().toUpperCase())}</span></span><span>${esc(formatApplicantDate(applicant.submitted_at))}</span></div>${aiInterviewCardHtml(aiInterviewFor(applicant.flow_id, applicant.candidate_email))}${interviewCardHtml(interviewFor(applicant.flow_id, applicant.candidate_email))}</article>`;
       };
       if (stage.key === 'failed') {
         const openHead = `<div class="kanban-column-head"><div class="kanban-column-title">${columnBox()}<span class="stage-dot ${stage.color}"></span>${esc(stage.label)}</div><span class="kanban-count">${cards.length}</span></div>`;
@@ -4007,6 +4245,7 @@
       if (orderError) showToast(sameColumn ? t('Could not save the new order: {reason}', { reason: orderError.message || t('please retry') }) : t('Applicant moved to {stage}, but its place in the column could not be saved.', { stage: applicantStageLabel(status) }), 6000);
       else if (!sameColumn) showToast(t('Applicant moved to {stage}.', { stage: applicantStageLabel(status) }));
       if (!sameColumn && (status === 'ai_interview' || previous.includes('ai_interview'))) watchAiInterviewTags();
+      if (!sameColumn && status === 'interview' && !orderError) void offerInterviewScheduling(id, Boolean(open && members.some(member => member.id === open.dataset.detailApplicant)));
     } catch (error) {
       before.forEach((state, member) => { member.status = state.status; member.board_position = state.position; });
       renderApplicantBoard();
@@ -4318,9 +4557,12 @@
     const statusOptions = visibleApplicantStages().map(stage => `<option value="${esc(stage.key)}" ${group.status === stage.key ? 'selected' : ''}>${esc(stage.label)}</option>`).join('');
     // The AI Interview tab (next to Resume) exists only for a candidate who has an interview.
     const aiRow = aiInterviewFor(applicant.flow_id, person.candidate_email);
+    // The Interview tab (human interview) exists for a candidate who has one: waiting to be scheduled, in play, or from an earlier round.
+    const interviewRow = interviewFor(applicant.flow_id, person.candidate_email);
     // The tab bar is always there (just "Resume" when there is no AI interview), because it also holds the close button of the panel on wide screens.
-    const rightTabs = `<div class="applicant-right-bar${aiRow ? ' has-ai' : ''}"><div class="applicant-right-tabs" role="tablist" aria-label="${aiRow ? t('Resume and AI interview') : t('Resume')}"><button class="applicant-tab" type="button" role="tab" aria-selected="true" data-right-tab="resume">${t('Resume')}</button>${aiRow ? `<button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="ai">${t('AI Interview')}</button>` : ''}<button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="logs">${t('Logs')}</button></div><button class="modal-x applicant-right-close" data-close aria-label="${t('Close applicant details')}">×</button></div>`;
+    const rightTabs = `<div class="applicant-right-bar${aiRow ? ' has-ai' : ''}"><div class="applicant-right-tabs" role="tablist" aria-label="${aiRow ? t('Resume and AI interview') : t('Resume')}"><button class="applicant-tab" type="button" role="tab" aria-selected="true" data-right-tab="resume">${t('Resume')}</button>${aiRow ? `<button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="ai">${t('AI Interview')}</button>` : ''}${interviewRow ? `<button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="interview">${t('Interview')}</button>` : ''}<button class="applicant-tab" type="button" role="tab" aria-selected="false" data-right-tab="logs">${t('Logs')}</button></div><button class="modal-x applicant-right-close" data-close aria-label="${t('Close applicant details')}">×</button></div>`;
     const aiPane = aiRow ? `<div class="applicant-right-pane is-hidden" data-right-pane="ai"><section class="applicant-ai-panel" id="applicant-ai-panel" aria-label="${t('AI interview')}"><div class="applicant-ai-loading">${t('Loading the interview…')}</div></section></div>` : '';
+    const interviewPane = interviewRow ? `<div class="applicant-right-pane is-hidden" data-right-pane="interview"><section class="applicant-ai-panel" id="applicant-interview-panel" aria-label="${t('Interview')}"><div class="applicant-ai-loading">${t('Loading the interview…')}</div></section></div>` : '';
     const logsPane = `<div class="applicant-right-pane is-hidden" data-right-pane="logs"><section class="applicant-logs-panel" id="applicant-logs-panel" aria-label="${t('Logs')}"></section></div>`;
 
     setModal(`<div class="applicant-review-layout" data-detail-applicant="${esc(person.id)}" data-detail-tab="${tab}">
@@ -4340,7 +4582,7 @@
           <section class="applicant-detail-section applicant-comments" aria-labelledby="applicant-comments-heading"><h3 id="applicant-comments-heading">${t('Team comments')}</h3><div class="comment-list" id="applicant-comment-list" aria-live="polite"><p class="comment-empty">${t('Loading comments…')}</p></div><form class="comment-form" id="applicant-comment-form" novalidate><label class="visually-hidden" for="applicant-comment-input">${t('Add a comment')}</label><textarea class="text-area" id="applicant-comment-input" maxlength="2000" rows="3" placeholder="${t('Write a comment for your team… Type @ to mention someone.')}"></textarea><div class="mention-menu" id="applicant-mention-menu" role="listbox" aria-label="${t('Mention a teammate')}" hidden></div><div class="comment-form-actions"><span class="comment-status" id="applicant-comment-status" role="status" aria-live="polite"></span><button class="btn btn-primary btn-sm" type="submit" id="applicant-comment-submit">${t('Add comment')}</button></div></form></section>
           <section class="applicant-delete-row" id="applicant-delete-row"></section>
         </div>
-        <div class="applicant-mobile-bar"><button class="btn" id="mobile-open-logs" type="button">${t('Logs')}</button>${isPdf ? `<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;${t('Preview resume')}</button>` : ''}${aiRow ? `<button class="btn" id="mobile-open-ai" type="button">${t('AI Interview')}</button>` : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;${t('Download resume')}</button></div>
+        <div class="applicant-mobile-bar"><button class="btn" id="mobile-open-logs" type="button">${t('Logs')}</button>${isPdf ? `<button class="btn" id="mobile-preview-resume" type="button">▧ &nbsp;${t('Preview resume')}</button>` : ''}${aiRow ? `<button class="btn" id="mobile-open-ai" type="button">${t('AI Interview')}</button>` : ''}${interviewRow ? `<button class="btn" id="mobile-open-interview" type="button">${t('Interview')}</button>` : ''}<button class="btn js-download-resume" type="button">↓ &nbsp;${t('Download resume')}</button></div>
       </section>
       <aside class="applicant-review-right" aria-label="${aiRow ? t('Resume preview and AI interview') : t('Resume preview')}">
         ${rightTabs}
@@ -4351,7 +4593,7 @@
           <iframe id="applicant-resume-frame" title="${t('PDF preview of {file}', { file: esc(filename) })}" loading="lazy" referrerpolicy="no-referrer"></iframe>
           <div class="applicant-pdf-pages" id="applicant-pdf-pages" role="document" aria-label="${t('PDF preview of {file}', { file: esc(filename) })}" hidden></div>
         </section>
-        </div>${aiPane}${logsPane}</div>
+        </div>${aiPane}${interviewPane}${logsPane}</div>
       </aside>
     </div>`);
 
@@ -4384,6 +4626,19 @@
         moveTo: () => moveApplicant(applicant.id, 'ai_interview')
       });
     };
+    let interviewPanelMounted = false;
+    const openInterviewTab = () => {
+      showRightPane('interview');
+      modalRoot.querySelector('.applicant-review-layout')?.classList.add('is-previewing');
+      if (interviewPanelMounted) return;
+      interviewPanelMounted = true;
+      const notice = interviewNotifs.find(item => item.flowId === applicant.flow_id && String(item.candidateEmail || '').trim().toLowerCase() === String(person.candidate_email || '').trim().toLowerCase());
+      if (notice) { interviewNotifs = interviewNotifs.filter(item => item !== notice); paintNotifications(); window.PathwayBackend.markCandidateInterviewNoticeSeen(notice.id).catch(() => {}); }
+      mountInterviewPanel(modalRoot.querySelector('#applicant-interview-panel'), applicant.flow_id, person.candidate_email, {
+        getStage: () => (C.groupApplicants(applicants).find(item => item.items.some(member => member.id === applicant.id)) || {}).status,
+        close: () => showRightPane('resume')
+      });
+    };
     let logsMounted = false;
     const openLogsTab = () => {
       showRightPane('logs');
@@ -4392,9 +4647,11 @@
       logsMounted = true;
       void mountApplicantLogs(modalRoot.querySelector('#applicant-logs-panel'), group);
     };
-    modalRoot.querySelectorAll('[data-right-tab]').forEach(button => button.addEventListener('click', () => { if (button.dataset.rightTab === 'ai') openAiTab(); else if (button.dataset.rightTab === 'logs') openLogsTab(); else showRightPane('resume'); }));
+    modalRoot.querySelectorAll('[data-right-tab]').forEach(button => button.addEventListener('click', () => { if (button.dataset.rightTab === 'ai') openAiTab(); else if (button.dataset.rightTab === 'interview') openInterviewTab(); else if (button.dataset.rightTab === 'logs') openLogsTab(); else showRightPane('resume'); }));
     modalRoot.querySelector('#mobile-open-logs')?.addEventListener('click', openLogsTab);
     modalRoot.querySelector('#mobile-open-ai')?.addEventListener('click', openAiTab);
+    modalRoot.querySelector('#mobile-open-interview')?.addEventListener('click', openInterviewTab);
+    if (interviewRow && pendingOpenInterviewTab) { pendingOpenInterviewTab = false; openInterviewTab(); }
     if (aiRow && pendingOpenAiTab) { pendingOpenAiTab = false; openAiTab(); }
     modalRoot.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => showApplicantDetails(person.id, Number(button.dataset.tab))));
     const previewButton = modalRoot.querySelector('#preview-applicant-resume');
