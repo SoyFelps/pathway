@@ -95,6 +95,8 @@ test('the invitation is written in the job language, with the time of the interv
   const cancel = buildCandidateEmail({ ...base, kind: 'cancel' });
   assert.equal(cancel.subject, 'Interview cancelled: Product Designer – CoreFront');
   assert.equal(cancel.html.includes('interview.html#TOKEN'), false, 'a cancellation has no button');
+  assert.ok(cancel.html.includes('When:') && !/Meeting link|Format|Address|Notes/.test(cancel.html), 'a cancellation shows only the date, no link, address or notes');
+  assert.equal(cancel.html.includes(online.meetingLink) || cancel.text.includes(online.meetingLink), false, 'the meeting link is not in a cancellation');
 });
 
 test('an in-person invitation shows the address; no language or an unknown one means English', async () => {

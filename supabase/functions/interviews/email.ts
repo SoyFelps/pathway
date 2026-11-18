@@ -227,7 +227,8 @@ export function buildCandidateEmail(input: CandidateEmailInput): BuiltEmail {
     heading: k.heading(company),
     greeting: copy.greeting(name),
     paragraphs: [k.intro(job, company), closing],
-    rows: detailRows(copy.labels, input.interview, language),
+    // a cancelled interview shows only the date and time (so the person knows which one): no meeting link, address or notes
+    rows: isCancel ? detailRows(copy.labels, input.interview, language).slice(0, 1) : detailRows(copy.labels, input.interview, language),
     button: isCancel ? undefined : { url: input.pageUrl, label: input.kind === "invite" || input.kind === "update" ? copy.buttonRespond : copy.buttonView },
     footer: copy.footer(company),
   });
