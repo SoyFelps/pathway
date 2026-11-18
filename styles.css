@@ -1171,3 +1171,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .rpt-version .select-combobox{width:320px;max-width:100%;flex:none}
 .select-combobox .applicants-filter{cursor:pointer}
 @media(max-width:760px){.reports-tools .select-combobox{flex:1;min-width:0}.flow-filters .select-combobox{flex:1 1 100%}.rpt-jobs-tools .select-combobox{flex:1;min-width:0}}
+/* Reports and Diversity (2026-11-18): the filters sit in one row under the subtitle (before they were at the right of the title), like the Applicants page. */
+.reports-page .reports-heading,.diversity-page .reports-heading{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:14px}
+.reports-page .reports-heading p,.diversity-page .reports-heading p{max-width:none}
+.reports-page .reports-tools,.diversity-page .reports-tools{width:100%;justify-content:flex-start}
