@@ -23,7 +23,7 @@
   'Reports': 'Informes',
   'Diversity': 'Diversidad',
   'My Team': 'Mi equipo',
-  'My Companies': 'Mis empresas',
+  'Companies': 'Empresas',
   'My Plan': 'Mi plan',
 
   // New / rename workspace, no workspace
@@ -352,7 +352,7 @@
   'Start with the role': 'Empieza por la vacante',
   'Create a new application flow': 'Crear una nueva vacante',
   'Add the job description and the AI interview questions inside the flow.': 'Agrega la descripción de la vacante y las preguntas de la entrevista con IA dentro del flujo.',
-  'This job will use your workspace name: {name}. Add a company profile from My Companies to choose another.': 'Esta vacante usará el nombre de tu espacio de trabajo: {name}. Agrega una empresa en Mis empresas para elegir otro.',
+  'This job will use your workspace name: {name}. Add a company profile from Companies to choose another.': 'Esta vacante usará el nombre de tu espacio de trabajo: {name}. Agrega una empresa en Empresas para elegir otro.',
   'Job title': 'Título de la vacante',
   'e.g. Senior Product Designer': 'p. ej., Diseñador de Producto Sénior',
   'Responsible': 'Responsable',

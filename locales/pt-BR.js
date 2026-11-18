@@ -23,7 +23,7 @@
   'Reports': 'Relatórios',
   'Diversity': 'Diversidade',
   'My Team': 'Minha equipe',
-  'My Companies': 'Minhas empresas',
+  'Companies': 'Empresas',
   'My Plan': 'Meu plano',
 
   // New / rename workspace, no workspace
@@ -352,7 +352,7 @@
   'Start with the role': 'Comece pela vaga',
   'Create a new application flow': 'Criar uma nova vaga',
   'Add the job description and the AI interview questions inside the flow.': 'Adicione a descrição da vaga e as perguntas da entrevista com IA dentro do fluxo.',
-  'This job will use your workspace name: {name}. Add a company profile from My Companies to choose another.': 'Esta vaga vai usar o nome do seu workspace: {name}. Cadastre uma empresa em Minhas empresas para escolher outro.',
+  'This job will use your workspace name: {name}. Add a company profile from Companies to choose another.': 'Esta vaga vai usar o nome do seu workspace: {name}. Cadastre uma empresa em Empresas para escolher outro.',
   'Job title': 'Título da vaga',
   'e.g. Senior Product Designer': 'ex.: Designer de Produto Sênior',
   'Responsible': 'Responsável',
