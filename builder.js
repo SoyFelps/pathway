@@ -257,6 +257,7 @@
     try { mentionNotifs = await window.PathwayBackend.listCommentMentions(workspace.id); } catch (error) { /* keep what we had */ }
     try { aiNotifs = await window.PathwayBackend.listAiInterviewNotices(workspace.id); } catch (error) { /* keep what we had */ }
     try { interviewNotifs = await window.PathwayBackend.listCandidateInterviewNotices(workspace.id); } catch (error) { /* keep what we had */ }
+    if (interviewNotifs.some(item => item.state === 'reschedule_requested')) await loadInterviewProposals();
     // The notifications page, when open, follows the bell: it is redrawn only if something changed.
     if (root.querySelector('.notifications-page')) void refreshNotificationPage();
     // On the board, the interview tags (sent, completed, badge) follow what happened since the board was loaded.
@@ -277,7 +278,7 @@
     button.setAttribute('aria-label', total ? t('Notifications, {count} unread', { count: total }) : t('Notifications'));
     const mentionItems = mentionNotifs.map(item => '<button type="button" class="notif-item" data-notif-mention-flow="' + esc(item.flowId) + '" data-notif-mention-email="' + esc(item.candidateEmail) + '"><span class="notif-text">' + notifMentionText(item.authorName) + '</span><span class="notif-sub">' + esc(item.candidateName) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
     const aiItems = aiNotifs.map(item => '<button type="button" class="notif-item" data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"><span class="notif-text">' + notifAiText(item.candidateName) + '</span><span class="notif-sub">' + notifImpressionText(item.impression) + (item.jobTitle ? ' · ' + esc(item.jobTitle) : '') + '</span></button>').join('');
-    const interviewItems = interviewNotifs.map(item => '<button type="button" class="notif-item" data-notif-iv="' + esc(item.id) + '" data-notif-iv-flow="' + esc(item.flowId) + '" data-notif-iv-email="' + esc(item.candidateEmail) + '"><span class="notif-text">' + notifInterviewText(item.state, item.candidateName) + '</span><span class="notif-sub">' + esc(item.jobTitle || '') + '</span></button>').join('');
+    const interviewItems = interviewNotifs.map(item => '<button type="button" class="notif-item" data-notif-iv="' + esc(item.id) + '" data-notif-iv-flow="' + esc(item.flowId) + '" data-notif-iv-email="' + esc(item.candidateEmail) + '"><span class="notif-text">' + notifInterviewText(item.state, item.candidateName) + '</span><span class="notif-sub">' + interviewNoticeSub(item.id, item.jobTitle) + '</span></button>').join('');
     menu.innerHTML = (total
       ? interviewItems + aiItems + mentionItems + notifications.map(item => '<button type="button" class="notif-item" data-notif-flow="' + esc(item.flowId) + '"><span class="notif-text">' + notifJobText(item.jobTitle) + '</span><span class="notif-sub">' + tn('{count} new candidate', '{count} new candidates', item.newCount) + (item.companyName ? ' · ' + esc(item.companyName) : '') + '</span></button>').join('')
       : `<div class="notif-empty">${t('You are all caught up.')}</div>`) + `<div class="notif-footer"><button type="button" class="notif-see-all" data-notif-all>${t('See all')}</button></div>`;
@@ -374,7 +375,7 @@
       attrs = 'data-notif-iv="' + esc(item.id) + '" data-notif-iv-flow="' + esc(item.flowId) + '" data-notif-iv-email="' + esc(item.candidateEmail) + '"';
       icon = '<span class="notif-row-icon is-interview" aria-hidden="true">' + INTERVIEW_ICON.replace('width="11" height="11"', 'width="18" height="18"') + '</span>';
       text = notifInterviewText(item.state, item.candidateName);
-      sub = esc(item.jobTitle || '');
+      sub = interviewNoticeSub(item.id, item.jobTitle);
     } else if (item.kind === 'ai_interview') {
       attrs = 'data-notif-ai="' + esc(item.id) + '" data-notif-ai-flow="' + esc(item.flowId) + '" data-notif-ai-email="' + esc(item.candidateEmail) + '"';
       icon = '<span class="notif-row-icon is-ai" aria-hidden="true">✦</span>';
@@ -417,6 +418,7 @@
       if (requestId !== notificationPageRequestId || !root.querySelector('.notifications-page')) return;
       const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
       if (startOfToday.getTime() + '|' + JSON.stringify(items) === notificationPageSignature) return;
+      if (items.some(item => item.kind === 'candidate_interview' && item.state === 'reschedule_requested')) await loadInterviewProposals();
       paintNotificationPage(items);
     } catch (error) { /* keep what is on the screen; the next check tries again */ }
   }
@@ -446,6 +448,7 @@
     try {
       const items = await window.PathwayBackend.listNotificationHistory(workspace.id);
       if (requestId !== notificationPageRequestId || !root.querySelector('.notifications-page')) return;
+      if (items.some(item => item.kind === 'candidate_interview' && item.state === 'reschedule_requested')) await loadInterviewProposals();
       paintNotificationPage(items);
     } catch (error) {
       if (requestId !== notificationPageRequestId || !root.querySelector('.notifications-page')) return;
@@ -469,6 +472,8 @@
   let interviewMap = new Map(); // "jobId|e-mail" -> the interview in play for that candidate (the newest one when none is in play)
   let interviewSignature = '';
   let interviewNotifs = [];
+  // The times a candidate suggested when asking for another time: interview id -> ["2026-12-03T14:00", ...] (wall-clock time in the interview's zone). Read with the interviews (database policy), only when a notice needs it.
+  let interviewProposals = new Map();
   let pendingOpenInterviewTab = false;
   const INTERVIEW_OPEN = ['awaiting_schedule', 'invited', 'confirmed', 'declined', 'reschedule_requested'];
   const INTERVIEW_ON = ['invited', 'confirmed', 'declined', 'reschedule_requested']; // scheduled and not over
@@ -632,20 +637,20 @@
       } else {
         const text = { invited: t('Waiting for the candidate to answer.'), confirmed: t('The candidate confirmed that they can attend.'), declined: t('The candidate said they cannot attend. Nothing was changed on the board: moving or rejecting the candidate is your decision.'), reschedule_requested: t('The candidate asked for another time. Schedule a new time to send a new invitation.') }[row.state];
         const requested = row.state === 'reschedule_requested'
-          ? ((row.proposedTimes.length ? '<div class="applicant-info-grid">' + info(t('Suggested times'), row.proposedTimes.map(item => esc(String(item.local || '').replace('T', ' '))).join('<br>')) + '</div>' : '') + (row.responseNote ? '<div class="ai-note"><strong>' + t('Message from the candidate') + '</strong> ' + esc(row.responseNote) + '</div>' : ''))
+          ? ((row.proposedTimes.length ? '<div class="applicant-info-grid">' + info(t('Suggested times'), row.proposedTimes.map(item => esc(interviewSlotText(item.local, 'full'))).join('<br>')) + '</div>' : '') + (row.responseNote ? '<div class="ai-note"><strong>' + t('Message from the candidate') + '</strong> ' + esc(row.responseNote) + '</div>' : ''))
           : (row.state === 'declined' && row.responseNote ? '<div class="ai-note"><strong>' + t('Message from the candidate') + '</strong> ' + esc(row.responseNote) + '</div>' : '');
         const away = stage.getStage && stage.getStage() !== 'interview' ? '<p class="muted">' + t('This candidate is not in the Interview column any more. The interview is still on, and the reminders still go out, until you cancel it here.') + '</p>' : '';
         const cancelControl = confirming
           ? '<span class="ai-confirm">' + t('Cancel this interview?') + ' <button type="button" class="btn btn-sm btn-danger" data-iv-action="cancel-yes">' + t('Yes, cancel') + '</button><button type="button" class="btn btn-sm" data-iv-action="cancel-no">' + t('Keep it') + '</button></span>'
           : button('cancel', t('Cancel interview'), 'btn-danger-ghost');
-        body = '<p>' + esc(text) + '</p><div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>')
+        body = '<p>' + esc(text) + '</p>' + requested + '<div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>')
           + info(t('Format'), row.kind === 'online' ? t('Online') : t('In person')) + info(t('Duration'), row.durationMinutes ? esc(tn('{count} minute', '{count} minutes', row.durationMinutes)) : '')
           + (row.kind === 'online' ? info(t('Meeting link'), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '') : info(t('Address'), esc(row.address || '')))
-          + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>' + requested + away
+          + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>' + away
           + '<div class="ai-actions">' + button('schedule', row.state === 'reschedule_requested' ? t('Schedule a new time') : t('Edit interview'), row.state === 'reschedule_requested' ? 'btn-primary' : '') + (row.state === 'declined' ? '' : button('resend', t('Re-send e-mail'))) + cancelControl + '</div>';
       }
       const history = events.length ? '<h4>' + t('History') + '</h4><ul class="interview-history">' + events.map(item => '<li><span>' + esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>' : '';
-      host.innerHTML = head + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + history;
+      host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + history + '</div>';
       host.dataset.interviewId = row ? row.id : '';
       host._interviewRow = row;
     };
@@ -683,6 +688,26 @@
       } catch (failure) { busy = false; confirming = false; await load(failure.message || t('Something went wrong. Try again.')); }
     });
     void load();
+  }
+  // One wall-clock time of an interview ("2026-12-03T14:00") written for the screen, in the interface language.
+  function interviewSlotText(local, style = 'medium') {
+    const date = new Date(String(local || '') + ':00Z');
+    if (Number.isNaN(date.getTime())) return String(local || '').replace('T', ' ');
+    return window.PathwayI18n.formatDate(date, { dateStyle: style, timeStyle: 'short', timeZone: 'UTC' });
+  }
+  // Second line of an interview notice: the times the candidate suggested (when the notice is about that) and the job.
+  function interviewNoticeSub(id, jobTitle) {
+    const slots = interviewProposals.get(id) || [];
+    const suggested = slots.length ? t('Suggested: {times}', { times: esc(slots.map(local => interviewSlotText(local)).join(' · ')) }) : '';
+    return [suggested, esc(jobTitle || '')].filter(Boolean).join(' · ');
+  }
+  async function loadInterviewProposals() {
+    try {
+      const rows = await window.PathwayBackend.listCandidateInterviews(workspace.id);
+      const next = new Map();
+      for (const row of rows) if (row.state === 'reschedule_requested' && Array.isArray(row.proposedTimes) && row.proposedTimes.length) next.set(row.id, row.proposedTimes.map(item => String(item.local || '')).filter(Boolean));
+      interviewProposals = next;
+    } catch (error) { /* the notice is shown without the times */ }
   }
   const notifInterviewText = (state, candidate) => {
     const name = '<strong>' + esc(candidate) + '</strong>';

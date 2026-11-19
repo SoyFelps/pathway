@@ -60,3 +60,13 @@ test('the browser reads interviews with the database policy and changes them onl
   assert.ok(backend.includes("callInterviews({ action: 'schedule'") && backend.includes("action: 'newRound'"));
   assert.equal(/reminder_24h_sent_at|reminder_2h_sent_at|token_hash/.test(backend), false, 'internal columns are never read');
 });
+
+test('the Interview tab and the notices show WHAT the candidate suggested, written for the screen, and the tab has the same side spacing as the AI tab', () => {
+  const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
+  assert.ok(panel.includes("'<div class=\"applicant-ai-body\">'"), 'the tab content sits in the same padded body as the AI interview tab');
+  assert.ok(panel.includes("interviewSlotText(item.local, 'full')"), 'suggested times are written as dates, not as 2026-12-03T14:00');
+  assert.ok(panel.indexOf("'</p>' + requested + '<div class=\"applicant-info-grid\">'") > -1, 'the suggested times come first, right under the status sentence');
+  assert.ok(builder.includes('function interviewNoticeSub(') && builder.includes("t('Suggested: {times}'"), 'the bell and the notifications page name the suggested times');
+  assert.ok(builder.includes('await loadInterviewProposals();'), 'the times are read (through the database policy) when a notice needs them');
+  assert.equal(/Suggested: \{times\}/.test(fs.readFileSync(path.join(__dirname, '..', 'locales', 'pt-BR.js'), 'utf8')), true);
+});
