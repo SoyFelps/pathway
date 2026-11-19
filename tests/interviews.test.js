@@ -207,3 +207,15 @@ test('the function is listed with the other edge functions that check the origin
   assert.ok(index.includes('Plan: D:\\Pathway\\plano-entrevistas.md'));
   assert.ok(!/sk_live|whsec_|re_[A-Za-z0-9]{20}/.test(index), 'no secret in the code');
 });
+
+test('while the hiring team looks at a request for another time the candidate has no buttons and no calendar', () => {
+  const view = index.slice(index.indexOf('function candidateView('), index.indexOf('// Recruiter actions (signed in)'));
+  assert.ok(view.includes('canChange: on && iv.state !== "reschedule_requested"'), 'no buttons while the request is open');
+  assert.ok(view.includes('calendar: (iv.state === "invited" || iv.state === "confirmed")'), 'a calendar only for an invitation or a confirmation');
+  const respond = index.slice(index.indexOf('async function actionRespond('), index.indexOf('async function actionCalendar('));
+  assert.ok(respond.includes('iv.state === "reschedule_requested"') && respond.includes('Your request is with the hiring team.'), 'the answer is refused by the server too');
+  const calendar = index.slice(index.indexOf('async function actionCalendar('), index.indexOf('// Reminders:'));
+  assert.ok(calendar.includes('state !== "invited" && found.ctx.iv.state !== "confirmed"') && calendar.includes('The calendar is not available for this interview.'), 'the .ics is refused too');
+  const page = fs.readFileSync(path.join(__dirname, '..', 'interview.js'), 'utf8');
+  assert.ok(page.includes('if (!view.canChange || panel) return'), 'the page draws the buttons only when the candidate may change the answer');
+});

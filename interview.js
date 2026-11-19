@@ -86,7 +86,7 @@
   }
 
   function actionsHtml() {
-    if (!view.canRespond || panel) return '';
+    if (!view.canChange || panel) return '';
     const buttons = [];
     if (view.state !== 'confirmed') buttons.push(`<button class="btn btn-primary" type="button" id="act-confirm">${t('Confirm attendance')}</button>`);
     if (view.state !== 'declined') buttons.push(`<button class="btn" type="button" id="act-decline">${t('I cannot attend')}</button>`);

@@ -234,10 +234,12 @@ function candidateView(ctx: Context) {
     when: formatWhen(startsAt, iv.duration_minutes, iv.time_zone, ctx.language),
     meetingLink: on ? iv.meeting_link : null, address: on ? iv.address : null, notes: on ? iv.notes : null,
     canRespond: on && startsAt.getTime() > Date.now(),
+    // While the hiring team is looking at a request for another time the candidate has no buttons and no calendar (owner decision, 2026-11-19).
+    canChange: on && iv.state !== "reschedule_requested" && startsAt.getTime() > Date.now(),
     responseNote: iv.response_note, proposedTimes: iv.proposed_times || [],
     suggestUntil: limit.toISOString(),
     suggestUntilDate: new Intl.DateTimeFormat("en-CA", { timeZone: iv.time_zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(limit),
-    calendar: on ? { google: googleCalendarUrl(event), outlook: outlookCalendarUrl(event) } : null,
+    calendar: (iv.state === "invited" || iv.state === "confirmed") ? { google: googleCalendarUrl(event), outlook: outlookCalendarUrl(event) } : null,
   };
 }
 
@@ -360,6 +362,7 @@ async function actionRespond(req: Request, body: Record<string, unknown>) {
   const { ctx } = found;
   const iv = ctx.iv;
   if (iv.state === "cancelled") return fail(req, 409, "This interview was cancelled.");
+  if (iv.state === "reschedule_requested") return fail(req, 409, "Your request is with the hiring team. They will contact you with a new invitation.");
   if (!(OPEN_STATES as readonly string[]).includes(iv.state) || new Date(iv.starts_at).getTime() <= Date.now()) return fail(req, 409, "This interview has already taken place.");
   const parsed = parseAnswer(body);
   if (!parsed.ok) return fail(req, 400, parsed.error);
@@ -385,7 +388,7 @@ async function actionRespond(req: Request, body: Record<string, unknown>) {
 async function actionCalendar(req: Request, body: Record<string, unknown>) {
   const found = await contextFromToken(req, body);
   if (found instanceof Response) return found;
-  if (!(OPEN_STATES as readonly string[]).includes(found.ctx.iv.state)) return fail(req, 409, "This interview was cancelled.");
+  if (found.ctx.iv.state !== "invited" && found.ctx.iv.state !== "confirmed") return fail(req, 409, "The calendar is not available for this interview.");
   return response(req, 200, { filename: "interview.ics", content: buildIcs(calendarEventOf(found.ctx)) });
 }
 

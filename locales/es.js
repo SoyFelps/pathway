@@ -1704,6 +1704,8 @@
   '{name} cannot attend the interview': '{name} no podrá asistir a la entrevista',
   '{name} asked for another time for the interview': '{name} pidió otro horario para la entrevista',
   'The candidate was not found.': 'No se encontró al candidato.',
+  'Your request is with the hiring team. They will contact you with a new invitation.': 'Su solicitud está con el equipo de selección. Se pondrán en contacto con una nueva invitación.',
+  'The calendar is not available for this interview.': 'El calendario no está disponible para esta entrevista.',
   '{count} minute': { one: '{count} minuto', other: '{count} minutos' },
   'An active plan is needed to schedule interviews.': 'Se necesita un plan activo para programar entrevistas.',
   'Choose a valid day and time.': 'Se debe elegir un día y una hora válidos.',
