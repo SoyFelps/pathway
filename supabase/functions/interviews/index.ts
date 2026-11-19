@@ -234,8 +234,8 @@ function candidateView(ctx: Context) {
     when: formatWhen(startsAt, iv.duration_minutes, iv.time_zone, ctx.language),
     meetingLink: on ? iv.meeting_link : null, address: on ? iv.address : null, notes: on ? iv.notes : null,
     canRespond: on && startsAt.getTime() > Date.now(),
-    // While the hiring team is looking at a request for another time the candidate has no buttons and no calendar (owner decision, 2026-11-19).
-    canChange: on && iv.state !== "reschedule_requested" && startsAt.getTime() > Date.now(),
+    // Once the candidate said "cannot attend" or asked for another time, the answer is with the hiring team: no buttons and no calendar until a new invitation arrives (owner decisions, 2026-11-19).
+    canChange: on && iv.state !== "reschedule_requested" && iv.state !== "declined" && startsAt.getTime() > Date.now(),
     responseNote: iv.response_note, proposedTimes: iv.proposed_times || [],
     suggestUntil: limit.toISOString(),
     suggestUntilDate: new Intl.DateTimeFormat("en-CA", { timeZone: iv.time_zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(limit),
@@ -363,6 +363,7 @@ async function actionRespond(req: Request, body: Record<string, unknown>) {
   const iv = ctx.iv;
   if (iv.state === "cancelled") return fail(req, 409, "This interview was cancelled.");
   if (iv.state === "reschedule_requested") return fail(req, 409, "Your request is with the hiring team. They will contact you with a new invitation.");
+  if (iv.state === "declined") return fail(req, 409, "Your answer is with the hiring team. They will contact you if there is a new time.");
   if (!(OPEN_STATES as readonly string[]).includes(iv.state) || new Date(iv.starts_at).getTime() <= Date.now()) return fail(req, 409, "This interview has already taken place.");
   const parsed = parseAnswer(body);
   if (!parsed.ok) return fail(req, 400, parsed.error);

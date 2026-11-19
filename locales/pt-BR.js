@@ -1705,6 +1705,7 @@
   '{name} asked for another time for the interview': '{name} pediu outro horário para a entrevista',
   'The candidate was not found.': 'O candidato não foi encontrado.',
   'Your request is with the hiring team. They will contact you with a new invitation.': 'Seu pedido está com a equipe de contratação. Ela entrará em contato com um novo convite.',
+  'Your answer is with the hiring team. They will contact you if there is a new time.': 'Sua resposta está com a equipe de contratação. Ela entrará em contato se houver um novo horário.',
   'The calendar is not available for this interview.': 'A agenda não está disponível para esta entrevista.',
   '{count} minute': { one: '{count} minuto', other: '{count} minutos' },
   'An active plan is needed to schedule interviews.': 'Um plano ativo é necessário para agendar entrevistas.',
