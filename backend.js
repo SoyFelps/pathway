@@ -208,6 +208,8 @@
   // Registers how an interview went (once), and corrects it afterwards. The same checked function does both.
   const finalizeInterview = async (interviewId, form) => mapInterviewResult((await callInterviews({ action: 'finalize', interviewId, ...form })).interview);
   const correctInterviewResult = async (interviewId, form) => mapInterviewResult((await callInterviews({ action: 'correctResult', interviewId, ...form })).interview);
+  // The empty row of a new round, when the window is closed without sending an invitation.
+  const discardInterviewRound = interviewId => callInterviews({ action: 'discardRound', interviewId });
   const cancelInterview = interviewId => callInterviews({ action: 'cancel', interviewId });
   const resendInterview = interviewId => callInterviews({ action: 'resend', interviewId });
   // A new round for a candidate whose earlier interview is over or was cancelled: the function makes a waiting row, ready to be scheduled.
@@ -1305,6 +1307,7 @@
     setInterviewResponsibles,
     cancelInterview,
     finalizeInterview,
+    discardInterviewRound,
     correctInterviewResult,
     resendInterview,
     startInterviewRound,

@@ -91,3 +91,12 @@ test('the Interview tab after the time has passed: waiting for results, no re-se
   const schedule = slice(builder, 'function openScheduleInterviewModal(', 'function openFinalizeInterviewModal');
   assert.ok(schedule.includes("const day = row.localStart && !pastRow"), 'a past interview asks for a new day');
 });
+
+test('a new round: no "Schedule later", cancelling throws the empty row away, and the earlier interviews stay visible in the tab', () => {
+  const schedule = slice(builder, 'function openScheduleInterviewModal(', 'function openFinalizeInterviewModal');
+  assert.ok(schedule.includes("const newRound = row.state === 'awaiting_schedule' && (interviewEarlier.get("), 'a candidate who already had an interview');
+  assert.ok(schedule.includes("row.state === 'awaiting_schedule' && !newRound ? t('Schedule later') : t('Cancel')"), 'Schedule later only for the first interview');
+  assert.ok(schedule.includes('if (newRound && !invitationSent) B.discardInterviewRound(row.id)'), 'closing without sending removes the empty row');
+  const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
+  assert.ok(panel.includes("t('Previous interviews')") && panel.includes("item.state === 'finished' || item.state === 'cancelled'"), 'earlier rounds are listed, each in a fold');
+});

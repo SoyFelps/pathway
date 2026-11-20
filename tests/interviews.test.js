@@ -281,3 +281,11 @@ test('finalizing is manual: only after the start, once, with an active plan; a c
   assert.ok(schedule.includes('Date.parse(before.starts_at) <= Date.now()') && schedule.includes('The interview must be in the future.'), 'editing a past interview needs a new time');
   assert.ok(schedule.includes('reminder_10m_sent_at: null'), 'a new time starts the reminders again');
 });
+
+test('discarding the empty row of a new round: only a waiting row, only when the candidate had another interview', () => {
+  const body = index.slice(index.indexOf('async function actionDiscardRound('), index.indexOf('async function actionCancel('));
+  assert.ok(body.includes('seen.state !== "awaiting_schedule"'), 'a waiting row only');
+  assert.ok(body.includes('.neq("id", seen.id).neq("state", "awaiting_schedule")') && body.includes('if (!count)'), 'the first interview of a candidate stays waiting');
+  assert.ok(body.includes('.delete().eq("id", seen.id).eq("state", "awaiting_schedule")'), 'deletes only that waiting row');
+  assert.ok(index.includes('action === "discardRound"'), 'signed-in action');
+});

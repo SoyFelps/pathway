@@ -474,6 +474,7 @@
   let interviewNotifs = [];
   // The times a candidate suggested when asking for another time: interview id -> ["2026-12-03T14:00", ...] (wall-clock time in the interview's zone). Read with the interviews (database policy), only when a notice needs it.
   let interviewProposals = new Map();
+  let interviewEarlier = new Map(); // key -> how many interviews (not waiting ones) the candidate already had: a new round is not the first one
   let pendingOpenInterviewTab = false;
   const INTERVIEW_OPEN = ['awaiting_schedule', 'invited', 'confirmed', 'declined', 'reschedule_requested'];
   const INTERVIEW_ON = ['invited', 'confirmed', 'declined', 'reschedule_requested']; // scheduled and not finalized
@@ -492,6 +493,8 @@
       if (!have || (!INTERVIEW_OPEN.includes(have.state) && INTERVIEW_OPEN.includes(row.state))) next.set(key, row);
     }
     interviewMap = next;
+    interviewEarlier = new Map();
+    for (const row of rows) if (row.state !== 'awaiting_schedule') { const key = aiInterviewKey(row.flowId, row.email); interviewEarlier.set(key, (interviewEarlier.get(key) || 0) + 1); }
     interviewSignature = rows.map(row => row.id + row.state + row.sequence + (row.startsAt || '')).join('|');
   }
   async function refreshInterviewTags(force = false) {
@@ -562,6 +565,9 @@
     const B = window.PathwayBackend;
     const who = interviewCandidate(row);
     const editing = INTERVIEW_ON.includes(row.state);
+    // A NEW round (the candidate already had an interview): no "Schedule later", only send or cancel; cancelling throws the empty row away, so the earlier interview shows again.
+    const newRound = row.state === 'awaiting_schedule' && (interviewEarlier.get(aiInterviewKey(row.flowId, row.email)) || 0) > 0;
+    let invitationSent = false;
     const browserZone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (error) { return 'UTC'; } })();
     const zone = row.timeZone || browserZone;
     const pastRow = row.state !== 'awaiting_schedule' && interviewStarted(row); // its time has passed: the new time must be chosen again
@@ -592,7 +598,7 @@
         <div class="field-group"><label for="iv-notes">${t('Notes for the candidate (optional)')}</label><textarea class="text-area" id="iv-notes" rows="3" maxlength="1000">${esc(row.notes || '')}</textarea></div>
         ${editing ? '' : `<div class="field-group"><span class="form-label" id="iv-responsible-label">${t('Responsible for the interview')}</span><div id="iv-responsible"></div><p class="team-permission-hint">${t('They are told when the candidate answers.')}</p></div>`}
         <p class="settings-delete-error" id="iv-error" role="alert" hidden></p>
-        <div class="modal-actions"><button class="btn" type="button" data-close>${row.state === 'awaiting_schedule' ? t('Schedule later') : t('Cancel')}</button><button class="btn btn-primary" id="iv-send" type="submit">${editing ? t('Send updated invitation') : t('Send invitation')}</button></div>
+        <div class="modal-actions"><button class="btn" type="button" data-close>${row.state === 'awaiting_schedule' && !newRound ? t('Schedule later') : t('Cancel')}</button><button class="btn btn-primary" id="iv-send" type="submit">${editing ? t('Send updated invitation') : t('Send invitation')}</button></div>
       </form>`);
     const form = modalRoot.querySelector('#schedule-interview-form');
     const field = id => form.querySelector('#' + id);
@@ -614,7 +620,10 @@
     field('iv-minutes').addEventListener('input', markMinutes);
     form.querySelectorAll('[data-iv-minutes]').forEach(button => button.addEventListener('click', () => { field('iv-minutes').value = button.dataset.ivMinutes; markMinutes(); }));
     form.querySelectorAll('[data-iv-suggested]').forEach(button => button.addEventListener('click', () => { const [d, h] = button.dataset.ivSuggested.split('T'); field('iv-day').value = d; field('iv-time').value = h; }));
-    modalCloseHook = () => { if (options.afterClose) options.afterClose(); };
+    modalCloseHook = () => {
+      if (newRound && !invitationSent) B.discardInterviewRound(row.id).catch(() => {}).then(() => { void refreshInterviewTags(true); if (options.afterClose) options.afterClose(); });
+      else if (options.afterClose) options.afterClose();
+    };
     form.addEventListener('submit', async event => {
       event.preventDefault();
       error.hidden = true;
@@ -629,6 +638,7 @@
           responsibleIds: !editing && people.length ? currentResponsibleIds(responsibleIds) : undefined // chosen only when the interview is created; afterwards they change in the Interview tab
         });
         showToast(result.emailSent === false ? t(result.warning || 'The interview was saved, but the e-mail could not be sent. Use Resend to try again.') : t('Invitation sent.'), result.emailSent === false ? 6000 : 2400);
+        invitationSent = true;
         closeModal(); // runs afterClose
         void refreshInterviewTags(true);
       } catch (failure) {
@@ -788,8 +798,11 @@
           : button('schedule', scheduleLabel, row.state === 'reschedule_requested' ? 'btn-primary' : '') + (row.state === 'declined' ? '' : button('resend', t('Re-send e-mail'))) + cancelControl;
         body = '<p>' + esc(text) + '</p>' + requested + detailsGrid(row) + responsibleField + away + '<div class="ai-actions">' + actions + '</div>';
       }
+      // The earlier rounds of this candidate (finished or cancelled), newest first, each in a fold.
+      const earlier = row ? mine.filter(item => item !== row && (item.state === 'finished' || item.state === 'cancelled')) : [];
+      const earlierHtml = earlier.length ? '<h4>' + t('Previous interviews') + '</h4>' + earlier.map(item => '<details class="iv-fold"><summary>' + esc(t('Interview') + ' · ' + interviewWhen(item, { dateStyle: 'medium', timeStyle: 'short' }) + ' · ' + (item.state === 'cancelled' ? t('Cancelled') : t('Finished'))) + '</summary>' + (item.resultAt ? resultHtml(item) : '') + detailsGrid(item) + '</details>').join('') : '';
       const history = events.length ? '<h4>' + t('History') + '</h4><ul class="interview-history">' + events.map(item => '<li><span>' + (item.kind === 'responsibles_changed' ? t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'finalized' ? t('{name} finalized the interview', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'result_corrected' ? t('{name} corrected the interview result', { name: esc(interviewActorName(item.actorUserId)) }) : esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind)) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>' : '';
-      host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + history + '</div>';
+      host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + earlierHtml + history + '</div>';
       host.dataset.interviewId = row ? row.id : '';
       host._interviewRow = row;
       // The responsible people change here at any time and save by themselves; nothing is sent to the candidate.

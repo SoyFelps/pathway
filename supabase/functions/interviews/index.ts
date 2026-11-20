@@ -369,6 +369,20 @@ async function actionFinalize(req: Request, userId: string, userClient: Supabase
   return response(req, 200, { interview: recruiterRow(updated) });
 }
 
+/** The empty "waiting to be scheduled" row of a NEW round, thrown away when the person closes the window without sending (the first interview of a candidate stays waiting: the card is in the column). */
+async function actionDiscardRound(req: Request, userClient: SupabaseClient, body: Record<string, unknown>) {
+  const seen = await visibleInterview(userClient, body);
+  if (!seen) return fail(req, 404, "The interview was not found.");
+  if (seen.state !== "awaiting_schedule") return fail(req, 409, "This interview can no longer be changed.");
+  const { data: row } = await admin!.from("candidate_interviews").select("flow_id,candidate_email").eq("id", seen.id).maybeSingle();
+  if (!row) return fail(req, 404, "The interview was not found.");
+  const { count } = await admin!.from("candidate_interviews").select("id", { count: "exact", head: true }).eq("flow_id", row.flow_id).eq("candidate_email", row.candidate_email).neq("id", seen.id).neq("state", "awaiting_schedule");
+  if (!count) return fail(req, 409, "This interview can no longer be changed.");
+  const { error } = await admin!.from("candidate_interviews").delete().eq("id", seen.id).eq("state", "awaiting_schedule");
+  if (error) return databaseFailure(req, error);
+  return response(req, 200, { discarded: true });
+}
+
 async function actionCancel(req: Request, userId: string, userClient: SupabaseClient, body: Record<string, unknown>) {
   const seen = await visibleInterview(userClient, body);
   if (!seen) return fail(req, 404, "The interview was not found.");
@@ -503,13 +517,14 @@ Deno.serve(async (req: Request) => {
     if (action === "respond") return await actionRespond(req, body);
     if (action === "calendar") return await actionCalendar(req, body);
     if (action === "tick") return await actionTick(req);
-    if (action === "schedule" || action === "cancel" || action === "resend" || action === "newRound" || action === "setResponsibles" || action === "finalize" || action === "correctResult") {
+    if (action === "schedule" || action === "cancel" || action === "resend" || action === "newRound" || action === "setResponsibles" || action === "finalize" || action === "correctResult" || action === "discardRound") {
       const auth = await authenticate(req);
       if (auth instanceof Response) return auth;
       if (action === "schedule") return await actionSchedule(req, auth.userId, auth.userClient, body);
       if (action === "cancel") return await actionCancel(req, auth.userId, auth.userClient, body);
       if (action === "newRound") return await actionNewRound(req, auth.userClient, body);
       if (action === "setResponsibles") return await actionSetResponsibles(req, auth.userId, auth.userClient, body);
+      if (action === "discardRound") return await actionDiscardRound(req, auth.userClient, body);
       if (action === "finalize" || action === "correctResult") return await actionFinalize(req, auth.userId, auth.userClient, body, action === "correctResult");
       return await actionResend(req, auth.userId, auth.userClient, body);
     }

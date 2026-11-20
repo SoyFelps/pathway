@@ -1712,6 +1712,7 @@
   'Interview result (corrected)': 'Resultado de la entrevista (corregido)',
   'Saved, but the notes could not be added to the team comments.': 'Guardado, pero las observaciones no pudieron agregarse a los comentarios del equipo.',
   'Result corrected.': 'Resultado corregido.',
+  'Previous interviews': 'Entrevistas anteriores',
   'Interview finalized.': 'Entrevista finalizada.',
   'Finalized by {name} on {date}': 'Finalizada por {name} el {date}',
   'Interview finalized': 'Entrevista finalizada',
