@@ -37,7 +37,7 @@ test('the schedule window asks for the format, link or address, day, time, zone,
 
 test('the card shows the interview tag, the panel has an Interview tab with edit, re-send, cancel and history', () => {
   assert.ok(builder.includes('${interviewCardHtml(interviewFor(applicant.flow_id, applicant.candidate_email))}</article>'));
-  for (const label of ['Waiting to be scheduled', 'Interview invite sent', 'Interview confirmed', 'Cannot attend the interview', 'Asked for another time']) assert.ok(builder.includes("'" + label + "'"), label);
+  for (const label of ['Waiting to be scheduled', 'Interview invite sent', 'Interview confirmed', 'Denied the interview', 'Asked for another time']) assert.ok(builder.includes("'" + label + "'"), label);
   assert.ok(builder.includes('data-right-tab="interview"') && builder.includes('data-right-pane="interview"') && builder.includes("id=\"mobile-open-interview\""));
   const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
   for (const action of ["'schedule'", "'cancel'", "'cancel-yes'", "'resend'", "'new'"]) assert.ok(panel.includes(action), action);
@@ -83,7 +83,7 @@ test('the Interview tab after the time has passed: waiting for results, no re-se
   assert.ok(panel.includes("button('finalize', t('Finalize interview'), 'btn-primary')"), 'finalize is offered');
   assert.ok(panel.includes("const actions = awaiting\n"), 'a different list of buttons once the time has passed');
   assert.ok(/awaiting\s*\n\s*\? button\('finalize'[^\n]*\n\s*: button\('schedule'[^\n]*button\('resend'[^\n]*cancelControl/.test(panel), 're-send and cancel only before the time');
-  assert.ok(panel.includes("'<h4>' + t('Scheduling details') + '</h4>' + detailsGrid(item)") && panel.includes('<details class=\"iv-fold\">'), 'the scheduling details are inside the fold of each round');
+  assert.ok(panel.includes("'<h4>' + t('Scheduling details') + '</h4>' + detailsGrid(item)") && panel.includes('<details class=\"iv-fold\"'), 'the scheduling details are inside the fold of each round');
   assert.ok(panel.includes('data-iv-action=\"correct\" data-iv-id=') && panel.includes("t('Correct result')"), 'a correction is possible, for the round it belongs to');
   const modal = slice(builder, 'function openFinalizeInterviewModal(', 'function offerInterviewScheduling');
   assert.ok(modal.includes("state.reason !== 'held' && state.reason !== 'other'"), 'no impression and recommendation for a no-show');
@@ -144,4 +144,13 @@ test('the recommendation seal also shows in the Interview tab and next to the hi
   assert.ok(panel.includes("interviewRecommended(mine.find(item => item.state !== 'cancelled') || null)"), 'the tab looks at the latest round that is not cancelled');
   assert.ok(panel.includes("</h3></div>' + seal + '<button"), 'the seal sits at the right of the title');
   assert.ok(builder.includes("${interviewRecommended(interviewRow) ? recommendSeal(true) : ''}"), 'next to the hiring stage in the candidate panel');
+});
+
+test('the card tag is centered like the AI one, a candidate who declined "denied the interview" (not "cannot attend"), a single interview opens its fold, and Recommended is an advanced filter', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.ok(css.includes('.applicant-card-interview{flex-wrap:nowrap;align-items:center}'), 'one centered line');
+  assert.ok(builder.includes("case 'declined': return ['Denied the interview', 'warn'];") && !/cannot attend/i.test(builder.replace(/I cannot attend/g, '')), 'no screen of the team says cannot attend');
+  const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
+  assert.ok(panel.includes("(terminal && rounds.length === 1 ? ' open' : '')"), 'the only interview is open');
+  assert.ok(builder.includes("interview: t('Interview'), date:") && builder.includes("case 'interview': return [{ value: 'recommended', label: t('Recommended') }];") && builder.includes("case 'interview': return group.items.some(item => interviewRecommended(interviewFor(item.flow_id, item.candidate_email)));"), 'the filter keeps the candidates the team recommends (same rule as the seal)');
 });

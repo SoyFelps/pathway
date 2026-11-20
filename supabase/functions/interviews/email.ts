@@ -255,7 +255,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
     htmlLang: "en",
     kinds: {
       confirmed: { subject: (n, j) => `${n} confirmed the interview – ${j}`, eyebrow: "Interview confirmed", heading: (n) => `${n} confirmed.`, intro: (n, j, c) => `${n} confirmed the interview for ${j} at ${c}.` },
-      declined: { subject: (n, j) => `${n} cannot attend the interview – ${j}`, eyebrow: "Interview declined", heading: (n) => `${n} cannot attend.`, intro: (n, j, c) => `${n} said they cannot attend the interview for ${j} at ${c}. The candidate was not moved or rejected: it is your decision.` },
+      declined: { subject: (n, j) => `${n} denied the interview – ${j}`, eyebrow: "Interview denied", heading: (n) => `${n} denied the interview.`, intro: (n, j, c) => `${n} denied the interview for ${j} at ${c}. The candidate was not moved or rejected: it is your decision.` },
       reschedule: { subject: (n, j) => `${n} asked for another time – ${j}`, eyebrow: "Another time requested", heading: (n) => `${n} asked for another time.`, intro: (n, j, c) => `${n} asked for another time for the interview for ${j} at ${c}. Open the candidate and schedule a new time to send a new invitation.` },
     },
     labels: { when: "When", format: "Format", online: "Online", inPerson: "In person", link: "Meeting link", address: "Address", notes: "Notes", message: "Candidate message", suggested: "Suggested times", addToCalendar: "Add to my calendar", email: "E-mail" },
@@ -266,7 +266,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
     htmlLang: "pt-BR",
     kinds: {
       confirmed: { subject: (n, j) => `${n} confirmou a entrevista – ${j}`, eyebrow: "Entrevista confirmada", heading: (n) => `${n} confirmou.`, intro: (n, j, c) => `${n} confirmou a entrevista para ${j} – ${c}.` },
-      declined: { subject: (n, j) => `${n} não poderá participar da entrevista – ${j}`, eyebrow: "Entrevista recusada", heading: (n) => `${n} não poderá participar.`, intro: (n, j, c) => `${n} informou que não poderá participar da entrevista para ${j} – ${c}. A pessoa não foi movida nem reprovada: a decisão é sua.` },
+      declined: { subject: (n, j) => `${n} recusou a entrevista – ${j}`, eyebrow: "Entrevista recusada", heading: (n) => `${n} recusou a entrevista.`, intro: (n, j, c) => `${n} recusou a entrevista para ${j} – ${c}. A pessoa não foi movida nem reprovada: a decisão é sua.` },
       reschedule: { subject: (n, j) => `${n} pediu outro horário – ${j}`, eyebrow: "Pedido de outro horário", heading: (n) => `${n} pediu outro horário.`, intro: (n, j, c) => `${n} pediu outro horário para a entrevista para ${j} – ${c}. Abra o candidato e agende um novo horário para enviar um novo convite.` },
     },
     labels: { when: "Quando", format: "Formato", online: "Online", inPerson: "Presencial", link: "Link da reunião", address: "Endereço", notes: "Observações", message: "Mensagem do candidato", suggested: "Horários sugeridos", addToCalendar: "Adicionar à minha agenda", email: "E-mail" },
@@ -277,7 +277,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
     htmlLang: "es",
     kinds: {
       confirmed: { subject: (n, j) => `${n} confirmó la entrevista – ${j}`, eyebrow: "Entrevista confirmada", heading: (n) => `${n} confirmó.`, intro: (n, j, c) => `${n} confirmó la entrevista para ${j} – ${c}.` },
-      declined: { subject: (n, j) => `${n} no podrá asistir a la entrevista – ${j}`, eyebrow: "Entrevista rechazada", heading: (n) => `${n} no podrá asistir.`, intro: (n, j, c) => `${n} indicó que no podrá asistir a la entrevista para ${j} – ${c}. La persona no fue movida ni rechazada: la decisión es tuya.` },
+      declined: { subject: (n, j) => `${n} rechazó la entrevista – ${j}`, eyebrow: "Entrevista rechazada", heading: (n) => `${n} rechazó la entrevista.`, intro: (n, j, c) => `${n} rechazó la entrevista para ${j} – ${c}. La persona no fue movida ni rechazada: la decisión es tuya.` },
       reschedule: { subject: (n, j) => `${n} pidió otro horario – ${j}`, eyebrow: "Solicitud de otro horario", heading: (n) => `${n} pidió otro horario.`, intro: (n, j, c) => `${n} pidió otro horario para la entrevista para ${j} – ${c}. Abre el candidato y programa un nuevo horario para enviar una nueva invitación.` },
     },
     labels: { when: "Cuándo", format: "Formato", online: "En línea", inPerson: "Presencial", link: "Enlace de la reunión", address: "Dirección", notes: "Observaciones", message: "Mensaje del candidato", suggested: "Horarios sugeridos", addToCalendar: "Agregar a mi calendario", email: "Correo" },

@@ -528,7 +528,7 @@
       case 'awaiting_schedule': return ['Waiting to be scheduled', 'warn'];
       case 'invited': return ['Interview invite sent', 'wait'];
       case 'confirmed': return ['Interview confirmed', 'ok'];
-      case 'declined': return ['Cannot attend the interview', 'warn'];
+      case 'declined': return ['Denied the interview', 'warn'];
       case 'reschedule_requested': return ['Asked for another time', 'warn'];
       default: return null;
     }
@@ -555,8 +555,7 @@
     if (!tag) return '';
     const when = (row.state === 'invited' || row.state === 'confirmed') && !interviewAwaitingResult(row) ? interviewWhen(row) : '';
     const badges = interviewBadges(row);
-    // with badges on the right the row is centered (the icon, the text and the badges share one line); without them a long tag may wrap and the icon stays at the top
-    return '<div class="applicant-card-ai applicant-card-interview ai-tone-' + tag[1] + (badges ? ' has-badges' : '') + '"><span class="ai-tag-icon">' + INTERVIEW_ICON + '</span><span class="ai-tag-text">' + esc(t(tag[0]) + (when ? ' · ' + when : '')) + '</span>' + badges + '</div>';
+    return '<div class="applicant-card-ai applicant-card-interview ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + INTERVIEW_ICON + '</span><span class="ai-tag-text">' + esc(t(tag[0]) + (when ? ' · ' + when : '')) + '</span>' + badges + '</div>';
   }
   // The candidate in the board data for a job and e-mail (name and job title for the windows).
   function interviewCandidate(row) {
@@ -777,8 +776,8 @@
     const afterClose = () => { if (reopenDetails) { pendingOpenInterviewTab = true; showApplicantDetails(group.latest.id); } };
     openScheduleInterviewModal(row, { afterClose });
   }
-  const INTERVIEW_STATE_LABEL = () => ({ awaiting_schedule: t('Waiting to be scheduled'), invited: t('Invite sent'), confirmed: t('Confirmed'), declined: t('Cannot attend'), reschedule_requested: t('Asked for another time'), cancelled: t('Cancelled'), finished: t('Finished') });
-  const INTERVIEW_EVENT_LABEL = () => ({ scheduled: t('Invitation sent'), updated: t('Invitation updated'), cancelled: t('Interview cancelled'), resent: t('E-mail sent again'), confirmed: t('Candidate confirmed'), declined: t('Candidate cannot attend'), reschedule_requested: t('Candidate asked for another time'), reminder_24h: t('Reminder sent (24 hours before)'), reminder_2h: t('Reminder sent (2 hours before)'), reminder_10m: t('Reminder sent (10 minutes before)'), finished: t('Interview time passed'), finalized: t('Interview finalized'), result_corrected: t('Result corrected') });
+  const INTERVIEW_STATE_LABEL = () => ({ awaiting_schedule: t('Waiting to be scheduled'), invited: t('Invite sent'), confirmed: t('Confirmed'), declined: t('Denied the interview'), reschedule_requested: t('Asked for another time'), cancelled: t('Cancelled'), finished: t('Finished') });
+  const INTERVIEW_EVENT_LABEL = () => ({ scheduled: t('Invitation sent'), updated: t('Invitation updated'), cancelled: t('Interview cancelled'), resent: t('E-mail sent again'), confirmed: t('Candidate confirmed'), declined: t('Candidate denied the interview'), reschedule_requested: t('Candidate asked for another time'), reminder_24h: t('Reminder sent (24 hours before)'), reminder_2h: t('Reminder sent (2 hours before)'), reminder_10m: t('Reminder sent (10 minutes before)'), finished: t('Interview time passed'), finalized: t('Interview finalized'), result_corrected: t('Result corrected') });
   // The Interview tab of a candidate: what is scheduled, what the candidate answered, what the recruiter can still do, and the history.
   // stage.getStage() says in which column the candidate is; stage.close() goes back to the resume tab.
   function mountInterviewPanel(host, flowId, email, stage = {}) {
@@ -823,7 +822,7 @@
       else if (terminal) body = '<div class="ai-actions">' + button('new', t('Schedule another interview'), 'btn-primary') + '</div>';
       else {
         const awaiting = interviewAwaitingResult(row);
-        const text = awaiting ? t('The time of this interview has passed. Finalize it to record how it went, or edit it to a new date if it did not happen.') : { invited: t('Waiting for the candidate to answer.'), confirmed: t('The candidate confirmed that they can attend.'), declined: t('The candidate said they cannot attend. Nothing was changed on the board: moving or rejecting the candidate is your decision.'), reschedule_requested: t('The candidate asked for another time. Schedule a new time to send a new invitation.') }[row.state];
+        const text = awaiting ? t('The time of this interview has passed. Finalize it to record how it went, or edit it to a new date if it did not happen.') : { invited: t('Waiting for the candidate to answer.'), confirmed: t('The candidate confirmed that they can attend.'), declined: t('The candidate denied the interview. Nothing was changed on the board: moving or rejecting the candidate is your decision.'), reschedule_requested: t('The candidate asked for another time. Schedule a new time to send a new invitation.') }[row.state];
         const requested = row.state === 'reschedule_requested'
           ? ((row.proposedTimes.length ? '<div class="applicant-info-grid">' + info(t('Suggested times'), row.proposedTimes.map(item => esc(interviewSlotText(item.local, 'full'))).join('<br>')) + '</div>' : '') + (row.responseNote ? '<div class="ai-note"><strong>' + t('Message from the candidate') + '</strong> ' + esc(row.responseNote) + '</div>' : ''))
           : (row.state === 'declined' && row.responseNote ? '<div class="ai-note"><strong>' + t('Message from the candidate') + '</strong> ' + esc(row.responseNote) + '</div>' : '');
@@ -841,7 +840,7 @@
       // Every finished or cancelled round, newest first, each in a fold with what happened, the scheduling details and its own history.
       const historyList = list => '<ul class="interview-history">' + list.map(item => '<li><span>' + (item.kind === 'responsibles_changed' ? t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'finalized' ? t('{name} finalized the interview', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'result_corrected' ? t('{name} corrected the interview result', { name: esc(interviewActorName(item.actorUserId)) }) : esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind)) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>';
       const folds = (terminal ? rounds : rounds.filter(item => item !== row));
-      const foldHtml = item => '<details class="iv-fold"><summary>' + esc(t('Interview') + ' · ' + interviewWhen(item, { dateStyle: 'medium', timeStyle: 'short' }) + ' · ' + (item.state === 'cancelled' ? t('Cancelled') : t('Finished'))) + '</summary>'
+      const foldHtml = item => '<details class="iv-fold"' + (terminal && rounds.length === 1 ? ' open' : '') + '><summary>' + esc(t('Interview') + ' · ' + interviewWhen(item, { dateStyle: 'medium', timeStyle: 'short' }) + ' · ' + (item.state === 'cancelled' ? t('Cancelled') : t('Finished'))) + '</summary>'
         + (item.resultAt ? resultHtml(item) : '') + '<h4>' + t('Scheduling details') + '</h4>' + detailsGrid(item)
         + (item.resultAt ? '<div class="ai-actions"><button type="button" class="btn btn-sm" data-iv-action="correct" data-iv-id="' + esc(item.id) + '"' + (busy ? ' disabled' : '') + '>' + t('Correct result') + '</button></div>' : '')
         + ((eventsById.get(item.id) || []).length ? '<h4>' + t('History') + '</h4>' + historyList(eventsById.get(item.id)) : '') + '</details>';
@@ -930,7 +929,7 @@
   }
   const notifInterviewText = (state, candidate) => {
     const name = '<strong>' + esc(candidate) + '</strong>';
-    return state === 'confirmed' ? t('{name} confirmed the interview', { name }) : state === 'declined' ? t('{name} cannot attend the interview', { name }) : t('{name} asked for another time for the interview', { name });
+    return state === 'confirmed' ? t('{name} confirmed the interview', { name }) : state === 'declined' ? t('{name} denied the interview', { name }) : t('{name} asked for another time for the interview', { name });
   };
   // ---- AI interview: tags on the cards, the tab in the candidate panel, the questions of a job -------------------------------
   const aiInterviewKey = (flowId, email) => flowId + '|' + String(email || '').trim().toLowerCase();
@@ -2130,11 +2129,11 @@
   // board shows (the candidates already loaded), it never changes data. Kept in memory like the search box.
   let applicantAdvanced = [];
   const FILTER_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>';
-  const advTypeLabels = () => ({ job: t('Job'), responsible: t('Responsible'), stage: t('Stage'), ai: t('AI interview'), date: t('Application date'), applications: t('Applications'), country: t('Country of birth'), rejection: t('Rejection') });
+  const advTypeLabels = () => ({ job: t('Job'), responsible: t('Responsible'), stage: t('Stage'), ai: t('AI interview'), interview: t('Interview'), date: t('Application date'), applications: t('Applications'), country: t('Country of birth'), rejection: t('Rejection') });
   function advTypes() {
     const types = ['job'];
     if (hasPermission('flows')) types.push('responsible'); // the responsible people of each job are only known to people who see the job flows
-    return types.concat(['stage', 'ai', 'date', 'applications', 'country', 'rejection']);
+    return types.concat(['stage', 'ai', 'interview', 'date', 'applications', 'country', 'rejection']);
   }
   function advOptions(type) {
     switch (type) {
@@ -2145,6 +2144,7 @@
         { value: 'completed', label: t('Completed') }, { value: 'incomplete', label: t('Not completed') }, { value: 'none', label: t('No AI interview') },
         { value: 'positive', label: t('Positive impression') }, { value: 'mixed', label: t('Mixed impression') }, { value: 'negative', label: t('Negative impression') }
       ];
+      case 'interview': return [{ value: 'recommended', label: t('Recommended') }];
       case 'applications': return [{ value: 'once', label: t('Applied once') }, { value: 'repeat', label: t('Applied more than once') }];
       case 'country': {
         const G = window.PathwayGeo;
@@ -2172,6 +2172,8 @@
           return interview.impression === value;
         });
       });
+      // the team recommends the candidate: the interview shown for them (the latest one that is not cancelled) was finalized with the recommendation on
+      case 'interview': return group.items.some(item => interviewRecommended(interviewFor(item.flow_id, item.candidate_email)));
       case 'date': {
         const start = row.from ? new Date(row.from + 'T00:00:00').getTime() : -Infinity;
         const end = row.to ? new Date(row.to + 'T23:59:59.999').getTime() : Infinity;

@@ -1238,7 +1238,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .interview-history{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:2px}
 .interview-history li{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--text-body);padding:8px 0;border-bottom:1px solid var(--border-subtle)}
 .interview-history time{color:var(--text-subtle);white-space:nowrap}
-.applicant-card-interview{flex-wrap:nowrap;align-items:flex-start}
+.applicant-card-interview{flex-wrap:nowrap;align-items:center}
 #applicant-interview-panel .applicant-info-grid{row-gap:14px;margin:14px 0}
 #applicant-interview-panel .ai-note{margin:12px 0}
 
@@ -1271,5 +1271,3 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .ai-recommend-chip svg{display:block;width:20px;height:20px}
 .applicant-ai-head .ai-recommend-chip{margin:2px 0 0 auto}
 .applicant-review-content .applicant-detail-actions .ai-recommend-chip{margin-left:12px}
-.applicant-card-interview.has-badges{align-items:center}
-.applicant-card-interview.has-badges .ai-tag-icon,.applicant-card-interview.has-badges .ai-tag-text{align-self:center}

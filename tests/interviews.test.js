@@ -130,7 +130,7 @@ test('the recruiter is told when the candidate answers, in the recruiter languag
   const base = { candidateName: 'Alex', jobTitle: 'Designer', companyName: 'CoreFront', interview, appUrl: 'https://nellio.app/#applicants' };
   assert.equal(buildRecruiterEmail({ ...base, kind: 'confirmed', language: 'pt' }).subject, 'Alex confirmou a entrevista – Designer');
   const declined = buildRecruiterEmail({ ...base, kind: 'declined' });
-  assert.equal(declined.subject, 'Alex cannot attend the interview – Designer');
+  assert.equal(declined.subject, 'Alex denied the interview – Designer');
   assert.match(declined.text, /not moved or rejected/);
   const ask = buildRecruiterEmail({ ...base, kind: 'reschedule', language: 'es', message: 'Puedo el viernes', suggestedTimes: ['2026-12-03T14:00', '2026-12-04T10:30'] });
   assert.match(ask.text, /2026-12-03 14:00/);
