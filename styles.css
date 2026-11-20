@@ -1262,3 +1262,8 @@ body:has(#canvas-stage) .toast{bottom:80px}
 
 /* A disabled button looks disabled everywhere (it used to look exactly like an active one while a request was running). */
 .btn:disabled,.btn[disabled]{opacity:.6;cursor:progress}
+
+/* Card of a finalized interview: the impression thumb and the recommendation seal, together on the right. */
+.ai-badges{display:inline-flex;align-items:center;gap:6px;margin-left:auto;flex:0 0 auto}
+.ai-recommend{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:22px;height:22px;line-height:0;color:var(--green-text)}
+.ai-recommend svg{display:block}

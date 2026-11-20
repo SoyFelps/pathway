@@ -533,11 +533,19 @@
       default: return null;
     }
   }
+  // On the card of a finalized interview: the impression (a thumb, like the AI interview) and, when the team recommends the candidate, a seal next to it.
+  function interviewBadges(row) {
+    if (!row || row.state !== 'finished' || !row.resultAt) return '';
+    const impression = aiImpressionBadge(row.resultImpression);
+    const label = t('Recommended');
+    const seal = row.resultRecommended === true ? '<span class="ai-recommend" role="img" aria-label="' + label + '" title="' + label + '"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" fill-opacity=".16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4" fill="none"/></svg></span>' : '';
+    return impression || seal ? '<span class="ai-badges">' + impression + seal + '</span>' : '';
+  }
   function interviewCardHtml(row) {
     const tag = interviewTag(row);
     if (!tag) return '';
     const when = (row.state === 'invited' || row.state === 'confirmed') && !interviewAwaitingResult(row) ? interviewWhen(row) : '';
-    return '<div class="applicant-card-ai applicant-card-interview ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + INTERVIEW_ICON + '</span><span class="ai-tag-text">' + esc(t(tag[0]) + (when ? ' · ' + when : '') + (row.state === 'finished' && row.resultRecommended === true ? ' · ' + t('Recommended') : '')) + '</span>' + (row.state === 'finished' && row.resultAt ? aiImpressionBadge(row.resultImpression) : '') + '</div>';
+    return '<div class="applicant-card-ai applicant-card-interview ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + INTERVIEW_ICON + '</span><span class="ai-tag-text">' + esc(t(tag[0]) + (when ? ' · ' + when : '')) + '</span>' + interviewBadges(row) + '</div>';
   }
   // The candidate in the board data for a job and e-mail (name and job title for the windows).
   function interviewCandidate(row) {
