@@ -575,6 +575,9 @@
     const showKind = () => { const online = field('iv-kind').value === 'online'; field('iv-link-field').hidden = !online; field('iv-address-field').hidden = online; };
     const markMinutes = () => form.querySelectorAll('[data-iv-minutes]').forEach(button => button.classList.toggle('is-active', button.dataset.ivMinutes === String(field('iv-minutes').value)));
     showKind(); markMinutes();
+    // The two lists of this window are the application's own list (same as the filters), not the browser's native select.
+    upgradeSelect(field('iv-kind'));
+    upgradeSelect(field('iv-zone'), { search: true, empty: t('No time zones match') });
     field('iv-kind').addEventListener('change', showKind);
     field('iv-minutes').addEventListener('input', markMinutes);
     form.querySelectorAll('[data-iv-minutes]').forEach(button => button.addEventListener('click', () => { field('iv-minutes').value = button.dataset.ivMinutes; markMinutes(); }));
@@ -2083,7 +2086,8 @@
   // Puts our list (the one of the job filter) in place of a native select. The select is only hidden: its options, value, hidden, disabled and title are
   // mirrored, and choosing an item sets the select and fires its `change` event, so the code that already used the select keeps working as it was.
   let upgradedSelectCount = 0;
-  function upgradeSelect(select) {
+  // options.search: the person can type to narrow a long list (the time zones); options.empty is the text when nothing matches.
+  function upgradeSelect(select, options = {}) {
     if (!select || select.dataset.upgraded) return null;
     select.dataset.upgraded = '1';
     select.classList.add('is-upgraded');
@@ -2095,9 +2099,10 @@
     const input = wrap.querySelector('input');
     const list = wrap.querySelector('ul');
     input.setAttribute('aria-label', select.getAttribute('aria-label') || '');
+    if (options.search) input.readOnly = false;
     const choices = () => [...select.options].map(option => ({ value: option.value, label: option.textContent }));
     const current = () => { const option = select.options[select.selectedIndex]; return option ? option.textContent : ''; };
-    const box = mountApplicantCombobox(wrap, { inputId: id, listId: id + '-list', idPrefix: id + '-opt', options: choices, value: () => select.value, label: current, empty: '' },
+    const box = mountApplicantCombobox(wrap, { inputId: id, listId: id + '-list', idPrefix: id + '-opt', options: choices, value: () => select.value, label: current, empty: options.empty || '' },
       value => { select.value = value; select.dispatchEvent(new Event('change', { bubbles: true })); box.refresh(); });
     const sync = () => {
       wrap.hidden = select.hidden;

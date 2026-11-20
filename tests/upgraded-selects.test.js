@@ -9,7 +9,7 @@ const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8').r
 
 test('one component puts our list in place of a native select and keeps the select working', () => {
   const builder = read('builder.js');
-  const start = builder.indexOf('function upgradeSelect(select)');
+  const start = builder.indexOf('function upgradeSelect(select, options = {})');
   const body = builder.slice(start, builder.indexOf('async function renderApplicants()'));
   assert.ok(start > 0);
   assert.ok(body.includes("select.classList.add('is-upgraded')") && body.includes("select.dataset.upgraded = '1'"), 'the select is only hidden, and never upgraded twice');
@@ -36,4 +36,12 @@ test('the hidden select stays hidden, and the lists have sizes for every screen'
     assert.ok(css.includes(rule), rule);
   }
   assert.ok(css.includes('@media(max-width:760px){.reports-tools .select-combobox{flex:1;min-width:0}.flow-filters .select-combobox{flex:1 1 100%}.rpt-jobs-tools .select-combobox{flex:1;min-width:0}}'), 'phones');
+});
+
+test('the two lists of the interview window (format and time zone) are the application\'s own list, and the time zones can be searched', () => {
+  const builder = read('builder.js');
+  assert.ok(builder.includes("upgradeSelect(field('iv-kind'));"), 'format');
+  assert.ok(builder.includes("upgradeSelect(field('iv-zone'), { search: true, empty: t('No time zones match') });"), 'time zone, searchable');
+  assert.ok(builder.includes('if (options.search) input.readOnly = false;'), 'typing narrows the list only where asked');
+  assert.ok(read('styles.css').includes('#schedule-interview-form .select-combobox{flex:none;width:100%;min-width:0}'), 'full width inside the window');
 });

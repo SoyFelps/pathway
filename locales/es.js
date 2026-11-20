@@ -767,6 +767,7 @@
   'All jobs': 'Todas las vacantes',
   'No jobs match': 'Ninguna vacante coincide',
   'No people match': 'Ninguna persona coincide',
+  'No time zones match': 'Ningún huso horario coincide',
   'Search people': 'Buscar personas',
   'Review applications and move candidates through your hiring stages.': 'Revisa las postulaciones y mueve a los candidatos por las etapas de selección.',
   'Filter applicants by job': 'Filtrar candidatos por vacante',

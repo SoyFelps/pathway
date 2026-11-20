@@ -1171,6 +1171,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 /* Filter lists that replace the browser's own select (2026-11-18): same look as the job filter. The select stays in the page, hidden. */
 .is-upgraded{display:none!important}
 .select-combobox{flex:0 0 220px;min-width:160px}
+#schedule-interview-form .select-combobox{flex:none;width:100%;min-width:0}
 .flow-filters .select-combobox{flex:0 1 220px}
 .reports-tools .select-combobox{flex:0 0 190px}
 .rpt-version .select-combobox{width:320px;max-width:100%;flex:none}
