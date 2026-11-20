@@ -172,12 +172,16 @@ async function sendToCandidate(ctx: Context, kind: CandidateEmailKind, keySuffix
   return await sendMail(ctx.iv.candidate_email, mail, `interview-${kind}/${ctx.iv.id}/${keySuffix}`);
 }
 
-/** The people who hear about the interview: who scheduled it plus the people responsible for the job (the owner when nobody is named). */
+/** The people who hear about the answers: the responsible people chosen for the interview; when none were chosen, who scheduled it plus the people responsible for the job (the owner when nobody is named). */
 async function recruiterRecipients(ctx: Context): Promise<Array<{ email: string; language: ReturnType<typeof languageOfProfile> }>> {
   const ids = new Set<string>();
-  if (ctx.iv.scheduled_by) ids.add(ctx.iv.scheduled_by);
-  for (const id of ctx.flow.responsible_user_ids || []) ids.add(id);
-  if (!ids.size && ctx.workspace.owner_id) ids.add(ctx.workspace.owner_id);
+  if (Array.isArray(ctx.iv.responsible_user_ids) && ctx.iv.responsible_user_ids.length) {
+    for (const id of ctx.iv.responsible_user_ids) ids.add(id);
+  } else {
+    if (ctx.iv.scheduled_by) ids.add(ctx.iv.scheduled_by);
+    for (const id of ctx.flow.responsible_user_ids || []) ids.add(id);
+    if (!ids.size && ctx.workspace.owner_id) ids.add(ctx.workspace.owner_id);
+  }
   const { data: profiles } = await admin!.from("profiles").select("user_id,ui_language").in("user_id", [...ids]);
   const out: Array<{ email: string; language: ReturnType<typeof languageOfProfile> }> = [];
   for (const id of ids) {
@@ -218,6 +222,7 @@ function recruiterRow(iv: Row) {
     id: iv.id, flowId: iv.flow_id, email: iv.candidate_email, state: iv.state, kind: iv.kind, localStart: iv.local_start ? String(iv.local_start).slice(0, 16).replace(" ", "T") : null,
     timeZone: iv.time_zone, startsAt: iv.starts_at, durationMinutes: iv.duration_minutes, meetingLink: iv.meeting_link, address: iv.address, notes: iv.notes,
     sequence: iv.sequence, responseNote: iv.response_note, proposedTimes: iv.proposed_times || [], invitedAt: iv.invited_at, respondedAt: iv.responded_at,
+    responsibleIds: iv.responsible_user_ids || [],
   };
 }
 
@@ -267,6 +272,22 @@ async function visibleInterview(userClient: SupabaseClient, body: Record<string,
   return data;
 }
 
+/** The responsible people sent with the schedule window: null when the request carries none (leave them as they are), else only people of the workspace (its owner or a member). */
+async function parseResponsibles(workspaceId: string, body: Record<string, unknown>): Promise<{ ok: true; ids: string[] | null } | { ok: false }> {
+  if (!Array.isArray(body.responsibleIds)) return { ok: true, ids: null };
+  const raw = body.responsibleIds as unknown[];
+  if (raw.length > 20 || raw.some((id) => typeof id !== "string" || !UUID_RE.test(id))) return { ok: false };
+  const ids = [...new Set(raw as string[])];
+  if (!ids.length) return { ok: true, ids: [] };
+  const [{ data: members }, { data: workspace }] = await Promise.all([
+    admin!.from("workspace_members").select("user_id").eq("workspace_id", workspaceId).in("user_id", ids),
+    admin!.from("workspaces").select("owner_id").eq("id", workspaceId).maybeSingle(),
+  ]);
+  const allowed = new Set<string>((members || []).map((m: Row) => m.user_id));
+  if (workspace?.owner_id) allowed.add(workspace.owner_id);
+  return ids.every((id) => allowed.has(id)) ? { ok: true, ids } : { ok: false };
+}
+
 async function actionSchedule(req: Request, userId: string, userClient: SupabaseClient, body: Record<string, unknown>) {
   const seen = await visibleInterview(userClient, body);
   if (!seen) return fail(req, 404, "The interview was not found.");
@@ -274,6 +295,8 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
   const parsed = parseScheduleInput(body);
   if (!parsed.ok) return fail(req, 400, parsed.error);
   if (!(await planActive(seen.workspace_id))) return fail(req, 402, "An active plan is needed to schedule interviews.");
+  const responsibles = await parseResponsibles(seen.workspace_id, body);
+  if (!responsibles.ok) return fail(req, 400, "Choose people from this workspace.");
   const v = parsed.value;
   const now = new Date().toISOString();
   const { data: before } = await admin!.from("candidate_interviews").select("sequence").eq("id", seen.id).maybeSingle();
@@ -281,6 +304,7 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
     state: "invited", kind: v.kind, local_start: v.localStart, time_zone: v.timeZone, duration_minutes: v.durationMinutes,
     meeting_link: v.meetingLink, address: v.address, notes: v.notes, sequence: (before?.sequence ?? 0) + 1, invited_at: now,
     responded_at: null, notice_at: null, response_note: null, proposed_times: [], reminder_24h_sent_at: null, reminder_2h_sent_at: null, scheduled_by: userId,
+    ...(responsibles.ids !== null ? { responsible_user_ids: responsibles.ids } : {}),
   }).eq("id", seen.id).eq("state", seen.state).select("*").maybeSingle();
   if (error) return databaseFailure(req, error);
   if (!updated) return fail(req, 409, "This interview can no longer be changed.");

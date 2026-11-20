@@ -172,12 +172,13 @@
     state: row.state, kind: row.kind || null, localStart: row.local_start ? String(row.local_start).slice(0, 16).replace(' ', 'T') : null, timeZone: row.time_zone || null,
     startsAt: row.starts_at || null, durationMinutes: row.duration_minutes || null, meetingLink: row.meeting_link || null, address: row.address || null, notes: row.notes || null,
     sequence: row.sequence || 0, responseNote: row.response_note || null, proposedTimes: Array.isArray(row.proposed_times) ? row.proposed_times : [],
-    invitedAt: row.invited_at || null, respondedAt: row.responded_at || null, createdAt: row.created_at, updatedAt: row.updated_at || null
+    invitedAt: row.invited_at || null, respondedAt: row.responded_at || null, createdAt: row.created_at, updatedAt: row.updated_at || null,
+    responsibleIds: Array.isArray(row.responsible_user_ids) ? row.responsible_user_ids : []
   });
   // The interviews of the candidates this person may review (the database policy decides which). Newest first.
   async function listCandidateInterviews(workspaceId, flowId = '') {
     await requireSession();
-    let query = client.from('candidate_interviews').select('id,workspace_id,flow_id,candidate_email,applicant_id,state,kind,local_start,time_zone,starts_at,duration_minutes,meeting_link,address,notes,sequence,response_note,proposed_times,invited_at,responded_at,created_at,updated_at')
+    let query = client.from('candidate_interviews').select('id,workspace_id,flow_id,candidate_email,applicant_id,state,kind,local_start,time_zone,starts_at,duration_minutes,meeting_link,address,notes,sequence,response_note,proposed_times,invited_at,responded_at,created_at,updated_at,responsible_user_ids')
       .eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(2000);
     if (flowId) query = query.eq('flow_id', flowId);
     const { data, error } = await query;
@@ -207,7 +208,7 @@
   // A new round for a candidate whose earlier interview is over or was cancelled: the function makes a waiting row, ready to be scheduled.
   async function startInterviewRound(flowId, email) { const payload = await callInterviews({ action: 'newRound', flowId, email }); return mapInterviewResult(payload.interview); }
   // The function answers with its own field names (camelCase); the window wants the same shape as the rows read from the database.
-  const mapInterviewResult = row => row ? ({ id: row.id, workspaceId: row.workspaceId || null, flowId: row.flowId, email: row.email, state: row.state, kind: row.kind || null, localStart: row.localStart || null, timeZone: row.timeZone || null, startsAt: row.startsAt || null, durationMinutes: row.durationMinutes || null, meetingLink: row.meetingLink || null, address: row.address || null, notes: row.notes || null, sequence: row.sequence || 0, responseNote: row.responseNote || null, proposedTimes: row.proposedTimes || [] }) : null;
+  const mapInterviewResult = row => row ? ({ id: row.id, workspaceId: row.workspaceId || null, flowId: row.flowId, email: row.email, state: row.state, kind: row.kind || null, localStart: row.localStart || null, timeZone: row.timeZone || null, startsAt: row.startsAt || null, durationMinutes: row.durationMinutes || null, meetingLink: row.meetingLink || null, address: row.address || null, notes: row.notes || null, sequence: row.sequence || 0, responseNote: row.responseNote || null, proposedTimes: row.proposedTimes || [], responsibleIds: row.responsibleIds || [] }) : null;
   // Bell notices: a candidate answered an interview invitation (one per interview and answer; each person marks it seen on their own).
   async function listCandidateInterviewNotices(workspaceId) {
     await requireSession();

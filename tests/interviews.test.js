@@ -219,3 +219,19 @@ test('while the hiring team looks at a request for another time the candidate ha
   const page = fs.readFileSync(path.join(__dirname, '..', 'interview.js'), 'utf8');
   assert.ok(page.includes('if (!view.canChange || panel) return'), 'the page draws the buttons only when the candidate may change the answer');
 });
+
+test('each interview has its own responsible people: chosen in the schedule window, checked against the workspace, and the ones told about the answers', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261120120000_candidate_interview_responsibles.sql'), 'utf8');
+  assert.ok(sql.includes("add column responsible_user_ids uuid[] not null default '{}'::uuid[]") && sql.includes('cardinality(responsible_user_ids) <= 20'), 'a list of at most 20 people, empty by default');
+  assert.ok(sql.includes('grant select (responsible_user_ids) on public.candidate_interviews to authenticated;'), 'the browser can read it, never write it');
+  assert.equal((sql.match(/case when cardinality\(i\.responsible_user_ids\) > 0 then auth\.uid\(\) = any \(i\.responsible_user_ids\)/g) || []).length, 2, 'the bell and the notifications page use the same rule');
+  assert.ok(sql.includes('else (cardinality(f.responsible_user_ids) = 0 or auth.uid() = any (f.responsible_user_ids)) end'), 'an empty list keeps the old rule (the job\'s people)');
+  assert.ok(index.includes('async function parseResponsibles(') && index.includes('"Choose people from this workspace."'), 'only people of the workspace');
+  assert.ok(index.includes('...(responsibles.ids !== null ? { responsible_user_ids: responsibles.ids } : {})'), 'a request without the list leaves it as it is');
+  const recipients = index.slice(index.indexOf('async function recruiterRecipients('), index.indexOf('async function notifyRecruiters('));
+  assert.ok(recipients.includes('ctx.iv.responsible_user_ids.length') && recipients.includes('ctx.flow.responsible_user_ids'), 'the interview\'s list first, else who scheduled it plus the job\'s people');
+  const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  assert.ok(builder.includes("mountResponsibleField(form.querySelector('#iv-responsible'), 'iv-responsible-label'"), 'the same multi-select as the job responsible field, at the end of the window');
+  assert.ok(builder.includes('responsibleIds: people.length ? currentResponsibleIds(responsibleIds) : undefined'), 'sent with the invitation');
+  assert.ok(fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8').includes(",responsible_user_ids')"), 'read with the interviews');
+});

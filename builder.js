@@ -554,6 +554,9 @@
     const today = new Date();
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate() - 1);
     const suggested = (row.state === 'reschedule_requested' ? row.proposedTimes : []).map(item => String(item.local || '')).filter(Boolean);
+    // Who is told when the candidate answers: the interview's own list, which starts as the job's responsible people (empty = as the job says).
+    const jobOfInterview = flows.find(item => item.cloudId === row.flowId);
+    let responsibleIds = (row.responsibleIds && row.responsibleIds.length ? row.responsibleIds : (jobOfInterview && jobOfInterview.responsibleIds) || []).slice();
     const suggestedHtml = suggested.length ? `<div class="field-group"><label>${t('The candidate suggested')}</label><div class="interview-chips">${suggested.map(local => `<button class="btn btn-sm" type="button" data-iv-suggested="${esc(local)}">${esc(local.replace('T', ' '))}</button>`).join('')}</div></div>` : '';
     const requestNote = row.state === 'reschedule_requested' && row.responseNote ? `<div class="ai-note"><strong>${t('Message from the candidate')}</strong> ${esc(row.responseNote)}</div>` : '';
     setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Interview')}</div><h2>${editing ? t('Edit interview') : t('Schedule interview')}</h2><p>${esc(who.name)}${who.jobTitle ? ' · ' + esc(who.jobTitle) : ''}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>
@@ -566,6 +569,7 @@
         <div class="field-group"><label for="iv-zone">${t('Time zone')}</label><select class="text-input" id="iv-zone">${interviewTimeZones(zone).map(name => `<option value="${esc(name)}"${name === zone ? ' selected' : ''}>${esc(name.replace(/_/g, ' '))}</option>`).join('')}</select></div>
         <div class="field-group"><label for="iv-minutes">${t('Duration (minutes)')}</label><div class="interview-duration"><button class="btn btn-sm" type="button" data-iv-minutes="30">${t('30 min')}</button><button class="btn btn-sm" type="button" data-iv-minutes="60">${t('1 hour')}</button><input class="text-input" id="iv-minutes" type="number" min="5" max="480" step="5" value="${minutes}" aria-label="${t('Duration (minutes)')}"></div></div>
         <div class="field-group"><label for="iv-notes">${t('Notes for the candidate (optional)')}</label><textarea class="text-area" id="iv-notes" rows="3" maxlength="1000">${esc(row.notes || '')}</textarea></div>
+        <div class="field-group"><span class="form-label" id="iv-responsible-label">${t('Responsible for the interview')}</span><div id="iv-responsible"></div><p class="team-permission-hint">${t('They are told when the candidate answers.')}</p></div>
         <p class="settings-delete-error" id="iv-error" role="alert" hidden></p>
         <div class="modal-actions"><button class="btn" type="button" data-close>${row.state === 'awaiting_schedule' ? t('Schedule later') : t('Cancel')}</button><button class="btn btn-primary" id="iv-send" type="submit">${editing ? t('Send updated invitation') : t('Send invitation')}</button></div>
       </form>`);
@@ -578,6 +582,7 @@
     // The two lists of this window are the application's own list (same as the filters), not the browser's native select.
     upgradeSelect(field('iv-kind'));
     upgradeSelect(field('iv-zone'), { search: true, empty: t('No time zones match') });
+    mountResponsibleField(form.querySelector('#iv-responsible'), 'iv-responsible-label', () => responsibleIds, ids => { responsibleIds = ids; });
     field('iv-kind').addEventListener('change', showKind);
     field('iv-minutes').addEventListener('input', markMinutes);
     form.querySelectorAll('[data-iv-minutes]').forEach(button => button.addEventListener('click', () => { field('iv-minutes').value = button.dataset.ivMinutes; markMinutes(); }));
@@ -593,7 +598,8 @@
       try {
         const result = await B.scheduleInterview(row.id, {
           kind: online ? 'online' : 'in_person', localStart: `${field('iv-day').value}T${field('iv-time').value}`, timeZone: field('iv-zone').value,
-          durationMinutes: Number(field('iv-minutes').value), meetingLink: online ? field('iv-link').value : '', address: online ? '' : field('iv-address').value, notes: field('iv-notes').value
+          durationMinutes: Number(field('iv-minutes').value), meetingLink: online ? field('iv-link').value : '', address: online ? '' : field('iv-address').value, notes: field('iv-notes').value,
+          responsibleIds: people.length ? currentResponsibleIds(responsibleIds) : undefined // not loaded: leave them as they are
         });
         showToast(result.emailSent === false ? t(result.warning || 'The interview was saved, but the e-mail could not be sent. Use Resend to try again.') : t('Invitation sent.'), result.emailSent === false ? 6000 : 2400);
         closeModal(); // runs afterClose
