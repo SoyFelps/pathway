@@ -490,12 +490,13 @@
     for (const row of rows) {
       const key = aiInterviewKey(row.flowId, row.email);
       const have = next.get(key);
-      if (!have || (!INTERVIEW_OPEN.includes(have.state) && INTERVIEW_OPEN.includes(row.state))) next.set(key, row);
+      // newest first: one in play wins; a cancelled latest round gives way to an earlier round that has a result
+      if (!have || (!INTERVIEW_OPEN.includes(have.state) && INTERVIEW_OPEN.includes(row.state)) || (have.state === 'cancelled' && row.state === 'finished')) next.set(key, row);
     }
     interviewMap = next;
     interviewEarlier = new Map();
     for (const row of rows) if (row.state !== 'awaiting_schedule') { const key = aiInterviewKey(row.flowId, row.email); interviewEarlier.set(key, (interviewEarlier.get(key) || 0) + 1); }
-    interviewSignature = rows.map(row => row.id + row.state + row.sequence + (row.startsAt || '')).join('|');
+    interviewSignature = rows.map(row => row.id + row.state + row.sequence + (row.startsAt || '') + (row.resultAt || '') + (row.resultReason || '') + (row.resultImpression || '') + String(row.resultRecommended)).join('|');
   }
   async function refreshInterviewTags(force = false) {
     if (!workspace || !hasPermission('applicants')) return;
@@ -516,6 +517,13 @@
   // [label, tone] of the small tag on a candidate's card (only while an interview is in play)
   function interviewTag(row) {
     if (interviewAwaitingResult(row)) return ['Waiting for results', 'warn'];
+    // the result of an interview that was finalized (the card keeps showing it; a cancelled one is shown only when nothing else happened)
+    if (row && row.state === 'finished' && row.resultAt) {
+      if (row.resultReason === 'no_show') return ['Candidate did not show up', 'warn'];
+      const tone = row.resultImpression === 'positive' ? 'ok' : row.resultImpression === 'negative' ? 'warn' : 'wait';
+      return [row.resultReason === 'held' ? 'Interview held' : 'Interview finished', tone];
+    }
+    if (row && row.state === 'cancelled') return ['Interview cancelled', 'warn'];
     switch (row && row.state) {
       case 'awaiting_schedule': return ['Waiting to be scheduled', 'warn'];
       case 'invited': return ['Interview invite sent', 'wait'];
@@ -529,7 +537,7 @@
     const tag = interviewTag(row);
     if (!tag) return '';
     const when = (row.state === 'invited' || row.state === 'confirmed') && !interviewAwaitingResult(row) ? interviewWhen(row) : '';
-    return '<div class="applicant-card-ai applicant-card-interview ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + INTERVIEW_ICON + '</span><span class="ai-tag-text">' + esc(t(tag[0]) + (when ? ' · ' + when : '')) + '</span></div>';
+    return '<div class="applicant-card-ai applicant-card-interview ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + INTERVIEW_ICON + '</span><span class="ai-tag-text">' + esc(t(tag[0]) + (when ? ' · ' + when : '') + (row.state === 'finished' && row.resultRecommended === true ? ' · ' + t('Recommended') : '')) + '</span>' + (row.state === 'finished' && row.resultAt ? aiImpressionBadge(row.resultImpression) : '') + '</div>';
   }
   // The candidate in the board data for a job and e-mail (name and job title for the windows).
   function interviewCandidate(row) {
@@ -700,16 +708,24 @@
     });
     field('ivf-recommend').addEventListener('change', () => { state.recommended = field('ivf-recommend').checked; });
     layerCloseHook = () => { if (options.afterClose) options.afterClose(); };
+    let submitting = false;
+    // While the result is being saved: the button says so and nothing in the window can be clicked, so it cannot be sent twice.
+    const setBusy = busy => {
+      submitting = busy;
+      form.querySelectorAll('button, textarea, input').forEach(item => { item.disabled = busy; });
+      field('ivf-send').textContent = busy ? t('Saving…') : (correcting ? t('Save correction') : t('Finalize interview'));
+      field('ivf-send').setAttribute('aria-busy', String(busy));
+    };
     form.addEventListener('submit', async event => {
       event.preventDefault();
+      if (submitting) return;
       error.hidden = true;
       const notes = field('ivf-notes').value.trim();
       const refuse = text => { error.textContent = text; error.hidden = false; };
       if (!state.reason) { refuse(t('Choose what happened in the interview.')); return; }
       if (state.reason === 'held' && !state.impression) { refuse(t('Choose your impression of the candidate.')); return; }
       if (state.reason === 'other' && !notes) { refuse(t('Write a note to explain what happened.')); return; }
-      const send = field('ivf-send');
-      send.disabled = true;
+      setBusy(true);
       try {
         const judged = state.reason !== 'no_show';
         const payload = { reason: state.reason, impression: judged ? state.impression || null : null, recommended: judged ? state.recommended : null, notes };
@@ -726,7 +742,7 @@
         closeLayer(); // runs afterClose
         void refreshInterviewTags(true);
       } catch (failure) {
-        send.disabled = false;
+        setBusy(false);
         refuse(failure.message || t('Something went wrong. Please try again.'));
       }
     });
@@ -811,7 +827,7 @@
         + ((eventsById.get(item.id) || []).length ? '<h4>' + t('History') + '</h4>' + historyList(eventsById.get(item.id)) : '') + '</details>';
       const earlierHtml = folds.length ? (terminal ? '' : '<h4>' + t('Previous interviews') + '</h4>') + folds.map(foldHtml).join('') : '';
       const history = !terminal && events.length ? '<h4>' + t('History') + '</h4>' + historyList(events) : '';
-      host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + earlierHtml + history + '</div>';
+      host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + history + earlierHtml + '</div>';
       host.dataset.interviewId = row ? row.id : '';
       host._interviewRow = row;
       host._interviewRows = mine;

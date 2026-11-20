@@ -126,3 +126,14 @@ test('"Schedule another interview" opens the window at once: the row of the new 
   assert.ok(schedule.includes('if (pendingRow) interviewId = (await pendingRow).id;'), 'sending waits for the row');
   assert.ok(schedule.includes('pendingRow.then(created => created.id)'), 'closing without sending discards the row once it exists');
 });
+
+test('the card shows the result of the latest interview (a cancelled one only when nothing else happened), the history of the round in play sits above the earlier rounds, and a saving button looks disabled', () => {
+  assert.ok(builder.includes("(have.state === 'cancelled' && row.state === 'finished')"), 'a cancelled latest round gives way to an earlier round with a result');
+  assert.ok(builder.includes("if (row && row.state === 'cancelled') return ['Interview cancelled', 'warn'];") && builder.includes("return [row.resultReason === 'held' ? 'Interview held' : 'Interview finished', tone];"), 'tags for a result and for a cancellation');
+  assert.ok(builder.includes("aiImpressionBadge(row.resultImpression)"), 'the impression badge like the AI interview card');
+  const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
+  assert.ok(panel.includes("+ body + history + earlierHtml + '</div>';"), 'history first, then the earlier rounds');
+  const modal = slice(builder, 'function openFinalizeInterviewModal(', 'function offerInterviewScheduling');
+  assert.ok(modal.includes("if (submitting) return;") && modal.includes("t('Saving…')") && modal.includes("form.querySelectorAll('button, textarea, input').forEach(item => { item.disabled = busy; });"), 'one submit only, with a visible waiting state');
+  assert.ok(fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8').includes('.btn:disabled,.btn[disabled]{opacity:.6;cursor:progress}'), 'a disabled button looks disabled');
+});

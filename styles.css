@@ -1259,3 +1259,6 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-fold summary::after{content:"";width:7px;height:7px;border-right:2px solid var(--text-subtle);border-bottom:2px solid var(--text-subtle);transform:rotate(45deg);transition:transform .15s;margin-right:3px}
 .iv-fold[open] summary::after{transform:rotate(-135deg)}
 .iv-fold[open] summary{border-bottom:1px solid var(--border-subtle)}
+
+/* A disabled button looks disabled everywhere (it used to look exactly like an active one while a request was running). */
+.btn:disabled,.btn[disabled]{opacity:.6;cursor:progress}
