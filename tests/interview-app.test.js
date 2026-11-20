@@ -65,7 +65,7 @@ test('the Interview tab and the notices show WHAT the candidate suggested, writt
   const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
   assert.ok(panel.includes("'<div class=\"applicant-ai-body\">'"), 'the tab content sits in the same padded body as the AI interview tab');
   assert.ok(panel.includes("interviewSlotText(item.local, 'full')"), 'suggested times are written as dates, not as 2026-12-03T14:00');
-  assert.ok(panel.indexOf("'</p>' + requested + '<div class=\"applicant-info-grid\">'") > -1, 'the suggested times come first, right under the status sentence');
+  assert.ok(panel.indexOf("'</p>' + requested + detailsGrid(row)") > -1, 'the suggested times come first, right under the status sentence');
   assert.ok(builder.includes('function interviewNoticeSub(') && builder.includes("t('Suggested: {times}'"), 'the bell and the notifications page name the suggested times');
   assert.ok(builder.includes('await loadInterviewProposals();'), 'the times are read (through the database policy) when a notice needs them');
   assert.equal(/Suggested: \{times\}/.test(fs.readFileSync(path.join(__dirname, '..', 'locales', 'pt-BR.js'), 'utf8')), true);
@@ -75,4 +75,19 @@ test('the interview tag on a card is separated from the AI interview tag by the 
   const css = read('styles.css');
   assert.equal(css.includes('.applicant-card-ai + .applicant-card-interview{'), false, 'no rule removes the line between the two subjects');
   assert.ok(css.includes('.applicant-card-ai{display:flex;flex-wrap:nowrap;align-items:center;gap:7px;margin-top:9px;padding-top:9px;border-top:1px solid var(--border-subtle)'), 'every subject of the card has the line above it');
+});
+
+test('the Interview tab after the time has passed: waiting for results, no re-send or cancel, finalize, and a result view with the details in a fold', () => {
+  const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
+  assert.ok(builder.includes("const interviewAwaitingResult = row =>") && builder.includes("if (interviewAwaitingResult(row)) return ['Waiting for results', 'warn'];"), 'a card tag as well');
+  assert.ok(panel.includes("button('finalize', t('Finalize interview'), 'btn-primary')"), 'finalize is offered');
+  assert.ok(panel.includes("const actions = awaiting\n"), 'a different list of buttons once the time has passed');
+  assert.ok(/awaiting\s*\n\s*\? button\('finalize'[^\n]*\n\s*: button\('schedule'[^\n]*button\('resend'[^\n]*cancelControl/.test(panel), 're-send and cancel only before the time');
+  assert.ok(panel.includes("'<details class=\"iv-fold\"><summary>' + t('Scheduling details')"), 'the scheduling details are in a fold');
+  assert.ok(panel.includes("button('correct', t('Correct result'))"), 'a correction is possible');
+  const modal = slice(builder, 'function openFinalizeInterviewModal(', 'function offerInterviewScheduling');
+  assert.ok(modal.includes("state.reason !== 'held' && state.reason !== 'other'"), 'no impression and recommendation for a no-show');
+  assert.ok(modal.includes("B.addApplicantComment(row.flowId, row.email, text)") && modal.includes("notes !== (row.resultNotes || '')"), 'the notes become a team comment; a correction adds a new one when the notes changed');
+  const schedule = slice(builder, 'function openScheduleInterviewModal(', 'function openFinalizeInterviewModal');
+  assert.ok(schedule.includes("const day = row.localStart && !pastRow"), 'a past interview asks for a new day');
 });

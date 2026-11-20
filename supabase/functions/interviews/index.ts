@@ -6,7 +6,7 @@ import {
   type BuiltEmail, type CandidateEmailKind, type InterviewDetails, type RecruiterEmailKind,
 } from "./email.ts";
 import {
-  eventTitle, hashToken, isRepeat, looksLikeToken, newToken, OPEN_STATES, parseAnswer, parseScheduleInput, stateAfter, UUID_RE,
+  eventTitle, hashToken, isRepeat, looksLikeToken, newToken, OPEN_STATES, parseAnswer, parseResultInput, parseScheduleInput, stateAfter, UUID_RE,
 } from "./logic.ts";
 
 // Human interviews (the "Interview" column): the recruiter schedules, edits, cancels and re-sends the invitation (signed in); the
@@ -223,6 +223,8 @@ function recruiterRow(iv: Row) {
     timeZone: iv.time_zone, startsAt: iv.starts_at, durationMinutes: iv.duration_minutes, meetingLink: iv.meeting_link, address: iv.address, notes: iv.notes,
     sequence: iv.sequence, responseNote: iv.response_note, proposedTimes: iv.proposed_times || [], invitedAt: iv.invited_at, respondedAt: iv.responded_at,
     responsibleIds: iv.responsible_user_ids || [],
+    resultReason: iv.result_reason ?? null, resultImpression: iv.result_impression ?? null, resultRecommended: iv.result_recommended ?? null,
+    resultNotes: iv.result_notes ?? null, resultAt: iv.result_at ?? null, resultBy: iv.result_by ?? null,
   };
 }
 
@@ -299,7 +301,9 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
   if (!responsibles.ok) return fail(req, 400, "Choose people from this workspace.");
   const v = parsed.value;
   const now = new Date().toISOString();
-  const { data: before } = await admin!.from("candidate_interviews").select("sequence").eq("id", seen.id).maybeSingle();
+  const { data: before } = await admin!.from("candidate_interviews").select("sequence,local_start,time_zone,starts_at").eq("id", seen.id).maybeSingle();
+  // An interview whose time has passed can only be edited to a NEW time (the database checks a changed time; an unchanged past time would slip through).
+  if (before?.starts_at && Date.parse(before.starts_at) <= Date.now() && String(before.local_start).slice(0, 16).replace(" ", "T") === v.localStart && before.time_zone === v.timeZone) return fail(req, 422, "The interview must be in the future.");
   const { data: updated, error } = await admin!.from("candidate_interviews").update({
     state: "invited", kind: v.kind, local_start: v.localStart, time_zone: v.timeZone, duration_minutes: v.durationMinutes,
     meeting_link: v.meetingLink, address: v.address, notes: v.notes, sequence: (before?.sequence ?? 0) + 1, invited_at: now,
@@ -333,6 +337,35 @@ async function actionSetResponsibles(req: Request, userId: string, userClient: S
   if (error) return databaseFailure(req, error);
   if (!updated) return fail(req, 404, "The interview was not found.");
   await addEvent(updated, "responsibles_changed", "recruiter", userId, { responsibleIds: responsibles.ids });
+  return response(req, 200, { interview: recruiterRow(updated) });
+}
+
+/** Registers how an interview went (finalize), or corrects it afterwards. Only the people who may review the candidates, only with an active plan, and only once the interview has started. */
+async function actionFinalize(req: Request, userId: string, userClient: SupabaseClient, body: Record<string, unknown>, correcting: boolean) {
+  const seen = await visibleInterview(userClient, body);
+  if (!seen) return fail(req, 404, "The interview was not found.");
+  const { data: before } = await admin!.from("candidate_interviews").select("*").eq("id", seen.id).maybeSingle();
+  if (!before) return fail(req, 404, "The interview was not found.");
+  if (correcting) {
+    if (before.state !== "finished" || !before.result_at) return fail(req, 409, "This interview has no result to correct.");
+  } else {
+    const waiting = (OPEN_STATES as readonly string[]).includes(before.state) || (before.state === "finished" && !before.result_at);
+    if (!waiting) return fail(req, 409, "This interview can no longer be changed.");
+    if (!before.starts_at || Date.parse(before.starts_at) > Date.now()) return fail(req, 409, "The interview has not started yet.");
+  }
+  if (!(await planActive(before.workspace_id))) return fail(req, 402, "An active plan is needed to schedule interviews.");
+  const parsed = parseResultInput(body);
+  if (!parsed.ok) return fail(req, 400, parsed.error);
+  const v = parsed.value;
+  const patch = { result_reason: v.reason, result_impression: v.impression, result_recommended: v.recommended, result_notes: v.notes };
+  let query = admin!.from("candidate_interviews")
+    .update(correcting ? patch : { ...patch, state: "finished", result_at: new Date().toISOString(), result_by: userId })
+    .eq("id", before.id).eq("state", before.state);
+  if (!correcting) query = query.is("result_at", null);
+  const { data: updated, error } = await query.select("*").maybeSingle();
+  if (error) return databaseFailure(req, error);
+  if (!updated) return fail(req, 409, "This interview can no longer be changed.");
+  await addEvent(updated, correcting ? "result_corrected" : "finalized", "recruiter", userId, { reason: v.reason, impression: v.impression, recommended: v.recommended });
   return response(req, 200, { interview: recruiterRow(updated) });
 }
 
@@ -470,13 +503,14 @@ Deno.serve(async (req: Request) => {
     if (action === "respond") return await actionRespond(req, body);
     if (action === "calendar") return await actionCalendar(req, body);
     if (action === "tick") return await actionTick(req);
-    if (action === "schedule" || action === "cancel" || action === "resend" || action === "newRound" || action === "setResponsibles") {
+    if (action === "schedule" || action === "cancel" || action === "resend" || action === "newRound" || action === "setResponsibles" || action === "finalize" || action === "correctResult") {
       const auth = await authenticate(req);
       if (auth instanceof Response) return auth;
       if (action === "schedule") return await actionSchedule(req, auth.userId, auth.userClient, body);
       if (action === "cancel") return await actionCancel(req, auth.userId, auth.userClient, body);
       if (action === "newRound") return await actionNewRound(req, auth.userClient, body);
       if (action === "setResponsibles") return await actionSetResponsibles(req, auth.userId, auth.userClient, body);
+      if (action === "finalize" || action === "correctResult") return await actionFinalize(req, auth.userId, auth.userClient, body, action === "correctResult");
       return await actionResend(req, auth.userId, auth.userClient, body);
     }
     return fail(req, 400, "Send a valid request.");

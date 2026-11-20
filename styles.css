@@ -1241,3 +1241,21 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .applicant-card-interview{flex-wrap:nowrap;align-items:flex-start}
 #applicant-interview-panel .applicant-info-grid{row-gap:14px;margin:14px 0}
 #applicant-interview-panel .ai-note{margin:12px 0}
+
+/* Interview result (2026-11-20): the choice buttons and the recommend switch of the "Finalize interview" window, and the fold with the scheduling details. */
+.iv-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.iv-choices .btn{width:100%;justify-content:center;text-align:center;padding:11px 8px;line-height:1.25;white-space:normal}
+@media(max-width:520px){.iv-choices{grid-template-columns:1fr}}
+.field-group .iv-switch,.iv-switch{display:flex;align-items:center;gap:11px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text-body);margin:0}
+.iv-switch input{position:absolute;opacity:0;width:1px;height:1px}
+.iv-switch-track{position:relative;flex:0 0 auto;width:38px;height:22px;border-radius:99px;background:var(--line);transition:background .15s}
+.iv-switch-track::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px var(--shadow-sm);transition:transform .15s}
+.iv-switch input:checked + .iv-switch-track{background:var(--green)}
+.iv-switch input:checked + .iv-switch-track::after{transform:translateX(16px)}
+.iv-switch input:focus-visible + .iv-switch-track{box-shadow:0 0 0 3px var(--ring-soft)}
+.iv-fold{margin:16px 0;border:1px solid var(--line);border-radius:10px;padding:0 14px}
+.iv-fold summary{cursor:pointer;padding:12px 0;font-size:13px;font-weight:700;color:var(--text-heading);list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.iv-fold summary::-webkit-details-marker{display:none}
+.iv-fold summary::after{content:"";width:7px;height:7px;border-right:2px solid var(--text-subtle);border-bottom:2px solid var(--text-subtle);transform:rotate(45deg);transition:transform .15s;margin-right:3px}
+.iv-fold[open] summary::after{transform:rotate(-135deg)}
+.iv-fold[open] summary{border-bottom:1px solid var(--border-subtle)}

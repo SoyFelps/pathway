@@ -98,3 +98,19 @@ export function eventTitle(language: "en" | "pt" | "es", job: string, company: s
   const prefix = language === "pt" ? "Entrevista" : language === "es" ? "Entrevista" : "Interview";
   return `${prefix}: ${job} – ${company}`;
 }
+
+export type ResultReason = "held" | "no_show" | "other";
+export type ResultImpression = "positive" | "mixed" | "negative";
+export interface ResultInput { reason: ResultReason; impression: ResultImpression | null; recommended: boolean | null; notes: string | null }
+
+/** Checks what the team typed when finalizing (or correcting) an interview. A no-show has no impression and no recommendation. */
+export function parseResultInput(body: Record<string, unknown>): Parsed<ResultInput> {
+  const reason = body.reason === "held" || body.reason === "no_show" || body.reason === "other" ? body.reason : null;
+  if (!reason) return { ok: false, error: "Choose what happened in the interview." };
+  const notes = multiLine(body.notes, 2000) || null;
+  if (reason === "no_show") return { ok: true, value: { reason, impression: null, recommended: null, notes } };
+  const impression = body.impression === "positive" || body.impression === "mixed" || body.impression === "negative" ? body.impression : null;
+  if (reason === "held" && !impression) return { ok: false, error: "Choose your impression of the candidate." };
+  if (reason === "other" && !notes) return { ok: false, error: "Write a note to explain what happened." };
+  return { ok: true, value: { reason, impression, recommended: body.recommended === true, notes } };
+}

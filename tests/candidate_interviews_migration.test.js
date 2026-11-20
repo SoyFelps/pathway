@@ -96,3 +96,14 @@ test('10-minute reminder: own column hidden from the browser, own window, 2 h re
   assert.ok(next.includes("i.starts_at - interval '2 hours' <= now() and i.starts_at - interval '10 minutes' > now()"));
   assert.ok(next.includes("'reminder_10m'"), 'history line kind allowed');
 });
+
+test('interview result: manual finish (no job closes interviews any more), result columns readable by the browser, new history kinds', () => {
+  const next = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261120150000_interview_result.sql'), 'utf8');
+  for (const column of ['result_reason', 'result_impression', 'result_recommended', 'result_notes', 'result_at', 'result_by']) assert.ok(next.includes('add column ' + column), column);
+  assert.ok(next.includes("grant select (result_reason, result_impression, result_recommended, result_notes, result_at, result_by) on public.candidate_interviews to authenticated"));
+  assert.ok(next.includes("'finalized', 'result_corrected'"), 'history kinds');
+  assert.ok(next.includes("state = 'finished' and result_reason is not null"), 'a result only exists on a finished interview');
+  const tick = next.slice(next.indexOf('create or replace function public.candidate_interview_tick()'));
+  assert.ok(!tick.includes("set state = 'finished'") && !tick.includes("update public.candidate_interviews"), 'the job no longer closes interviews');
+  assert.ok(tick.includes('candidate_interview_reminders_due()'), 'it still wakes the reminders');
+});

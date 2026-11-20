@@ -476,7 +476,11 @@
   let interviewProposals = new Map();
   let pendingOpenInterviewTab = false;
   const INTERVIEW_OPEN = ['awaiting_schedule', 'invited', 'confirmed', 'declined', 'reschedule_requested'];
-  const INTERVIEW_ON = ['invited', 'confirmed', 'declined', 'reschedule_requested']; // scheduled and not over
+  const INTERVIEW_ON = ['invited', 'confirmed', 'declined', 'reschedule_requested']; // scheduled and not finalized
+  const interviewStarted = row => Boolean(row && row.startsAt && new Date(row.startsAt).getTime() <= Date.now());
+  // The time has passed and nobody registered the result yet ("Waiting for results": the screen decides, the state still says invited / confirmed /...).
+  // Interviews that an older version closed by itself (finished, no result) count too, so a person can still register how they went.
+  const interviewAwaitingResult = row => Boolean(row && (INTERVIEW_ON.includes(row.state) || (row.state === 'finished' && !row.resultAt)) && interviewStarted(row));
   const interviewFor = (flowId, email) => interviewMap.get(aiInterviewKey(flowId, email)) || null;
   const INTERVIEW_ICON = '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M8 3.5v4M16 3.5v4M4 10h16"/></svg>';
   // rows arrive newest first: one in play wins over a finished or cancelled one
@@ -508,6 +512,7 @@
   }
   // [label, tone] of the small tag on a candidate's card (only while an interview is in play)
   function interviewTag(row) {
+    if (interviewAwaitingResult(row)) return ['Waiting for results', 'warn'];
     switch (row && row.state) {
       case 'awaiting_schedule': return ['Waiting to be scheduled', 'warn'];
       case 'invited': return ['Interview invite sent', 'wait'];
@@ -520,7 +525,7 @@
   function interviewCardHtml(row) {
     const tag = interviewTag(row);
     if (!tag) return '';
-    const when = row.state === 'invited' || row.state === 'confirmed' ? interviewWhen(row) : '';
+    const when = (row.state === 'invited' || row.state === 'confirmed') && !interviewAwaitingResult(row) ? interviewWhen(row) : '';
     return '<div class="applicant-card-ai applicant-card-interview ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + INTERVIEW_ICON + '</span><span class="ai-tag-text">' + esc(t(tag[0]) + (when ? ' · ' + when : '')) + '</span></div>';
   }
   // The candidate in the board data for a job and e-mail (name and job title for the windows).
@@ -559,8 +564,9 @@
     const editing = INTERVIEW_ON.includes(row.state);
     const browserZone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (error) { return 'UTC'; } })();
     const zone = row.timeZone || browserZone;
-    const day = row.localStart ? row.localStart.slice(0, 10) : '';
-    const time = row.localStart ? row.localStart.slice(11, 16) : '';
+    const pastRow = row.state !== 'awaiting_schedule' && interviewStarted(row); // its time has passed: the new time must be chosen again
+    const day = row.localStart && !pastRow ? row.localStart.slice(0, 10) : '';
+    const time = row.localStart && !pastRow ? row.localStart.slice(11, 16) : '';
     const kind = row.kind || 'online';
     const minutes = row.durationMinutes || 30;
     const pad = number => String(number).padStart(2, '0');
@@ -573,9 +579,10 @@
     let responsibleIds = (row.responsibleIds && row.responsibleIds.length ? row.responsibleIds : (jobOfInterview && jobOfInterview.responsibleIds) || []).slice();
     const suggestedHtml = suggested.length ? `<div class="field-group"><label>${t('The candidate suggested')}</label><div class="interview-chips">${suggested.map(local => `<button class="btn btn-sm" type="button" data-iv-suggested="${esc(local)}">${esc(local.replace('T', ' '))}</button>`).join('')}</div></div>` : '';
     const requestNote = row.state === 'reschedule_requested' && row.responseNote ? `<div class="ai-note"><strong>${t('Message from the candidate')}</strong> ${esc(row.responseNote)}</div>` : '';
+    const pastNote = pastRow ? `<div class="ai-note">${t('The time of this interview has passed. Choose a new day and time: the candidate gets an updated invitation.')}</div>` : '';
     setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Interview')}</div><h2>${editing ? t('Edit interview') : t('Schedule interview')}</h2><p>${esc(who.name)}${who.jobTitle ? ' · ' + esc(who.jobTitle) : ''}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>
       <form id="schedule-interview-form" novalidate>
-        ${requestNote}${suggestedHtml}
+        ${pastNote}${requestNote}${suggestedHtml}
         <div class="field-group"><div class="interview-kind" role="group" aria-label="${t('Format')}"><button class="btn${kind === 'online' ? ' btn-primary' : ''}" type="button" data-iv-kind="online" aria-pressed="${kind === 'online'}">${t('Online')}</button><button class="btn${kind === 'in_person' ? ' btn-primary' : ''}" type="button" data-iv-kind="in_person" aria-pressed="${kind === 'in_person'}">${t('In person')}</button></div><input type="hidden" id="iv-kind" value="${kind === 'in_person' ? 'in_person' : 'online'}"></div>
         <div class="field-group" id="iv-link-field"><label for="iv-link">${t('Meeting link')}</label><input class="text-input" id="iv-link" type="url" maxlength="500" placeholder="https://" value="${esc(row.meetingLink || '')}"></div>
         <div class="field-group" id="iv-address-field" hidden><label for="iv-address">${t('Address')}</label><input class="text-input" id="iv-address" maxlength="300" value="${esc(row.address || '')}"></div>
@@ -630,6 +637,86 @@
       }
     });
   }
+  // Back to the candidate's panel on the Interview tab (after a window of the Interview tab closes). The comments are read again: the notes of a result are added there.
+  function reopenInterviewTab(flowId, email) {
+    const wanted = String(email || '').trim().toLowerCase();
+    pendingOpenInterviewTab = true;
+    applicantCommentsCache.delete(flowId + '|' + wanted);
+    const open = C.groupApplicants(applicants).find(item => item.latest.flow_id === flowId && String(item.latest.candidate_email || '').trim().toLowerCase() === wanted);
+    if (open) showApplicantDetails(open.latest.id);
+  }
+  // The "Finalize interview" window (and "Correct result"): what happened, the impression, whether the team recommends the candidate, and notes.
+  // The notes are also added as a team comment (a correction with new notes adds a new comment). options.afterClose runs when the window closes.
+  function openFinalizeInterviewModal(row, options = {}) {
+    const B = window.PathwayBackend;
+    const who = interviewCandidate(row);
+    const correcting = Boolean(options.correcting);
+    const state = { reason: correcting ? row.resultReason || '' : '', impression: correcting ? row.resultImpression || '' : '', recommended: correcting && row.resultRecommended === true };
+    const reasonLabels = { held: t('The interview was held'), no_show: t('The candidate did not show up'), other: t('Other') };
+    const impressionLabels = { positive: t('Positive impression'), mixed: t('Mixed impression'), negative: t('Negative impression') };
+    const choices = (attr, labels) => Object.keys(labels).map(value => `<button class="btn" type="button" data-${attr}="${value}" aria-pressed="false">${esc(labels[value])}</button>`).join('');
+    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Interview')}</div><h2>${correcting ? t('Correct result') : t('Finalize interview')}</h2><p>${esc(who.name)}${who.jobTitle ? ' · ' + esc(who.jobTitle) : ''}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>
+      <form id="finalize-interview-form" novalidate>
+        <div class="field-group"><span class="form-label" id="ivf-reason-label">${t('What happened?')}</span><div class="iv-choices" role="group" aria-labelledby="ivf-reason-label">${choices('ivf-reason', reasonLabels)}</div></div>
+        <div id="ivf-judgement" hidden>
+          <div class="field-group"><span class="form-label" id="ivf-impression-label">${t('Your impression of the candidate')}</span><div class="iv-choices" role="group" aria-labelledby="ivf-impression-label">${choices('ivf-impression', impressionLabels)}</div></div>
+          <div class="field-group"><label class="iv-switch"><input type="checkbox" id="ivf-recommend" role="switch"><span class="iv-switch-track" aria-hidden="true"></span><span class="iv-switch-text">${t('Recommend this candidate')}</span></label></div>
+        </div>
+        <div class="field-group"><label for="ivf-notes" id="ivf-notes-label">${t('Notes (optional)')}</label><textarea class="text-area" id="ivf-notes" rows="4" maxlength="1700">${esc(correcting ? row.resultNotes || '' : '')}</textarea><p class="team-permission-hint">${t('These notes are also added to the team comments.')}</p></div>
+        <p class="settings-delete-error" id="ivf-error" role="alert" hidden></p>
+        <div class="modal-actions"><button class="btn" type="button" data-close>${t('Cancel')}</button><button class="btn btn-primary" id="ivf-send" type="submit">${correcting ? t('Save correction') : t('Finalize interview')}</button></div>
+      </form>`);
+    const form = modalRoot.querySelector('#finalize-interview-form');
+    const field = id => form.querySelector('#' + id);
+    const error = field('ivf-error');
+    const sync = () => {
+      form.querySelectorAll('[data-ivf-reason]').forEach(button => { const on = button.dataset.ivfReason === state.reason; button.classList.toggle('is-active', on); button.setAttribute('aria-pressed', String(on)); });
+      form.querySelectorAll('[data-ivf-impression]').forEach(button => { const on = button.dataset.ivfImpression === state.impression; button.classList.toggle('is-active', on); button.setAttribute('aria-pressed', String(on)); });
+      field('ivf-judgement').hidden = state.reason !== 'held' && state.reason !== 'other'; // a no-show has no impression and no recommendation
+      field('ivf-recommend').checked = state.recommended;
+      field('ivf-notes-label').textContent = state.reason === 'other' ? t('Notes') : t('Notes (optional)');
+    };
+    sync();
+    form.addEventListener('click', event => {
+      error.hidden = true; // an old message goes away as soon as something is chosen
+      const reason = event.target.closest('[data-ivf-reason]');
+      const impression = event.target.closest('[data-ivf-impression]');
+      if (reason) { state.reason = reason.dataset.ivfReason; sync(); }
+      else if (impression) { state.impression = impression.dataset.ivfImpression; sync(); }
+    });
+    field('ivf-recommend').addEventListener('change', () => { state.recommended = field('ivf-recommend').checked; });
+    modalCloseHook = () => { if (options.afterClose) options.afterClose(); };
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      error.hidden = true;
+      const notes = field('ivf-notes').value.trim();
+      const refuse = text => { error.textContent = text; error.hidden = false; };
+      if (!state.reason) { refuse(t('Choose what happened in the interview.')); return; }
+      if (state.reason === 'held' && !state.impression) { refuse(t('Choose your impression of the candidate.')); return; }
+      if (state.reason === 'other' && !notes) { refuse(t('Write a note to explain what happened.')); return; }
+      const send = field('ivf-send');
+      send.disabled = true;
+      try {
+        const judged = state.reason !== 'no_show';
+        const payload = { reason: state.reason, impression: judged ? state.impression || null : null, recommended: judged ? state.recommended : null, notes };
+        await (correcting ? B.correctInterviewResult(row.id, payload) : B.finalizeInterview(row.id, payload));
+        let commentFailed = false;
+        if (notes && (!correcting || notes !== (row.resultNotes || ''))) {
+          const parts = [reasonLabels[state.reason]];
+          if (payload.impression) parts.push(impressionLabels[payload.impression]);
+          if (payload.recommended === true) parts.push(t('Recommended'));
+          const text = ((correcting ? t('Interview result (corrected)') : t('Interview result')) + ': ' + parts.join(' · ') + '\n\n' + notes).slice(0, 2000);
+          try { await B.addApplicantComment(row.flowId, row.email, text); } catch (failure) { commentFailed = true; }
+        }
+        showToast(commentFailed ? t('Saved, but the notes could not be added to the team comments.') : correcting ? t('Result corrected.') : t('Interview finalized.'));
+        closeModal(); // runs afterClose
+        void refreshInterviewTags(true);
+      } catch (failure) {
+        send.disabled = false;
+        refuse(failure.message || t('Something went wrong. Please try again.'));
+      }
+    });
+  }
   // After a SINGLE move into the Interview column (drag, or the stage list of the candidate panel): the waiting row exists already (a
   // database trigger made it), so offer the schedule window. A candidate who already has a scheduled interview is left alone.
   async function offerInterviewScheduling(applicantId, reopenDetails) {
@@ -642,7 +729,7 @@
     openScheduleInterviewModal(row, { afterClose });
   }
   const INTERVIEW_STATE_LABEL = () => ({ awaiting_schedule: t('Waiting to be scheduled'), invited: t('Invite sent'), confirmed: t('Confirmed'), declined: t('Cannot attend'), reschedule_requested: t('Asked for another time'), cancelled: t('Cancelled'), finished: t('Finished') });
-  const INTERVIEW_EVENT_LABEL = () => ({ scheduled: t('Invitation sent'), updated: t('Invitation updated'), cancelled: t('Interview cancelled'), resent: t('E-mail sent again'), confirmed: t('Candidate confirmed'), declined: t('Candidate cannot attend'), reschedule_requested: t('Candidate asked for another time'), reminder_24h: t('Reminder sent (24 hours before)'), reminder_2h: t('Reminder sent (2 hours before)'), reminder_10m: t('Reminder sent (10 minutes before)'), finished: t('Interview time passed') });
+  const INTERVIEW_EVENT_LABEL = () => ({ scheduled: t('Invitation sent'), updated: t('Invitation updated'), cancelled: t('Interview cancelled'), resent: t('E-mail sent again'), confirmed: t('Candidate confirmed'), declined: t('Candidate cannot attend'), reschedule_requested: t('Candidate asked for another time'), reminder_24h: t('Reminder sent (24 hours before)'), reminder_2h: t('Reminder sent (2 hours before)'), reminder_10m: t('Reminder sent (10 minutes before)'), finished: t('Interview time passed'), finalized: t('Interview finalized'), result_corrected: t('Result corrected') });
   // The Interview tab of a candidate: what is scheduled, what the candidate answered, what the recruiter can still do, and the history.
   // stage.getStage() says in which column the candidate is; stage.close() goes back to the resume tab.
   function mountInterviewPanel(host, flowId, email, stage = {}) {
@@ -656,33 +743,52 @@
     const info = (label, value) => value ? '<div class="applicant-info-item"><span>' + esc(label) + '</span><strong>' + value + '</strong></div>' : '';
     const button = (action, label, extra = '') => '<button type="button" class="btn btn-sm' + (extra ? ' ' + extra : '') + '" data-iv-action="' + action + '"' + (busy ? ' disabled' : '') + '>' + esc(label) + '</button>';
     const wanted = String(email || '').trim().toLowerCase();
+    // What was scheduled (shown as it is while the interview is on, and inside a fold once it was finalized).
+    const detailsGrid = row => '<div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>')
+      + info(t('Format'), row.kind === 'online' ? t('Online') : t('In person')) + info(t('Duration'), row.durationMinutes ? esc(tn('{count} minute', '{count} minutes', row.durationMinutes)) : '')
+      + (row.kind === 'online' ? info(t('Meeting link'), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '') : info(t('Address'), esc(row.address || '')))
+      + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>';
+    // The result of a finalized interview: what happened, the impression, the recommendation, the notes, who registered it and when.
+    const resultHtml = row => {
+      const reasons = { held: t('The interview was held'), no_show: t('The candidate did not show up'), other: t('Other') };
+      const person = row.resultBy ? interviewActorName(row.resultBy) : t('A teammate');
+      return '<div class="applicant-info-grid">' + info(t('What happened'), esc(reasons[row.resultReason] || ''))
+        + (row.resultImpression ? info(t('Impression'), aiImpressionLabelled(row.resultImpression)) : '')
+        + (row.resultRecommended === null ? '' : info(t('Recommended'), row.resultRecommended ? t('Yes') : t('No'))) + '</div>'
+        + (row.resultNotes ? '<div class="ai-note"><strong>' + t('Notes') + '</strong> ' + esc(row.resultNotes).replace(/\n/g, '<br>') + '</div>' : '')
+        + '<p class="muted">' + t('Finalized by {name} on {date}', { name: esc(person), date: esc(window.PathwayI18n.formatDate(row.resultAt, { dateStyle: 'medium', timeStyle: 'short' })) }) + '</p>';
+    };
     const render = (rows, events, errorText = '') => {
       const mine = rows.filter(item => item.flowId === flowId && item.email === wanted);
       const row = mine.find(item => INTERVIEW_OPEN.includes(item.state)) || mine[0] || null;
       const labels = INTERVIEW_STATE_LABEL();
       let body = '';
-      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">' + t('Interview') + '</span><h3>' + esc(row ? labels[row.state] || row.state : t('No interview')) + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-iv-close>' + t('Close') + '</button></header>';
+      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">' + t('Interview') + '</span><h3>' + esc(row ? (interviewAwaitingResult(row) ? t('Waiting for results') : labels[row.state] || row.state) : t('No interview')) + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-iv-close>' + t('Close') + '</button></header>';
       if (!row) body = '<p class="muted">' + t('This candidate has no interview yet. Moving the card to the Interview column creates one.') + '</p>';
       else if (row.state === 'awaiting_schedule') body = '<p>' + t('This interview has not been scheduled yet. The candidate receives an e-mail invitation as soon as you schedule it.') + '</p><div class="ai-actions">' + button('schedule', t('Schedule interview'), 'btn-primary') + '</div>';
-      else if (row.state === 'cancelled' || row.state === 'finished') {
-        body = '<p>' + (row.state === 'cancelled' ? t('This interview was cancelled.') : t('This interview already took place.')) + '</p><div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'medium', timeStyle: 'short' }))) + '</div><div class="ai-actions">' + button('new', t('Schedule another interview'), 'btn-primary') + '</div>';
+      else if (row.state === 'finished' && row.resultAt) {
+        // finalized: only the result; the scheduling details wait in a fold
+        body = resultHtml(row) + '<details class="iv-fold"><summary>' + t('Scheduling details') + '</summary>' + detailsGrid(row) + '</details><div class="ai-actions">' + button('correct', t('Correct result')) + button('new', t('Schedule another interview')) + '</div>';
+      } else if (row.state === 'cancelled') {
+        body = '<p>' + t('This interview was cancelled.') + '</p><div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'medium', timeStyle: 'short' }))) + '</div><div class="ai-actions">' + button('new', t('Schedule another interview'), 'btn-primary') + '</div>';
       } else {
-        const text = { invited: t('Waiting for the candidate to answer.'), confirmed: t('The candidate confirmed that they can attend.'), declined: t('The candidate said they cannot attend. Nothing was changed on the board: moving or rejecting the candidate is your decision.'), reschedule_requested: t('The candidate asked for another time. Schedule a new time to send a new invitation.') }[row.state];
+        const awaiting = interviewAwaitingResult(row);
+        const text = awaiting ? t('The time of this interview has passed. Finalize it to record how it went, or edit it to a new date if it did not happen.') : { invited: t('Waiting for the candidate to answer.'), confirmed: t('The candidate confirmed that they can attend.'), declined: t('The candidate said they cannot attend. Nothing was changed on the board: moving or rejecting the candidate is your decision.'), reschedule_requested: t('The candidate asked for another time. Schedule a new time to send a new invitation.') }[row.state];
         const requested = row.state === 'reschedule_requested'
           ? ((row.proposedTimes.length ? '<div class="applicant-info-grid">' + info(t('Suggested times'), row.proposedTimes.map(item => esc(interviewSlotText(item.local, 'full'))).join('<br>')) + '</div>' : '') + (row.responseNote ? '<div class="ai-note"><strong>' + t('Message from the candidate') + '</strong> ' + esc(row.responseNote) + '</div>' : ''))
           : (row.state === 'declined' && row.responseNote ? '<div class="ai-note"><strong>' + t('Message from the candidate') + '</strong> ' + esc(row.responseNote) + '</div>' : '');
-        const away = stage.getStage && stage.getStage() !== 'interview' ? '<p class="muted">' + t('This candidate is not in the Interview column any more. The interview is still on, and the reminders still go out, until you cancel it here.') + '</p>' : '';
+        const away = !awaiting && stage.getStage && stage.getStage() !== 'interview' ? '<p class="muted">' + t('This candidate is not in the Interview column any more. The interview is still on, and the reminders still go out, until you cancel it here.') + '</p>' : '';
         const cancelControl = confirming
           ? '<span class="ai-confirm">' + t('Cancel this interview?') + ' <button type="button" class="btn btn-sm btn-danger" data-iv-action="cancel-yes">' + t('Yes, cancel') + '</button><button type="button" class="btn btn-sm" data-iv-action="cancel-no">' + t('Keep it') + '</button></span>'
           : button('cancel', t('Cancel interview'), 'btn-danger-ghost');
-        body = '<p>' + esc(text) + '</p>' + requested + '<div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>')
-          + info(t('Format'), row.kind === 'online' ? t('Online') : t('In person')) + info(t('Duration'), row.durationMinutes ? esc(tn('{count} minute', '{count} minutes', row.durationMinutes)) : '')
-          + (row.kind === 'online' ? info(t('Meeting link'), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '') : info(t('Address'), esc(row.address || '')))
-          + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>'
-          + '<div class="field-group iv-tab-responsible"><span class="form-label" id="iv-tab-resp-label">' + t('Responsible for the interview') + '</span><div id="iv-tab-resp"></div></div>' + away
-          + '<div class="ai-actions">' + button('schedule', row.state === 'reschedule_requested' ? t('Schedule a new time') : t('Edit interview'), row.state === 'reschedule_requested' ? 'btn-primary' : '') + (row.state === 'declined' ? '' : button('resend', t('Re-send e-mail'))) + cancelControl + '</div>';
+        const responsibleField = row.state === 'finished' ? '' : '<div class="field-group iv-tab-responsible"><span class="form-label" id="iv-tab-resp-label">' + t('Responsible for the interview') + '</span><div id="iv-tab-resp"></div></div>';
+        const scheduleLabel = row.state === 'reschedule_requested' ? t('Schedule a new time') : t('Edit interview');
+        const actions = awaiting
+          ? button('finalize', t('Finalize interview'), 'btn-primary') + (row.state === 'finished' ? button('new', t('Schedule another interview')) : button('schedule', scheduleLabel))
+          : button('schedule', scheduleLabel, row.state === 'reschedule_requested' ? 'btn-primary' : '') + (row.state === 'declined' ? '' : button('resend', t('Re-send e-mail'))) + cancelControl;
+        body = '<p>' + esc(text) + '</p>' + requested + detailsGrid(row) + responsibleField + away + '<div class="ai-actions">' + actions + '</div>';
       }
-      const history = events.length ? '<h4>' + t('History') + '</h4><ul class="interview-history">' + events.map(item => '<li><span>' + (item.kind === 'responsibles_changed' ? t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) }) : esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind)) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>' : '';
+      const history = events.length ? '<h4>' + t('History') + '</h4><ul class="interview-history">' + events.map(item => '<li><span>' + (item.kind === 'responsibles_changed' ? t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'finalized' ? t('{name} finalized the interview', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'result_corrected' ? t('{name} corrected the interview result', { name: esc(interviewActorName(item.actorUserId)) }) : esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind)) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>' : '';
       host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + history + '</div>';
       host.dataset.interviewId = row ? row.id : '';
       host._interviewRow = row;
@@ -718,6 +824,8 @@
       const row = host._interviewRow;
       const action = control.dataset.ivAction;
       if (action === 'schedule' && row) { openScheduleInterviewModal(row, { afterClose: () => { pendingOpenInterviewTab = true; const open = C.groupApplicants(applicants).find(item => item.latest.flow_id === flowId && String(item.latest.candidate_email || '').trim().toLowerCase() === wanted); if (open) showApplicantDetails(open.latest.id); } }); return; }
+      if (action === 'finalize' && row) { openFinalizeInterviewModal(row, { afterClose: () => reopenInterviewTab(flowId, wanted) }); return; }
+      if (action === 'correct' && row) { openFinalizeInterviewModal(row, { correcting: true, afterClose: () => reopenInterviewTab(flowId, wanted) }); return; }
       if (action === 'cancel') { confirming = true; void load(); return; }
       if (action === 'cancel-no') { confirming = false; void load(); return; }
       busy = true;

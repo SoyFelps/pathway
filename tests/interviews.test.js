@@ -235,7 +235,7 @@ test('each interview has its own responsible people: chosen in the schedule wind
   const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
   assert.ok(builder.includes("if (!editing) mountResponsibleField(form.querySelector('#iv-responsible'), 'iv-responsible-label'"), 'the same multi-select as the job responsible field, at the end of the window, only when the interview is created');
   assert.ok(builder.includes('responsibleIds: !editing && people.length ? currentResponsibleIds(responsibleIds) : undefined'), 'sent with the first invitation, never with an edit (which e-mails the candidate)');
-  assert.ok(fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8').includes(",responsible_user_ids')"), 'read with the interviews');
+  assert.ok(fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8').includes(",responsible_user_ids,result_reason,result_impression,result_recommended,result_notes,result_at,result_by')"), 'read with the interviews');
 });
 
 test('after the invitation the responsible people change in the Interview tab at any time: no e-mail to the candidate and a line in the history with the name', () => {
@@ -252,4 +252,32 @@ test('after the invitation the responsible people change in the Interview tab at
   assert.ok(builder.includes("t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) })"), 'the history line has the name');
   const backend = fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8');
   assert.ok(backend.includes("action: 'setResponsibles'") && backend.includes('actor_user_id'), 'the browser asks the function and reads who acted');
+});
+
+test('the result of an interview: what happened, impression and recommendation (none for a no-show), notes required for "other"', async () => {
+  const { parseResultInput } = await loadLogic();
+  const held = parseResultInput({ reason: 'held', impression: 'mixed', recommended: true, notes: '  Good talk  ' });
+  assert.deepEqual(held.value, { reason: 'held', impression: 'mixed', recommended: true, notes: 'Good talk' });
+  assert.equal(parseResultInput({ reason: 'held', impression: 'mixed' }).value.recommended, false, 'the switch off means not recommended');
+  assert.equal(parseResultInput({ reason: 'held' }).error, 'Choose your impression of the candidate.');
+  assert.equal(parseResultInput({ reason: 'held', impression: 'great' }).error, 'Choose your impression of the candidate.');
+  assert.equal(parseResultInput({}).error, 'Choose what happened in the interview.');
+  const noShow = parseResultInput({ reason: 'no_show', impression: 'positive', recommended: true });
+  assert.deepEqual(noShow.value, { reason: 'no_show', impression: null, recommended: null, notes: null }, 'a no-show keeps no judgement');
+  assert.equal(parseResultInput({ reason: 'other' }).error, 'Write a note to explain what happened.');
+  assert.equal(parseResultInput({ reason: 'other', notes: 'Room was closed' }).value.impression, null, 'the impression is optional for "other"');
+  assert.equal(parseResultInput({ reason: 'held', impression: 'positive', notes: 'x'.repeat(3000) }).value.notes.length, 2000);
+});
+
+test('finalizing is manual: only after the start, once, with an active plan; a correction needs an existing result; an unchanged past time is refused on edit', () => {
+  const body = index.slice(index.indexOf('async function actionFinalize('), index.indexOf('async function actionCancel('));
+  assert.ok(body.includes('Date.parse(before.starts_at) > Date.now()') && body.includes('The interview has not started yet.'), 'not before the start');
+  assert.ok(body.includes('.is("result_at", null)') && body.includes('.eq("state", before.state)'), 'registered once, and not over a change that happened meanwhile');
+  assert.ok(body.includes('planActive(before.workspace_id)'), 'needs an active plan like the other actions');
+  assert.ok(body.includes('before.state !== "finished" || !before.result_at'), 'a correction needs a result');
+  assert.ok(body.includes('"result_corrected"') && body.includes('"finalized"'), 'both are in the history');
+  assert.ok(index.includes('action === "finalize" || action === "correctResult"'), 'signed-in actions only');
+  const schedule = index.slice(index.indexOf('async function actionSchedule('), index.indexOf('async function actionSetResponsibles('));
+  assert.ok(schedule.includes('Date.parse(before.starts_at) <= Date.now()') && schedule.includes('The interview must be in the future.'), 'editing a past interview needs a new time');
+  assert.ok(schedule.includes('reminder_10m_sent_at: null'), 'a new time starts the reminders again');
 });
