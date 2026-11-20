@@ -1267,3 +1267,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .ai-badges{display:inline-flex;align-items:center;gap:6px;margin-left:auto;flex:0 0 auto}
 .ai-recommend{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:22px;height:22px;line-height:0;color:var(--green-text)}
 .ai-recommend svg{display:block}
+.ai-recommend-chip{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;margin-left:auto;padding:3px 11px 3px 5px;border-radius:99px;background:var(--positive-bg);color:var(--positive-text);font-size:12px;font-weight:700;line-height:1}
+.ai-recommend-chip svg{display:block;width:20px;height:20px}
+.applicant-ai-head .ai-recommend-chip{margin:2px 0 0 auto}
+.applicant-review-content .applicant-detail-actions .ai-recommend-chip{margin-left:12px}

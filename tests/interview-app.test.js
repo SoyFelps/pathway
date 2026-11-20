@@ -137,3 +137,11 @@ test('the card shows the result of the latest interview (a cancelled one only wh
   assert.ok(modal.includes("if (submitting) return;") && modal.includes("t('Saving…')") && modal.includes("form.querySelectorAll('button, textarea, input').forEach(item => { item.disabled = busy; });"), 'one submit only, with a visible waiting state');
   assert.ok(fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8').includes('.btn:disabled,.btn[disabled]{opacity:.6;cursor:progress}'), 'a disabled button looks disabled');
 });
+
+test('the recommendation seal also shows in the Interview tab and next to the hiring stage, for the latest interview that is not cancelled', () => {
+  assert.ok(builder.includes("const interviewRecommended = row => Boolean(row && row.state === 'finished' && row.resultAt && row.resultRecommended === true);"), 'only a finalized interview with the recommendation on');
+  const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
+  assert.ok(panel.includes("interviewRecommended(mine.find(item => item.state !== 'cancelled') || null)"), 'the tab looks at the latest round that is not cancelled');
+  assert.ok(panel.includes("</h3></div>' + seal + '<button"), 'the seal sits at the right of the title');
+  assert.ok(builder.includes("${interviewRecommended(interviewRow) ? recommendSeal(true) : ''}"), 'next to the hiring stage in the candidate panel');
+});

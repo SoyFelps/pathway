@@ -533,12 +533,21 @@
       default: return null;
     }
   }
-  // On the card of a finalized interview: the impression (a thumb, like the AI interview) and, when the team recommends the candidate, a seal next to it.
+  // The recommendation seal: an icon on the card, the icon with the word in the candidate's panel and in the Interview tab.
+  const RECOMMEND_SEAL_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" fill-opacity=".16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4" fill="none"/></svg>';
+  // The team recommends the candidate: the interview shown for them (the latest one that is not cancelled) was finalized with the recommendation on.
+  const interviewRecommended = row => Boolean(row && row.state === 'finished' && row.resultAt && row.resultRecommended === true);
+  function recommendSeal(withWord) {
+    const label = t('Recommended');
+    return withWord
+      ? '<span class="ai-recommend-chip" title="' + label + '">' + RECOMMEND_SEAL_SVG + '<span>' + label + '</span></span>'
+      : '<span class="ai-recommend" role="img" aria-label="' + label + '" title="' + label + '">' + RECOMMEND_SEAL_SVG + '</span>';
+  }
+  // On the card of a finalized interview: the impression (a thumb, like the AI interview) and, when the team recommends the candidate, the seal next to it.
   function interviewBadges(row) {
     if (!row || row.state !== 'finished' || !row.resultAt) return '';
     const impression = aiImpressionBadge(row.resultImpression);
-    const label = t('Recommended');
-    const seal = row.resultRecommended === true ? '<span class="ai-recommend" role="img" aria-label="' + label + '" title="' + label + '"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" fill-opacity=".16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4" fill="none"/></svg></span>' : '';
+    const seal = interviewRecommended(row) ? recommendSeal(false) : '';
     return impression || seal ? '<span class="ai-badges">' + impression + seal + '</span>' : '';
   }
   function interviewCardHtml(row) {
@@ -804,8 +813,9 @@
       // The latest round is over (cancelled, or finalized): no round gets the spotlight, every round is listed in its own fold.
       const terminal = Boolean(row && (row.state === 'cancelled' || (row.state === 'finished' && row.resultAt)));
       const rounds = mine.filter(item => item.state === 'finished' || item.state === 'cancelled');
+      const seal = interviewRecommended(mine.find(item => item.state !== 'cancelled') || null) ? recommendSeal(true) : '';
       let body = '';
-      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">' + t('Interview') + '</span><h3>' + esc(row ? (terminal ? tn('{count} interview', '{count} interviews', rounds.length) : interviewAwaitingResult(row) ? t('Waiting for results') : labels[row.state] || row.state) : t('No interview')) + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-iv-close>' + t('Close') + '</button></header>';
+      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">' + t('Interview') + '</span><h3>' + esc(row ? (terminal ? tn('{count} interview', '{count} interviews', rounds.length) : interviewAwaitingResult(row) ? t('Waiting for results') : labels[row.state] || row.state) : t('No interview')) + '</h3></div>' + seal + '<button type="button" class="btn btn-sm applicant-ai-close" data-iv-close>' + t('Close') + '</button></header>';
       if (!row) body = '<p class="muted">' + t('This candidate has no interview yet. Moving the card to the Interview column creates one.') + '</p>';
       else if (row.state === 'awaiting_schedule') body = '<p>' + t('This interview has not been scheduled yet. The candidate receives an e-mail invitation as soon as you schedule it.') + '</p><div class="ai-actions">' + button('schedule', t('Schedule interview'), 'btn-primary') + '</div>';
       else if (terminal) body = '<div class="ai-actions">' + button('new', t('Schedule another interview'), 'btn-primary') + '</div>';
@@ -4826,7 +4836,7 @@
         ${tabs}
         <div class="applicant-review-content">
           <section class="applicant-detail-section applicant-detail-actions-section"><div class="applicant-detail-actions">
-            <label class="applicant-info-item"><span>${t('Hiring stage')}</span><select class="applicant-status-select" id="applicant-status-select"${workspaceIsFree() ? ` disabled title="${t('Upgrade your plan to move candidates between stages.')}"` : ''}>${statusOptions}</select>${group.count > 1 ? `<small class="applicant-stage-note">${t('Applies to all {count} applications', { count: group.count })}</small>` : ''}</label>${autoFailReason ? `<p class="applicant-autofail-note"><strong>${t('Moved to Failed automatically:')}</strong> ${esc(autoFailReasonText(autoFailReason))}</p>` : ''}
+            <label class="applicant-info-item"><span>${t('Hiring stage')}</span><select class="applicant-status-select" id="applicant-status-select"${workspaceIsFree() ? ` disabled title="${t('Upgrade your plan to move candidates between stages.')}"` : ''}>${statusOptions}</select>${group.count > 1 ? `<small class="applicant-stage-note">${t('Applies to all {count} applications', { count: group.count })}</small>` : ''}</label>${interviewRecommended(interviewRow) ? recommendSeal(true) : ''}${autoFailReason ? `<p class="applicant-autofail-note"><strong>${t('Moved to Failed automatically:')}</strong> ${esc(autoFailReasonText(autoFailReason))}</p>` : ''}
           </div></section>
           <section class="applicant-detail-section"><h3>${t('Candidate details')}</h3><div class="applicant-info-grid"><div class="applicant-info-item"><span>${t('Full name')}</span><strong>${esc(applicant.candidate_name)}</strong></div><div class="applicant-info-item"><span>${t('Email address')}</span><a href="mailto:${esc(applicant.candidate_email)}">${esc(applicant.candidate_email)}</a></div>${detailFields.map(([key, value]) => `<div class="applicant-info-item"><span>${esc(t(C.infoFieldLabel(key)))}</span><strong>${esc(infoValue(key, value))}</strong></div>`).join('')}</div></section>
           <section class="applicant-detail-section"><h3>${t('Application answers')} · ${answers.length}</h3>${answers.length ? answers.map((answer, index) => `<div class="applicant-answer"><strong>${index + 1}. ${esc(answer.question || t('Application question'))}</strong><p>${esc(Array.isArray(answer.answer) ? answer.answer.join(', ') : answer.answer)}</p></div>`).join('') : `<div class="board-empty">${t('No written answers were submitted for this flow.')}</div>`}</section>
