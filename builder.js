@@ -566,8 +566,10 @@
     const who = interviewCandidate(row);
     const editing = INTERVIEW_ON.includes(row.state);
     // A NEW round (the candidate already had an interview): no "Schedule later", only send or cancel; cancelling throws the empty row away, so the earlier interview shows again.
-    const newRound = row.state === 'awaiting_schedule' && (interviewEarlier.get(aiInterviewKey(row.flowId, row.email)) || 0) > 0;
+    const newRound = row.state === 'awaiting_schedule' && (Boolean(options.rowPromise) || (interviewEarlier.get(aiInterviewKey(row.flowId, row.email)) || 0) > 0);
     let invitationSent = false;
+    // A new round opened from the tab: the window opens at once and the row is made in the background (options.rowPromise); sending waits for it.
+    const pendingRow = options.rowPromise || null;
     const browserZone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (error) { return 'UTC'; } })();
     const zone = row.timeZone || browserZone;
     const pastRow = row.state !== 'awaiting_schedule' && interviewStarted(row); // its time has passed: the new time must be chosen again
@@ -621,7 +623,7 @@
     form.querySelectorAll('[data-iv-minutes]').forEach(button => button.addEventListener('click', () => { field('iv-minutes').value = button.dataset.ivMinutes; markMinutes(); }));
     form.querySelectorAll('[data-iv-suggested]').forEach(button => button.addEventListener('click', () => { const [d, h] = button.dataset.ivSuggested.split('T'); field('iv-day').value = d; field('iv-time').value = h; }));
     layerCloseHook = () => {
-      if (newRound && !invitationSent) B.discardInterviewRound(row.id).catch(() => {}).then(() => { void refreshInterviewTags(true); if (options.afterClose) options.afterClose(); });
+      if (newRound && !invitationSent) (pendingRow ? pendingRow.then(created => created.id).catch(() => null) : Promise.resolve(row.id)).then(id => id ? B.discardInterviewRound(id).catch(() => {}) : null).then(() => { void refreshInterviewTags(true); if (options.afterClose) options.afterClose(); });
       else if (options.afterClose) options.afterClose();
     };
     form.addEventListener('submit', async event => {
@@ -632,7 +634,9 @@
       const send = field('iv-send');
       send.disabled = true; send.textContent = t('Sending…');
       try {
-        const result = await B.scheduleInterview(row.id, {
+        let interviewId = row.id;
+        if (pendingRow) interviewId = (await pendingRow).id;
+        const result = await B.scheduleInterview(interviewId, {
           kind: online ? 'online' : 'in_person', localStart: `${field('iv-day').value}T${field('iv-time').value}`, timeZone: field('iv-zone').value,
           durationMinutes: Number(field('iv-minutes').value), meetingLink: online ? field('iv-link').value : '', address: online ? '' : field('iv-address').value, notes: field('iv-notes').value,
           responsibleIds: !editing && people.length ? currentResponsibleIds(responsibleIds) : undefined // chosen only when the interview is created; afterwards they change in the Interview tab
@@ -851,9 +855,12 @@
       busy = true;
       try {
         if (action === 'new') {
-          const created = await B.startInterviewRound(flowId, wanted);
           busy = false;
-          openScheduleInterviewModal(created, { afterClose: () => { pendingOpenInterviewTab = true; const open = C.groupApplicants(applicants).find(item => item.latest.flow_id === flowId && String(item.latest.candidate_email || '').trim().toLowerCase() === wanted); if (open) showApplicantDetails(open.latest.id); } });
+          // The window opens at once with an empty round; the row is made at the same time, in the background.
+          const creating = B.startInterviewRound(flowId, wanted);
+          creating.catch(() => {});
+          const empty = { id: null, flowId, email: wanted, state: 'awaiting_schedule', kind: null, localStart: null, timeZone: null, durationMinutes: null, meetingLink: null, address: null, notes: null, proposedTimes: [], responseNote: null, responsibleIds: [] };
+          openScheduleInterviewModal(empty, { rowPromise: creating, afterClose: () => { pendingOpenInterviewTab = true; const open = C.groupApplicants(applicants).find(item => item.latest.flow_id === flowId && String(item.latest.candidate_email || '').trim().toLowerCase() === wanted); if (open) showApplicantDetails(open.latest.id); } });
           return;
         }
         if (action === 'resend' && row) { const result = await B.resendInterview(row.id); showToast(result.emailSent === false ? t(result.warning || 'The e-mail could not be sent. Try again.') : t('E-mail sent again.')); }

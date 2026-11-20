@@ -32,7 +32,7 @@ test('the schedule window asks for the format, link or address, day, time, zone,
   assert.ok(modal.includes('max="${isoDay(lastDay)}"') && modal.includes('today.getMonth() + 6'), 'the calendar stops at 6 months');
   assert.ok(modal.includes('Schedule later'), 'closing the window leaves the candidate waiting');
   assert.ok(modal.includes('data-iv-suggested'), 'the times the candidate suggested can be picked');
-  assert.ok(modal.includes('B.scheduleInterview(row.id'), 'the invitation goes through the checked function');
+  assert.ok(modal.includes('B.scheduleInterview(interviewId'), 'the invitation goes through the checked function');
 });
 
 test('the card shows the interview tag, the panel has an Interview tab with edit, re-send, cancel and history', () => {
@@ -94,9 +94,9 @@ test('the Interview tab after the time has passed: waiting for results, no re-se
 
 test('a new round: no "Schedule later", cancelling throws the empty row away, and the earlier interviews stay visible in the tab', () => {
   const schedule = slice(builder, 'function openScheduleInterviewModal(', 'function openFinalizeInterviewModal');
-  assert.ok(schedule.includes("const newRound = row.state === 'awaiting_schedule' && (interviewEarlier.get("), 'a candidate who already had an interview');
+  assert.ok(schedule.includes("const newRound = row.state === 'awaiting_schedule' && (Boolean(options.rowPromise) || (interviewEarlier.get("), 'a candidate who already had an interview');
   assert.ok(schedule.includes("row.state === 'awaiting_schedule' && !newRound ? t('Schedule later') : t('Cancel')"), 'Schedule later only for the first interview');
-  assert.ok(schedule.includes('if (newRound && !invitationSent) B.discardInterviewRound(row.id)'), 'closing without sending removes the empty row');
+  assert.ok(schedule.includes('if (newRound && !invitationSent)') && schedule.includes('B.discardInterviewRound(id)'), 'closing without sending removes the empty row');
   const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
   assert.ok(panel.includes("t('Previous interviews')") && panel.includes("item.state === 'finished' || item.state === 'cancelled'"), 'earlier rounds are listed, each in a fold');
 });
@@ -115,4 +115,14 @@ test('when the latest round is over, no round gets the spotlight: a count and ev
   assert.ok(panel.includes('const folds = (terminal ? rounds : rounds.filter(item => item !== row));'), 'all rounds listed when none is in play');
   assert.ok(panel.includes('historyList(eventsById.get(item.id))'), 'each round shows its own history');
   assert.ok(panel.includes("const history = !terminal && events.length"), 'no global history under the folds');
+});
+
+test('"Schedule another interview" opens the window at once: the row of the new round is made in the background and sending waits for it', () => {
+  const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
+  const start = panel.indexOf("if (action === 'new') {");
+  const branch = panel.slice(start, panel.indexOf('return;', start));
+  assert.ok(branch.indexOf('openScheduleInterviewModal(') > -1 && branch.indexOf('B.startInterviewRound') < branch.indexOf('openScheduleInterviewModal(') && !/await B\.startInterviewRound/.test(branch), 'the window does not wait for the server');
+  const schedule = slice(builder, 'function openScheduleInterviewModal(', 'function openFinalizeInterviewModal');
+  assert.ok(schedule.includes('if (pendingRow) interviewId = (await pendingRow).id;'), 'sending waits for the row');
+  assert.ok(schedule.includes('pendingRow.then(created => created.id)'), 'closing without sending discards the row once it exists');
 });
