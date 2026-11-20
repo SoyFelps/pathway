@@ -70,3 +70,9 @@ test('the Interview tab and the notices show WHAT the candidate suggested, writt
   assert.ok(builder.includes('await loadInterviewProposals();'), 'the times are read (through the database policy) when a notice needs them');
   assert.equal(/Suggested: \{times\}/.test(fs.readFileSync(path.join(__dirname, '..', 'locales', 'pt-BR.js'), 'utf8')), true);
 });
+
+test('the interview tag on a card is separated from the AI interview tag by the same thin line', () => {
+  const css = read('styles.css');
+  assert.equal(css.includes('.applicant-card-ai + .applicant-card-interview{'), false, 'no rule removes the line between the two subjects');
+  assert.ok(css.includes('.applicant-card-ai{display:flex;flex-wrap:nowrap;align-items:center;gap:7px;margin-top:9px;padding-top:9px;border-top:1px solid var(--border-subtle)'), 'every subject of the card has the line above it');
+});

@@ -1224,7 +1224,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .interview-panel .interview-add{margin:0 auto 16px}
 
 /* Human interviews in the recruiter app (2026-11-19): tag on the card, the schedule window and the history of the Interview tab. Reuses the AI tag, the info grid, the field groups and the buttons. */
-.applicant-card-ai + .applicant-card-interview{margin-top:6px;padding-top:0;border-top:0}
+/* each subject of the card (AI interview, human interview) is separated by the same thin line */
 .applicant-card-interview{color:var(--green-text)}
 .applicant-card-interview .ai-tag-icon{background:var(--tint);color:var(--green-text)}
 .applicant-card-interview.ai-tone-warn{color:var(--amber-text)}.applicant-card-interview.ai-tone-warn .ai-tag-icon{background:var(--amber-bg);color:var(--amber-text)}
