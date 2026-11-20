@@ -586,7 +586,7 @@
     const suggestedHtml = suggested.length ? `<div class="field-group"><label>${t('The candidate suggested')}</label><div class="interview-chips">${suggested.map(local => `<button class="btn btn-sm" type="button" data-iv-suggested="${esc(local)}">${esc(local.replace('T', ' '))}</button>`).join('')}</div></div>` : '';
     const requestNote = row.state === 'reschedule_requested' && row.responseNote ? `<div class="ai-note"><strong>${t('Message from the candidate')}</strong> ${esc(row.responseNote)}</div>` : '';
     const pastNote = pastRow ? `<div class="ai-note">${t('The time of this interview has passed. Choose a new day and time: the candidate gets an updated invitation.')}</div>` : '';
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Interview')}</div><h2>${editing ? t('Edit interview') : t('Schedule interview')}</h2><p>${esc(who.name)}${who.jobTitle ? ' · ' + esc(who.jobTitle) : ''}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>
+    setLayer(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Interview')}</div><h2>${editing ? t('Edit interview') : t('Schedule interview')}</h2><p>${esc(who.name)}${who.jobTitle ? ' · ' + esc(who.jobTitle) : ''}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>
       <form id="schedule-interview-form" novalidate>
         ${pastNote}${requestNote}${suggestedHtml}
         <div class="field-group"><div class="interview-kind" role="group" aria-label="${t('Format')}"><button class="btn${kind === 'online' ? ' btn-primary' : ''}" type="button" data-iv-kind="online" aria-pressed="${kind === 'online'}">${t('Online')}</button><button class="btn${kind === 'in_person' ? ' btn-primary' : ''}" type="button" data-iv-kind="in_person" aria-pressed="${kind === 'in_person'}">${t('In person')}</button></div><input type="hidden" id="iv-kind" value="${kind === 'in_person' ? 'in_person' : 'online'}"></div>
@@ -620,7 +620,7 @@
     field('iv-minutes').addEventListener('input', markMinutes);
     form.querySelectorAll('[data-iv-minutes]').forEach(button => button.addEventListener('click', () => { field('iv-minutes').value = button.dataset.ivMinutes; markMinutes(); }));
     form.querySelectorAll('[data-iv-suggested]').forEach(button => button.addEventListener('click', () => { const [d, h] = button.dataset.ivSuggested.split('T'); field('iv-day').value = d; field('iv-time').value = h; }));
-    modalCloseHook = () => {
+    layerCloseHook = () => {
       if (newRound && !invitationSent) B.discardInterviewRound(row.id).catch(() => {}).then(() => { void refreshInterviewTags(true); if (options.afterClose) options.afterClose(); });
       else if (options.afterClose) options.afterClose();
     };
@@ -639,7 +639,7 @@
         });
         showToast(result.emailSent === false ? t(result.warning || 'The interview was saved, but the e-mail could not be sent. Use Resend to try again.') : t('Invitation sent.'), result.emailSent === false ? 6000 : 2400);
         invitationSent = true;
-        closeModal(); // runs afterClose
+        closeLayer(); // runs afterClose
         void refreshInterviewTags(true);
       } catch (failure) {
         send.disabled = false; send.textContent = editing ? t('Send updated invitation') : t('Send invitation');
@@ -665,7 +665,7 @@
     const reasonLabels = { held: t('The interview was held'), no_show: t('The candidate did not show up'), other: t('Other') };
     const impressionLabels = { positive: t('Positive impression'), mixed: t('Mixed impression'), negative: t('Negative impression') };
     const choices = (attr, labels) => Object.keys(labels).map(value => `<button class="btn" type="button" data-${attr}="${value}" aria-pressed="false">${esc(labels[value])}</button>`).join('');
-    setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Interview')}</div><h2>${correcting ? t('Correct result') : t('Finalize interview')}</h2><p>${esc(who.name)}${who.jobTitle ? ' · ' + esc(who.jobTitle) : ''}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>
+    setLayer(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Interview')}</div><h2>${correcting ? t('Correct result') : t('Finalize interview')}</h2><p>${esc(who.name)}${who.jobTitle ? ' · ' + esc(who.jobTitle) : ''}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>
       <form id="finalize-interview-form" novalidate>
         <div class="field-group"><span class="form-label" id="ivf-reason-label">${t('What happened?')}</span><div class="iv-choices" role="group" aria-labelledby="ivf-reason-label">${choices('ivf-reason', reasonLabels)}</div></div>
         <div id="ivf-judgement" hidden>
@@ -695,7 +695,7 @@
       else if (impression) { state.impression = impression.dataset.ivfImpression; sync(); }
     });
     field('ivf-recommend').addEventListener('change', () => { state.recommended = field('ivf-recommend').checked; });
-    modalCloseHook = () => { if (options.afterClose) options.afterClose(); };
+    layerCloseHook = () => { if (options.afterClose) options.afterClose(); };
     form.addEventListener('submit', async event => {
       event.preventDefault();
       error.hidden = true;
@@ -719,7 +719,7 @@
           try { await B.addApplicantComment(row.flowId, row.email, text); } catch (failure) { commentFailed = true; }
         }
         showToast(commentFailed ? t('Saved, but the notes could not be added to the team comments.') : correcting ? t('Result corrected.') : t('Interview finalized.'));
-        closeModal(); // runs afterClose
+        closeLayer(); // runs afterClose
         void refreshInterviewTags(true);
       } catch (failure) {
         send.disabled = false;
@@ -1328,6 +1328,19 @@
   }
   // A window can ask to be told when it closes (the interview questions window hands its unsaved draft back to the panel).
   let modalCloseHook = null;
+  // A window that opens ON TOP of what is already there (the interview windows opened from the candidate's panel): the panel stays where it is,
+  // behind it. It has its own close hook; closing it never touches the window underneath.
+  let layerCloseHook = null;
+  function setLayer(html) {
+    modalRoot.querySelector('#modal-layer')?.remove();
+    const layer = document.createElement('div');
+    layer.id = 'modal-layer';
+    layer.innerHTML = `<div class="modal-backdrop" role="presentation"><section class="modal" role="dialog" aria-modal="true">${html}</section></div>`;
+    modalRoot.appendChild(layer);
+    layer.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) closeLayer(); });
+    layer.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', closeLayer));
+  }
+  function closeLayer() { const hook = layerCloseHook; layerCloseHook = null; modalRoot.querySelector('#modal-layer')?.remove(); if (hook) hook(); }
   function closeModal() { const hook = modalCloseHook; modalCloseHook = null; modalRoot.innerHTML = ''; root.querySelector('.app-shell')?.classList.remove('is-creating-flow'); if (hook) hook(); }
 
   // ---- Workspaces: a person can own up to 5 and belong to others. The header shows a selector; Settings lists them all. ----

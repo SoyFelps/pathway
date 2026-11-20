@@ -100,3 +100,10 @@ test('a new round: no "Schedule later", cancelling throws the empty row away, an
   const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
   assert.ok(panel.includes("t('Previous interviews')") && panel.includes("item.state === 'finished' || item.state === 'cancelled'"), 'earlier rounds are listed, each in a fold');
 });
+
+test('the interview windows open ON TOP of the candidate panel (a second layer), so the panel never closes behind them', () => {
+  assert.ok(builder.includes('function setLayer(html)') && builder.includes('function closeLayer()'), 'a layer that leaves the window underneath alone');
+  const windows = slice(builder, 'function openScheduleInterviewModal(', '// After a SINGLE move into the Interview column');
+  assert.ok(!/\bsetModal\(/.test(windows) && !/\bcloseModal\(\)/.test(windows) && !/\bmodalCloseHook\b/.test(windows), 'the schedule, finalize and correct windows use the layer only');
+  assert.ok((windows.match(/\bsetLayer\(/g) || []).length === 2 && (windows.match(/\bcloseLayer\(\)/g) || []).length === 2);
+});
