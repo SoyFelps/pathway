@@ -1371,3 +1371,4 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-alert{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:99px;padding:6px 13px 6px 7px;font:600 12px var(--sans);color:var(--amber-text);background:var(--amber-bg);cursor:pointer}
 .iv-alert span{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--amber-text);color:var(--amber-bg);font-size:11px;font-weight:800}
 .iv-alert:hover{filter:brightness(.97)}
+.iv-nolink{color:var(--amber-text);font-weight:600}

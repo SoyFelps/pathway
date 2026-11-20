@@ -307,7 +307,7 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
   const { data: updated, error } = await admin!.from("candidate_interviews").update({
     state: "invited", kind: v.kind, local_start: v.localStart, time_zone: v.timeZone, duration_minutes: v.durationMinutes,
     meeting_link: v.meetingLink, address: v.address, notes: v.notes, sequence: (before?.sequence ?? 0) + 1, invited_at: now,
-    responded_at: null, notice_at: null, response_note: null, proposed_times: [], reminder_24h_sent_at: null, reminder_2h_sent_at: null, reminder_10m_sent_at: null, scheduled_by: userId,
+    responded_at: null, notice_at: null, notice_reason: null, response_note: null, proposed_times: [], reminder_24h_sent_at: null, reminder_2h_sent_at: null, reminder_10m_sent_at: null, scheduled_by: userId,
     ...(responsibles.ids !== null ? { responsible_user_ids: responsibles.ids } : {}),
   }).eq("id", seen.id).eq("state", seen.state).select("*").maybeSingle();
   if (error) return databaseFailure(req, error);
@@ -387,7 +387,7 @@ async function actionCancel(req: Request, userId: string, userClient: SupabaseCl
   const seen = await visibleInterview(userClient, body);
   if (!seen) return fail(req, 404, "The interview was not found.");
   if (!(OPEN_STATES as readonly string[]).includes(seen.state)) return fail(req, 409, "This interview can no longer be changed.");
-  const { data: updated, error } = await admin!.from("candidate_interviews").update({ state: "cancelled", notice_at: null }).eq("id", seen.id).eq("state", seen.state).select("*").maybeSingle();
+  const { data: updated, error } = await admin!.from("candidate_interviews").update({ state: "cancelled", notice_at: null, notice_reason: null }).eq("id", seen.id).eq("state", seen.state).select("*").maybeSingle();
   if (error) return databaseFailure(req, error);
   if (!updated) return fail(req, 409, "This interview can no longer be changed.");
   await addEvent(updated, "cancelled", "recruiter", userId);
@@ -462,7 +462,7 @@ async function actionRespond(req: Request, body: Record<string, unknown>) {
   if (await recentEvents(iv.id, ["confirmed", "declined", "reschedule_requested"], 60) >= 10) return fail(req, 429, "Too many changes. Try again later.");
   const now = new Date().toISOString();
   const { data: updated, error } = await admin!.from("candidate_interviews").update({
-    state: stateAfter(answer), responded_at: now, notice_at: now,
+    state: stateAfter(answer), responded_at: now, notice_at: now, notice_reason: null,
     response_note: answer.response === "confirm" ? null : answer.note,
     proposed_times: answer.response === "reschedule" ? answer.times.map((local) => ({ local })) : [],
   }).eq("id", iv.id).eq("state", iv.state).select("*").maybeSingle();
@@ -483,6 +483,14 @@ async function actionCalendar(req: Request, body: Record<string, unknown>) {
   return response(req, 200, { filename: "interview.ics", content: buildIcs(calendarEventOf(found.ctx)) });
 }
 
+/** An online interview with no meeting link, 24 hours before: it becomes the notice of the team (bell and notifications page) and they get an e-mail. */
+async function alertNoLink(ctx: Context) {
+  const now = new Date().toISOString();
+  await admin!.from("candidate_interviews").update({ notice_at: now, notice_reason: "link_missing" }).eq("id", ctx.iv.id).eq("state", "confirmed");
+  await addEvent(ctx.iv, "link_missing", "system");
+  await notifyRecruiters(ctx, "no_link", `nolink-${ctx.iv.sequence}`);
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Reminders: woken every 5 minutes by the database, only when one is due. Harmless to call by hand: each reminder is claimed once.
 async function actionTick(req: Request) {
@@ -495,7 +503,11 @@ async function actionTick(req: Request) {
     if (!claimed) continue;
     const ctx = await loadContext(item.interview_id);
     const ok = ctx ? await sendToCandidate(ctx, item.reminder === "24h" ? "reminder24" : item.reminder === "2h" ? "reminder2" : "reminder10", `${ctx.iv.sequence}`) : false;
-    if (ok && ctx) { sent++; await addEvent(ctx.iv, `reminder_${item.reminder}`, "system"); }
+    if (ok && ctx) {
+      sent++;
+      await addEvent(ctx.iv, `reminder_${item.reminder}`, "system");
+      if (item.reminder === "24h" && ctx.iv.kind === "online" && !ctx.iv.meeting_link) await alertNoLink(ctx);
+    }
     else await admin!.from("candidate_interviews").update({ [column]: null }).eq("id", item.interview_id); // try again on the next tick
   }
   return response(req, 200, { sent });

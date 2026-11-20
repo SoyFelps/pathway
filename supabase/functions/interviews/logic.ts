@@ -35,8 +35,9 @@ export function parseScheduleInput(body: Record<string, unknown>): Parsed<Schedu
   const notes = multiLine(body.notes, 1000) || null;
   if (kind === "online") {
     const link = singleLine(body.meetingLink, 500);
-    if (!/^https?:\/\/\S+$/i.test(link)) return { ok: false, error: "Enter a meeting link that starts with http:// or https://." };
-    return { ok: true, value: { kind, localStart, timeZone, durationMinutes: duration, meetingLink: link, address: null, notes } };
+    // The link may be left empty and added later by editing the interview (owner decision, 2026-11-21); the 24 h reminder warns the team if it is still missing.
+    if (link && !/^https?:\/\/\S+$/i.test(link)) return { ok: false, error: "Enter a meeting link that starts with http:// or https://." };
+    return { ok: true, value: { kind, localStart, timeZone, durationMinutes: duration, meetingLink: link || null, address: null, notes } };
   }
   const address = singleLine(body.address, 300);
   if (address.length < 3) return { ok: false, error: "Enter the address of the interview." };

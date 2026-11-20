@@ -633,7 +633,7 @@
       <form id="schedule-interview-form" novalidate>
         ${pastNote}${requestNote}${suggestedHtml}
         <div class="field-group"><div class="interview-kind" role="group" aria-label="${t('Format')}"><button class="btn${kind === 'online' ? ' btn-primary' : ''}" type="button" data-iv-kind="online" aria-pressed="${kind === 'online'}">${t('Online')}</button><button class="btn${kind === 'in_person' ? ' btn-primary' : ''}" type="button" data-iv-kind="in_person" aria-pressed="${kind === 'in_person'}">${t('In person')}</button></div><input type="hidden" id="iv-kind" value="${kind === 'in_person' ? 'in_person' : 'online'}"></div>
-        <div class="field-group" id="iv-link-field"><label for="iv-link">${t('Meeting link')}</label><input class="text-input" id="iv-link" type="url" maxlength="500" placeholder="https://" value="${esc(row.meetingLink || '')}"></div>
+        <div class="field-group" id="iv-link-field"><label for="iv-link">${t('Meeting link')}</label><input class="text-input" id="iv-link" type="url" maxlength="500" placeholder="${esc(t('https://link.com or leave empty to send later.'))}" value="${esc(row.meetingLink || '')}"></div>
         <div class="field-group" id="iv-address-field" hidden><label for="iv-address">${t('Address')}</label><input class="text-input" id="iv-address" maxlength="300" value="${esc(row.address || '')}"></div>
         <div class="field-row"><div class="field-group"><label for="iv-day">${t('Day')}</label><input class="text-input" id="iv-day" type="date" min="${isoDay(today)}" max="${isoDay(lastDay)}" value="${esc(day)}"></div><div class="field-group"><label for="iv-time">${t('Time')}</label><input class="text-input" id="iv-time" type="time" value="${esc(time)}"></div></div>
         <div class="field-group"><label for="iv-zone">${t('Time zone')}</label><select class="text-input" id="iv-zone">${interviewTimeZones(zone).map(name => `<option value="${esc(name)}"${name === zone ? ' selected' : ''}>${esc(interviewZoneLabel(name, day))}</option>`).join('')}</select></div>
@@ -792,7 +792,7 @@
     openScheduleInterviewModal(row, { afterClose });
   }
   const INTERVIEW_STATE_LABEL = () => ({ awaiting_schedule: t('Waiting to be scheduled'), invited: t('Invite sent'), confirmed: t('Confirmed'), declined: t('Denied the interview'), reschedule_requested: t('Asked for another time'), cancelled: t('Cancelled'), finished: t('Finished') });
-  const INTERVIEW_EVENT_LABEL = () => ({ scheduled: t('Invitation sent'), updated: t('Invitation updated'), cancelled: t('Interview cancelled'), resent: t('E-mail sent again'), confirmed: t('Candidate confirmed'), declined: t('Candidate denied the interview'), reschedule_requested: t('Candidate asked for another time'), reminder_24h: t('Reminder sent (24 hours before)'), reminder_2h: t('Reminder sent (2 hours before)'), reminder_10m: t('Reminder sent (10 minutes before)'), finished: t('Interview time passed'), finalized: t('Interview finalized'), result_corrected: t('Result corrected') });
+  const INTERVIEW_EVENT_LABEL = () => ({ scheduled: t('Invitation sent'), updated: t('Invitation updated'), cancelled: t('Interview cancelled'), resent: t('E-mail sent again'), confirmed: t('Candidate confirmed'), declined: t('Candidate denied the interview'), reschedule_requested: t('Candidate asked for another time'), reminder_24h: t('Reminder sent (24 hours before)'), reminder_2h: t('Reminder sent (2 hours before)'), reminder_10m: t('Reminder sent (10 minutes before)'), link_missing: t('Team warned: no meeting link'), finished: t('Interview time passed'), finalized: t('Interview finalized'), result_corrected: t('Result corrected') });
   // The Interview tab of a candidate: what is scheduled, what the candidate answered, what the recruiter can still do, and the history.
   // stage.getStage() says in which column the candidate is; stage.close() goes back to the resume tab.
   function mountInterviewPanel(host, flowId, email, stage = {}) {
@@ -809,7 +809,7 @@
     // What was scheduled (shown as it is while the interview is on, and inside a fold once it was finalized).
     const detailsGrid = row => '<div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>')
       + info(t('Format'), row.kind === 'online' ? t('Online') : t('In person')) + info(t('Duration'), row.durationMinutes ? esc(tn('{count} minute', '{count} minutes', row.durationMinutes)) : '')
-      + (row.kind === 'online' ? info(t('Meeting link'), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '') : info(t('Address'), esc(row.address || '')))
+      + (row.kind === 'online' ? info(t('Meeting link'), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '<span class="iv-nolink">' + esc(t('No link yet')) + '</span>') : info(t('Address'), esc(row.address || '')))
       + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>';
     // The result of a finalized interview: what happened, the impression, the recommendation, the notes, who registered it and when.
     const resultHtml = row => {
@@ -944,6 +944,7 @@
   }
   const notifInterviewText = (state, candidate) => {
     const name = '<strong>' + esc(candidate) + '</strong>';
+    if (state === 'link_missing') return t('The interview with {name} has no meeting link yet', { name });
     return state === 'confirmed' ? t('{name} confirmed the interview', { name }) : state === 'declined' ? t('{name} denied the interview', { name }) : t('{name} asked for another time for the interview', { name });
   };
   // ---- AI interview: tags on the cards, the tab in the candidate panel, the questions of a job -------------------------------
@@ -2632,7 +2633,7 @@
     setLayer('<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">' + t('Interview') + '</div><h2>' + esc(ivName(row)) + '</h2><p>' + esc(ivJobTitle(row.flowId)) + '</p></div><button class="modal-x" data-close aria-label="' + t('Close') + '">×</button></div>'
       + '<div class="iv-detail"><div class="iv-status"><span class="iv-chip ai-tone-' + tag[1] + '"><span class="iv-chip-icon">' + INTERVIEW_ICON + '</span>' + esc(t(tag[0])) + '</span>' + interviewBadges(row) + '</div>'
       + '<div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>') + info(t('Format'), row.kind === 'online' ? t('Online') : t('In person')) + info(t('Duration'), row.durationMinutes ? esc(tn('{count} minute', '{count} minutes', row.durationMinutes)) : '')
-      + (row.kind === 'online' ? info(t('Meeting link'), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '') : info(t('Address'), esc(row.address || ''))) + info(t('Responsible'), esc(ivResponsibleText(row))) + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>'
+      + (row.kind === 'online' ? info(t('Meeting link'), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '<span class="iv-nolink">' + esc(t('No link yet')) + '</span>') : info(t('Address'), esc(row.address || ''))) + info(t('Responsible'), esc(ivResponsibleText(row))) + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>'
       + result + '</div><div class="modal-actions iv-detail-actions">' + actions + '</div>');
     const layer = modalRoot.querySelector('#modal-layer');
     const actionBox = layer.querySelector('.iv-detail-actions');

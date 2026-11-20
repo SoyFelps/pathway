@@ -25,7 +25,9 @@ test('the schedule form is checked: kind, day and time, zone, duration, link or 
   assert.equal(parseScheduleInput({ ...online, durationMinutes: 3 }).error, 'The duration must be between 5 minutes and 8 hours.');
   assert.equal(parseScheduleInput({ ...online, durationMinutes: 481 }).error, 'The duration must be between 5 minutes and 8 hours.');
   assert.equal(parseScheduleInput({ ...online, meetingLink: 'javascript:alert(1)' }).error, 'Enter a meeting link that starts with http:// or https://.');
-  assert.equal(parseScheduleInput({ ...online, meetingLink: '' }).error, 'Enter a meeting link that starts with http:// or https://.');
+  const noLink = parseScheduleInput({ ...online, meetingLink: '  ' });
+  assert.equal(noLink.ok, true, 'an online interview may be scheduled without a link (added later)');
+  assert.equal(noLink.value.meetingLink, null);
   assert.equal(parseScheduleInput({ ...online, kind: 'in_person', address: ' ' }).error, 'Enter the address of the interview.');
 });
 
@@ -288,4 +290,21 @@ test('discarding the empty row of a new round: only a waiting row, only when the
   assert.ok(body.includes('.neq("id", seen.id).neq("state", "awaiting_schedule")') && body.includes('if (!count)'), 'the first interview of a candidate stays waiting');
   assert.ok(body.includes('.delete().eq("id", seen.id).eq("state", "awaiting_schedule")'), 'deletes only that waiting row');
   assert.ok(index.includes('action === "discardRound"'), 'signed-in action');
+});
+
+test('no link yet: the 24 h reminder warns the team (event, notice and e-mail), and the answer, a new schedule or a cancel clears the notice', async () => {
+  const { buildRecruiterEmail } = await loadEmail();
+  for (const language of ['en', 'pt', 'es']) {
+    const mail = buildRecruiterEmail({
+      kind: 'no_link', language, candidateName: 'Eve', candidateEmail: 'eve@example.test', jobTitle: 'Support', companyName: 'Acme',
+      interview: { kind: 'online', localStart: '2026-12-01T14:00', timeZone: 'America/Sao_Paulo', startsAt: new Date('2026-12-01T17:00:00Z'), durationMinutes: 30, meetingLink: null }, appUrl: 'https://nellio.app/#applicants',
+    });
+    assert.ok(mail.subject.includes('Eve') && mail.html.includes('Eve') && mail.text.includes('Eve'), language + ': names the candidate');
+  }
+  assert.ok(index.includes('async function alertNoLink(ctx: Context)') && index.includes('notice_reason: "link_missing"') && index.includes('addEvent(ctx.iv, "link_missing", "system")') && index.includes('notifyRecruiters(ctx, "no_link"'));
+  assert.ok(index.includes('item.reminder === "24h" && ctx.iv.kind === "online" && !ctx.iv.meeting_link) await alertNoLink(ctx)'), 'only at the 24 h reminder, only online without a link');
+  assert.equal((index.match(/notice_reason: null/g) || []).length, 3, 'a new schedule, a cancel and the candidate answer reset the notice reason');
+  const sql = read('supabase/migrations/20261121100000_interview_no_link.sql');
+  assert.ok(sql.includes("(kind = 'online' or (kind = 'in_person' and address is not null))") && sql.includes("'link_missing'") && sql.includes('add column notice_reason'));
+  assert.equal((sql.match(/case when i\.notice_reason = 'link_missing' then 'link_missing' else i\.state end/g) || []).length, 2, 'the bell and the notifications page');
 });
