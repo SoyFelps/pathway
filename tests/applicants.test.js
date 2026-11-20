@@ -83,7 +83,7 @@ test('a Customize button opens a modal that turns stages on and off; Failed, New
   assert.match(migration, /check \(status in \('failed', 'new', 'screening', 'team_fit', 'skill_fit', 'interview', 'promising', 'offer', 'withdrawn', 'hired'\)\)/);
   assert.match(migration, /public\.workspace_user_has_permission\(workspace_id, 'applicants'\)/);
   assert.match(read('styles.css'), /\.stage-option\.is-locked\{cursor:not-allowed\}/);
-  assert.match(read('index.html'), /builder\.js\?v=mw3-20261120n/);
+  assert.match(read('index.html'), /builder\.js\?v=mw3-20261120o/);
 });
 
 test('Applicants uses a people icon in navigation and its empty state', () => {
@@ -158,13 +158,13 @@ test('live published form submits while builder preview remains non-persistent',
   assert.doesNotMatch(candidate, /candidate-privacy-copy|privacy-consent|How your information is used|I have read and agree|name="privacyAcknowledged"/);
   assert.match(candidate, /if \(live\) state\.info\.privacyAcknowledged = true/);
   assert.match(candidate, /Preview mode · Your details are not uploaded or stored/);
-  assert.match(read('apply.html'), /pathway\.js\?v=mw3-20261120n/);
-  assert.match(read('index.html'), /pathway\.js\?v=mw3-20261120n/);
-  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261120n/);
-  assert.match(read('index.html'), /candidate\.js\?v=mw3-20261120n/);
-  assert.match(read('apply.html'), /styles\.css\?v=mw3-20261120n/);
-  assert.match(read('index.html'), /styles\.css\?v=mw3-20261120n/);
-  assert.match(read('apply.html'), /backend\.js\?v=mw3-20261120n/);
+  assert.match(read('apply.html'), /pathway\.js\?v=mw3-20261120o/);
+  assert.match(read('index.html'), /pathway\.js\?v=mw3-20261120o/);
+  assert.match(read('apply.html'), /candidate\.js\?v=mw3-20261120o/);
+  assert.match(read('index.html'), /candidate\.js\?v=mw3-20261120o/);
+  assert.match(read('apply.html'), /styles\.css\?v=mw3-20261120o/);
+  assert.match(read('index.html'), /styles\.css\?v=mw3-20261120o/);
+  assert.match(read('apply.html'), /backend\.js\?v=mw3-20261120o/);
   assert.match(read('apply.html'), /mountCandidate\(root, flow, \{ publishedFlowId \}\)/);
 });
 
@@ -327,4 +327,11 @@ test('the job filter shows a drawn chevron that flips while the list is open', (
   const styles = read('styles.css');
   assert.match(builder, /<span class="job-combobox-chevron" aria-hidden="true"><svg viewBox="0 0 20 20"/);
   assert.match(styles, /\.job-combobox \.applicants-filter\[aria-expanded="true"\] ~ \.job-combobox-chevron\{transform:translateY\(-50%\) rotate\(180deg\)\}/);
+});
+
+test('the applicants board keeps its horizontal scroll bar in view: every rule that makes it as tall as the window has a valid selector', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.ok(css.includes('.workspace-body.is-board #applicants-content{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}'), 'the content area of the board fills what is left of the window');
+  assert.ok(!/\.workspace-body\.is-board\s+\.workspace-body\.is-board/.test(css), 'no selector repeats itself (it would match nothing)');
+  assert.ok(css.includes('.workspace-body.is-board .kanban-board{flex:1 1 auto;min-height:300px;overflow:auto;'), 'the board scrolls inside itself');
 });
