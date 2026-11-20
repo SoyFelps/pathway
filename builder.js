@@ -2546,10 +2546,10 @@
       : '<div class="iv-nav"><button type="button" class="btn btn-sm" data-ivp-nav="today">' + t('Today') + '</button><button type="button" class="iv-nav-btn" data-ivp-nav="prev" aria-label="' + t('Previous') + '">‹</button><button type="button" class="iv-nav-btn" data-ivp-nav="next" aria-label="' + t('Next') + '">›</button><strong class="iv-nav-title">' + esc(ivNavTitle(ivCalEvents())) + '</strong></div>';
     host.innerHTML = views + second;
   }
-  function ivEventButton(ev, style, wide) {
+  function ivEventButton(ev, style, wide, tall) {
     const tag = ivTagOf(ev.row);
     const title = ivClock(ev.start) + ' · ' + ivName(ev.row) + ' · ' + ivJobTitle(ev.row.flowId) + ' · ' + t(tag[0]);
-    return '<button type="button" class="iv-ev ai-tone-' + tag[1] + (wide ? ' is-wide' : '') + (ev.row.state === 'cancelled' ? ' is-cancelled' : '') + '" data-ivp-ev="' + esc(ev.id) + '" style="' + style + '" title="' + esc(title) + '"><span>' + esc(ivName(ev.row)) + '</span><strong>' + esc(ivClock(ev.start)) + '</strong><em>' + esc(ivJobTitle(ev.row.flowId)) + '</em></button>';
+    return '<button type="button" class="iv-ev ai-tone-' + tag[1] + (wide ? ' is-wide' : '') + (wide && tall ? ' is-tall' : '') + (ev.row.state === 'cancelled' ? ' is-cancelled' : '') + '" data-ivp-ev="' + esc(ev.id) + '" style="' + style + '" title="' + esc(title) + '"><span>' + esc(ivName(ev.row)) + '</span><strong>' + esc(ivClock(ev.start)) + '</strong><em>' + esc(ivJobTitle(ev.row.flowId)) + '</em></button>';
   }
   function ivTimeGrid(days, events) {
     const Cal = ivCal();
@@ -2571,7 +2571,7 @@
         const crowded = item.lanes > maxLanes;
         if (item.lane >= (crowded ? maxLanes - 1 : item.lanes)) { const entry = hidden.get(item.group) || { count: 0, from: item.from }; entry.count++; entry.from = Math.min(entry.from, item.from); hidden.set(item.group, entry); return ''; }
         const width = 100 / (crowded ? maxLanes : item.lanes);
-        return ivEventButton(item.event, 'top:' + ((item.from - range.from * 60) / 60 * IV_HOUR_PX) + 'px;height:' + Math.max(24, (item.to - item.from) / 60 * IV_HOUR_PX - 2) + 'px;left:' + (item.lane * width) + '%;width:calc(' + width + '% - 3px)', days.length === 1);
+        return ivEventButton(item.event, 'top:' + ((item.from - range.from * 60) / 60 * IV_HOUR_PX) + 'px;height:' + Math.max(24, (item.to - item.from) / 60 * IV_HOUR_PX - 2) + 'px;left:' + (item.lane * width) + '%;width:calc(' + width + '% - 3px)', days.length === 1, (item.to - item.from) / 60 * IV_HOUR_PX - 2 >= 38);
       }).join('') + [...hidden.values()].map(entry => '<button type="button" class="iv-ev-more" data-ivp-day="' + Cal.dayKey(day) + '" style="top:' + ((entry.from - range.from * 60) / 60 * IV_HOUR_PX) + 'px;width:calc(' + (100 / maxLanes) + '% - 6px)">' + esc(tn('+{count} more', '+{count} more', entry.count)) + '</button>').join('');
       const minute = now.getHours() * 60 + now.getMinutes();
       const line = Cal.sameDay(day, now) && minute >= range.from * 60 && minute <= range.to * 60 ? '<div class="iv-cal-now" style="top:' + ((minute - range.from * 60) / 60 * IV_HOUR_PX) + 'px"></div>' : '';

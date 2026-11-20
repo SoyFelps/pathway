@@ -1363,6 +1363,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-ev.is-wide strong{display:block;order:-1}
 .iv-ev.is-wide span{display:block;flex:0 1 auto}
 .iv-ev.is-wide em{display:none}
+.iv-ev.is-wide.is-tall em{display:block;flex:1 0 100%}
 .iv-ev:hover,.iv-ev:focus-visible{z-index:6;min-width:200px;width:auto!important;height:auto!important;min-height:24px;box-shadow:0 6px 18px var(--shadow-md)}
 .iv-ev:hover strong,.iv-ev:hover em,.iv-ev:focus-visible strong,.iv-ev:focus-visible em{display:block}
 .iv-ev:hover span,.iv-ev:focus-visible span{display:block;white-space:normal}
