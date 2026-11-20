@@ -23,6 +23,7 @@
   const ICONS = {
     published: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9S14.5 18.3 12 21c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>',
     flows: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>',
+    interviews: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>',
     applicants: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.8 20c.4-3.9 3.2-6 7.2-6s6.8 2.1 7.2 6"/></svg>',
     workspace: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l8.5 4.6L12 12.7 3.5 8.1 12 3.5z"/><path d="M3.5 12.2l8.5 4.6 8.5-4.6"/><path d="M3.5 16.1l8.5 4.6 8.5-4.6"/></svg>',
     dashboard: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="9" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="5" rx="1.6"/><rect x="13.5" y="11.5" width="7" height="9" rx="1.6"/><rect x="3.5" y="15.5" width="7" height="5" rx="1.6"/></svg>',
@@ -469,6 +470,7 @@
   // Plan: plano-entrevistas.md. The browser only READS the interviews (database policy); every change goes through the checked
   // `interviews` function. Moving a card into the column creates a waiting row ("Waiting to be scheduled") by itself; a single move
   // opens the schedule window, a bulk move (Select mode) does not. Leaving the column never cancels anything.
+  let interviewNames = new Map(); // "jobId|e-mail" -> the candidate's name, for the windows opened from the Interviews page (where the Applicants list is not loaded)
   let interviewMap = new Map(); // "jobId|e-mail" -> the interview in play for that candidate (the newest one when none is in play)
   let interviewSignature = '';
   let interviewNotifs = [];
@@ -574,7 +576,7 @@
   function interviewCandidate(row) {
     const group = C.groupApplicants(applicants).find(item => item.latest.flow_id === row.flowId && String(item.latest.candidate_email || '').trim().toLowerCase() === row.email);
     const flow = flows.find(item => item.cloudId === row.flowId) || applicantFlowLabels.find(item => item.cloudId === row.flowId);
-    return { group, name: group ? group.latest.candidate_name : row.email, jobTitle: (flow && flow.jobTitle) || '' };
+    return { group, name: group ? group.latest.candidate_name : (interviewNames.get(row.flowId + '|' + row.email) || row.email), jobTitle: (flow && flow.jobTitle) || '' };
   }
   // "UTC-3", "UTC+5:30", "UTC": the difference of a time zone to UTC on a given day (it changes with summer time).
   function interviewZoneOffset(zone, day) {
@@ -1618,13 +1620,14 @@
 
   function renderSidebar(active) {
     if (!workspace) return `<aside class="app-sidebar" aria-label="${t('Account navigation')}"><div class="sidebar-caption">${t('Account')}</div><button class="sidebar-link ${active === 'settings' ? 'active' : ''}" data-route="settings"><span class="sidebar-icon" aria-hidden="true">${ICONS.settings}</span>${t('Settings')}</button>${themeToggleHtml()}</aside>`;
-    return `<aside class="app-sidebar" aria-label="${t('Workspace navigation')}"><div class="sidebar-caption">${t('Workspace')}</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">${ICONS.dashboard}</span>${t('Dashboard')}</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>${t('Applicants')}</button>${hasPermission('view_reports') ? `<button class="sidebar-link ${active === 'reports' ? 'active' : ''}" data-route="reports"><span class="sidebar-icon" aria-hidden="true">${ICONS.reports}</span>${t('Reports')}</button>` : ''}${hasPermission('diversity') ? `<button class="sidebar-link ${active === 'diversity' ? 'active' : ''}" data-route="diversity"><span class="sidebar-icon" aria-hidden="true">${ICONS.diversity}</span>${t('Diversity')}</button>` : ''}${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.workspace}</span>${t('Workspace')}</button>` : ''}${hasPermission('flows') ? `<button class="sidebar-link ${active === 'my-companies' ? 'active' : ''}" data-route="my-companies"><span class="sidebar-icon" aria-hidden="true">${ICONS.companies}</span>${t('Companies')}</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">${ICONS.plan}</span>${t('My Plan')}</button>` : ''}${themeToggleHtml()}</aside>`;
+    return `<aside class="app-sidebar" aria-label="${t('Workspace navigation')}"><div class="sidebar-caption">${t('Workspace')}</div><button class="sidebar-link ${active === 'dashboard' ? 'active' : ''}" data-route="dashboard"><span class="sidebar-icon" aria-hidden="true">${ICONS.dashboard}</span>${t('Dashboard')}</button><button class="sidebar-link ${active === 'applicants' ? 'active' : ''}" data-route="applicants"><span class="sidebar-icon" aria-hidden="true">${ICONS.applicants}</span>${t('Applicants')}</button>${hasPermission('applicants') ? `<button class="sidebar-link ${active === 'interviews' ? 'active' : ''}" data-route="interviews"><span class="sidebar-icon" aria-hidden="true">${ICONS.interviews}</span>${t('Interviews')}</button>` : ''}${hasPermission('view_reports') ? `<button class="sidebar-link ${active === 'reports' ? 'active' : ''}" data-route="reports"><span class="sidebar-icon" aria-hidden="true">${ICONS.reports}</span>${t('Reports')}</button>` : ''}${hasPermission('diversity') ? `<button class="sidebar-link ${active === 'diversity' ? 'active' : ''}" data-route="diversity"><span class="sidebar-icon" aria-hidden="true">${ICONS.diversity}</span>${t('Diversity')}</button>` : ''}${isOwner || teamMember ? `<button class="sidebar-link ${active === 'my-team' ? 'active' : ''}" data-route="my-team"><span class="sidebar-icon" aria-hidden="true">${ICONS.workspace}</span>${t('Workspace')}</button>` : ''}${hasPermission('flows') ? `<button class="sidebar-link ${active === 'my-companies' ? 'active' : ''}" data-route="my-companies"><span class="sidebar-icon" aria-hidden="true">${ICONS.companies}</span>${t('Companies')}</button>` : ''}${isOwner ? `<button class="sidebar-link ${active === 'my-plan' ? 'active' : ''}" data-route="my-plan"><span class="sidebar-icon" aria-hidden="true">${ICONS.plan}</span>${t('My Plan')}</button>` : ''}${themeToggleHtml()}</aside>`;
   }
 
   function bindSidebar() {
     root.querySelector('[data-route="dashboard"]')?.addEventListener('click', () => renderDashboard());
     root.querySelector('[data-route="my-companies"]')?.addEventListener('click', renderMyCompanies);
     root.querySelector('[data-route="applicants"]')?.addEventListener('click', () => { void renderApplicants(); });
+    root.querySelector('[data-route="interviews"]')?.addEventListener('click', () => { void renderInterviews(); });
     root.querySelector('[data-route="reports"]')?.addEventListener('click', () => { void renderReports(); });
     root.querySelector('[data-route="diversity"]')?.addEventListener('click', () => { void renderDiversity(); });
     root.querySelector('[data-route="my-plan"]')?.addEventListener('click', renderMyPlan);
@@ -2417,6 +2420,160 @@
       const content = root.querySelector('#applicants-content');
       if (content) content.innerHTML = `<div class="auth-error show" role="alert">${esc(t('Could not load applicants: {reason}', { reason: error.message || t('check your connection and try again') }))}</div>`;
     }
+  }
+
+  // ---- Interviews page: every scheduled human interview of the workspace (not the Interview column of the board) ----------------------
+  // A list with search, job / responsible / status filters and an Upcoming-Past-All switch. The windows to edit, finalize and the cancel
+  // flow are the same ones the candidate's Interview tab uses; after any change the page only reloads itself. The calendar views come on top of this list.
+  let ivRows = [];
+  let ivScope = 'upcoming';
+  let ivSearch = '';
+  let ivJob = '';
+  let ivResponsible = '';
+  let ivStatus = '';
+  let ivShown = 50;
+  let ivConfirmId = '';
+  let ivRequestId = 0;
+  const IV_PAGE_SIZE = 50;
+  const IV_CHEVRON = '<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7.5 10 13l5.5-5.5"/></svg>';
+  const ivComboboxHtml = (id, label, placeholder) => '<div class="job-combobox"><input id="' + id + '" class="applicants-filter" type="text" role="combobox" aria-expanded="false" aria-controls="' + id + '-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" aria-label="' + esc(label) + '" placeholder="' + esc(placeholder) + '"><span class="job-combobox-chevron" aria-hidden="true">' + IV_CHEVRON + '</span><ul class="job-combobox-list" id="' + id + '-list" role="listbox" aria-label="' + esc(label) + '" hidden></ul></div>';
+  const ivStatusOptions = () => [
+    { value: '', label: t('All statuses') }, { value: 'invited', label: t('Interview invite sent') }, { value: 'confirmed', label: t('Interview confirmed') },
+    { value: 'reschedule_requested', label: t('Asked for another time') }, { value: 'declined', label: t('Denied the interview') }, { value: 'waiting_results', label: t('Waiting for results') },
+    { value: 'held', label: t('Interview held') }, { value: 'no_show', label: t('Candidate did not show up') }, { value: 'other', label: t('Interview finished') }, { value: 'cancelled', label: t('Interview cancelled') }
+  ];
+  const ivJobOptions = () => [{ value: '', label: t('All jobs') }, ...applicantFlowLabels.filter(flow => flow.cloudId).map(flow => ({ value: flow.cloudId, label: flow.jobTitle || t('Untitled role') }))];
+  const ivResponsibleOptions = () => [{ value: '', label: t('All responsibles') }, ...people.map(person => ({ value: person.userId, label: personLabel(person) + (person.isOwner ? ' ' + t('(owner)') : '') }))];
+  const ivLabelOf = (options, value, fallback) => { const found = options().find(option => option.value === value); return found ? found.label : fallback; };
+  const ivJobTitle = flowId => { const flow = flows.find(item => item.cloudId === flowId) || applicantFlowLabels.find(item => item.cloudId === flowId); return (flow && flow.jobTitle) || t('Untitled role'); };
+  const ivName = row => interviewNames.get(row.flowId + '|' + row.email) || row.email;
+  // Who is responsible: the people chosen for the interview; when none, the job's people; when none either, everybody on the team.
+  function ivResponsibleIds(row) {
+    if (row.responsibleIds && row.responsibleIds.length) return row.responsibleIds;
+    const flow = flows.find(item => item.cloudId === row.flowId);
+    return flow ? currentResponsibleIds(flow.responsibleIds) : [];
+  }
+  function ivResponsibleText(row) {
+    const ids = ivResponsibleIds(row);
+    if (!ids.length) return t('All team members');
+    return ids.map(id => { const person = people.find(item => item.userId === id); return person ? personLabel(person) : t('A teammate'); }).join(', ');
+  }
+  // The rows this page lists: scheduled ones only (an interview still waiting to be scheduled has no date; it lives in the Interview column).
+  const ivScheduled = () => ivRows.filter(row => row.state !== 'awaiting_schedule' && row.startsAt);
+  function ivMatches(row) {
+    if (ivJob && row.flowId !== ivJob) return false;
+    if (ivResponsible && !(row.responsibleIds && row.responsibleIds.length ? row.responsibleIds.includes(ivResponsible) : applicantFlowHasResponsible(row.flowId, ivResponsible))) return false;
+    if (ivStatus && !interviewFilterKeys(row).has(ivStatus)) return false;
+    const needle = ivSearch.trim().toLowerCase();
+    if (needle && !(ivName(row) + ' ' + row.email + ' ' + ivJobTitle(row.flowId) + ' ' + ivResponsibleText(row)).toLowerCase().includes(needle)) return false;
+    return true;
+  }
+  // Upcoming: still to happen, or waiting for the team to register how it went. Past: everything else that already started.
+  const ivInScope = row => ivScope === 'all' || (ivScope === 'upcoming' ? (!interviewStarted(row) || interviewAwaitingResult(row)) : (interviewStarted(row) && !interviewAwaitingResult(row)));
+  function ivVisibleRows() {
+    const rows = ivScheduled().filter(row => ivInScope(row) && ivMatches(row));
+    return rows.sort((a, b) => (ivScope === 'upcoming' ? 1 : -1) * (new Date(a.startsAt) - new Date(b.startsAt)));
+  }
+  function ivRowHtml(row) {
+    const tag = interviewTag(row) || ['Interview', 'wait'];
+    const year = new Date(row.startsAt).getFullYear() !== new Date().getFullYear();
+    const day = interviewWhen(row, { weekday: 'short', month: 'short', day: 'numeric', ...(year ? { year: 'numeric' } : {}) });
+    const time = interviewWhen(row, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) + (row.durationMinutes ? ' · ' + tn('{count} minute', '{count} minutes', row.durationMinutes) : '');
+    const started = interviewStarted(row);
+    const waiting = interviewAwaitingResult(row);
+    const on = INTERVIEW_ON.includes(row.state);
+    const locked = workspaceIsFree() ? ' disabled' : '';
+    const btn = (action, label, extra = '', off = '') => '<button type="button" class="btn btn-sm' + (extra ? ' ' + extra : '') + '" data-ivp-action="' + action + '" data-ivp-id="' + esc(row.id) + '"' + off + '>' + esc(label) + '</button>';
+    const actions = ivConfirmId === row.id
+      ? '<span class="ai-confirm">' + t('Cancel this interview?') + ' ' + btn('cancel-yes', t('Yes, cancel'), 'btn-danger') + btn('cancel-no', t('Keep it')) + '</span>'
+      : (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '') + (on ? btn('edit', t('Edit interview'), '', locked) : '') + (on && !started ? btn('cancel', t('Cancel interview'), 'btn-danger-ghost', locked) : '') + btn('open', t('Open candidate'));
+    return '<article class="iv-row" data-ivp-row="' + esc(row.id) + '">'
+      + '<div class="iv-when"><strong>' + esc(day) + '</strong><span>' + esc(time) + '</span></div>'
+      + '<div class="iv-who"><strong>' + esc(ivName(row)) + '</strong><span>' + esc(ivJobTitle(row.flowId)) + '</span></div>'
+      + '<div class="iv-status"><span class="iv-chip ai-tone-' + tag[1] + '"><span class="iv-chip-icon">' + INTERVIEW_ICON + '</span>' + esc(t(tag[0])) + '</span>' + interviewBadges(row) + '</div>'
+      + '<div class="iv-resp"><span class="iv-label">' + t('Responsible') + '</span><span>' + esc(ivResponsibleText(row)) + '</span></div>'
+      + '<div class="iv-actions">' + actions + '</div></article>';
+  }
+  function renderInterviewsList() {
+    const host = root.querySelector('#interviews-content');
+    if (!host) return;
+    const rows = ivVisibleRows();
+    const shown = rows.slice(0, ivShown);
+    const none = !ivScheduled().length ? t('No interviews are scheduled yet. Schedule one from the Interview column of the Applicants board.') : t('No interviews match your filters.');
+    host.innerHTML = (workspaceIsFree() ? '<p class="iv-note">' + t('You can see the interviews, but scheduling, editing and finalizing need an active plan.') + '</p>' : '')
+      + '<div class="iv-count">' + tn('{count} interview', '{count} interviews', rows.length) + '</div>'
+      + (rows.length ? '<div class="iv-list">' + shown.map(ivRowHtml).join('') + '</div>' + (rows.length > shown.length ? '<div class="iv-more"><button type="button" class="btn btn-sm" data-ivp-action="more">' + t('Show more') + '</button></div>' : '') : '<div class="iv-empty">' + none + '</div>');
+  }
+  function renderInterviewsScope() {
+    const host = root.querySelector('#iv-scope');
+    if (!host) return;
+    host.innerHTML = [['upcoming', t('Upcoming')], ['past', t('Past')], ['all', t('All')]].map(([key, label]) => '<button type="button" class="iv-scope-btn' + (ivScope === key ? ' is-active' : '') + '" data-ivp-scope="' + key + '" aria-pressed="' + (ivScope === key) + '">' + esc(label) + '</button>').join('');
+  }
+  async function loadInterviewsPage() {
+    const requestId = ++ivRequestId;
+    const B = window.PathwayBackend;
+    const content = root.querySelector('#interviews-content');
+    try {
+      const [rows] = await Promise.all([
+        B.listCandidateInterviews(workspace.id),
+        hasPermission('flows') ? Promise.resolve() : B.listApplicantFlowLabels().then(labels => { applicantFlowLabels = labels; }),
+        refreshPeople()
+      ]);
+      const names = await B.listInterviewCandidateNames(workspace.id, rows.map(row => row.applicantId)).catch(() => ({}));
+      if (requestId !== ivRequestId || !root.querySelector('.interviews-page')) return;
+      for (const row of rows) { const name = row.applicantId && names[row.applicantId]; if (name) interviewNames.set(row.flowId + '|' + row.email, name); }
+      ivRows = rows;
+      ivConfirmId = '';
+      for (const box of ivBoxes) box.refresh();
+      renderInterviewsScope();
+      renderInterviewsList();
+    } catch (error) {
+      if (content) content.innerHTML = '<div class="auth-error show" role="alert">' + esc(t('Could not load interviews: {reason}', { reason: error.message || t('check your connection and try again') })) + '</div>';
+    }
+  }
+  let ivBoxes = [];
+  async function renderInterviews() {
+    if (!hasPermission('applicants')) return renderAccessMessage('applicants');
+    setRoute('interviews');
+    currentId = null; selectedId = null;
+    applicantFlowLabels = flows;
+    ivRows = []; ivConfirmId = ''; ivShown = IV_PAGE_SIZE;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><img class="brand-logo logo-light" src="brand/nellio-logo.svg" alt="Nellio"><img class="brand-logo logo-dark" src="brand/nellio-logo-white.svg" alt="" aria-hidden="true"></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('interviews')}<main class="interviews-page"><div class="applicants-heading"><div><h1>${t('Interviews')}</h1><p>${t('Interviews scheduled with your candidates: when, the status and who is responsible.')}</p></div><div class="iv-tools"><input id="iv-search" class="applicants-search" type="search" placeholder="${t('Search interviews')}" value="${esc(ivSearch)}" aria-label="${t('Search interviews')}">${hasPermission('flows') ? ivComboboxHtml('iv-responsible-filter', t('Filter by responsible'), t('Search people')) : ''}${ivComboboxHtml('iv-job-filter', t('Filter interviews by job'), t('Search jobs'))}${ivComboboxHtml('iv-status-filter', t('Filter by status'), t('Search statuses'))}<button class="btn btn-sm" id="iv-refresh" type="button" title="${t('Refresh interviews')}">↻ ${t('Refresh')}</button></div></div><div class="iv-toolbar"><div class="iv-scope" id="iv-scope" role="group" aria-label="${t('Which interviews')}"></div></div><div id="interviews-content" aria-live="polite"><div class="loading-card"><span>${t('Loading interviews…')}</span></div></div></main></div></div>`;
+    bindSidebar();
+    bindPlanControl();
+    ivBoxes = [];
+    if (hasPermission('flows')) ivBoxes.push(mountApplicantCombobox(root, { inputId: 'iv-responsible-filter', listId: 'iv-responsible-filter-list', idPrefix: 'iv-responsible-opt', options: ivResponsibleOptions, value: () => ivResponsible, label: () => ivLabelOf(ivResponsibleOptions, ivResponsible, t('All responsibles')), empty: t('No people match') }, value => { ivResponsible = value; ivShown = IV_PAGE_SIZE; ivBoxes.forEach(box => box.refresh()); renderInterviewsList(); }));
+    ivBoxes.push(mountApplicantCombobox(root, { inputId: 'iv-job-filter', listId: 'iv-job-filter-list', idPrefix: 'iv-job-opt', options: ivJobOptions, value: () => ivJob, label: () => ivLabelOf(ivJobOptions, ivJob, ivJob ? t('Untitled role') : t('All jobs')), empty: t('No jobs match') }, value => { ivJob = value; ivShown = IV_PAGE_SIZE; ivBoxes.forEach(box => box.refresh()); renderInterviewsList(); }));
+    ivBoxes.push(mountApplicantCombobox(root, { inputId: 'iv-status-filter', listId: 'iv-status-filter-list', idPrefix: 'iv-status-opt', options: ivStatusOptions, value: () => ivStatus, label: () => ivLabelOf(ivStatusOptions, ivStatus, t('All statuses')), empty: t('No statuses match') }, value => { ivStatus = value; ivShown = IV_PAGE_SIZE; ivBoxes.forEach(box => box.refresh()); renderInterviewsList(); }));
+    ivBoxes.forEach(box => box.refresh());
+    renderInterviewsScope();
+    root.querySelector('#iv-search').addEventListener('input', event => { ivSearch = event.target.value; ivShown = IV_PAGE_SIZE; renderInterviewsList(); });
+    root.querySelector('#iv-refresh').addEventListener('click', () => { void loadInterviewsPage(); });
+    root.querySelector('.interviews-page').addEventListener('click', async event => {
+      const scope = event.target.closest('[data-ivp-scope]');
+      if (scope) { ivScope = scope.dataset.ivpScope; ivShown = IV_PAGE_SIZE; renderInterviewsScope(); renderInterviewsList(); return; }
+      const control = event.target.closest('[data-ivp-action]');
+      if (!control) return;
+      const action = control.dataset.ivpAction;
+      if (action === 'more') { ivShown += IV_PAGE_SIZE; renderInterviewsList(); return; }
+      const row = ivRows.find(item => item.id === control.dataset.ivpId);
+      if (!row) return;
+      if (action === 'edit') { openScheduleInterviewModal(row, { afterClose: () => { void loadInterviewsPage(); } }); return; }
+      if (action === 'finalize') { openFinalizeInterviewModal(row, { afterClose: () => { void loadInterviewsPage(); } }); return; }
+      if (action === 'open') { pendingCandidateOpen = { flowId: row.flowId, email: row.email }; pendingOpenInterviewTab = true; applicantFilter = row.flowId; applicantSearch = ''; void renderApplicants(); return; }
+      if (action === 'cancel') { ivConfirmId = row.id; renderInterviewsList(); return; }
+      if (action === 'cancel-no') { ivConfirmId = ''; renderInterviewsList(); return; }
+      if (action === 'cancel-yes') {
+        control.disabled = true;
+        try {
+          const result = await window.PathwayBackend.cancelInterview(row.id);
+          showToast(result.emailSent === false ? t(result.warning || 'The interview was cancelled, but the e-mail could not be sent.') : t('Interview cancelled.'));
+        } catch (failure) { showToast(failure.message || t('Something went wrong. Try again.')); }
+        ivConfirmId = '';
+        void loadInterviewsPage();
+      }
+    });
+    await loadInterviewsPage();
   }
 
   // ---- Reports ------------------------------------------------------------------------------------------------------------
@@ -5648,6 +5805,7 @@
     if (!workspace) { if (requestedPage === 'settings') renderSettings(); else renderNoWorkspace(); }
     else if (requestedPage === 'my-companies') renderMyCompanies();
     else if (requestedPage === 'applicants') void renderApplicants();
+    else if (requestedPage === 'interviews') void renderInterviews();
     else if (requestedPage === 'reports') void renderReports();
     else if (requestedPage === 'diversity') void renderDiversity();
     else if (requestedPage === 'notifications') void renderNotifications();

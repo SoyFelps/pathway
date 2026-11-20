@@ -162,3 +162,19 @@ test('the Interview filter lists the stages, results, impressions, Recommended a
   assert.ok(keys.includes('interviewAwaitingResult(row)') && keys.includes('interviewRecommended(row)') && keys.includes("keys.add('none')"), 'waiting for results, recommendation and no interview');
   assert.ok(keys.includes("row.resultReason === 'held' ? 'held' : row.resultReason === 'no_show' ? 'no_show' : 'other'"), 'the result of a finalized interview');
 });
+
+test('the Interviews page: its own menu item below Applicants, its own route, a list with search, job / responsible / status filters and Upcoming-Past-All, and the same windows as the candidate tab', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.ok(builder.indexOf("data-route=\"applicants\"") < builder.indexOf("data-route=\"interviews\"") && builder.includes("hasPermission('applicants') ? `<button class=\"sidebar-link ${active === 'interviews' ? 'active' : ''}\" data-route=\"interviews\""), 'a menu item right below Applicants, for people who may see candidates');
+  assert.ok(builder.includes("requestedPage === 'interviews') void renderInterviews()") && builder.includes("setRoute('interviews')"), 'its own address');
+  const page = slice(builder, 'async function renderInterviews()', '// ---- Reports');
+  assert.ok(page.includes("id=\"iv-search\"") && page.includes("'iv-job-filter'") && page.includes("'iv-responsible-filter'") && page.includes("'iv-status-filter'"), 'search, job, responsible and status');
+  assert.ok(page.includes("hasPermission('flows') ? ivComboboxHtml('iv-responsible-filter'"), 'the responsible filter needs the job lists, like on Applicants');
+  assert.ok(page.includes("openScheduleInterviewModal(row, { afterClose") && page.includes("openFinalizeInterviewModal(row, { afterClose") && page.includes('cancelInterview(row.id)'), 'edit, finalize and cancel are the same flows as the candidate tab');
+  assert.ok(!/class="[^"]*applicants-page/.test(page), 'it must not carry the class of the board page (the interview windows would try to redraw a board that is not there)');
+  const list = slice(builder, 'const ivScheduled = () =>', 'function ivRowHtml(row)');
+  assert.ok(list.includes("row.state !== 'awaiting_schedule' && row.startsAt") && list.includes('interviewFilterKeys(row).has(ivStatus)') && list.includes('applicantFlowHasResponsible(row.flowId, ivResponsible)'), 'only scheduled interviews; the status and responsible rules are the ones of the card and the filter');
+  assert.ok(list.includes('(!interviewStarted(row) || interviewAwaitingResult(row))'), 'Upcoming keeps what still has to be registered');
+  assert.ok(builder.includes("interviewNames.get(row.flowId + '|' + row.email)"), 'the windows know the candidate name without the Applicants list');
+  assert.ok(fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8').includes('listInterviewCandidateNames'), 'a light read of the candidate names');
+});

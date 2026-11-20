@@ -193,6 +193,18 @@
     if (error) throw translatedError(error);
     return (data || []).map(row => ({ id: row.id, kind: row.kind, actor: row.actor, actorUserId: row.actor_user_id || null, data: row.data || {}, createdAt: row.created_at }));
   }
+  // The names of the candidates of some interviews (by application id): a light read for the Interviews page (the Applicants list is not loaded there).
+  async function listInterviewCandidateNames(workspaceId, applicantIds) {
+    await requireSession();
+    const ids = [...new Set((applicantIds || []).filter(Boolean))];
+    const names = {};
+    for (let index = 0; index < ids.length; index += 100) {
+      const { data, error } = await client.from('applicants').select('id,candidate_name').eq('workspace_id', workspaceId).in('id', ids.slice(index, index + 100));
+      if (error) throw translatedError(error);
+      for (const row of data || []) names[row.id] = row.candidate_name || '';
+    }
+    return names;
+  }
   async function callInterviews(body) {
     const session = await requireSession();
     let result;
@@ -1303,6 +1315,7 @@
     listAiInterviews,
     listCandidateInterviews,
     listCandidateInterviewEvents,
+    listInterviewCandidateNames,
     scheduleInterview,
     setInterviewResponsibles,
     cancelInterview,
