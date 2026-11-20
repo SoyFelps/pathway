@@ -100,9 +100,11 @@ test('the impression is a thumb, green up for positive, amber dash for mixed and
   assert.ok(builder.includes(`mixed: '<path d="M5 12h14"/>'`), 'mixed has its own icon');
 });
 
-test('the board columns are wide enough for the interview tag and its thumb to stay on one line', () => {
-  assert.ok(css.includes('grid-template-columns:repeat(4,minmax(240px,1fr))'), 'desktop columns are at least 240px');
-  assert.ok(css.includes('minmax(225px,1fr)'), 'medium screens keep a slightly narrower minimum');
+test('the board columns are wide enough for the interview tag and its thumb to stay on one line, in English, Portuguese and Spanish', () => {
+  assert.ok(css.includes('grid-template-columns:repeat(4,minmax(270px,1fr))'), 'desktop columns are at least 270px (the longest Portuguese and Spanish tags need it)');
+  assert.ok(css.includes('minmax(255px,1fr)'), 'medium screens keep a slightly narrower minimum');
+  assert.ok(!css.includes('minmax(240px,1fr)') && !css.includes('minmax(225px,1fr)'), 'the older minimums are gone, Failed column included');
+  assert.ok(css.includes('.applicant-card-ai{display:flex;flex-wrap:nowrap;') && css.includes('.applicant-card-ai .ai-tag-text{flex:0 1 auto;min-width:0}'), 'the thumb never drops under the text: the text shrinks inside its own line instead');
   assert.ok(!css.includes('minmax(215px,1fr)'), 'the old narrow minimum is gone everywhere, Failed column included');
 });
 
