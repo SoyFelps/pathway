@@ -2691,7 +2691,7 @@
     root.querySelector('#iv-refresh').addEventListener('click', () => { void loadInterviewsPage(); });
     root.querySelector('.interviews-page').addEventListener('keydown', event => { if (event.key === 'Escape') ivCloseMenus(); });
     root.querySelector('.interviews-page').addEventListener('click', async event => {
-      if (event.target.closest('[data-ivp-waiting]')) { ivView = 'list'; ivScope = 'past'; ivShown = IV_PAGE_SIZE; renderInterviewsScope(); renderInterviewsBody(); return; }
+      if (event.target.closest('[data-ivp-waiting]')) { ivView = 'list'; ivScope = 'past'; ivStatus = 'waiting_results'; ivShown = IV_PAGE_SIZE; ivBoxes.forEach(box => box.refresh()); renderInterviewsScope(); renderInterviewsBody(); return; }
       const menuButton = event.target.closest('[data-ivp-menu]');
       const wasOpen = menuButton && menuButton.getAttribute('aria-expanded') === 'true';
       ivCloseMenus();
