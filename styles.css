@@ -1356,3 +1356,4 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-menu-item.is-danger{color:var(--red-text)}
 .iv-menu-item:disabled{opacity:.5;cursor:not-allowed}
 .iv-actions{align-items:center}
+.iv-tools #iv-refresh{height:39px;padding:0 14px;border-radius:8px}
