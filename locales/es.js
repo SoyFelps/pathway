@@ -1744,6 +1744,7 @@
   'Next': 'Siguiente',
   'No interviews in this period.': 'Ninguna entrevista en este período.',
   '+{count} more': { one: '+{count} más', other: '+{count} más' },
+  'More actions': 'Más acciones',
   'Interview finalized.': 'Entrevista finalizada.',
   'Finalized by {name} on {date}': 'Finalizada por {name} el {date}',
   'Interview finalized': 'Entrevista finalizada',

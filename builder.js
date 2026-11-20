@@ -2474,6 +2474,13 @@
     const rows = ivScheduled().filter(row => ivInScope(row) && ivMatches(row));
     return rows.sort((a, b) => (ivScope === 'upcoming' ? 1 : -1) * (new Date(a.startsAt) - new Date(b.startsAt)));
   }
+  /** The three-dots menu of a row: every action of the interview inside a popover (the green "Finalize" button, when it applies, stays outside). */
+  function ivMenuHtml(row, items) {
+    const id = 'iv-menu-' + row.id;
+    return '<div class="iv-menu"><button type="button" class="iv-menu-btn" data-ivp-menu="' + esc(row.id) + '" aria-haspopup="menu" aria-expanded="false" aria-controls="' + esc(id) + '" aria-label="' + esc(t('More actions')) + '" title="' + esc(t('More actions')) + '">⋯</button>'
+      + '<div class="iv-menu-panel" id="' + esc(id) + '" role="menu" hidden>' + items.map(([action, label, extra, off]) => '<button type="button" role="menuitem" class="iv-menu-item' + extra + '" data-ivp-action="' + action + '" data-ivp-id="' + esc(row.id) + '"' + off + '>' + esc(label) + '</button>').join('') + '</div></div>';
+  }
+  const ivCloseMenus = host => (host || root).querySelectorAll('.iv-menu-btn[aria-expanded="true"]').forEach(button => { button.setAttribute('aria-expanded', 'false'); const panel = button.nextElementSibling; if (panel) panel.hidden = true; });
   function ivRowHtml(row) {
     const tag = interviewTag(row) || ['Interview', 'wait'];
     const year = new Date(row.startsAt).getFullYear() !== new Date().getFullYear();
@@ -2486,7 +2493,11 @@
     const btn = (action, label, extra = '', off = '') => '<button type="button" class="btn btn-sm' + (extra ? ' ' + extra : '') + '" data-ivp-action="' + action + '" data-ivp-id="' + esc(row.id) + '"' + off + '>' + esc(label) + '</button>';
     const actions = ivConfirmId === row.id
       ? '<span class="ai-confirm">' + t('Cancel this interview?') + ' ' + btn('cancel-yes', t('Yes, cancel'), 'btn-danger') + btn('cancel-no', t('Keep it')) + '</span>'
-      : (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '') + (on ? btn('edit', t('Edit interview'), '', locked) : '') + (on && !started ? btn('cancel', t('Cancel interview'), 'btn-danger-ghost', locked) : '') + btn('open', t('Open candidate'));
+      : (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '') + ivMenuHtml(row, [
+        on ? ['edit', t('Edit interview'), '', locked] : null,
+        on && !started && !waiting ? ['cancel', t('Cancel interview'), ' is-danger', locked] : null,
+        ['open', t('Open candidate'), '', '']
+      ].filter(Boolean));
     return '<article class="iv-row" data-ivp-row="' + esc(row.id) + '">'
       + '<div class="iv-when"><strong>' + esc(day) + '</strong><span>' + esc(time) + '</span></div>'
       + '<div class="iv-who"><strong>' + esc(ivName(row)) + '</strong><span>' + esc(ivJobTitle(row.flowId)) + '</span></div>'
@@ -2676,7 +2687,12 @@
     renderInterviewsScope();
     root.querySelector('#iv-search').addEventListener('input', event => { ivSearch = event.target.value; ivShown = IV_PAGE_SIZE; renderInterviewsBody(); });
     root.querySelector('#iv-refresh').addEventListener('click', () => { void loadInterviewsPage(); });
+    root.querySelector('.interviews-page').addEventListener('keydown', event => { if (event.key === 'Escape') ivCloseMenus(); });
     root.querySelector('.interviews-page').addEventListener('click', async event => {
+      const menuButton = event.target.closest('[data-ivp-menu]');
+      const wasOpen = menuButton && menuButton.getAttribute('aria-expanded') === 'true';
+      ivCloseMenus();
+      if (menuButton) { if (!wasOpen) { menuButton.setAttribute('aria-expanded', 'true'); menuButton.nextElementSibling.hidden = false; } return; }
       const viewButton = event.target.closest('[data-ivp-view]');
       if (viewButton) { ivView = viewButton.dataset.ivpView; ivShown = IV_PAGE_SIZE; renderInterviewsBody(); return; }
       const nav = event.target.closest('[data-ivp-nav]');
