@@ -1172,6 +1172,8 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .is-upgraded{display:none!important}
 .select-combobox{flex:0 0 220px;min-width:160px}
 #schedule-interview-form .select-combobox{flex:none;width:100%;min-width:0}
+.interview-kind{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.interview-kind .btn{width:100%;justify-content:center;padding:13px 16px}
 .flow-filters .select-combobox{flex:0 1 220px}
 .reports-tools .select-combobox{flex:0 0 190px}
 .rpt-version .select-combobox{width:320px;max-width:100%;flex:none}

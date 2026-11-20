@@ -38,9 +38,11 @@ test('the hidden select stays hidden, and the lists have sizes for every screen'
   assert.ok(css.includes('@media(max-width:760px){.reports-tools .select-combobox{flex:1;min-width:0}.flow-filters .select-combobox{flex:1 1 100%}.rpt-jobs-tools .select-combobox{flex:1;min-width:0}}'), 'phones');
 });
 
-test('the two lists of the interview window (format and time zone) are the application\'s own list, and the time zones can be searched', () => {
+test("the time zone list of the interview window is the application's own list and can be searched; the format is two buttons", () => {
   const builder = read('builder.js');
-  assert.ok(builder.includes("upgradeSelect(field('iv-kind'));"), 'format');
+  assert.equal(builder.includes("upgradeSelect(field('iv-kind'));"), false, 'the format is not a select any more');
+  assert.ok(builder.includes('data-iv-kind="online"') && builder.includes('data-iv-kind="in_person"') && builder.includes('<input type="hidden" id="iv-kind"'), 'two buttons with a hidden value');
+  assert.ok(builder.includes('interviewZoneLabel(name, day)') && builder.includes("option.textContent = interviewZoneLabel(option.value, field('iv-day').value)"), 'each time zone shows its difference to UTC, following the chosen day');
   assert.ok(builder.includes("upgradeSelect(field('iv-zone'), { search: true, empty: t('No time zones match') });"), 'time zone, searchable');
   assert.ok(builder.includes('if (options.search) input.readOnly = false;'), 'typing narrows the list only where asked');
   assert.ok(read('styles.css').includes('#schedule-interview-form .select-combobox{flex:none;width:100%;min-width:0}'), 'full width inside the window');

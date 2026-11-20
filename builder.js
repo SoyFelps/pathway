@@ -529,6 +529,20 @@
     const flow = flows.find(item => item.cloudId === row.flowId) || applicantFlowLabels.find(item => item.cloudId === row.flowId);
     return { group, name: group ? group.latest.candidate_name : row.email, jobTitle: (flow && flow.jobTitle) || '' };
   }
+  // "UTC-3", "UTC+5:30", "UTC": the difference of a time zone to UTC on a given day (it changes with summer time).
+  function interviewZoneOffset(zone, day) {
+    const date = new Date((/^\d{4}-\d{2}-\d{2}$/.test(day || '') ? day : new Date().toISOString().slice(0, 10)) + 'T12:00:00Z');
+    try {
+      const part = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' }).formatToParts(date).find(item => item.type === 'timeZoneName');
+      const match = part && /GMT([+-])(\d{2}):(\d{2})/.exec(part.value);
+      return match ? 'UTC' + match[1] + Number(match[2]) + (match[3] !== '00' ? ':' + match[3] : '') : 'UTC';
+    } catch (error) { return ''; }
+  }
+  function interviewZoneLabel(zone, day) {
+    const name = zone.replace(/_/g, ' ');
+    const offset = interviewZoneOffset(zone, day);
+    return !offset || zone === 'UTC' ? name : name + ' · ' + offset;
+  }
   function interviewTimeZones(selected) {
     let zones = [];
     try { zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []; } catch (error) { zones = []; }
@@ -562,11 +576,11 @@
     setModal(`<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">${t('Interview')}</div><h2>${editing ? t('Edit interview') : t('Schedule interview')}</h2><p>${esc(who.name)}${who.jobTitle ? ' · ' + esc(who.jobTitle) : ''}</p></div><button class="modal-x" data-close aria-label="${t('Close')}">×</button></div>
       <form id="schedule-interview-form" novalidate>
         ${requestNote}${suggestedHtml}
-        <div class="field-group"><label for="iv-kind">${t('Format')}</label><select class="text-input" id="iv-kind"><option value="online"${kind === 'online' ? ' selected' : ''}>${t('Online')}</option><option value="in_person"${kind === 'in_person' ? ' selected' : ''}>${t('In person')}</option></select></div>
+        <div class="field-group"><div class="interview-kind" role="group" aria-label="${t('Format')}"><button class="btn${kind === 'online' ? ' btn-primary' : ''}" type="button" data-iv-kind="online" aria-pressed="${kind === 'online'}">${t('Online')}</button><button class="btn${kind === 'in_person' ? ' btn-primary' : ''}" type="button" data-iv-kind="in_person" aria-pressed="${kind === 'in_person'}">${t('In person')}</button></div><input type="hidden" id="iv-kind" value="${kind === 'in_person' ? 'in_person' : 'online'}"></div>
         <div class="field-group" id="iv-link-field"><label for="iv-link">${t('Meeting link')}</label><input class="text-input" id="iv-link" type="url" maxlength="500" placeholder="https://" value="${esc(row.meetingLink || '')}"></div>
         <div class="field-group" id="iv-address-field" hidden><label for="iv-address">${t('Address')}</label><input class="text-input" id="iv-address" maxlength="300" value="${esc(row.address || '')}"></div>
         <div class="field-row"><div class="field-group"><label for="iv-day">${t('Day')}</label><input class="text-input" id="iv-day" type="date" min="${isoDay(today)}" max="${isoDay(lastDay)}" value="${esc(day)}"></div><div class="field-group"><label for="iv-time">${t('Time')}</label><input class="text-input" id="iv-time" type="time" value="${esc(time)}"></div></div>
-        <div class="field-group"><label for="iv-zone">${t('Time zone')}</label><select class="text-input" id="iv-zone">${interviewTimeZones(zone).map(name => `<option value="${esc(name)}"${name === zone ? ' selected' : ''}>${esc(name.replace(/_/g, ' '))}</option>`).join('')}</select></div>
+        <div class="field-group"><label for="iv-zone">${t('Time zone')}</label><select class="text-input" id="iv-zone">${interviewTimeZones(zone).map(name => `<option value="${esc(name)}"${name === zone ? ' selected' : ''}>${esc(interviewZoneLabel(name, day))}</option>`).join('')}</select></div>
         <div class="field-group"><label for="iv-minutes">${t('Duration (minutes)')}</label><div class="interview-duration"><button class="btn btn-sm" type="button" data-iv-minutes="30">${t('30 min')}</button><button class="btn btn-sm" type="button" data-iv-minutes="60">${t('1 hour')}</button><input class="text-input" id="iv-minutes" type="number" min="5" max="480" step="5" value="${minutes}" aria-label="${t('Duration (minutes)')}"></div></div>
         <div class="field-group"><label for="iv-notes">${t('Notes for the candidate (optional)')}</label><textarea class="text-area" id="iv-notes" rows="3" maxlength="1000">${esc(row.notes || '')}</textarea></div>
         ${editing ? '' : `<div class="field-group"><span class="form-label" id="iv-responsible-label">${t('Responsible for the interview')}</span><div id="iv-responsible"></div><p class="team-permission-hint">${t('They are told when the candidate answers.')}</p></div>`}
@@ -580,10 +594,16 @@
     const markMinutes = () => form.querySelectorAll('[data-iv-minutes]').forEach(button => button.classList.toggle('is-active', button.dataset.ivMinutes === String(field('iv-minutes').value)));
     showKind(); markMinutes();
     // The two lists of this window are the application's own list (same as the filters), not the browser's native select.
-    upgradeSelect(field('iv-kind'));
     upgradeSelect(field('iv-zone'), { search: true, empty: t('No time zones match') });
+    // the offsets follow the chosen day (summer time moves them)
+    field('iv-day').addEventListener('change', () => { for (const option of field('iv-zone').options) option.textContent = interviewZoneLabel(option.value, field('iv-day').value); });
     if (!editing) mountResponsibleField(form.querySelector('#iv-responsible'), 'iv-responsible-label', () => responsibleIds, ids => { responsibleIds = ids; });
     field('iv-kind').addEventListener('change', showKind);
+    form.querySelectorAll('[data-iv-kind]').forEach(button => button.addEventListener('click', () => {
+      field('iv-kind').value = button.dataset.ivKind;
+      form.querySelectorAll('[data-iv-kind]').forEach(other => { const on = other === button; other.classList.toggle('btn-primary', on); other.setAttribute('aria-pressed', String(on)); });
+      showKind();
+    }));
     field('iv-minutes').addEventListener('input', markMinutes);
     form.querySelectorAll('[data-iv-minutes]').forEach(button => button.addEventListener('click', () => { field('iv-minutes').value = button.dataset.ivMinutes; markMinutes(); }));
     form.querySelectorAll('[data-iv-suggested]').forEach(button => button.addEventListener('click', () => { const [d, h] = button.dataset.ivSuggested.split('T'); field('iv-day').value = d; field('iv-time').value = h; }));
