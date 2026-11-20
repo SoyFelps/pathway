@@ -1368,3 +1368,6 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-ev:hover strong,.iv-ev:hover em,.iv-ev:focus-visible strong,.iv-ev:focus-visible em{display:block}
 .iv-ev:hover span,.iv-ev:focus-visible span{display:block;white-space:normal}
 .iv-ev:hover,.iv-ev:focus-visible{background-color:var(--surface);background-image:linear-gradient(var(--tint),var(--tint))}
+.iv-alert{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:99px;padding:6px 13px 6px 7px;font:600 12px var(--sans);color:var(--amber-text);background:var(--amber-bg);cursor:pointer}
+.iv-alert span{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--amber-text);color:var(--amber-bg);font-size:11px;font-weight:800}
+.iv-alert:hover{filter:brightness(.97)}

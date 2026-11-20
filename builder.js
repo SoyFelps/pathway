@@ -2469,7 +2469,7 @@
     return true;
   }
   // Upcoming: still to happen, or waiting for the team to register how it went. Past: everything else that already started.
-  const ivInScope = row => ivScope === 'all' || (ivScope === 'upcoming' ? (!interviewStarted(row) || interviewAwaitingResult(row)) : (interviewStarted(row) && !interviewAwaitingResult(row)));
+  const ivInScope = row => ivScope === 'all' || (ivScope === 'upcoming' ? !interviewStarted(row) : interviewStarted(row));
   function ivVisibleRows() {
     const rows = ivScheduled().filter(row => ivInScope(row) && ivMatches(row));
     return rows.sort((a, b) => (ivScope === 'upcoming' ? 1 : -1) * (new Date(a.startsAt) - new Date(b.startsAt)));
@@ -2544,7 +2544,9 @@
     const second = ivView === 'list'
       ? group(t('Which interviews'), [['upcoming', t('Upcoming')], ['past', t('Past')], ['all', t('All')]], 'data-ivp-scope', ivScope)
       : '<div class="iv-nav"><button type="button" class="btn btn-sm" data-ivp-nav="today">' + t('Today') + '</button><button type="button" class="iv-nav-btn" data-ivp-nav="prev" aria-label="' + t('Previous') + '">‹</button><button type="button" class="iv-nav-btn" data-ivp-nav="next" aria-label="' + t('Next') + '">›</button><strong class="iv-nav-title">' + esc(ivNavTitle(ivCalEvents())) + '</strong></div>';
-    host.innerHTML = views + second;
+    const waitingCount = ivScheduled().filter(interviewAwaitingResult).length;
+    const alert = waitingCount ? '<button type="button" class="iv-alert" data-ivp-waiting="1" title="' + esc(t('Show them')) + '"><span aria-hidden="true">!</span>' + esc(tn('{count} interview waiting for results', '{count} interviews waiting for results', waitingCount)) + '</button>' : '';
+    host.innerHTML = views + second + alert;
   }
   function ivEventButton(ev, style, wide, tall) {
     const tag = ivTagOf(ev.row);
@@ -2689,6 +2691,7 @@
     root.querySelector('#iv-refresh').addEventListener('click', () => { void loadInterviewsPage(); });
     root.querySelector('.interviews-page').addEventListener('keydown', event => { if (event.key === 'Escape') ivCloseMenus(); });
     root.querySelector('.interviews-page').addEventListener('click', async event => {
+      if (event.target.closest('[data-ivp-waiting]')) { ivView = 'list'; ivScope = 'past'; ivShown = IV_PAGE_SIZE; renderInterviewsScope(); renderInterviewsBody(); return; }
       const menuButton = event.target.closest('[data-ivp-menu]');
       const wasOpen = menuButton && menuButton.getAttribute('aria-expanded') === 'true';
       ivCloseMenus();
