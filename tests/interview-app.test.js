@@ -170,11 +170,23 @@ test('the Interviews page: its own menu item below Applicants, its own route, a 
   const page = slice(builder, 'async function renderInterviews()', '// ---- Reports');
   assert.ok(page.includes("id=\"iv-search\"") && page.includes("'iv-job-filter'") && page.includes("'iv-responsible-filter'") && page.includes("'iv-status-filter'"), 'search, job, responsible and status');
   assert.ok(page.includes("hasPermission('flows') ? ivComboboxHtml('iv-responsible-filter'"), 'the responsible filter needs the job lists, like on Applicants');
-  assert.ok(page.includes("openScheduleInterviewModal(row, { afterClose") && page.includes("openFinalizeInterviewModal(row, { afterClose") && page.includes('cancelInterview(row.id)'), 'edit, finalize and cancel are the same flows as the candidate tab');
+  assert.ok(page.includes("openScheduleInterviewModal(row, { afterClose") && page.includes("openFinalizeInterviewModal(row, { afterClose") && page.includes('await ivCancelInterview(row)') && builder.includes('window.PathwayBackend.cancelInterview(row.id)'), 'edit, finalize and cancel are the same flows as the candidate tab');
   assert.ok(!/class="[^"]*applicants-page/.test(page), 'it must not carry the class of the board page (the interview windows would try to redraw a board that is not there)');
   const list = slice(builder, 'const ivScheduled = () =>', 'function ivRowHtml(row)');
   assert.ok(list.includes("row.state !== 'awaiting_schedule' && row.startsAt") && list.includes('interviewFilterKeys(row).has(ivStatus)') && list.includes('applicantFlowHasResponsible(row.flowId, ivResponsible)'), 'only scheduled interviews; the status and responsible rules are the ones of the card and the filter');
   assert.ok(list.includes('(!interviewStarted(row) || interviewAwaitingResult(row))'), 'Upcoming keeps what still has to be registered');
   assert.ok(builder.includes("interviewNames.get(row.flowId + '|' + row.email)"), 'the windows know the candidate name without the Applicants list');
   assert.ok(fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8').includes('listInterviewCandidateNames'), 'a light read of the candidate names');
+});
+
+test('the Interviews calendar: List / Day / Week / Month on the same filtered interviews, the weekend rule of the calendar file, and a details window with the same actions', () => {
+  const page = slice(builder, '// ---- the calendar views (Day, Week, Month)', '  async function loadInterviewsPage() {');
+  assert.ok(page.includes("[['list', t('List')], ['day', t('Day')], ['week', t('Week')], ['month', t('Month')]]"), 'the four views');
+  assert.ok(page.includes('ivScheduled().filter(ivMatches)'), 'the calendar uses the same filters as the list');
+  assert.ok(page.includes('Cal.weekDays(') || page.includes('ivCal().weekDays('), 'the week hides Saturday and Sunday without an interview');
+  assert.ok(page.includes('Cal.monthGrid(ivAnchor, events)') && page.includes('data-ivp-day'), 'the month, and a click on a day opens it');
+  assert.ok(page.includes('const maxLanes = days.length > 1 ? 3 : 6;') && page.includes('iv-ev-more'), 'crowded hours show a "+N" button');
+  assert.ok(page.includes('function openInterviewDetails(row)') && page.includes("closeLayer(); openScheduleInterviewModal(row, { afterClose: reload });") && page.includes("closeLayer(); openFinalizeInterviewModal(row, { afterClose: reload });") && page.includes('await ivCancelInterview(row)'), 'edit, finalize and cancel from the details window');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.ok(html.includes('interviews-calendar.js?v='), 'the calendar file is loaded (with a version)');
 });

@@ -2504,10 +2504,137 @@
       + '<div class="iv-count">' + tn('{count} interview', '{count} interviews', rows.length) + '</div>'
       + (rows.length ? '<div class="iv-list">' + shown.map(ivRowHtml).join('') + '</div>' + (rows.length > shown.length ? '<div class="iv-more"><button type="button" class="btn btn-sm" data-ivp-action="more">' + t('Show more') + '</button></div>' : '') : '<div class="iv-empty">' + none + '</div>');
   }
+  // ---- the calendar views (Day, Week, Month) of the same filtered interviews; the clock is the viewer's own (see interviews-calendar.js) ----
+  let ivView = 'list';
+  let ivAnchor = new Date();
+  const IV_HOUR_PX = 52;
+  const ivCal = () => window.PathwayInterviewsCalendar;
+  const ivFmt = (date, options) => window.PathwayI18n.formatDate(date, options);
+  const ivClock = date => ivFmt(date, { hour: 'numeric', minute: '2-digit' });
+  const ivCalEvents = () => ivScheduled().filter(ivMatches).map(row => { const start = new Date(row.startsAt); return { id: row.id, row, start, end: new Date(start.getTime() + (row.durationMinutes || 30) * 60000) }; });
+  const ivTagOf = row => interviewTag(row) || ['Interview', 'wait'];
+  function ivNavTitle(events) {
+    if (ivView === 'day') return ivFmt(ivAnchor, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    if (ivView === 'week') { const days = ivCal().weekDays(ivAnchor, events); return ivFmt(days[0], { month: 'short', day: 'numeric' }) + ' – ' + ivFmt(days[days.length - 1], { month: 'short', day: 'numeric', year: 'numeric' }); }
+    return ivFmt(ivAnchor, { month: 'long', year: 'numeric' });
+  }
+  function ivNavigate(kind) {
+    if (kind === 'today') { ivAnchor = new Date(); return; }
+    const step = kind === 'next' ? 1 : -1;
+    if (ivView === 'day') ivAnchor = ivCal().stepDay(ivAnchor, step, ivCalEvents());
+    else if (ivView === 'week') ivAnchor = ivCal().addDays(ivAnchor, 7 * step);
+    else ivAnchor = new Date(ivAnchor.getFullYear(), ivAnchor.getMonth() + step, 1);
+  }
   function renderInterviewsScope() {
-    const host = root.querySelector('#iv-scope');
+    const host = root.querySelector('#iv-toolbar');
     if (!host) return;
-    host.innerHTML = [['upcoming', t('Upcoming')], ['past', t('Past')], ['all', t('All')]].map(([key, label]) => '<button type="button" class="iv-scope-btn' + (ivScope === key ? ' is-active' : '') + '" data-ivp-scope="' + key + '" aria-pressed="' + (ivScope === key) + '">' + esc(label) + '</button>').join('');
+    const group = (label, items, attr, current) => '<div class="iv-scope" role="group" aria-label="' + esc(label) + '">' + items.map(([key, text]) => '<button type="button" class="iv-scope-btn' + (current === key ? ' is-active' : '') + '" ' + attr + '="' + key + '" aria-pressed="' + (current === key) + '">' + esc(text) + '</button>').join('') + '</div>';
+    const views = group(t('Calendar view'), [['list', t('List')], ['day', t('Day')], ['week', t('Week')], ['month', t('Month')]], 'data-ivp-view', ivView);
+    const second = ivView === 'list'
+      ? group(t('Which interviews'), [['upcoming', t('Upcoming')], ['past', t('Past')], ['all', t('All')]], 'data-ivp-scope', ivScope)
+      : '<div class="iv-nav"><button type="button" class="btn btn-sm" data-ivp-nav="today">' + t('Today') + '</button><button type="button" class="iv-nav-btn" data-ivp-nav="prev" aria-label="' + t('Previous') + '">‹</button><button type="button" class="iv-nav-btn" data-ivp-nav="next" aria-label="' + t('Next') + '">›</button><strong class="iv-nav-title">' + esc(ivNavTitle(ivCalEvents())) + '</strong></div>';
+    host.innerHTML = views + second;
+  }
+  function ivEventButton(ev, style) {
+    const tag = ivTagOf(ev.row);
+    const title = ivClock(ev.start) + ' · ' + ivName(ev.row) + ' · ' + ivJobTitle(ev.row.flowId) + ' · ' + t(tag[0]);
+    return '<button type="button" class="iv-ev ai-tone-' + tag[1] + (ev.row.state === 'cancelled' ? ' is-cancelled' : '') + '" data-ivp-ev="' + esc(ev.id) + '" style="' + style + '" title="' + esc(title) + '"><strong>' + esc(ivClock(ev.start)) + '</strong> <span>' + esc(ivName(ev.row)) + '</span><em>' + esc(ivJobTitle(ev.row.flowId)) + '</em></button>';
+  }
+  function ivTimeGrid(days, events) {
+    const Cal = ivCal();
+    const byDay = Cal.eventsByDay(events);
+    const range = Cal.hourRange(events.filter(ev => days.some(day => Cal.sameDay(day, ev.start))));
+    const now = new Date();
+    const hours = [];
+    for (let hour = range.from; hour < range.to; hour++) hours.push(hour);
+    const height = (range.to - range.from) * IV_HOUR_PX;
+    const gridColumns = 'grid-template-columns:' + (window.matchMedia('(max-width:760px)').matches ? 40 : 54) + 'px repeat(' + days.length + ',minmax(0,1fr))';
+    const head = '<div class="iv-cal-head" style="' + gridColumns + '"><div></div>' + days.map(day => '<button type="button" class="iv-cal-dayhead' + (Cal.sameDay(day, now) ? ' is-today' : '') + '" data-ivp-day="' + Cal.dayKey(day) + '"><span>' + esc(ivFmt(day, { weekday: 'short' })) + '</span><strong>' + day.getDate() + '</strong></button>').join('') + '</div>';
+    const labels = '<div class="iv-cal-hours">' + hours.map(hour => '<span style="height:' + IV_HOUR_PX + 'px">' + esc(ivFmt(new Date(2000, 0, 1, hour), { hour: 'numeric' })) + '</span>').join('') + '</div>';
+    const columns = days.map(day => {
+      // In the week many interviews at the same time would be too narrow to read: three lanes at most, and a "+N" that opens the day.
+      const maxLanes = days.length > 1 ? 3 : 6;
+      const hidden = new Map();
+      const items = Cal.layoutDay(byDay.get(Cal.dayKey(day)) || []).map(item => {
+        // a crowded group keeps one lane's width free for the "+N" button
+        const crowded = item.lanes > maxLanes;
+        if (item.lane >= (crowded ? maxLanes - 1 : item.lanes)) { const entry = hidden.get(item.group) || { count: 0, from: item.from }; entry.count++; entry.from = Math.min(entry.from, item.from); hidden.set(item.group, entry); return ''; }
+        const width = 100 / (crowded ? maxLanes : item.lanes);
+        return ivEventButton(item.event, 'top:' + ((item.from - range.from * 60) / 60 * IV_HOUR_PX) + 'px;height:' + Math.max(24, (item.to - item.from) / 60 * IV_HOUR_PX - 2) + 'px;left:' + (item.lane * width) + '%;width:calc(' + width + '% - 3px)');
+      }).join('') + [...hidden.values()].map(entry => '<button type="button" class="iv-ev-more" data-ivp-day="' + Cal.dayKey(day) + '" style="top:' + ((entry.from - range.from * 60) / 60 * IV_HOUR_PX) + 'px;width:calc(' + (100 / maxLanes) + '% - 6px)">' + esc(tn('+{count} more', '+{count} more', entry.count)) + '</button>').join('');
+      const minute = now.getHours() * 60 + now.getMinutes();
+      const line = Cal.sameDay(day, now) && minute >= range.from * 60 && minute <= range.to * 60 ? '<div class="iv-cal-now" style="top:' + ((minute - range.from * 60) / 60 * IV_HOUR_PX) + 'px"></div>' : '';
+      return '<div class="iv-cal-col' + (Cal.sameDay(day, now) ? ' is-today' : '') + '" style="height:' + height + 'px">' + items + line + '</div>';
+    }).join('');
+    const any = days.some(day => (byDay.get(Cal.dayKey(day)) || []).length);
+    return '<div class="iv-cal">' + head + '<div class="iv-cal-body" style="' + gridColumns + '">' + labels + columns + '</div>' + (any ? '' : '<p class="iv-cal-empty">' + t('No interviews in this period.') + '</p>') + '</div>';
+  }
+  function ivMonthGrid(events) {
+    const Cal = ivCal();
+    const grid = Cal.monthGrid(ivAnchor, events);
+    const byDay = Cal.eventsByDay(events);
+    const now = new Date();
+    const head = grid.columns.map(index => '<div class="iv-month-head">' + esc(ivFmt(new Date(2024, 0, 1 + index), { weekday: 'short' })) + '</div>').join('');
+    const cells = grid.weeks.map(week => week.map(day => {
+      const key = Cal.dayKey(day);
+      const list = byDay.get(key) || [];
+      const more = list.length - 3;
+      const chips = list.slice(0, 3).map(ev => '<button type="button" class="iv-chip-ev ai-tone-' + ivTagOf(ev.row)[1] + (ev.row.state === 'cancelled' ? ' is-cancelled' : '') + '" data-ivp-ev="' + esc(ev.id) + '" title="' + esc(ivClock(ev.start) + ' · ' + ivName(ev.row) + ' · ' + ivJobTitle(ev.row.flowId) + ' · ' + t(ivTagOf(ev.row)[0])) + '"><time>' + esc(ivClock(ev.start)) + '</time> ' + esc(ivName(ev.row)) + '</button>').join('');
+      return '<div class="iv-month-cell' + (day.getMonth() !== grid.month ? ' is-other' : '') + (Cal.sameDay(day, now) ? ' is-today' : '') + '"><button type="button" class="iv-month-num" data-ivp-day="' + key + '">' + day.getDate() + '</button>' + chips + (more > 0 ? '<button type="button" class="iv-month-more" data-ivp-day="' + key + '">' + esc(tn('+{count} more', '+{count} more', more)) + '</button>' : '') + '</div>';
+    }).join('')).join('');
+    return '<div class="iv-month" style="grid-template-columns:repeat(' + grid.columns.length + ',minmax(0,1fr))">' + head + cells + '</div>';
+  }
+  // The body under the toolbar: the list, or one of the calendar views.
+  function renderInterviewsBody() {
+    renderInterviewsScope();
+    if (ivView === 'list') { renderInterviewsList(); return; }
+    const host = root.querySelector('#interviews-content');
+    if (!host) return;
+    const events = ivCalEvents();
+    const grid = ivView === 'month' ? ivMonthGrid(events) : ivTimeGrid(ivView === 'day' ? [ivCal().startOfDay(ivAnchor)] : ivCal().weekDays(ivAnchor, events), events);
+    host.innerHTML = (workspaceIsFree() ? '<p class="iv-note">' + t('You can see the interviews, but scheduling, editing and finalizing need an active plan.') + '</p>' : '') + grid;
+  }
+  // What the list buttons and the details window both do.
+  function ivOpenCandidate(row) { pendingCandidateOpen = { flowId: row.flowId, email: row.email }; pendingOpenInterviewTab = true; applicantFilter = row.flowId; applicantSearch = ''; void renderApplicants(); }
+  async function ivCancelInterview(row) {
+    try {
+      const result = await window.PathwayBackend.cancelInterview(row.id);
+      showToast(result.emailSent === false ? t(result.warning || 'The interview was cancelled, but the e-mail could not be sent.') : t('Interview cancelled.'));
+    } catch (failure) { showToast(failure.message || t('Something went wrong. Try again.')); }
+  }
+  // The window of one interview (opened from the calendar): everything about it and the same actions as the list.
+  function openInterviewDetails(row) {
+    const tag = ivTagOf(row);
+    const info = (label, value) => value ? '<div class="applicant-info-item"><span>' + esc(label) + '</span><strong>' + value + '</strong></div>' : '';
+    const reasons = { held: t('The interview was held'), no_show: t('The candidate did not show up'), other: t('Other') };
+    const started = interviewStarted(row);
+    const waiting = interviewAwaitingResult(row);
+    const on = INTERVIEW_ON.includes(row.state);
+    const locked = workspaceIsFree() ? ' disabled' : '';
+    const btn = (action, label, extra = '', off = '') => '<button type="button" class="btn' + (extra ? ' ' + extra : '') + '" data-ivd="' + action + '"' + off + '>' + esc(label) + '</button>';
+    const actions = (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '') + (on ? btn('edit', t('Edit interview'), '', locked) : '') + (on && !started ? btn('cancel', t('Cancel interview'), 'btn-danger-ghost', locked) : '') + btn('open', t('Open candidate'));
+    const result = row.state === 'finished' && row.resultAt
+      ? '<div class="applicant-info-grid">' + info(t('What happened'), esc(reasons[row.resultReason] || '')) + (row.resultImpression ? info(t('Impression'), aiImpressionLabelled(row.resultImpression)) : '') + (row.resultRecommended === null ? '' : info(t('Recommended'), row.resultRecommended ? t('Yes') : t('No'))) + '</div>' + (row.resultNotes ? '<div class="ai-note"><strong>' + t('Notes') + '</strong> ' + esc(row.resultNotes).replace(/\n/g, '<br>') + '</div>' : '')
+      : '';
+    setLayer('<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">' + t('Interview') + '</div><h2>' + esc(ivName(row)) + '</h2><p>' + esc(ivJobTitle(row.flowId)) + '</p></div><button class="modal-x" data-close aria-label="' + t('Close') + '">×</button></div>'
+      + '<div class="iv-detail"><div class="iv-status"><span class="iv-chip ai-tone-' + tag[1] + '"><span class="iv-chip-icon">' + INTERVIEW_ICON + '</span>' + esc(t(tag[0])) + '</span>' + interviewBadges(row) + '</div>'
+      + '<div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>') + info(t('Format'), row.kind === 'online' ? t('Online') : t('In person')) + info(t('Duration'), row.durationMinutes ? esc(tn('{count} minute', '{count} minutes', row.durationMinutes)) : '')
+      + (row.kind === 'online' ? info(t('Meeting link'), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '') : info(t('Address'), esc(row.address || ''))) + info(t('Responsible'), esc(ivResponsibleText(row))) + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>'
+      + result + '</div><div class="modal-actions iv-detail-actions">' + actions + '</div>');
+    const layer = modalRoot.querySelector('#modal-layer');
+    const actionBox = layer.querySelector('.iv-detail-actions');
+    const reload = () => { void loadInterviewsPage(); };
+    layer.addEventListener('click', async event => {
+      const control = event.target.closest('[data-ivd]');
+      if (!control) return;
+      const action = control.dataset.ivd;
+      if (action === 'edit') { closeLayer(); openScheduleInterviewModal(row, { afterClose: reload }); }
+      else if (action === 'finalize') { closeLayer(); openFinalizeInterviewModal(row, { afterClose: reload }); }
+      else if (action === 'open') { closeLayer(); ivOpenCandidate(row); }
+      else if (action === 'cancel') { actionBox.innerHTML = '<span class="ai-confirm">' + t('Cancel this interview?') + ' ' + btn('cancel-yes', t('Yes, cancel'), 'btn-danger') + btn('cancel-no', t('Keep it')) + '</span>'; }
+      else if (action === 'cancel-no') { actionBox.innerHTML = actions; }
+      else if (action === 'cancel-yes') { control.disabled = true; await ivCancelInterview(row); closeLayer(); reload(); }
+    });
   }
   async function loadInterviewsPage() {
     const requestId = ++ivRequestId;
@@ -2538,37 +2665,42 @@
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
     ivRows = []; ivConfirmId = ''; ivShown = IV_PAGE_SIZE;
-    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><img class="brand-logo logo-light" src="brand/nellio-logo.svg" alt="Nellio"><img class="brand-logo logo-dark" src="brand/nellio-logo-white.svg" alt="" aria-hidden="true"></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('interviews')}<main class="interviews-page"><div class="applicants-heading"><div><h1>${t('Interviews')}</h1><p>${t('Interviews scheduled with your candidates: when, the status and who is responsible.')}</p></div><div class="iv-tools"><input id="iv-search" class="applicants-search" type="search" placeholder="${t('Search interviews')}" value="${esc(ivSearch)}" aria-label="${t('Search interviews')}">${hasPermission('flows') ? ivComboboxHtml('iv-responsible-filter', t('Filter by responsible'), t('Search people')) : ''}${ivComboboxHtml('iv-job-filter', t('Filter interviews by job'), t('Search jobs'))}${ivComboboxHtml('iv-status-filter', t('Filter by status'), t('Search statuses'))}<button class="btn btn-sm" id="iv-refresh" type="button" title="${t('Refresh interviews')}">↻ ${t('Refresh')}</button></div></div><div class="iv-toolbar"><div class="iv-scope" id="iv-scope" role="group" aria-label="${t('Which interviews')}"></div></div><div id="interviews-content" aria-live="polite"><div class="loading-card"><span>${t('Loading interviews…')}</span></div></div></main></div></div>`;
+    root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><img class="brand-logo logo-light" src="brand/nellio-logo.svg" alt="Nellio"><img class="brand-logo logo-dark" src="brand/nellio-logo-white.svg" alt="" aria-hidden="true"></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('interviews')}<main class="interviews-page"><div class="applicants-heading"><div><h1>${t('Interviews')}</h1><p>${t('Interviews scheduled with your candidates: when, the status and who is responsible.')}</p></div><div class="iv-tools"><input id="iv-search" class="applicants-search" type="search" placeholder="${t('Search interviews')}" value="${esc(ivSearch)}" aria-label="${t('Search interviews')}">${hasPermission('flows') ? ivComboboxHtml('iv-responsible-filter', t('Filter by responsible'), t('Search people')) : ''}${ivComboboxHtml('iv-job-filter', t('Filter interviews by job'), t('Search jobs'))}${ivComboboxHtml('iv-status-filter', t('Filter by status'), t('Search statuses'))}<button class="btn btn-sm" id="iv-refresh" type="button" title="${t('Refresh interviews')}">↻ ${t('Refresh')}</button></div></div><div class="iv-toolbar" id="iv-toolbar"></div><div id="interviews-content" aria-live="polite"><div class="loading-card"><span>${t('Loading interviews…')}</span></div></div></main></div></div>`;
     bindSidebar();
     bindPlanControl();
     ivBoxes = [];
-    if (hasPermission('flows')) ivBoxes.push(mountApplicantCombobox(root, { inputId: 'iv-responsible-filter', listId: 'iv-responsible-filter-list', idPrefix: 'iv-responsible-opt', options: ivResponsibleOptions, value: () => ivResponsible, label: () => ivLabelOf(ivResponsibleOptions, ivResponsible, t('All responsibles')), empty: t('No people match') }, value => { ivResponsible = value; ivShown = IV_PAGE_SIZE; ivBoxes.forEach(box => box.refresh()); renderInterviewsList(); }));
-    ivBoxes.push(mountApplicantCombobox(root, { inputId: 'iv-job-filter', listId: 'iv-job-filter-list', idPrefix: 'iv-job-opt', options: ivJobOptions, value: () => ivJob, label: () => ivLabelOf(ivJobOptions, ivJob, ivJob ? t('Untitled role') : t('All jobs')), empty: t('No jobs match') }, value => { ivJob = value; ivShown = IV_PAGE_SIZE; ivBoxes.forEach(box => box.refresh()); renderInterviewsList(); }));
-    ivBoxes.push(mountApplicantCombobox(root, { inputId: 'iv-status-filter', listId: 'iv-status-filter-list', idPrefix: 'iv-status-opt', options: ivStatusOptions, value: () => ivStatus, label: () => ivLabelOf(ivStatusOptions, ivStatus, t('All statuses')), empty: t('No statuses match') }, value => { ivStatus = value; ivShown = IV_PAGE_SIZE; ivBoxes.forEach(box => box.refresh()); renderInterviewsList(); }));
+    if (hasPermission('flows')) ivBoxes.push(mountApplicantCombobox(root, { inputId: 'iv-responsible-filter', listId: 'iv-responsible-filter-list', idPrefix: 'iv-responsible-opt', options: ivResponsibleOptions, value: () => ivResponsible, label: () => ivLabelOf(ivResponsibleOptions, ivResponsible, t('All responsibles')), empty: t('No people match') }, value => { ivResponsible = value; ivShown = IV_PAGE_SIZE; ivBoxes.forEach(box => box.refresh()); renderInterviewsBody(); }));
+    ivBoxes.push(mountApplicantCombobox(root, { inputId: 'iv-job-filter', listId: 'iv-job-filter-list', idPrefix: 'iv-job-opt', options: ivJobOptions, value: () => ivJob, label: () => ivLabelOf(ivJobOptions, ivJob, ivJob ? t('Untitled role') : t('All jobs')), empty: t('No jobs match') }, value => { ivJob = value; ivShown = IV_PAGE_SIZE; ivBoxes.forEach(box => box.refresh()); renderInterviewsBody(); }));
+    ivBoxes.push(mountApplicantCombobox(root, { inputId: 'iv-status-filter', listId: 'iv-status-filter-list', idPrefix: 'iv-status-opt', options: ivStatusOptions, value: () => ivStatus, label: () => ivLabelOf(ivStatusOptions, ivStatus, t('All statuses')), empty: t('No statuses match') }, value => { ivStatus = value; ivShown = IV_PAGE_SIZE; ivBoxes.forEach(box => box.refresh()); renderInterviewsBody(); }));
     ivBoxes.forEach(box => box.refresh());
     renderInterviewsScope();
-    root.querySelector('#iv-search').addEventListener('input', event => { ivSearch = event.target.value; ivShown = IV_PAGE_SIZE; renderInterviewsList(); });
+    root.querySelector('#iv-search').addEventListener('input', event => { ivSearch = event.target.value; ivShown = IV_PAGE_SIZE; renderInterviewsBody(); });
     root.querySelector('#iv-refresh').addEventListener('click', () => { void loadInterviewsPage(); });
     root.querySelector('.interviews-page').addEventListener('click', async event => {
+      const viewButton = event.target.closest('[data-ivp-view]');
+      if (viewButton) { ivView = viewButton.dataset.ivpView; ivShown = IV_PAGE_SIZE; renderInterviewsBody(); return; }
+      const nav = event.target.closest('[data-ivp-nav]');
+      if (nav) { ivNavigate(nav.dataset.ivpNav); renderInterviewsBody(); return; }
+      const dayButton = event.target.closest('[data-ivp-day]');
+      if (dayButton) { const [year, month, day] = dayButton.dataset.ivpDay.split('-').map(Number); ivAnchor = new Date(year, month - 1, day); ivView = 'day'; renderInterviewsBody(); return; }
+      const eventButton = event.target.closest('[data-ivp-ev]');
+      if (eventButton) { const found = ivRows.find(item => item.id === eventButton.dataset.ivpEv); if (found) openInterviewDetails(found); return; }
       const scope = event.target.closest('[data-ivp-scope]');
-      if (scope) { ivScope = scope.dataset.ivpScope; ivShown = IV_PAGE_SIZE; renderInterviewsScope(); renderInterviewsList(); return; }
+      if (scope) { ivScope = scope.dataset.ivpScope; ivShown = IV_PAGE_SIZE; renderInterviewsScope(); renderInterviewsBody(); return; }
       const control = event.target.closest('[data-ivp-action]');
       if (!control) return;
       const action = control.dataset.ivpAction;
-      if (action === 'more') { ivShown += IV_PAGE_SIZE; renderInterviewsList(); return; }
+      if (action === 'more') { ivShown += IV_PAGE_SIZE; renderInterviewsBody(); return; }
       const row = ivRows.find(item => item.id === control.dataset.ivpId);
       if (!row) return;
       if (action === 'edit') { openScheduleInterviewModal(row, { afterClose: () => { void loadInterviewsPage(); } }); return; }
       if (action === 'finalize') { openFinalizeInterviewModal(row, { afterClose: () => { void loadInterviewsPage(); } }); return; }
-      if (action === 'open') { pendingCandidateOpen = { flowId: row.flowId, email: row.email }; pendingOpenInterviewTab = true; applicantFilter = row.flowId; applicantSearch = ''; void renderApplicants(); return; }
-      if (action === 'cancel') { ivConfirmId = row.id; renderInterviewsList(); return; }
-      if (action === 'cancel-no') { ivConfirmId = ''; renderInterviewsList(); return; }
+      if (action === 'open') { ivOpenCandidate(row); return; }
+      if (action === 'cancel') { ivConfirmId = row.id; renderInterviewsBody(); return; }
+      if (action === 'cancel-no') { ivConfirmId = ''; renderInterviewsBody(); return; }
       if (action === 'cancel-yes') {
         control.disabled = true;
-        try {
-          const result = await window.PathwayBackend.cancelInterview(row.id);
-          showToast(result.emailSent === false ? t(result.warning || 'The interview was cancelled, but the e-mail could not be sent.') : t('Interview cancelled.'));
-        } catch (failure) { showToast(failure.message || t('Something went wrong. Try again.')); }
+        await ivCancelInterview(row);
         ivConfirmId = '';
         void loadInterviewsPage();
       }

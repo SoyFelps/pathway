@@ -1301,3 +1301,48 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-more{display:flex;justify-content:center;margin-top:14px}
 @media(max-width:1180px){.iv-row{grid-template-columns:minmax(120px,1fr) minmax(150px,1.3fr) minmax(160px,1.2fr)}.iv-resp{grid-column:1 / 3}.iv-actions{grid-column:3;justify-content:flex-start}}
 @media(max-width:760px){.interviews-page{padding:28px 16px 48px}.iv-tools{width:100%}.iv-tools .job-combobox{flex:1 1 100%}.iv-row{grid-template-columns:1fr}.iv-resp,.iv-actions{grid-column:auto}.iv-actions{justify-content:flex-start}}
+
+/* Interviews calendar (2026-11-21): Day, Week and Month views of the same interviews. */
+.iv-toolbar{justify-content:flex-start;gap:14px}
+.iv-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.iv-nav-btn{width:32px;height:32px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text-heading);font:700 18px/1 var(--sans);cursor:pointer}
+.iv-nav-btn:hover{background:var(--bg-page)}
+.iv-nav-title{font:700 15px var(--display);color:var(--text-heading);margin-left:6px}
+.iv-cal{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.iv-cal-head,.iv-cal-body{display:grid}
+.iv-cal-head{border-bottom:1px solid var(--line)}
+.iv-cal-dayhead{border:0;background:transparent;padding:10px 4px;text-align:center;cursor:pointer;color:var(--text-subtle);font:600 12px var(--sans);border-left:1px solid var(--border-subtle)}
+.iv-cal-dayhead strong{display:block;font:700 18px var(--display);color:var(--text-heading);margin-top:2px}
+.iv-cal-dayhead:hover{background:var(--bg-page)}
+.iv-cal-dayhead.is-today strong{color:var(--green-text)}
+.iv-cal-hours span{display:block;box-sizing:border-box;padding:0 8px 0 0;text-align:right;font-size:10px;color:var(--soft);transform:translateY(-6px)}
+.iv-cal-col{position:relative;border-left:1px solid var(--border-subtle);background:repeating-linear-gradient(to bottom,transparent 0,transparent 51px,var(--border-subtle) 51px,var(--border-subtle) 52px)}
+.iv-cal-col.is-today{background-color:var(--bg-page)}
+.iv-cal-now{position:absolute;left:0;right:0;height:2px;background:var(--red);z-index:3;pointer-events:none}
+.iv-ev{position:absolute;box-sizing:border-box;overflow:hidden;text-align:left;border:0;border-left:3px solid var(--green-text);border-radius:6px;padding:3px 6px;font:500 11px/1.3 var(--sans);background:var(--tint);color:var(--green-text);cursor:pointer;z-index:2}
+.iv-ev strong{font-weight:700}
+.iv-ev span{font-weight:600;color:var(--text-heading)}
+.iv-ev em{display:block;font-style:normal;color:var(--text-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iv-ev.ai-tone-wait{border-left-color:var(--text-subtle);background:var(--border-subtle);color:var(--text-subtle)}
+.iv-ev.ai-tone-warn{border-left-color:var(--amber-text);background:var(--amber-bg);color:var(--amber-text)}
+.iv-ev.is-cancelled,.iv-chip-ev.is-cancelled{opacity:.6;text-decoration:line-through}
+.iv-ev:hover,.iv-chip-ev:hover{filter:brightness(1.08)}
+.iv-cal-empty{margin:0;padding:18px;text-align:center;font-size:13px;color:var(--text-subtle);border-top:1px solid var(--border-subtle)}
+.iv-month{display:grid;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.iv-month-head{padding:9px 8px;font:700 11px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--text-subtle);border-bottom:1px solid var(--line);background:var(--bg-page)}
+.iv-month-cell{min-height:104px;padding:6px;border-right:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:3px;min-width:0}
+.iv-month-cell.is-other{background:var(--bg-page)}
+.iv-month-cell.is-other .iv-month-num{color:var(--soft)}
+.iv-month-cell.is-today .iv-month-num{background:var(--green);color:var(--surface);border-radius:50%}
+.iv-month-num{align-self:flex-start;border:0;background:transparent;min-width:22px;height:22px;padding:0 4px;font:700 12px var(--sans);color:var(--text-heading);cursor:pointer;text-align:center}
+.iv-chip-ev{display:block;width:100%;text-align:left;border:0;border-left:3px solid var(--green-text);border-radius:5px;padding:2px 5px;font:600 11px/1.35 var(--sans);background:var(--tint);color:var(--text-heading);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iv-chip-ev time{color:var(--green-text);font-weight:700}
+.iv-chip-ev.ai-tone-wait{border-left-color:var(--text-subtle);background:var(--border-subtle)}
+.iv-chip-ev.ai-tone-wait time{color:var(--text-subtle)}
+.iv-chip-ev.ai-tone-warn{border-left-color:var(--amber-text);background:var(--amber-bg)}
+.iv-chip-ev.ai-tone-warn time{color:var(--amber-text)}
+.iv-month-more{border:0;background:transparent;text-align:left;font:600 11px var(--sans);color:var(--green-text);cursor:pointer;padding:1px 4px}
+.iv-detail{display:grid;gap:14px;margin:4px 0 6px}
+.iv-detail-actions{flex-wrap:wrap;justify-content:flex-start;margin-top:10px}
+@media(max-width:760px){.iv-month-cell{min-height:78px}.iv-chip-ev time{display:none}.iv-ev em{display:none}}
+.iv-ev-more{position:absolute;right:3px;box-sizing:border-box;z-index:4;border:0;border-radius:6px;padding:3px 4px;font:700 10px var(--sans);text-align:center;background:var(--green);color:var(--surface);cursor:pointer}
