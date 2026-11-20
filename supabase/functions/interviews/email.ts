@@ -59,7 +59,7 @@ interface CandidateCopy {
   htmlLang: string; fallbackName: string; fallbackJob: string; fallbackCompany: string;
   greeting: (name: string) => string;
   labels: { when: string; format: string; online: string; inPerson: string; link: string; address: string; notes: string };
-  kinds: Record<"invite" | "update" | "cancel" | "reminder24" | "reminder2", {
+  kinds: Record<"invite" | "update" | "cancel" | "reminder24" | "reminder2" | "reminder10", {
     subject: (job: string, company: string) => string;
     eyebrow: string;
     heading: (company: string) => string;
@@ -81,6 +81,7 @@ const CANDIDATE: Record<Language, CandidateCopy> = {
       cancel: { subject: (j, c) => `Interview cancelled: ${j} – ${c}`, eyebrow: "Interview cancelled", heading: () => "Your interview was cancelled.", intro: (j, c) => `The interview for ${j} at ${c} scheduled for the time below was cancelled. The hiring team may contact you about a new time.` },
       reminder24: { subject: (j) => `Reminder: your interview for ${j} is in 24 hours`, eyebrow: "Interview reminder", heading: () => "Your interview is tomorrow.", intro: (j, c) => `A reminder that your interview for ${j} at ${c} is coming up in about 24 hours.` },
       reminder2: { subject: (j) => `Reminder: your interview for ${j} is in 2 hours`, eyebrow: "Interview reminder", heading: () => "Your interview is in 2 hours.", intro: (j, c) => `A reminder that your interview for ${j} at ${c} starts in about 2 hours.` },
+      reminder10: { subject: (j) => `Reminder: your interview for ${j} starts in 10 minutes`, eyebrow: "Interview reminder", heading: () => "Your interview starts in 10 minutes.", intro: (j, c) => `A reminder that your interview for ${j} at ${c} starts in about 10 minutes.` },
     },
     respondLine: "Confirm you can attend, ask for another time or add the interview to your calendar with the button below.",
     cancelLine: "", reminderLine: "You can see the details and add the interview to your calendar with the button below.",
@@ -97,6 +98,7 @@ const CANDIDATE: Record<Language, CandidateCopy> = {
       cancel: { subject: (j, c) => `Entrevista cancelada: ${j} – ${c}`, eyebrow: "Entrevista cancelada", heading: () => "Sua entrevista foi cancelada.", intro: (j, c) => `A entrevista para ${j} – ${c} marcada para o horário abaixo foi cancelada. A equipe de contratação pode entrar em contato para combinar um novo horário.` },
       reminder24: { subject: (j) => `Lembrete: sua entrevista para ${j} é em 24 horas`, eyebrow: "Lembrete de entrevista", heading: () => "Sua entrevista é amanhã.", intro: (j, c) => `Um lembrete de que sua entrevista para ${j} – ${c} acontece em cerca de 24 horas.` },
       reminder2: { subject: (j) => `Lembrete: sua entrevista para ${j} é em 2 horas`, eyebrow: "Lembrete de entrevista", heading: () => "Sua entrevista é em 2 horas.", intro: (j, c) => `Um lembrete de que sua entrevista para ${j} – ${c} começa em cerca de 2 horas.` },
+      reminder10: { subject: (j) => `Lembrete: sua entrevista para ${j} começa em 10 minutos`, eyebrow: "Lembrete de entrevista", heading: () => "Sua entrevista começa em 10 minutos.", intro: (j, c) => `Um lembrete de que sua entrevista para ${j} – ${c} começa em cerca de 10 minutos.` },
     },
     respondLine: "Confirme sua presença, peça outro horário ou adicione a entrevista à sua agenda pelo botão abaixo.",
     cancelLine: "", reminderLine: "Veja os detalhes e adicione a entrevista à sua agenda pelo botão abaixo.",
@@ -113,6 +115,7 @@ const CANDIDATE: Record<Language, CandidateCopy> = {
       cancel: { subject: (j, c) => `Entrevista cancelada: ${j} – ${c}`, eyebrow: "Entrevista cancelada", heading: () => "Su entrevista fue cancelada.", intro: (j, c) => `La entrevista para ${j} – ${c} programada para el horario indicado abajo fue cancelada. El equipo de selección podrá contactarlo para acordar un nuevo horario.` },
       reminder24: { subject: (j) => `Recordatorio: su entrevista para ${j} es en 24 horas`, eyebrow: "Recordatorio de entrevista", heading: () => "Su entrevista es mañana.", intro: (j, c) => `Le recordamos que su entrevista para ${j} – ${c} es en aproximadamente 24 horas.` },
       reminder2: { subject: (j) => `Recordatorio: su entrevista para ${j} es en 2 horas`, eyebrow: "Recordatorio de entrevista", heading: () => "Su entrevista es en 2 horas.", intro: (j, c) => `Le recordamos que su entrevista para ${j} – ${c} comienza en aproximadamente 2 horas.` },
+      reminder10: { subject: (j) => `Recordatorio: su entrevista para ${j} empieza en 10 minutos`, eyebrow: "Recordatorio de entrevista", heading: () => "Su entrevista empieza en 10 minutos.", intro: (j, c) => `Le recordamos que su entrevista para ${j} – ${c} empieza en aproximadamente 10 minutos.` },
     },
     respondLine: "Confirme su asistencia, pida otro horario o agregue la entrevista a su calendario con el botón de abajo.",
     cancelLine: "", reminderLine: "Vea los detalles y agregue la entrevista a su calendario con el botón de abajo.",
@@ -121,7 +124,7 @@ const CANDIDATE: Record<Language, CandidateCopy> = {
   },
 };
 
-export type CandidateEmailKind = "invite" | "update" | "cancel" | "reminder24" | "reminder2";
+export type CandidateEmailKind = "invite" | "update" | "cancel" | "reminder24" | "reminder2" | "reminder10";
 
 export interface CandidateEmailInput {
   kind: CandidateEmailKind;
@@ -219,7 +222,7 @@ export function buildCandidateEmail(input: CandidateEmailInput): BuiltEmail {
   const company = singleLine(input.companyName, 80) || copy.fallbackCompany;
   const k = copy.kinds[input.kind];
   const isCancel = input.kind === "cancel";
-  const isReminder = input.kind === "reminder24" || input.kind === "reminder2";
+  const isReminder = input.kind === "reminder24" || input.kind === "reminder2" || input.kind === "reminder10";
   const closing = isCancel ? "" : isReminder ? copy.reminderLine : copy.respondLine;
   const built = layout({
     htmlLang: copy.htmlLang,

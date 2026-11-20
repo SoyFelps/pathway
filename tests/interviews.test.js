@@ -92,6 +92,8 @@ test('the invitation is written in the job language, with the time of the interv
   assert.equal(buildCandidateEmail({ ...base, kind: 'update' }).subject, 'Interview updated: Product Designer – CoreFront');
   assert.equal(buildCandidateEmail({ ...base, kind: 'reminder24' }).subject, 'Reminder: your interview for Product Designer is in 24 hours');
   assert.equal(buildCandidateEmail({ ...base, kind: 'reminder2', language: 'pt' }).subject, 'Lembrete: sua entrevista para Product Designer é em 2 horas');
+  assert.equal(buildCandidateEmail({ ...base, kind: 'reminder10' }).subject, 'Reminder: your interview for Product Designer starts in 10 minutes');
+  assert.equal(buildCandidateEmail({ ...base, kind: 'reminder10', language: 'es' }).subject, 'Recordatorio: su entrevista para Product Designer empieza en 10 minutos');
   const cancel = buildCandidateEmail({ ...base, kind: 'cancel' });
   assert.equal(cancel.subject, 'Interview cancelled: Product Designer – CoreFront');
   assert.equal(cancel.html.includes('interview.html#TOKEN'), false, 'a cancellation has no button');

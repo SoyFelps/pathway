@@ -1688,6 +1688,7 @@
   'Candidate asked for another time': 'El candidato pidió otro horario',
   'Reminder sent (24 hours before)': 'Recordatorio enviado (24 horas antes)',
   'Reminder sent (2 hours before)': 'Recordatorio enviado (2 horas antes)',
+  'Reminder sent (10 minutes before)': 'Recordatorio enviado (10 minutos antes)',
   'Interview time passed': 'Pasó la hora de la entrevista',
   'This candidate has no interview yet. Moving the card to the Interview column creates one.': 'Este candidato aún no tiene entrevista. Mover la tarjeta a la columna Entrevista crea una.',
   'This interview has not been scheduled yet. The candidate receives an e-mail invitation as soon as you schedule it.': 'Esta entrevista aún no se ha programado. El candidato recibe una invitación por correo en cuanto la programes.',

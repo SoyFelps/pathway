@@ -11,7 +11,7 @@ import {
 
 // Human interviews (the "Interview" column): the recruiter schedules, edits, cancels and re-sends the invitation (signed in); the
 // candidate opens the answer page from the e-mail and confirms, declines or asks for another time (no sign-in, only the secret of the
-// link); every 5 minutes the database wakes the "tick" action, which sends the 24 h and 2 h reminders to confirmed interviews.
+// link); every 5 minutes the database wakes the "tick" action, which sends the 24 h, 2 h and 10 min reminders to confirmed interviews.
 // The browser only READS the interviews (database policies); every change goes through here, as service role, after the checks below.
 // Plan: D:\Pathway\plano-entrevistas.md.
 
@@ -303,7 +303,7 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
   const { data: updated, error } = await admin!.from("candidate_interviews").update({
     state: "invited", kind: v.kind, local_start: v.localStart, time_zone: v.timeZone, duration_minutes: v.durationMinutes,
     meeting_link: v.meetingLink, address: v.address, notes: v.notes, sequence: (before?.sequence ?? 0) + 1, invited_at: now,
-    responded_at: null, notice_at: null, response_note: null, proposed_times: [], reminder_24h_sent_at: null, reminder_2h_sent_at: null, scheduled_by: userId,
+    responded_at: null, notice_at: null, response_note: null, proposed_times: [], reminder_24h_sent_at: null, reminder_2h_sent_at: null, reminder_10m_sent_at: null, scheduled_by: userId,
     ...(responsibles.ids !== null ? { responsible_user_ids: responsibles.ids } : {}),
   }).eq("id", seen.id).eq("state", seen.state).select("*").maybeSingle();
   if (error) return databaseFailure(req, error);
@@ -442,13 +442,13 @@ async function actionTick(req: Request) {
   const { data: due, error } = await admin!.rpc("candidate_interview_reminders_due");
   if (error) { console.error("interviews: tick failed", error.message); return fail(req, 500, "Something went wrong. Please try again."); }
   let sent = 0;
-  for (const item of (due || []).slice(0, 50) as Array<{ interview_id: string; reminder: "24h" | "2h" }>) {
-    const column = item.reminder === "24h" ? "reminder_24h_sent_at" : "reminder_2h_sent_at";
+  for (const item of (due || []).slice(0, 50) as Array<{ interview_id: string; reminder: "24h" | "2h" | "10m" }>) {
+    const column = `reminder_${item.reminder}_sent_at`;
     const { data: claimed } = await admin!.from("candidate_interviews").update({ [column]: new Date().toISOString() }).eq("id", item.interview_id).eq("state", "confirmed").is(column, null).select("id").maybeSingle();
     if (!claimed) continue;
     const ctx = await loadContext(item.interview_id);
-    const ok = ctx ? await sendToCandidate(ctx, item.reminder === "24h" ? "reminder24" : "reminder2", `${ctx.iv.sequence}`) : false;
-    if (ok && ctx) { sent++; await addEvent(ctx.iv, item.reminder === "24h" ? "reminder_24h" : "reminder_2h", "system"); }
+    const ok = ctx ? await sendToCandidate(ctx, item.reminder === "24h" ? "reminder24" : item.reminder === "2h" ? "reminder2" : "reminder10", `${ctx.iv.sequence}`) : false;
+    if (ok && ctx) { sent++; await addEvent(ctx.iv, `reminder_${item.reminder}`, "system"); }
     else await admin!.from("candidate_interviews").update({ [column]: null }).eq("id", item.interview_id); // try again on the next tick
   }
   return response(req, 200, { sent });

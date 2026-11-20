@@ -85,3 +85,14 @@ test('reminders: confirmed only, workspace with an active plan, none for an inte
 test('the migration stores no secret and no function address', () => {
   assert.ok(!/sk_|whsec_|functions\/v1|RESEND/.test(sql));
 });
+
+test('10-minute reminder: own column hidden from the browser, own window, 2 h reminder stops 10 minutes before', () => {
+  const next = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261120140000_interview_reminder_10m.sql'), 'utf8');
+  assert.ok(next.includes('add column reminder_10m_sent_at timestamptz'));
+  assert.ok(!/grant/.test(next.replace(/grant execute on function public\.candidate_interview_reminders_due\(\) to service_role;/, '')), 'no new table grant: the column stays hidden');
+  assert.ok(next.includes("i.state = 'confirmed' and i.reminder_10m_sent_at is null"));
+  assert.ok(next.includes("i.starts_at - interval '10 minutes' <= now() and i.starts_at > now()"));
+  assert.ok(next.includes("i.invited_at <= i.starts_at - interval '10 minutes'"));
+  assert.ok(next.includes("i.starts_at - interval '2 hours' <= now() and i.starts_at - interval '10 minutes' > now()"));
+  assert.ok(next.includes("'reminder_10m'"), 'history line kind allowed');
+});
