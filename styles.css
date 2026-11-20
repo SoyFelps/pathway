@@ -1321,7 +1321,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-cal-now{position:absolute;left:0;right:0;height:2px;background:var(--red);z-index:3;pointer-events:none}
 .iv-ev{position:absolute;box-sizing:border-box;overflow:hidden;text-align:left;border:0;border-left:3px solid var(--green-text);border-radius:6px;padding:3px 6px;font:500 11px/1.3 var(--sans);background:var(--tint);color:var(--green-text);cursor:pointer;z-index:2}
 .iv-ev strong{font-weight:700}
-.iv-ev span{font-weight:600;color:var(--text-heading)}
+.iv-ev span{display:block;font-weight:700;color:var(--text-heading);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .iv-ev em{display:block;font-style:normal;color:var(--text-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .iv-ev.ai-tone-wait{border-left-color:var(--text-subtle);background:var(--border-subtle);color:var(--text-subtle)}
 .iv-ev.ai-tone-warn{border-left-color:var(--amber-text);background:var(--amber-bg);color:var(--amber-text)}
@@ -1357,3 +1357,13 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-menu-item:disabled{opacity:.5;cursor:not-allowed}
 .iv-actions{align-items:center}
 .iv-tools #iv-refresh{height:39px;padding:0 14px;border-radius:8px}
+/* The name is always the first line; time and job appear when there is room (day view) or on hover, which opens the whole card over its neighbours. */
+.iv-ev strong,.iv-ev em{display:none}
+.iv-ev.is-wide{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 6px}
+.iv-ev.is-wide strong{display:block;order:-1}
+.iv-ev.is-wide span{display:block;flex:0 1 auto}
+.iv-ev.is-wide em{display:block;flex:1 0 100%}
+.iv-ev:hover,.iv-ev:focus-visible{z-index:6;min-width:200px;width:auto!important;height:auto!important;min-height:24px;box-shadow:0 6px 18px var(--shadow-md)}
+.iv-ev:hover strong,.iv-ev:hover em,.iv-ev:focus-visible strong,.iv-ev:focus-visible em{display:block}
+.iv-ev:hover span,.iv-ev:focus-visible span{display:block;white-space:normal}
+.iv-ev:hover,.iv-ev:focus-visible{background-color:var(--surface);background-image:linear-gradient(var(--tint),var(--tint))}

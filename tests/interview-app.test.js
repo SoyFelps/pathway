@@ -185,7 +185,7 @@ test('the Interviews calendar: List / Day / Week / Month on the same filtered in
   assert.ok(page.includes('ivScheduled().filter(ivMatches)'), 'the calendar uses the same filters as the list');
   assert.ok(page.includes('Cal.weekDays(') || page.includes('ivCal().weekDays('), 'the week hides Saturday and Sunday without an interview');
   assert.ok(page.includes('Cal.monthGrid(ivAnchor, events)') && page.includes('data-ivp-day'), 'the month, and a click on a day opens it');
-  assert.ok(page.includes('const maxLanes = days.length > 1 ? 3 : 6;') && page.includes('iv-ev-more'), 'crowded hours show a "+N" button');
+  assert.ok(page.includes('const maxLanes = days.length > 1 ? 2 : 6;') && page.includes('iv-ev-more'), 'crowded hours show a "+N" button');
   assert.ok(page.includes('function openInterviewDetails(row)') && page.includes("closeLayer(); openScheduleInterviewModal(row, { afterClose: reload });") && page.includes("closeLayer(); openFinalizeInterviewModal(row, { afterClose: reload });") && page.includes('await ivCancelInterview(row)'), 'edit, finalize and cancel from the details window');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.ok(html.includes('interviews-calendar.js?v='), 'the calendar file is loaded (with a version)');
