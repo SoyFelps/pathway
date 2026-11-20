@@ -1746,6 +1746,7 @@
   'Your answer is with the hiring team. They will contact you if there is a new time.': 'Sua resposta está com a equipe de contratação. Ela entrará em contato se houver um novo horário.',
   'Suggested: {times}': 'Sugeriu: {times}',
   'The calendar is not available for this interview.': 'A agenda não está disponível para esta entrevista.',
+  '{count} interview': { one: '{count} entrevista', other: '{count} entrevistas' },
   '{count} minute': { one: '{count} minuto', other: '{count} minutos' },
   'An active plan is needed to schedule interviews.': 'Um plano ativo é necessário para agendar entrevistas.',
   'Choose a valid day and time.': 'Escolha um dia e um horário válidos.',

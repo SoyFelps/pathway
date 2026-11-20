@@ -83,8 +83,8 @@ test('the Interview tab after the time has passed: waiting for results, no re-se
   assert.ok(panel.includes("button('finalize', t('Finalize interview'), 'btn-primary')"), 'finalize is offered');
   assert.ok(panel.includes("const actions = awaiting\n"), 'a different list of buttons once the time has passed');
   assert.ok(/awaiting\s*\n\s*\? button\('finalize'[^\n]*\n\s*: button\('schedule'[^\n]*button\('resend'[^\n]*cancelControl/.test(panel), 're-send and cancel only before the time');
-  assert.ok(panel.includes("'<details class=\"iv-fold\"><summary>' + t('Scheduling details')"), 'the scheduling details are in a fold');
-  assert.ok(panel.includes("button('correct', t('Correct result'))"), 'a correction is possible');
+  assert.ok(panel.includes("'<h4>' + t('Scheduling details') + '</h4>' + detailsGrid(item)") && panel.includes('<details class=\"iv-fold\">'), 'the scheduling details are inside the fold of each round');
+  assert.ok(panel.includes('data-iv-action=\"correct\" data-iv-id=') && panel.includes("t('Correct result')"), 'a correction is possible, for the round it belongs to');
   const modal = slice(builder, 'function openFinalizeInterviewModal(', 'function offerInterviewScheduling');
   assert.ok(modal.includes("state.reason !== 'held' && state.reason !== 'other'"), 'no impression and recommendation for a no-show');
   assert.ok(modal.includes("B.addApplicantComment(row.flowId, row.email, text)") && modal.includes("notes !== (row.resultNotes || '')"), 'the notes become a team comment; a correction adds a new one when the notes changed');
@@ -106,4 +106,13 @@ test('the interview windows open ON TOP of the candidate panel (a second layer),
   const windows = slice(builder, 'function openScheduleInterviewModal(', '// After a SINGLE move into the Interview column');
   assert.ok(!/\bsetModal\(/.test(windows) && !/\bcloseModal\(\)/.test(windows) && !/\bmodalCloseHook\b/.test(windows), 'the schedule, finalize and correct windows use the layer only');
   assert.ok((windows.match(/\bsetLayer\(/g) || []).length === 2 && (windows.match(/\bcloseLayer\(\)/g) || []).length === 2);
+});
+
+test('when the latest round is over, no round gets the spotlight: a count and every round in a fold, each with its own history', () => {
+  const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
+  assert.ok(panel.includes("const terminal = Boolean(row && (row.state === 'cancelled' || (row.state === 'finished' && row.resultAt)));"), 'a cancelled or finalized latest round');
+  assert.ok(panel.includes("tn('{count} interview', '{count} interviews', rounds.length)"), 'the title counts the rounds');
+  assert.ok(panel.includes('const folds = (terminal ? rounds : rounds.filter(item => item !== row));'), 'all rounds listed when none is in play');
+  assert.ok(panel.includes('historyList(eventsById.get(item.id))'), 'each round shows its own history');
+  assert.ok(panel.includes("const history = !terminal && events.length"), 'no global history under the folds');
 });

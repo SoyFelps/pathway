@@ -768,20 +768,20 @@
         + (row.resultNotes ? '<div class="ai-note"><strong>' + t('Notes') + '</strong> ' + esc(row.resultNotes).replace(/\n/g, '<br>') + '</div>' : '')
         + '<p class="muted">' + t('Finalized by {name} on {date}', { name: esc(person), date: esc(window.PathwayI18n.formatDate(row.resultAt, { dateStyle: 'medium', timeStyle: 'short' })) }) + '</p>';
     };
-    const render = (rows, events, errorText = '') => {
+    const render = (rows, eventsById, errorText = '') => {
       const mine = rows.filter(item => item.flowId === flowId && item.email === wanted);
       const row = mine.find(item => INTERVIEW_OPEN.includes(item.state)) || mine[0] || null;
       const labels = INTERVIEW_STATE_LABEL();
+      const events = row ? eventsById.get(row.id) || [] : [];
+      // The latest round is over (cancelled, or finalized): no round gets the spotlight, every round is listed in its own fold.
+      const terminal = Boolean(row && (row.state === 'cancelled' || (row.state === 'finished' && row.resultAt)));
+      const rounds = mine.filter(item => item.state === 'finished' || item.state === 'cancelled');
       let body = '';
-      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">' + t('Interview') + '</span><h3>' + esc(row ? (interviewAwaitingResult(row) ? t('Waiting for results') : labels[row.state] || row.state) : t('No interview')) + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-iv-close>' + t('Close') + '</button></header>';
+      const head = '<header class="applicant-ai-head"><div><span class="eyebrow">' + t('Interview') + '</span><h3>' + esc(row ? (terminal ? tn('{count} interview', '{count} interviews', rounds.length) : interviewAwaitingResult(row) ? t('Waiting for results') : labels[row.state] || row.state) : t('No interview')) + '</h3></div><button type="button" class="btn btn-sm applicant-ai-close" data-iv-close>' + t('Close') + '</button></header>';
       if (!row) body = '<p class="muted">' + t('This candidate has no interview yet. Moving the card to the Interview column creates one.') + '</p>';
       else if (row.state === 'awaiting_schedule') body = '<p>' + t('This interview has not been scheduled yet. The candidate receives an e-mail invitation as soon as you schedule it.') + '</p><div class="ai-actions">' + button('schedule', t('Schedule interview'), 'btn-primary') + '</div>';
-      else if (row.state === 'finished' && row.resultAt) {
-        // finalized: only the result; the scheduling details wait in a fold
-        body = resultHtml(row) + '<details class="iv-fold"><summary>' + t('Scheduling details') + '</summary>' + detailsGrid(row) + '</details><div class="ai-actions">' + button('correct', t('Correct result')) + button('new', t('Schedule another interview')) + '</div>';
-      } else if (row.state === 'cancelled') {
-        body = '<p>' + t('This interview was cancelled.') + '</p><div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'medium', timeStyle: 'short' }))) + '</div><div class="ai-actions">' + button('new', t('Schedule another interview'), 'btn-primary') + '</div>';
-      } else {
+      else if (terminal) body = '<div class="ai-actions">' + button('new', t('Schedule another interview'), 'btn-primary') + '</div>';
+      else {
         const awaiting = interviewAwaitingResult(row);
         const text = awaiting ? t('The time of this interview has passed. Finalize it to record how it went, or edit it to a new date if it did not happen.') : { invited: t('Waiting for the candidate to answer.'), confirmed: t('The candidate confirmed that they can attend.'), declined: t('The candidate said they cannot attend. Nothing was changed on the board: moving or rejecting the candidate is your decision.'), reschedule_requested: t('The candidate asked for another time. Schedule a new time to send a new invitation.') }[row.state];
         const requested = row.state === 'reschedule_requested'
@@ -798,13 +798,19 @@
           : button('schedule', scheduleLabel, row.state === 'reschedule_requested' ? 'btn-primary' : '') + (row.state === 'declined' ? '' : button('resend', t('Re-send e-mail'))) + cancelControl;
         body = '<p>' + esc(text) + '</p>' + requested + detailsGrid(row) + responsibleField + away + '<div class="ai-actions">' + actions + '</div>';
       }
-      // The earlier rounds of this candidate (finished or cancelled), newest first, each in a fold.
-      const earlier = row ? mine.filter(item => item !== row && (item.state === 'finished' || item.state === 'cancelled')) : [];
-      const earlierHtml = earlier.length ? '<h4>' + t('Previous interviews') + '</h4>' + earlier.map(item => '<details class="iv-fold"><summary>' + esc(t('Interview') + ' · ' + interviewWhen(item, { dateStyle: 'medium', timeStyle: 'short' }) + ' · ' + (item.state === 'cancelled' ? t('Cancelled') : t('Finished'))) + '</summary>' + (item.resultAt ? resultHtml(item) : '') + detailsGrid(item) + '</details>').join('') : '';
-      const history = events.length ? '<h4>' + t('History') + '</h4><ul class="interview-history">' + events.map(item => '<li><span>' + (item.kind === 'responsibles_changed' ? t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'finalized' ? t('{name} finalized the interview', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'result_corrected' ? t('{name} corrected the interview result', { name: esc(interviewActorName(item.actorUserId)) }) : esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind)) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>' : '';
+      // Every finished or cancelled round, newest first, each in a fold with what happened, the scheduling details and its own history.
+      const historyList = list => '<ul class="interview-history">' + list.map(item => '<li><span>' + (item.kind === 'responsibles_changed' ? t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'finalized' ? t('{name} finalized the interview', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'result_corrected' ? t('{name} corrected the interview result', { name: esc(interviewActorName(item.actorUserId)) }) : esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind)) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>';
+      const folds = (terminal ? rounds : rounds.filter(item => item !== row));
+      const foldHtml = item => '<details class="iv-fold"><summary>' + esc(t('Interview') + ' · ' + interviewWhen(item, { dateStyle: 'medium', timeStyle: 'short' }) + ' · ' + (item.state === 'cancelled' ? t('Cancelled') : t('Finished'))) + '</summary>'
+        + (item.resultAt ? resultHtml(item) : '') + '<h4>' + t('Scheduling details') + '</h4>' + detailsGrid(item)
+        + (item.resultAt ? '<div class="ai-actions"><button type="button" class="btn btn-sm" data-iv-action="correct" data-iv-id="' + esc(item.id) + '"' + (busy ? ' disabled' : '') + '>' + t('Correct result') + '</button></div>' : '')
+        + ((eventsById.get(item.id) || []).length ? '<h4>' + t('History') + '</h4>' + historyList(eventsById.get(item.id)) : '') + '</details>';
+      const earlierHtml = folds.length ? (terminal ? '' : '<h4>' + t('Previous interviews') + '</h4>') + folds.map(foldHtml).join('') : '';
+      const history = !terminal && events.length ? '<h4>' + t('History') + '</h4>' + historyList(events) : '';
       host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + earlierHtml + history + '</div>';
       host.dataset.interviewId = row ? row.id : '';
       host._interviewRow = row;
+      host._interviewRows = mine;
       // The responsible people change here at any time and save by themselves; nothing is sent to the candidate.
       const respHost = host.querySelector('#iv-tab-resp');
       if (respHost && row) {
@@ -826,8 +832,9 @@
         const rows = await B.listCandidateInterviews(workspace.id, flowId);
         const mine = rows.filter(item => item.flowId === flowId && item.email === wanted);
         const current = mine.find(item => INTERVIEW_OPEN.includes(item.state)) || mine[0] || null;
-        const events = current ? await B.listCandidateInterviewEvents(current.id).catch(() => []) : [];
-        render(rows, events, errorText);
+        const eventsById = new Map();
+        await Promise.all(mine.filter(item => item === current || item.state === 'finished' || item.state === 'cancelled').map(async item => { eventsById.set(item.id, await B.listCandidateInterviewEvents(item.id).catch(() => [])); }));
+        render(rows, eventsById, errorText);
       } catch (failure) { host.innerHTML = '<div class="ai-note is-warn" role="alert">' + esc(failure.message || t('Something went wrong. Try again.')) + '</div>'; }
     };
     host.addEventListener('click', async event => {
@@ -838,7 +845,7 @@
       const action = control.dataset.ivAction;
       if (action === 'schedule' && row) { openScheduleInterviewModal(row, { afterClose: () => { pendingOpenInterviewTab = true; const open = C.groupApplicants(applicants).find(item => item.latest.flow_id === flowId && String(item.latest.candidate_email || '').trim().toLowerCase() === wanted); if (open) showApplicantDetails(open.latest.id); } }); return; }
       if (action === 'finalize' && row) { openFinalizeInterviewModal(row, { afterClose: () => reopenInterviewTab(flowId, wanted) }); return; }
-      if (action === 'correct' && row) { openFinalizeInterviewModal(row, { correcting: true, afterClose: () => reopenInterviewTab(flowId, wanted) }); return; }
+      if (action === 'correct') { const target = (host._interviewRows || []).find(item => item.id === control.dataset.ivId) || row; if (target) openFinalizeInterviewModal(target, { correcting: true, afterClose: () => reopenInterviewTab(flowId, wanted) }); return; }
       if (action === 'cancel') { confirming = true; void load(); return; }
       if (action === 'cancel-no') { confirming = false; void load(); return; }
       busy = true;
