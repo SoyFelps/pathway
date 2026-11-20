@@ -187,9 +187,9 @@
   }
   async function listCandidateInterviewEvents(interviewId) {
     await requireSession();
-    const { data, error } = await client.from('candidate_interview_events').select('id,kind,actor,data,created_at').eq('interview_id', interviewId).order('created_at', { ascending: true }).limit(200);
+    const { data, error } = await client.from('candidate_interview_events').select('id,kind,actor,actor_user_id,data,created_at').eq('interview_id', interviewId).order('created_at', { ascending: true }).limit(200);
     if (error) throw translatedError(error);
-    return (data || []).map(row => ({ id: row.id, kind: row.kind, actor: row.actor, data: row.data || {}, createdAt: row.created_at }));
+    return (data || []).map(row => ({ id: row.id, kind: row.kind, actor: row.actor, actorUserId: row.actor_user_id || null, data: row.data || {}, createdAt: row.created_at }));
   }
   async function callInterviews(body) {
     const session = await requireSession();
@@ -206,6 +206,8 @@
   const cancelInterview = interviewId => callInterviews({ action: 'cancel', interviewId });
   const resendInterview = interviewId => callInterviews({ action: 'resend', interviewId });
   // A new round for a candidate whose earlier interview is over or was cancelled: the function makes a waiting row, ready to be scheduled.
+  // Only the responsible people change (no e-mail to the candidate); the history of the interview says who did it.
+  async function setInterviewResponsibles(interviewId, responsibleIds) { const payload = await callInterviews({ action: 'setResponsibles', interviewId, responsibleIds }); return mapInterviewResult(payload.interview); }
   async function startInterviewRound(flowId, email) { const payload = await callInterviews({ action: 'newRound', flowId, email }); return mapInterviewResult(payload.interview); }
   // The function answers with its own field names (camelCase); the window wants the same shape as the rows read from the database.
   const mapInterviewResult = row => row ? ({ id: row.id, workspaceId: row.workspaceId || null, flowId: row.flowId, email: row.email, state: row.state, kind: row.kind || null, localStart: row.localStart || null, timeZone: row.timeZone || null, startsAt: row.startsAt || null, durationMinutes: row.durationMinutes || null, meetingLink: row.meetingLink || null, address: row.address || null, notes: row.notes || null, sequence: row.sequence || 0, responseNote: row.responseNote || null, proposedTimes: row.proposedTimes || [], responsibleIds: row.responsibleIds || [] }) : null;
@@ -1295,6 +1297,7 @@
     listCandidateInterviews,
     listCandidateInterviewEvents,
     scheduleInterview,
+    setInterviewResponsibles,
     cancelInterview,
     resendInterview,
     startInterviewRound,

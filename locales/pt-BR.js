@@ -770,6 +770,8 @@
   'Responsible for the interview': 'Responsáveis pela entrevista',
   'They are told when the candidate answers.': 'Eles são avisados quando o candidato responde.',
   'Choose people from this workspace.': 'Escolha pessoas deste workspace.',
+  'Responsible people updated.': 'Responsáveis atualizados.',
+  '{name} changed the responsible people': '{name} alterou os responsáveis',
   'No time zones match': 'Nenhum fuso horário encontrado',
   'Search people': 'Buscar pessoas',
   'Review applications and move candidates through your hiring stages.': 'Avalie as candidaturas e mova os candidatos pelas etapas da contratação.',

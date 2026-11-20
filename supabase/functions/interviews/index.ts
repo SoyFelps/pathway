@@ -317,6 +317,25 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
   return response(req, 200, sent ? { interview: recruiterRow(updated), emailSent: true } : { interview: recruiterRow(updated), emailSent: false, warning: "The interview was saved, but the e-mail could not be sent. Use Resend to try again." });
 }
 
+/** Changes only the responsible people of an interview, at any time: nothing is sent to the candidate; the history says who changed it. */
+async function actionSetResponsibles(req: Request, userId: string, userClient: SupabaseClient, body: Record<string, unknown>) {
+  const seen = await visibleInterview(userClient, body);
+  if (!seen) return fail(req, 404, "The interview was not found.");
+  if (seen.state !== "awaiting_schedule" && !(OPEN_STATES as readonly string[]).includes(seen.state)) return fail(req, 409, "This interview can no longer be changed.");
+  if (!(await planActive(seen.workspace_id))) return fail(req, 402, "An active plan is needed to schedule interviews.");
+  const responsibles = await parseResponsibles(seen.workspace_id, body);
+  if (!responsibles.ok || responsibles.ids === null) return fail(req, 400, "Choose people from this workspace.");
+  const { data: before } = await admin!.from("candidate_interviews").select("*").eq("id", seen.id).maybeSingle();
+  if (!before) return fail(req, 404, "The interview was not found.");
+  const had = new Set<string>(before.responsible_user_ids || []);
+  if (had.size === responsibles.ids.length && responsibles.ids.every((id) => had.has(id))) return response(req, 200, { interview: recruiterRow(before) });
+  const { data: updated, error } = await admin!.from("candidate_interviews").update({ responsible_user_ids: responsibles.ids }).eq("id", seen.id).select("*").maybeSingle();
+  if (error) return databaseFailure(req, error);
+  if (!updated) return fail(req, 404, "The interview was not found.");
+  await addEvent(updated, "responsibles_changed", "recruiter", userId, { responsibleIds: responsibles.ids });
+  return response(req, 200, { interview: recruiterRow(updated) });
+}
+
 async function actionCancel(req: Request, userId: string, userClient: SupabaseClient, body: Record<string, unknown>) {
   const seen = await visibleInterview(userClient, body);
   if (!seen) return fail(req, 404, "The interview was not found.");
@@ -451,12 +470,13 @@ Deno.serve(async (req: Request) => {
     if (action === "respond") return await actionRespond(req, body);
     if (action === "calendar") return await actionCalendar(req, body);
     if (action === "tick") return await actionTick(req);
-    if (action === "schedule" || action === "cancel" || action === "resend" || action === "newRound") {
+    if (action === "schedule" || action === "cancel" || action === "resend" || action === "newRound" || action === "setResponsibles") {
       const auth = await authenticate(req);
       if (auth instanceof Response) return auth;
       if (action === "schedule") return await actionSchedule(req, auth.userId, auth.userClient, body);
       if (action === "cancel") return await actionCancel(req, auth.userId, auth.userClient, body);
       if (action === "newRound") return await actionNewRound(req, auth.userClient, body);
+      if (action === "setResponsibles") return await actionSetResponsibles(req, auth.userId, auth.userClient, body);
       return await actionResend(req, auth.userId, auth.userClient, body);
     }
     return fail(req, 400, "Send a valid request.");

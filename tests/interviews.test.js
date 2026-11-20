@@ -231,7 +231,23 @@ test('each interview has its own responsible people: chosen in the schedule wind
   const recipients = index.slice(index.indexOf('async function recruiterRecipients('), index.indexOf('async function notifyRecruiters('));
   assert.ok(recipients.includes('ctx.iv.responsible_user_ids.length') && recipients.includes('ctx.flow.responsible_user_ids'), 'the interview\'s list first, else who scheduled it plus the job\'s people');
   const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
-  assert.ok(builder.includes("mountResponsibleField(form.querySelector('#iv-responsible'), 'iv-responsible-label'"), 'the same multi-select as the job responsible field, at the end of the window');
-  assert.ok(builder.includes('responsibleIds: people.length ? currentResponsibleIds(responsibleIds) : undefined'), 'sent with the invitation');
+  assert.ok(builder.includes("if (!editing) mountResponsibleField(form.querySelector('#iv-responsible'), 'iv-responsible-label'"), 'the same multi-select as the job responsible field, at the end of the window, only when the interview is created');
+  assert.ok(builder.includes('responsibleIds: !editing && people.length ? currentResponsibleIds(responsibleIds) : undefined'), 'sent with the first invitation, never with an edit (which e-mails the candidate)');
   assert.ok(fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8').includes(",responsible_user_ids')"), 'read with the interviews');
+});
+
+test('after the invitation the responsible people change in the Interview tab at any time: no e-mail to the candidate and a line in the history with the name', () => {
+  const action = index.slice(index.indexOf('async function actionSetResponsibles('), index.indexOf('async function actionCancel('));
+  assert.ok(action.length > 100);
+  assert.equal(/sendToCandidate|sendMail|notifyRecruiters/.test(action), false, 'nothing is e-mailed to anyone');
+  assert.ok(action.includes('addEvent(updated, "responsibles_changed", "recruiter", userId'), 'the history records who did it');
+  assert.ok(action.includes('return response(req, 200, { interview: recruiterRow(before) });'), 'an unchanged list writes no history line');
+  assert.ok(index.includes('action === "setResponsibles"') && index.includes('actionSetResponsibles(req, auth.userId, auth.userClient, body)'), 'a signed-in action');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261120130000_interview_responsibles_history.sql'), 'utf8');
+  assert.ok(sql.includes("'finished', 'responsibles_changed'"), 'the history accepts the new kind');
+  const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  assert.ok(builder.includes("mountResponsibleField(respHost, 'iv-tab-resp-label'") && builder.includes('B.setInterviewResponsibles(row.id, currentResponsibleIds(chosen))'), 'the tab saves by itself');
+  assert.ok(builder.includes("t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) })"), 'the history line has the name');
+  const backend = fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8');
+  assert.ok(backend.includes("action: 'setResponsibles'") && backend.includes('actor_user_id'), 'the browser asks the function and reads who acted');
 });

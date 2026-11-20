@@ -569,7 +569,7 @@
         <div class="field-group"><label for="iv-zone">${t('Time zone')}</label><select class="text-input" id="iv-zone">${interviewTimeZones(zone).map(name => `<option value="${esc(name)}"${name === zone ? ' selected' : ''}>${esc(name.replace(/_/g, ' '))}</option>`).join('')}</select></div>
         <div class="field-group"><label for="iv-minutes">${t('Duration (minutes)')}</label><div class="interview-duration"><button class="btn btn-sm" type="button" data-iv-minutes="30">${t('30 min')}</button><button class="btn btn-sm" type="button" data-iv-minutes="60">${t('1 hour')}</button><input class="text-input" id="iv-minutes" type="number" min="5" max="480" step="5" value="${minutes}" aria-label="${t('Duration (minutes)')}"></div></div>
         <div class="field-group"><label for="iv-notes">${t('Notes for the candidate (optional)')}</label><textarea class="text-area" id="iv-notes" rows="3" maxlength="1000">${esc(row.notes || '')}</textarea></div>
-        <div class="field-group"><span class="form-label" id="iv-responsible-label">${t('Responsible for the interview')}</span><div id="iv-responsible"></div><p class="team-permission-hint">${t('They are told when the candidate answers.')}</p></div>
+        ${editing ? '' : `<div class="field-group"><span class="form-label" id="iv-responsible-label">${t('Responsible for the interview')}</span><div id="iv-responsible"></div><p class="team-permission-hint">${t('They are told when the candidate answers.')}</p></div>`}
         <p class="settings-delete-error" id="iv-error" role="alert" hidden></p>
         <div class="modal-actions"><button class="btn" type="button" data-close>${row.state === 'awaiting_schedule' ? t('Schedule later') : t('Cancel')}</button><button class="btn btn-primary" id="iv-send" type="submit">${editing ? t('Send updated invitation') : t('Send invitation')}</button></div>
       </form>`);
@@ -582,7 +582,7 @@
     // The two lists of this window are the application's own list (same as the filters), not the browser's native select.
     upgradeSelect(field('iv-kind'));
     upgradeSelect(field('iv-zone'), { search: true, empty: t('No time zones match') });
-    mountResponsibleField(form.querySelector('#iv-responsible'), 'iv-responsible-label', () => responsibleIds, ids => { responsibleIds = ids; });
+    if (!editing) mountResponsibleField(form.querySelector('#iv-responsible'), 'iv-responsible-label', () => responsibleIds, ids => { responsibleIds = ids; });
     field('iv-kind').addEventListener('change', showKind);
     field('iv-minutes').addEventListener('input', markMinutes);
     form.querySelectorAll('[data-iv-minutes]').forEach(button => button.addEventListener('click', () => { field('iv-minutes').value = button.dataset.ivMinutes; markMinutes(); }));
@@ -599,7 +599,7 @@
         const result = await B.scheduleInterview(row.id, {
           kind: online ? 'online' : 'in_person', localStart: `${field('iv-day').value}T${field('iv-time').value}`, timeZone: field('iv-zone').value,
           durationMinutes: Number(field('iv-minutes').value), meetingLink: online ? field('iv-link').value : '', address: online ? '' : field('iv-address').value, notes: field('iv-notes').value,
-          responsibleIds: people.length ? currentResponsibleIds(responsibleIds) : undefined // not loaded: leave them as they are
+          responsibleIds: !editing && people.length ? currentResponsibleIds(responsibleIds) : undefined // chosen only when the interview is created; afterwards they change in the Interview tab
         });
         showToast(result.emailSent === false ? t(result.warning || 'The interview was saved, but the e-mail could not be sent. Use Resend to try again.') : t('Invitation sent.'), result.emailSent === false ? 6000 : 2400);
         closeModal(); // runs afterClose
@@ -630,6 +630,9 @@
     const B = window.PathwayBackend;
     let confirming = false;
     let busy = false;
+    let responsibleSaveTimer = null;
+    // The name shown in the history for the person who did something (the team list; "A teammate" when they are not in it any more).
+    const interviewActorName = userId => { const person = people.find(item => item.userId === userId); return person ? personLabel(person) : t('A teammate'); };
     const info = (label, value) => value ? '<div class="applicant-info-item"><span>' + esc(label) + '</span><strong>' + value + '</strong></div>' : '';
     const button = (action, label, extra = '') => '<button type="button" class="btn btn-sm' + (extra ? ' ' + extra : '') + '" data-iv-action="' + action + '"' + (busy ? ' disabled' : '') + '>' + esc(label) + '</button>';
     const wanted = String(email || '').trim().toLowerCase();
@@ -655,16 +658,32 @@
         body = '<p>' + esc(text) + '</p>' + requested + '<div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>')
           + info(t('Format'), row.kind === 'online' ? t('Online') : t('In person')) + info(t('Duration'), row.durationMinutes ? esc(tn('{count} minute', '{count} minutes', row.durationMinutes)) : '')
           + (row.kind === 'online' ? info(t('Meeting link'), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '') : info(t('Address'), esc(row.address || '')))
-          + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>' + away
+          + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>'
+          + '<div class="field-group iv-tab-responsible"><span class="form-label" id="iv-tab-resp-label">' + t('Responsible for the interview') + '</span><div id="iv-tab-resp"></div></div>' + away
           + '<div class="ai-actions">' + button('schedule', row.state === 'reschedule_requested' ? t('Schedule a new time') : t('Edit interview'), row.state === 'reschedule_requested' ? 'btn-primary' : '') + (row.state === 'declined' ? '' : button('resend', t('Re-send e-mail'))) + cancelControl + '</div>';
       }
-      const history = events.length ? '<h4>' + t('History') + '</h4><ul class="interview-history">' + events.map(item => '<li><span>' + esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>' : '';
+      const history = events.length ? '<h4>' + t('History') + '</h4><ul class="interview-history">' + events.map(item => '<li><span>' + (item.kind === 'responsibles_changed' ? t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) }) : esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind)) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>' : '';
       host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + history + '</div>';
       host.dataset.interviewId = row ? row.id : '';
       host._interviewRow = row;
+      // The responsible people change here at any time and save by themselves; nothing is sent to the candidate.
+      const respHost = host.querySelector('#iv-tab-resp');
+      if (respHost && row) {
+        const jobOfRow = flows.find(item => item.cloudId === row.flowId);
+        let chosen = (row.responsibleIds && row.responsibleIds.length ? row.responsibleIds : (jobOfRow && jobOfRow.responsibleIds) || []).slice();
+        mountResponsibleField(respHost, 'iv-tab-resp-label', () => chosen, ids => {
+          chosen = ids;
+          clearTimeout(responsibleSaveTimer);
+          responsibleSaveTimer = setTimeout(async () => {
+            try { await B.setInterviewResponsibles(row.id, currentResponsibleIds(chosen)); showToast(t('Responsible people updated.')); await load(); }
+            catch (failure) { await load(failure.message || t('Something went wrong. Try again.')); }
+          }, 700);
+        });
+      }
     };
     const load = async (errorText = '') => {
       try {
+        await refreshPeople();
         const rows = await B.listCandidateInterviews(workspace.id, flowId);
         const mine = rows.filter(item => item.flowId === flowId && item.email === wanted);
         const current = mine.find(item => INTERVIEW_OPEN.includes(item.state)) || mine[0] || null;
