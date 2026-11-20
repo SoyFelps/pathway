@@ -554,7 +554,9 @@
     const tag = interviewTag(row);
     if (!tag) return '';
     const when = (row.state === 'invited' || row.state === 'confirmed') && !interviewAwaitingResult(row) ? interviewWhen(row) : '';
-    return '<div class="applicant-card-ai applicant-card-interview ai-tone-' + tag[1] + '"><span class="ai-tag-icon">' + INTERVIEW_ICON + '</span><span class="ai-tag-text">' + esc(t(tag[0]) + (when ? ' · ' + when : '')) + '</span>' + interviewBadges(row) + '</div>';
+    const badges = interviewBadges(row);
+    // with badges on the right the row is centered (the icon, the text and the badges share one line); without them a long tag may wrap and the icon stays at the top
+    return '<div class="applicant-card-ai applicant-card-interview ai-tone-' + tag[1] + (badges ? ' has-badges' : '') + '"><span class="ai-tag-icon">' + INTERVIEW_ICON + '</span><span class="ai-tag-text">' + esc(t(tag[0]) + (when ? ' · ' + when : '')) + '</span>' + badges + '</div>';
   }
   // The candidate in the board data for a job and e-mail (name and job title for the windows).
   function interviewCandidate(row) {
