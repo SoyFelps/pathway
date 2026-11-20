@@ -550,6 +550,19 @@
     const seal = interviewRecommended(row) ? recommendSeal(false) : '';
     return impression || seal ? '<span class="ai-badges">' + impression + seal + '</span>' : '';
   }
+  // What the Interview filter of the Applicants page can ask about a candidate's interview (the one the card shows): its stage, the result and the
+  // impression of a finalized one, and whether the team recommends the candidate. "none" = no interview at all.
+  function interviewFilterKeys(row) {
+    const keys = new Set();
+    if (!row) { keys.add('none'); return keys; }
+    if (interviewAwaitingResult(row)) keys.add('waiting_results');
+    else if (row.state === 'finished' && row.resultAt) {
+      keys.add(row.resultReason === 'held' ? 'held' : row.resultReason === 'no_show' ? 'no_show' : 'other');
+      if (row.resultImpression) keys.add(row.resultImpression);
+    } else keys.add(row.state); // awaiting_schedule, invited, confirmed, declined, reschedule_requested, cancelled
+    if (interviewRecommended(row)) keys.add('recommended');
+    return keys;
+  }
   function interviewCardHtml(row) {
     const tag = interviewTag(row);
     if (!tag) return '';
@@ -2144,7 +2157,13 @@
         { value: 'completed', label: t('Completed') }, { value: 'incomplete', label: t('Not completed') }, { value: 'none', label: t('No AI interview') },
         { value: 'positive', label: t('Positive impression') }, { value: 'mixed', label: t('Mixed impression') }, { value: 'negative', label: t('Negative impression') }
       ];
-      case 'interview': return [{ value: 'recommended', label: t('Recommended') }];
+      case 'interview': return [
+        { value: 'awaiting_schedule', label: t('Waiting to be scheduled') }, { value: 'invited', label: t('Interview invite sent') }, { value: 'confirmed', label: t('Interview confirmed') },
+        { value: 'reschedule_requested', label: t('Asked for another time') }, { value: 'declined', label: t('Denied the interview') }, { value: 'waiting_results', label: t('Waiting for results') },
+        { value: 'held', label: t('Interview held') }, { value: 'no_show', label: t('Candidate did not show up') }, { value: 'other', label: t('Interview finished') }, { value: 'cancelled', label: t('Interview cancelled') },
+        { value: 'positive', label: t('Positive impression') }, { value: 'mixed', label: t('Mixed impression') }, { value: 'negative', label: t('Negative impression') },
+        { value: 'recommended', label: t('Recommended') }, { value: 'none', label: t('No interview') }
+      ];
       case 'applications': return [{ value: 'once', label: t('Applied once') }, { value: 'repeat', label: t('Applied more than once') }];
       case 'country': {
         const G = window.PathwayGeo;
@@ -2172,8 +2191,8 @@
           return interview.impression === value;
         });
       });
-      // the team recommends the candidate: the interview shown for them (the latest one that is not cancelled) was finalized with the recommendation on
-      case 'interview': return group.items.some(item => interviewRecommended(interviewFor(item.flow_id, item.candidate_email)));
+      // the interview shown for the candidate (the same one as on the card): its stage, result, impression and recommendation
+      case 'interview': return group.items.some(item => { const keys = interviewFilterKeys(interviewFor(item.flow_id, item.candidate_email)); return row.values.some(value => keys.has(value)); });
       case 'date': {
         const start = row.from ? new Date(row.from + 'T00:00:00').getTime() : -Infinity;
         const end = row.to ? new Date(row.to + 'T23:59:59.999').getTime() : Infinity;

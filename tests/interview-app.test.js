@@ -152,5 +152,13 @@ test('the card tag is centered like the AI one, a candidate who declined "denied
   assert.ok(builder.includes("case 'declined': return ['Denied the interview', 'warn'];") && !/cannot attend/i.test(builder.replace(/I cannot attend/g, '')), 'no screen of the team says cannot attend');
   const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
   assert.ok(panel.includes("(terminal && rounds.length === 1 ? ' open' : '')"), 'the only interview is open');
-  assert.ok(builder.includes("interview: t('Interview'), date:") && builder.includes("case 'interview': return [{ value: 'recommended', label: t('Recommended') }];") && builder.includes("case 'interview': return group.items.some(item => interviewRecommended(interviewFor(item.flow_id, item.candidate_email)));"), 'the filter keeps the candidates the team recommends (same rule as the seal)');
+  assert.ok(builder.includes("interview: t('Interview'), date:") && builder.includes("{ value: 'recommended', label: t('Recommended') }") && builder.includes('const keys = interviewFilterKeys(interviewFor(item.flow_id, item.candidate_email)); return row.values.some(value => keys.has(value));'), 'the filter asks about the interview the card shows (same rule as the seal for Recommended)');
+});
+
+test('the Interview filter lists the stages, results, impressions, Recommended and "No interview", and reads them from the interview the card shows', () => {
+  const options = slice(builder, "case 'interview': return [", "case 'applications':");
+  for (const value of ['awaiting_schedule', 'invited', 'confirmed', 'reschedule_requested', 'declined', 'waiting_results', 'held', 'no_show', 'other', 'cancelled', 'positive', 'mixed', 'negative', 'recommended', 'none']) assert.ok(options.includes("value: '" + value + "'"), value);
+  const keys = slice(builder, 'function interviewFilterKeys(row) {', 'function interviewCardHtml(row) {');
+  assert.ok(keys.includes('interviewAwaitingResult(row)') && keys.includes('interviewRecommended(row)') && keys.includes("keys.add('none')"), 'waiting for results, recommendation and no interview');
+  assert.ok(keys.includes("row.resultReason === 'held' ? 'held' : row.resultReason === 'no_show' ? 'no_show' : 'other'"), 'the result of a finalized interview');
 });
