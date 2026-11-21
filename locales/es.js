@@ -1752,6 +1752,7 @@
   'The interview with {name} has no meeting link yet': 'La entrevista con {name} aún no tiene enlace de reunión',
   'Team warned: no meeting link': 'Equipo avisado: sin enlace de la reunión',
   'Change responsible': 'Cambiar responsable',
+  'You were added as responsible for the interview with {name}': 'Te agregaron como responsable de la entrevista con {name}',
   'Interview finalized.': 'Entrevista finalizada.',
   'Finalized by {name} on {date}': 'Finalizada por {name} el {date}',
   'Interview finalized': 'Entrevista finalizada',

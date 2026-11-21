@@ -100,6 +100,11 @@ function detailsOf(iv: Row): InterviewDetails {
   };
 }
 
+/** Null while the interview has no date (it is still waiting to be scheduled). */
+function detailsOrNull(iv: Row): InterviewDetails | null {
+  return iv.starts_at ? detailsOf(iv) : null;
+}
+
 function calendarEventOf(ctx: Context): CalendarEvent {
   const iv = ctx.iv;
   const d = detailsOf(iv);
@@ -215,6 +220,34 @@ async function notifyRecruiters(ctx: Context, kind: RecruiterEmailKind, keySuffi
   }
 }
 
+/** The people newly INCLUDED in the responsible people of an interview (not who made the change) get a bell notice and an e-mail. */
+async function notifyNewResponsibles(ctx: Context, before: string[], after: string[], actorId: string) {
+  try {
+    const had = new Set(before);
+    const added = [...new Set(after)].filter((id) => !had.has(id) && id !== actorId);
+    if (!added.length) return;
+    const now = new Date().toISOString();
+    await admin!.from("candidate_interview_assignments").upsert(
+      added.map((user_id) => ({ interview_id: ctx.iv.id, user_id, workspace_id: ctx.iv.workspace_id, assigned_at: now, seen_at: null })),
+      { onConflict: "interview_id,user_id" },
+    );
+    const { data: profiles } = await admin!.from("profiles").select("user_id,ui_language").in("user_id", added);
+    for (const id of added) {
+      const { data } = await admin!.auth.admin.getUserById(id);
+      const email = data?.user?.email;
+      if (!email) continue;
+      const language = languageOfProfile(profiles?.find((p: Row) => p.user_id === id)?.ui_language);
+      const mail = buildRecruiterEmail({
+        kind: "assigned", language, candidateName: ctx.candidateName, candidateEmail: ctx.iv.candidate_email, jobTitle: ctx.jobTitle, companyName: ctx.companyName,
+        interview: detailsOrNull(ctx.iv), appUrl: `${APP_URL}#applicants`,
+      });
+      await sendMail(email, mail, `interview-recruiter-assigned/${ctx.iv.id}/${Date.parse(now)}/${email}`);
+    }
+  } catch (error) {
+    console.error("interviews: new responsibles were not notified", error instanceof Error ? error.message : error);
+  }
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Views
 function recruiterRow(iv: Row) {
@@ -301,7 +334,7 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
   if (!responsibles.ok) return fail(req, 400, "Choose people from this workspace.");
   const v = parsed.value;
   const now = new Date().toISOString();
-  const { data: before } = await admin!.from("candidate_interviews").select("sequence,local_start,time_zone,starts_at").eq("id", seen.id).maybeSingle();
+  const { data: before } = await admin!.from("candidate_interviews").select("sequence,local_start,time_zone,starts_at,responsible_user_ids").eq("id", seen.id).maybeSingle();
   // An interview whose time has passed can only be edited to a NEW time (the database checks a changed time; an unchanged past time would slip through).
   if (before?.starts_at && Date.parse(before.starts_at) <= Date.now() && String(before.local_start).slice(0, 16).replace(" ", "T") === v.localStart && before.time_zone === v.timeZone) return fail(req, 422, "The interview must be in the future.");
   const { data: updated, error } = await admin!.from("candidate_interviews").update({
@@ -318,6 +351,7 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
   const ctx = await loadContext(updated.id);
   if (!ctx) return fail(req, 404, "The interview was not found.");
   const sent = await sendToCandidate(ctx, wasFirst ? "invite" : "update", String(updated.sequence));
+  if (responsibles.ids !== null) await notifyNewResponsibles(ctx, before?.responsible_user_ids || [], responsibles.ids, userId);
   return response(req, 200, sent ? { interview: recruiterRow(updated), emailSent: true } : { interview: recruiterRow(updated), emailSent: false, warning: "The interview was saved, but the e-mail could not be sent. Use Resend to try again." });
 }
 
@@ -337,6 +371,8 @@ async function actionSetResponsibles(req: Request, userId: string, userClient: S
   if (error) return databaseFailure(req, error);
   if (!updated) return fail(req, 404, "The interview was not found.");
   await addEvent(updated, "responsibles_changed", "recruiter", userId, { responsibleIds: responsibles.ids });
+  const ctx = await loadContext(updated.id);
+  if (ctx) await notifyNewResponsibles(ctx, [...had], responsibles.ids, userId);
   return response(req, 200, { interview: recruiterRow(updated) });
 }
 

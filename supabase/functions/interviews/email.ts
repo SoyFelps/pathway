@@ -242,7 +242,7 @@ export function buildCandidateEmail(input: CandidateEmailInput): BuiltEmail {
 // To the recruiter
 interface RecruiterCopy {
   htmlLang: string;
-  kinds: Record<"confirmed" | "declined" | "reschedule" | "no_link", {
+  kinds: Record<"confirmed" | "declined" | "reschedule" | "no_link" | "assigned", {
     subject: (name: string, job: string) => string; eyebrow: string; heading: (name: string) => string; intro: (name: string, job: string, company: string) => string;
   }>;
   labels: CandidateCopy["labels"] & { message: string; suggested: string; addToCalendar: string; email: string };
@@ -258,6 +258,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       declined: { subject: (n, j) => `${n} denied the interview – ${j}`, eyebrow: "Interview denied", heading: (n) => `${n} denied the interview.`, intro: (n, j, c) => `${n} denied the interview for ${j} at ${c}. The candidate was not moved or rejected: it is your decision.` },
       reschedule: { subject: (n, j) => `${n} asked for another time – ${j}`, eyebrow: "Another time requested", heading: (n) => `${n} asked for another time.`, intro: (n, j, c) => `${n} asked for another time for the interview for ${j} at ${c}. Open the candidate and schedule a new time to send a new invitation.` },
       no_link: { subject: (n, j) => `Add the meeting link: interview with ${n} – ${j}`, eyebrow: "Meeting link missing", heading: (n) => `The interview with ${n} has no meeting link.`, intro: (n, j, c) => `The interview with ${n} for ${j} at ${c} is in about 24 hours and has no meeting link yet. Open the candidate, edit the interview and add the link: the candidate receives the updated invitation.` },
+      assigned: { subject: (n, j) => `You are now responsible for the interview with ${n} – ${j}`, eyebrow: "Responsible for an interview", heading: (n) => `You were added as responsible for the interview with ${n}.`, intro: (n, j, c) => `You were added as one of the people responsible for the interview with ${n} for ${j} at ${c}. You will be told when the candidate answers.` },
     },
     labels: { when: "When", format: "Format", online: "Online", inPerson: "In person", link: "Meeting link", address: "Address", notes: "Notes", message: "Candidate message", suggested: "Suggested times", addToCalendar: "Add to my calendar", email: "E-mail" },
     button: "Open candidates",
@@ -270,6 +271,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       declined: { subject: (n, j) => `${n} recusou a entrevista – ${j}`, eyebrow: "Entrevista recusada", heading: (n) => `${n} recusou a entrevista.`, intro: (n, j, c) => `${n} recusou a entrevista para ${j} – ${c}. A pessoa não foi movida nem reprovada: a decisão é sua.` },
       reschedule: { subject: (n, j) => `${n} pediu outro horário – ${j}`, eyebrow: "Pedido de outro horário", heading: (n) => `${n} pediu outro horário.`, intro: (n, j, c) => `${n} pediu outro horário para a entrevista para ${j} – ${c}. Abra o candidato e agende um novo horário para enviar um novo convite.` },
       no_link: { subject: (n, j) => `Falta o link da reunião: entrevista com ${n} – ${j}`, eyebrow: "Falta o link da reunião", heading: (n) => `A entrevista com ${n} está sem link.`, intro: (n, j, c) => `A entrevista com ${n} para ${j} – ${c} será em cerca de 24 horas e ainda não tem link de reunião. Abra o candidato, edite a entrevista e adicione o link: a pessoa recebe o convite atualizado.` },
+      assigned: { subject: (n, j) => `Você agora é responsável pela entrevista com ${n} – ${j}`, eyebrow: "Responsável por uma entrevista", heading: (n) => `Você foi incluído como responsável pela entrevista com ${n}.`, intro: (n, j, c) => `Você foi incluído como um dos responsáveis pela entrevista com ${n} para ${j} – ${c}. Você será avisado quando o candidato responder.` },
     },
     labels: { when: "Quando", format: "Formato", online: "Online", inPerson: "Presencial", link: "Link da reunião", address: "Endereço", notes: "Observações", message: "Mensagem do candidato", suggested: "Horários sugeridos", addToCalendar: "Adicionar à minha agenda", email: "E-mail" },
     button: "Abrir candidatos",
@@ -282,6 +284,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       declined: { subject: (n, j) => `${n} rechazó la entrevista – ${j}`, eyebrow: "Entrevista rechazada", heading: (n) => `${n} rechazó la entrevista.`, intro: (n, j, c) => `${n} rechazó la entrevista para ${j} – ${c}. La persona no fue movida ni rechazada: la decisión es tuya.` },
       reschedule: { subject: (n, j) => `${n} pidió otro horario – ${j}`, eyebrow: "Solicitud de otro horario", heading: (n) => `${n} pidió otro horario.`, intro: (n, j, c) => `${n} pidió otro horario para la entrevista para ${j} – ${c}. Abre el candidato y programa un nuevo horario para enviar una nueva invitación.` },
       no_link: { subject: (n, j) => `Falta el enlace de la reunión: entrevista con ${n} – ${j}`, eyebrow: "Falta el enlace de la reunión", heading: (n) => `La entrevista con ${n} no tiene enlace.`, intro: (n, j, c) => `La entrevista con ${n} para ${j} – ${c} es en unas 24 horas y aún no tiene enlace de reunión. Abre el candidato, edita la entrevista y agrega el enlace: la persona recibe la invitación actualizada.` },
+      assigned: { subject: (n, j) => `Ahora eres responsable de la entrevista con ${n} – ${j}`, eyebrow: "Responsable de una entrevista", heading: (n) => `Te agregaron como responsable de la entrevista con ${n}.`, intro: (n, j, c) => `Te agregaron como uno de los responsables de la entrevista con ${n} para ${j} – ${c}. Se te avisará cuando el candidato responda.` },
     },
     labels: { when: "Cuándo", format: "Formato", online: "En línea", inPerson: "Presencial", link: "Enlace de la reunión", address: "Dirección", notes: "Observaciones", message: "Mensaje del candidato", suggested: "Horarios sugeridos", addToCalendar: "Agregar a mi calendario", email: "Correo" },
     button: "Abrir candidatos",
@@ -289,7 +292,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
   },
 };
 
-export type RecruiterEmailKind = "confirmed" | "declined" | "reschedule" | "no_link";
+export type RecruiterEmailKind = "confirmed" | "declined" | "reschedule" | "no_link" | "assigned";
 
 export interface RecruiterEmailInput {
   kind: RecruiterEmailKind;
@@ -299,7 +302,8 @@ export interface RecruiterEmailInput {
   candidateEmail?: unknown;
   jobTitle?: unknown;
   companyName?: unknown;
-  interview: InterviewDetails;
+  /** Null for an interview with no date yet (a person added as responsible before it is scheduled). */
+  interview: InterviewDetails | null;
   /** The candidate's own words, for a request of another time. */
   message?: unknown;
   /** Suggested times as written by the candidate, e.g. "2026-12-03T14:00". */
@@ -317,7 +321,7 @@ export function buildRecruiterEmail(input: RecruiterEmailInput): BuiltEmail {
   const job = singleLine(input.jobTitle, 120) || "—";
   const company = singleLine(input.companyName, 80) || "—";
   const k = copy.kinds[input.kind];
-  const rows = detailRows(copy.labels, input.interview, language);
+  const rows = input.interview ? detailRows(copy.labels, input.interview, language) : [];
   // The title and the text name the person; the address is in the body, so the team has both.
   if (candidateEmail) rows.unshift([copy.labels.email, candidateEmail]);
   const message = multiLine(input.message, 1000);

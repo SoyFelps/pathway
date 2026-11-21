@@ -308,3 +308,19 @@ test('no link yet: the 24 h reminder warns the team (event, notice and e-mail), 
   assert.ok(sql.includes("(kind = 'online' or (kind = 'in_person' and address is not null))") && sql.includes("'link_missing'") && sql.includes('add column notice_reason'));
   assert.equal((sql.match(/case when i\.notice_reason = 'link_missing' then 'link_missing' else i\.state end/g) || []).length, 2, 'the bell and the notifications page');
 });
+
+test('new responsible people are told: an e-mail in their language, a bell notice, never the person who made the change, and also while the interview has no date', async () => {
+  const { buildRecruiterEmail } = await loadEmail();
+  for (const language of ['en', 'pt', 'es']) {
+    const withDate = buildRecruiterEmail({ kind: 'assigned', language, candidateName: 'Eve', candidateEmail: 'eve@example.test', jobTitle: 'Support', companyName: 'Acme', interview: { kind: 'online', startsAt: new Date('2026-12-01T17:00:00Z'), durationMinutes: 30, timeZone: 'America/Sao_Paulo', meetingLink: null }, appUrl: 'https://nellio.app/#applicants' });
+    const noDate = buildRecruiterEmail({ kind: 'assigned', language, candidateName: 'Eve', candidateEmail: 'eve@example.test', jobTitle: 'Support', companyName: 'Acme', interview: null, appUrl: 'https://nellio.app/#applicants' });
+    assert.ok(withDate.subject.includes('Eve') && noDate.subject.includes('Eve'), language);
+    assert.ok(withDate.html.includes('2026') && !noDate.html.includes('2026'), language + ': the date only when there is one');
+  }
+  assert.ok(index.includes('async function notifyNewResponsibles(ctx: Context, before: string[], after: string[], actorId: string)') && index.includes('id !== actorId'));
+  assert.ok(index.includes('await notifyNewResponsibles(ctx, before?.responsible_user_ids || [], responsibles.ids, userId)') && index.includes('await notifyNewResponsibles(ctx, [...had], responsibles.ids, userId)'), 'when the interview is scheduled with people chosen, and when they change afterwards');
+  const sql = read('supabase/migrations/20261121110000_interview_assignments.sql');
+  assert.ok(sql.includes('alter table public.candidate_interview_assignments enable row level security') && sql.includes('revoke all on public.candidate_interview_assignments from public, anon, authenticated') && sql.includes('grant all on public.candidate_interview_assignments to service_role'));
+  assert.equal((sql.match(/'responsible_added'/g) || []).length >= 2, true, 'bell and notifications page');
+  assert.ok(sql.includes('update public.candidate_interview_assignments set seen_at = now()'), 'opening the candidate marks it seen');
+});

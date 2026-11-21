@@ -944,6 +944,7 @@
   }
   const notifInterviewText = (state, candidate) => {
     const name = '<strong>' + esc(candidate) + '</strong>';
+    if (state === 'responsible_added') return t('You were added as responsible for the interview with {name}', { name });
     if (state === 'link_missing') return t('The interview with {name} has no meeting link yet', { name });
     return state === 'confirmed' ? t('{name} confirmed the interview', { name }) : state === 'declined' ? t('{name} denied the interview', { name }) : t('{name} asked for another time for the interview', { name });
   };
