@@ -190,3 +190,11 @@ test('the Interviews calendar: List / Day / Week / Month on the same filtered in
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.ok(html.includes('interviews-calendar.js?v='), 'the calendar file is loaded (with a version)');
 });
+
+test('the Interviews page can change the responsible people of an interview that is not finalized, in a small window with the same field and server action as the Interview tab', () => {
+  const page = slice(builder, 'function ivRowHtml(row)', 'function renderInterviewsList()');
+  assert.ok(page.includes("on ? ['responsibles', t('Change responsible'), '', locked] : null"), 'in the menu of every interview that is on (invited, confirmed, declined, asked for another time, waiting for results), never finalized or cancelled');
+  const modal = slice(builder, 'function openInterviewResponsiblesModal(row)', 'function openInterviewDetails(row)');
+  assert.ok(modal.includes('mountResponsibleField(') && modal.includes('setInterviewResponsibles(row.id, currentResponsibleIds(chosen))') && modal.includes('loadInterviewsPage()'));
+  assert.ok(builder.includes("action === 'responsibles') { openInterviewResponsiblesModal(row); return; }") && builder.includes("action === 'responsibles') { closeLayer(); openInterviewResponsiblesModal(row); }"), 'from the list and from the details window');
+});

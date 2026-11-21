@@ -2496,6 +2496,7 @@
       ? '<span class="ai-confirm">' + t('Cancel this interview?') + ' ' + btn('cancel-yes', t('Yes, cancel'), 'btn-danger') + btn('cancel-no', t('Keep it')) + '</span>'
       : (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '') + ivMenuHtml(row, [
         on ? ['edit', t('Edit interview'), '', locked] : null,
+        on ? ['responsibles', t('Change responsible'), '', locked] : null,
         on && !started && !waiting ? ['cancel', t('Cancel interview'), ' is-danger', locked] : null,
         ['open', t('Open candidate'), '', '']
       ].filter(Boolean));
@@ -2617,6 +2618,31 @@
     } catch (failure) { showToast(failure.message || t('Something went wrong. Try again.')); }
   }
   // The window of one interview (opened from the calendar): everything about it and the same actions as the list.
+  /** A small window to change who is responsible for ONE interview (the same field and the same server action as the Interview tab); nothing is sent to the candidate. */
+  function openInterviewResponsiblesModal(row) {
+    let chosen = ivResponsibleIds(row).slice();
+    setLayer('<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">' + t('Interview') + '</div><h2>' + t('Change responsible') + '</h2><p>' + esc(ivName(row)) + ' · ' + esc(ivJobTitle(row.flowId)) + '</p></div><button class="modal-x" data-close aria-label="' + t('Close') + '">×</button></div>'
+      + '<div class="field-group"><span class="form-label" id="iv-resp-modal-label">' + t('Responsible for the interview') + '</span><div id="iv-resp-modal"></div><p class="team-permission-hint">' + t('They are told when the candidate answers.') + '</p></div>'
+      + '<div class="auth-error" id="iv-resp-modal-error" role="alert" hidden></div>'
+      + '<div class="modal-actions"><button class="btn" type="button" data-close>' + t('Cancel') + '</button><button class="btn btn-primary" type="button" id="iv-resp-modal-save">' + t('Save') + '</button></div>');
+    const layer = modalRoot.querySelector('#modal-layer');
+    mountResponsibleField(layer.querySelector('#iv-resp-modal'), 'iv-resp-modal-label', () => chosen, ids => { chosen = ids; });
+    const save = layer.querySelector('#iv-resp-modal-save');
+    const error = layer.querySelector('#iv-resp-modal-error');
+    save.addEventListener('click', async () => {
+      error.hidden = true;
+      save.disabled = true; save.textContent = t('Saving…');
+      try {
+        await window.PathwayBackend.setInterviewResponsibles(row.id, currentResponsibleIds(chosen));
+        showToast(t('Responsible people updated.'));
+        closeLayer();
+        void loadInterviewsPage();
+      } catch (failure) {
+        save.disabled = false; save.textContent = t('Save');
+        error.textContent = failure.message || t('Something went wrong. Please try again.'); error.hidden = false;
+      }
+    });
+  }
   function openInterviewDetails(row) {
     const tag = ivTagOf(row);
     const info = (label, value) => value ? '<div class="applicant-info-item"><span>' + esc(label) + '</span><strong>' + value + '</strong></div>' : '';
@@ -2626,7 +2652,7 @@
     const on = INTERVIEW_ON.includes(row.state);
     const locked = workspaceIsFree() ? ' disabled' : '';
     const btn = (action, label, extra = '', off = '') => '<button type="button" class="btn' + (extra ? ' ' + extra : '') + '" data-ivd="' + action + '"' + off + '>' + esc(label) + '</button>';
-    const actions = (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '') + (on ? btn('edit', t('Edit interview'), '', locked) : '') + (on && !started ? btn('cancel', t('Cancel interview'), 'btn-danger-ghost', locked) : '') + btn('open', t('Open candidate'));
+    const actions = (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '') + (on ? btn('edit', t('Edit interview'), '', locked) : '') + (on ? btn('responsibles', t('Change responsible'), '', locked) : '') + (on && !started ? btn('cancel', t('Cancel interview'), 'btn-danger-ghost', locked) : '') + btn('open', t('Open candidate'));
     const result = row.state === 'finished' && row.resultAt
       ? '<div class="applicant-info-grid">' + info(t('What happened'), esc(reasons[row.resultReason] || '')) + (row.resultImpression ? info(t('Impression'), aiImpressionLabelled(row.resultImpression)) : '') + (row.resultRecommended === null ? '' : info(t('Recommended'), row.resultRecommended ? t('Yes') : t('No'))) + '</div>' + (row.resultNotes ? '<div class="ai-note"><strong>' + t('Notes') + '</strong> ' + esc(row.resultNotes).replace(/\n/g, '<br>') + '</div>' : '')
       : '';
@@ -2644,6 +2670,7 @@
       const action = control.dataset.ivd;
       if (action === 'edit') { closeLayer(); openScheduleInterviewModal(row, { afterClose: reload }); }
       else if (action === 'finalize') { closeLayer(); openFinalizeInterviewModal(row, { afterClose: reload }); }
+      else if (action === 'responsibles') { closeLayer(); openInterviewResponsiblesModal(row); }
       else if (action === 'open') { closeLayer(); ivOpenCandidate(row); }
       else if (action === 'cancel') { actionBox.innerHTML = '<span class="ai-confirm">' + t('Cancel this interview?') + ' ' + btn('cancel-yes', t('Yes, cancel'), 'btn-danger') + btn('cancel-no', t('Keep it')) + '</span>'; }
       else if (action === 'cancel-no') { actionBox.innerHTML = actions; }
@@ -2715,6 +2742,7 @@
       if (!row) return;
       if (action === 'edit') { openScheduleInterviewModal(row, { afterClose: () => { void loadInterviewsPage(); } }); return; }
       if (action === 'finalize') { openFinalizeInterviewModal(row, { afterClose: () => { void loadInterviewsPage(); } }); return; }
+      if (action === 'responsibles') { openInterviewResponsiblesModal(row); return; }
       if (action === 'open') { ivOpenCandidate(row); return; }
       if (action === 'cancel') { ivConfirmId = row.id; renderInterviewsBody(); return; }
       if (action === 'cancel-no') { ivConfirmId = ''; renderInterviewsBody(); return; }
