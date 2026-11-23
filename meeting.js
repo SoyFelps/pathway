@@ -26,6 +26,7 @@
   let deviceError = '';
   let busy = false;
   let peers = [];
+  const logLines = []; // what happened in the connections, for "Copy connection details" (support)
 
   async function call(body) {
     let result;
@@ -156,7 +157,7 @@
   }
 
   function onRoomEvent(event, detail) {
-    if (event === 'log') { console.debug('[meeting]', detail.text); return; }
+    if (event === 'log') { logLines.push(new Date().toISOString().slice(11, 19) + '  ' + detail.text); if (logLines.length > 300) logLines.shift(); console.debug('[meeting]', detail.text); return; }
     if (event === 'peers') { peers = detail; paintPeople(); return; }
     if (event === 'full') { room = null; renderMessage(t('This meeting is full.'), t('Up to {count} people can be in the room at the same time.', { count: view.maxPeople || 4 })); return; }
   }
@@ -170,6 +171,7 @@
         <button class="btn" type="button" id="meeting-cam-toggle" aria-pressed="false"${stream && stream.getVideoTracks().length ? '' : ' disabled'}>${t('Turn camera off')}</button>
         <button class="btn btn-danger" type="button" id="meeting-leave">${t('Leave')}</button>
       </div>
+      <div class="meeting-support"><button class="meeting-copy" type="button" id="meeting-copy">${t('Copy connection details')}</button></div>
     </section>`, true);
     const me = root.querySelector('[data-tile="me"] video');
     me.srcObject = stream || new MediaStream(); me.play().catch(() => {});
@@ -177,6 +179,13 @@
     document.getElementById('meeting-mic-toggle').addEventListener('click', event => { micOn = !micOn; room && room.setMic(micOn); event.currentTarget.textContent = micOn ? t('Mute') : t('Unmute'); event.currentTarget.setAttribute('aria-pressed', String(!micOn)); });
     document.getElementById('meeting-cam-toggle').addEventListener('click', event => { camOn = !camOn; room && room.setCam(camOn); event.currentTarget.textContent = camOn ? t('Turn camera off') : t('Turn camera on'); event.currentTarget.setAttribute('aria-pressed', String(!camOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-off', !camOn); });
     document.getElementById('meeting-leave').addEventListener('click', leave);
+    document.getElementById('meeting-copy').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      const report = { when: new Date().toISOString(), userAgent: navigator.userAgent, phone: PHONE, peers: room ? room.peers().map(({ stream: _s, ...p }) => p) : [], stats: room ? await room.stats().catch(() => []) : [], log: logLines.slice(-120) };
+      try { await navigator.clipboard.writeText(JSON.stringify(report, null, 2)); button.textContent = t('Copied'); }
+      catch (_) { button.textContent = t('Could not copy'); }
+      setTimeout(() => { button.textContent = t('Copy connection details'); }, 2500);
+    });
     paintPeople();
   }
 

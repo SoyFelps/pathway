@@ -1408,3 +1408,5 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .meeting-badge:empty{display:none}
 .meeting-controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 @media(max-width:640px){.meeting-main{padding:24px 14px 40px}.meeting-card{padding:20px 16px}.meeting-grid,.meeting-grid[data-count="2"]{grid-template-columns:1fr}.meeting-tile{aspect-ratio:4/3}.meeting-actions .btn,.meeting-controls .btn{flex:1}}
+.meeting-support{display:flex;justify-content:center}
+.meeting-copy{border:0;background:transparent;color:var(--text-subtle);font:600 12px var(--sans);text-decoration:underline;cursor:pointer;padding:4px 8px}
