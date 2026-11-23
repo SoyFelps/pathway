@@ -64,3 +64,11 @@ test('a tile with no picture shows the initials and the name; camera and microph
   assert.ok(page.includes("tile.classList.toggle('is-off', !person.cam || !picture)") && page.includes('const initials = name =>') && page.includes(".split(/\\s+/)"));
   assert.ok(read('styles.css').includes('.meeting-tile.is-off .meeting-avatar{display:flex}'));
 });
+
+test('the camera and microphone check is required: "Join" appears only after it, with a live microphone level', () => {
+  const page = read('meeting.js');
+  assert.ok(page.includes("${!checked ? `<button class=\"btn btn-primary\" type=\"button\" id=\"meeting-check\">"), 'before the check, only the check button');
+  assert.ok(page.includes('if (busy || !checked) return;'), 'joining without the check is refused');
+  assert.ok(!page.includes('if (!stream) await startDevices();'), 'joining never asks for the devices by itself');
+  assert.ok(page.includes('function startMeter()') && page.includes("id=\"meeting-meter\""));
+});

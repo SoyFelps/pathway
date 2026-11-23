@@ -24,6 +24,8 @@
   let wakeLock = null;
   let pollTimer = null;
   let deviceError = '';
+  let checked = false; // the camera/microphone check is required before "Join" appears (owner decision, 2026-11-23)
+  let meterStop = null;
   let busy = false;
   let peers = [];
   const logLines = []; // what happened in the connections, for "Copy connection details" (support)
@@ -81,6 +83,7 @@
   }
 
   async function startDevices(cameraId, micId) {
+    checked = true;
     deviceError = '';
     const video = cameraId ? { ...VIDEO, deviceId: { exact: cameraId } } : VIDEO;
     const audio = micId ? { ...AUDIO, deviceId: { exact: micId } } : AUDIO;
@@ -107,24 +110,56 @@
     const current = kind => stream && stream.getTracks().find(track => track.kind === kind);
     const { cameras, mics } = stream ? await deviceOptions() : { cameras: [], mics: [] };
     const select = (id, label, list, kind) => list.length > 1 ? `<label class="meeting-field"><span>${label}</span><select class="text-input" id="${id}">${list.map(d => `<option value="${esc(d.deviceId)}"${current(kind) && current(kind).getSettings().deviceId === d.deviceId ? ' selected' : ''}>${esc(d.label)}</option>`).join('')}</select></label>` : '';
+    stopMeter();
+    const hasMic = !!current('audio');
     root.innerHTML = shell(`<section class="candidate-form-card meeting-card">${heading()}
       <div class="meeting-preview">${stream && current('video') ? '<video id="preview" autoplay playsinline muted></video>' : `<div class="meeting-preview-empty">${stream ? t('Camera off') : t('Your camera is not on yet.')}</div>`}</div>
+      ${hasMic ? `<div class="meeting-meter"><span>${t('Microphone')}</span><div class="meeting-meter-track" role="meter" aria-label="${t('Microphone level')}" aria-valuemin="0" aria-valuemax="100"><div class="meeting-meter-fill" id="meeting-meter"></div></div><small>${t('Speak to see the bar move.')}</small></div>` : ''}
       ${deviceError ? `<div class="ai-note is-warn" role="alert">${esc(deviceError)}</div>` : ''}
       <div class="meeting-fields">
         <label class="meeting-field"><span>${t('Your name')}</span><input class="text-input" id="meeting-name" maxlength="40" autocomplete="name" value="${esc(name)}"></label>
         ${select('meeting-camera', t('Camera'), cameras, 'video')}${select('meeting-mic', t('Microphone'), mics, 'audio')}
       </div>
-      <p class="meeting-hint">${stream ? t('Your camera and microphone will be on when you join. You can turn them off in the room.') : t('When you continue, the browser asks to use your camera and microphone.')}</p>
-      <div class="meeting-actions">${stream ? '' : `<button class="btn" type="button" id="meeting-check">${t('Check camera and microphone')}</button>`}<button class="btn btn-primary" type="button" id="meeting-join">${t('Join the meeting')}</button></div>
+      <p class="meeting-hint">${!checked ? t('Before joining, check your camera and microphone. The browser will ask for permission to use them.') : stream ? t('Your camera and microphone will be on when you join. You can turn them off in the room.') : ''}</p>
+      <div class="meeting-actions">${!checked ? `<button class="btn btn-primary" type="button" id="meeting-check">${t('Check camera and microphone')}</button>` : `${deviceError ? `<button class="btn" type="button" id="meeting-check">${t('Check again')}</button>` : ''}<button class="btn btn-primary" type="button" id="meeting-join">${t('Join the meeting')}</button>`}</div>
     </section>`);
     const preview = document.getElementById('preview');
     if (preview) { preview.srcObject = stream; preview.play().catch(() => {}); }
+    if (hasMic) startMeter();
     const reselect = async () => { await startDevices(document.getElementById('meeting-camera')?.value, document.getElementById('meeting-mic')?.value); rememberName(); renderLobby(); };
     document.getElementById('meeting-camera')?.addEventListener('change', reselect);
     document.getElementById('meeting-mic')?.addEventListener('change', reselect);
     document.getElementById('meeting-check')?.addEventListener('click', async () => { rememberName(); await startDevices(); renderLobby(); });
-    document.getElementById('meeting-join').addEventListener('click', join);
+    document.getElementById('meeting-join')?.addEventListener('click', join);
   }
+
+  // A live microphone level in the lobby, so the person sees the microphone works before joining.
+  function startMeter() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const audio = new AudioCtx();
+      const source = audio.createMediaStreamSource(new MediaStream(stream.getAudioTracks()));
+      const analyser = audio.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.fftSize);
+      let frame = 0;
+      const draw = () => {
+        analyser.getByteTimeDomainData(data);
+        let peak = 0;
+        for (const value of data) peak = Math.max(peak, Math.abs(value - 128));
+        const level = Math.min(100, Math.round(peak / 128 * 220));
+        const bar = document.getElementById('meeting-meter');
+        if (!bar) { stopMeter(); return; }
+        bar.style.width = level + '%';
+        bar.parentElement.setAttribute('aria-valuenow', String(level));
+        frame = requestAnimationFrame(draw);
+      };
+      draw();
+      meterStop = () => { cancelAnimationFrame(frame); source.disconnect(); audio.close().catch(() => {}); };
+    } catch (_) { /* no level bar; the check still worked */ }
+  }
+  function stopMeter() { if (meterStop) { const stop = meterStop; meterStop = null; stop(); } }
 
   function rememberName() {
     const input = document.getElementById('meeting-name');
@@ -133,7 +168,8 @@
 
   // ---- The room ---------------------------------------------------------------------------------------------------------
   async function join() {
-    if (busy) return;
+    if (busy || !checked) return;
+    stopMeter();
     const input = document.getElementById('meeting-name');
     const name = (input && input.value.trim()) || '';
     if (!name) { input && input.focus(); input && input.classList.add('is-invalid'); return; }
@@ -142,7 +178,6 @@
     const button = document.getElementById('meeting-join');
     if (button) { button.disabled = true; button.textContent = t('Joining…'); }
     try {
-      if (!stream) await startDevices();
       const { room: entered } = await call({ action: 'join', secret, enter: true });
       view = entered;
       if (view.status !== 'open' || !view.channel) { busy = false; renderState(); return; }
@@ -227,6 +262,7 @@
     if (room) room.leave();
     room = null; peers = [];
     stream = null; // room.leave() stopped the camera and microphone
+    checked = false;
     if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
     renderMessage(t('You left the meeting.'), t('You can join again while the room is open.'), `<div class="meeting-actions"><button class="btn btn-primary" type="button" id="meeting-again">${t('Join again')}</button></div>`);
     document.getElementById('meeting-again').addEventListener('click', load);
