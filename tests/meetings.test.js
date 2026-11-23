@@ -53,3 +53,14 @@ test('the room page asks for the camera only after a click, follows the job lang
   const room = read('meeting-room.js');
   assert.ok(room.includes('const MAX_PEOPLE = 4') && room.includes('polite: myId > id') && room.includes('pc.restartIce()'));
 });
+
+test('a tile with no picture shows the initials and the name; camera and microphone changes travel as messages, never as presence updates', () => {
+  const room = read('meeting-room.js');
+  const page = read('meeting.js');
+  assert.ok(room.includes("channel.send({ type: 'broadcast', event: 'state'") && !/setTrack[\s\S]{0,300}announce\(\)/.test(room), 'turning the camera off must not update presence (that dropped the connection of the others)');
+  assert.ok(room.includes('missing.set(id, setTimeout('), 'someone absent from the presence list for a moment is not dropped at once');
+  assert.ok(room.includes("event: 'bye'"), 'pressing Leave removes the tile at once');
+  assert.ok(room.includes('lastState.get(person.id)'), 'a newcomer sees the current camera state of the others');
+  assert.ok(page.includes("tile.classList.toggle('is-off', !person.cam || !picture)") && page.includes('const initials = name =>') && page.includes(".split(/\\s+/)"));
+  assert.ok(read('styles.css').includes('.meeting-tile.is-off .meeting-avatar{display:flex}'));
+});

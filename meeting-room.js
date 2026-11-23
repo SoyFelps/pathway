@@ -20,6 +20,14 @@
     let channel = null;
     let localStream = null;
     let left = false;
+    // What the others are told about me through presence: name, arrival time (who stays when the room is full), camera and microphone on/off.
+    // Presence is sent ONCE, when entering: updating it makes the person vanish from the list for a moment, which would drop their connection.
+    // Camera/microphone changes go as a separate broadcast message instead ("state"), and again to anyone who arrives later.
+    const me = { name, at: 0, cam: false, mic: false };
+    const announce = () => channel && channel.track({ name: me.name, at: me.at, cam: me.cam, mic: me.mic }).catch(() => {});
+    const sendState = () => channel && channel.send({ type: 'broadcast', event: 'state', payload: { from: myId, cam: me.cam, mic: me.mic } }).catch(() => {});
+    const lastState = new Map(); // id -> { cam, mic } from the latest "state" message (it may arrive before that person is in my list)
+    const missing = new Map(); // id -> timer: someone absent from the presence list is dropped only if they stay absent for a few seconds
 
     // Every message is checked: the Realtime client throttles bursts, and a lost offer leaves a connection stuck in "new".
     const send = async (to, payload) => {
@@ -45,8 +53,8 @@
       pc.ontrack = ({ track }) => {
         peer.stream.addTrack(track);
         // A phone that locks its screen stops sending its camera: the track goes "muted" until it comes back.
-        track.onmute = () => log(peer.name + ': ' + track.kind + ' paused');
-        track.onunmute = () => log(peer.name + ': ' + track.kind + ' back');
+        track.onmute = () => { log(peer.name + ': ' + track.kind + ' paused'); emit('peers', list()); };
+        track.onunmute = () => { log(peer.name + ': ' + track.kind + ' back'); emit('peers', list()); };
         emit('peers', list());
       };
       pc.onicecandidate = ({ candidate }) => { if (candidate) queueCandidate(peer, candidate.toJSON()); };
@@ -125,27 +133,45 @@
     }
 
     function list() {
-      return [...peers.values()].map(peer => ({ id: peer.id, name: peer.name, stream: peer.stream, state: peer.pc.connectionState, candidateType: peer.candidateType, connectMs: peer.connectedAt ? peer.connectedAt - peer.joinedAt : null }));
+      return [...peers.values()].map(peer => ({ id: peer.id, name: peer.name, cam: peer.cam !== false, mic: peer.mic !== false, stream: peer.stream, state: peer.pc.connectionState, candidateType: peer.candidateType, connectMs: peer.connectedAt ? peer.connectedAt - peer.joinedAt : null }));
     }
 
     async function join(stream) {
       localStream = stream || null;
+      me.cam = !!(localStream && localStream.getVideoTracks().length);
+      me.mic = !!(localStream && localStream.getAudioTracks().length);
       channel = supabase.channel(channelName, { config: { broadcast: { self: false }, presence: { key: myId } } });
       channel.on('broadcast', { event: 'signal' }, ({ payload }) => onSignal(payload));
+      // Someone pressing "Leave" says so, so their tile goes away at once (a lost connection waits for the presence list instead).
+      channel.on('broadcast', { event: 'bye' }, ({ payload }) => { if (payload && peers.has(payload.from)) dropPeer(payload.from); });
+      channel.on('broadcast', { event: 'state' }, ({ payload }) => {
+        if (!payload || !payload.from) return;
+        lastState.set(payload.from, { cam: !!payload.cam, mic: !!payload.mic });
+        const peer = peers.get(payload.from);
+        if (!peer) return;
+        peer.cam = !!payload.cam; peer.mic = !!payload.mic;
+        emit('peers', list());
+      });
       channel.on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
-        const present = Object.entries(state).map(([id, metas]) => ({ id, name: (metas[0] && metas[0].name) || '?', at: (metas[0] && metas[0].at) || 0 }));
+        const present = Object.entries(state).map(([id, metas]) => ({ id, name: (metas[0] && metas[0].name) || '?', at: (metas[0] && metas[0].at) || 0, cam: !!(metas[0] && metas[0].cam), mic: !!(metas[0] && metas[0].mic) }));
         // Room full: the four who arrived first stay; a fifth leaves on its own.
         const ordered = present.slice().sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
         if (ordered.length > MAX_PEOPLE && ordered.findIndex(item => item.id === myId) >= MAX_PEOPLE) { emit('full'); leave(); return; }
-        for (const person of present) if (person.id !== myId) peerFor(person.id, person.name);
-        for (const id of [...peers.keys()]) if (!state[id]) dropPeer(id);
+        let arrived = false;
+        for (const person of present) {
+          if (person.id === myId) continue;
+          if (missing.has(person.id)) { clearTimeout(missing.get(person.id)); missing.delete(person.id); }
+          if (!peers.has(person.id)) { const peer = peerFor(person.id, person.name); const known = lastState.get(person.id); peer.cam = known ? known.cam : person.cam; peer.mic = known ? known.mic : person.mic; arrived = true; }
+        }
+        for (const id of [...peers.keys()]) if (!state[id] && !missing.has(id)) missing.set(id, setTimeout(() => { missing.delete(id); if (!channel || !channel.presenceState()[id]) dropPeer(id); }, 4000));
+        if (arrived) { sendState(); setTimeout(sendState, 1500); } // the newcomer learns my current camera/microphone state (presence only has the state at my arrival)
         emit('peers', list());
       });
       await new Promise((resolve, reject) => {
         channel.subscribe(async (status) => {
           log('channel: ' + status);
-          if (status === 'SUBSCRIBED') { await channel.track({ name, at: Date.now() }); resolve(); }
+          if (status === 'SUBSCRIBED') { me.at = Date.now(); await announce(); resolve(); }
           else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') reject(new Error('Could not reach the room (' + status + ').'));
         });
       });
@@ -154,6 +180,9 @@
     function leave() {
       if (left) return;
       left = true;
+      if (channel) channel.send({ type: 'broadcast', event: 'bye', payload: { from: myId } }).catch(() => {});
+      for (const timer of missing.values()) clearTimeout(timer);
+      missing.clear();
       for (const id of [...peers.keys()]) dropPeer(id);
       if (channel) { channel.untrack().catch(() => {}); supabase.removeChannel(channel); channel = null; }
       if (localStream) for (const track of localStream.getTracks()) track.stop();
@@ -171,7 +200,12 @@
       if (old && old !== stream) for (const track of old.getTracks()) if (!stream.getTracks().includes(track)) track.stop();
     }
 
-    const setTrack = (kind, on) => { if (localStream) for (const track of localStream.getTracks()) if (track.kind === kind) track.enabled = on; };
+    const setTrack = (kind, on) => {
+      if (!localStream) return;
+      let has = false;
+      for (const track of localStream.getTracks()) if (track.kind === kind) { track.enabled = on; has = true; }
+      if (has) { me[kind === 'video' ? 'cam' : 'mic'] = on; sendState(); }
+    };
 
     return { id: myId, join, leave, replaceStream, localStream: () => localStream, setMic: on => setTrack('audio', on), setCam: on => setTrack('video', on), peers: list, stats: () => Promise.all([...peers.values()].map(async peer => ({ name: peer.name, ...(await pairStats(peer.pc)) }))) };
   }

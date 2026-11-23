@@ -1410,3 +1410,10 @@ body:has(#canvas-stage) .toast{bottom:80px}
 @media(max-width:640px){.meeting-main{padding:24px 14px 40px}.meeting-card{padding:20px 16px}.meeting-grid,.meeting-grid[data-count="2"]{grid-template-columns:1fr}.meeting-tile{aspect-ratio:4/3}.meeting-actions .btn,.meeting-controls .btn{flex:1}}
 .meeting-support{display:flex;justify-content:center}
 .meeting-copy{border:0;background:transparent;color:var(--text-subtle);font:600 12px var(--sans);text-decoration:underline;cursor:pointer;padding:4px 8px}
+.meeting-avatar{position:absolute;inset:0;display:none;align-items:center;justify-content:center}
+.meeting-tile.is-off .meeting-avatar{display:flex}
+.meeting-initials{width:88px;height:88px;border-radius:50%;display:grid;place-items:center;background:var(--green);color:var(--surface);font:700 32px var(--sans);letter-spacing:.02em}
+.meeting-label{display:inline-flex;align-items:center;gap:5px}
+.meeting-mic-off{display:none;color:var(--red-soft)}
+.meeting-tile.is-muted .meeting-mic-off{display:block}
+@media(max-width:640px){.meeting-initials{width:68px;height:68px;font-size:24px}}

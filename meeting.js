@@ -45,6 +45,10 @@
     const brand = view ? esc(view.companyName || t('Hiring team')) : '';
     return `<div class="candidate-app"><header class="candidate-header"><div class="candidate-header-brands"><a class="brand" href="./" aria-label="${t('Nellio home')}"><img class="brand-logo" src="brand/nellio-logo.svg" alt="Nellio"></a></div><span class="candidate-header-note">${brand || t('Interview')}</span></header><main class="${wide ? 'meeting-main is-wide' : 'meeting-main'}">${inner}</main><footer class="candidate-footer">${t('Powered by Nellio · A clearer way to hire')}</footer></div>`;
   }
+  // When there is no picture, the tile shows the initials and the name (like other meeting apps); a struck microphone when muted.
+  const initials = name => String(name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase() || '?';
+  const MIC_OFF = '<svg class="meeting-mic-off" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 9v3a3 3 0 0 0 5.1 2.1M15 9.3V5a3 3 0 0 0-5.9-.7"/><path d="M19 11a7 7 0 0 1-1.2 3.9M5 11a7 7 0 0 0 11.1 5.7M12 18v3M3 3l18 18"/></svg>';
+  const tileInner = (name, label) => '<video autoplay playsinline' + (label ? ' muted' : '') + '></video><div class="meeting-avatar"><span class="meeting-initials">' + esc(initials(name)) + '</span></div><span class="meeting-label">' + MIC_OFF + '<span class="meeting-name">' + esc(label || name) + '</span></span><span class="meeting-badge"></span>';
   const heading = () => `<div class="eyebrow">${t('Interview')}</div><h1 class="meeting-title">${esc(view.jobTitle || t('Interview'))}</h1><p class="meeting-sub">${esc(view.companyName || '')}${view.startsAt ? ' · ' + esc(whenText()) : ''}</p>`;
 
   function renderMessage(title, text, extra = '') {
@@ -165,7 +169,7 @@
   function renderRoom(name) {
     root.innerHTML = shell(`<section class="meeting-room">
       <div class="meeting-room-head"><div><strong>${esc(view.jobTitle || t('Interview'))}</strong><span>${esc(view.companyName || '')}</span></div><span class="meeting-status" id="meeting-status"></span></div>
-      <div class="meeting-grid" id="meeting-grid"><div class="meeting-tile is-me" data-tile="me"><video autoplay playsinline muted></video><span class="meeting-label">${esc(t('{name} (you)', { name }))}</span></div></div>
+      <div class="meeting-grid" id="meeting-grid"><div class="meeting-tile is-me" data-tile="me">${tileInner(name, t('{name} (you)', { name }))}</div></div>
       <div class="meeting-controls">
         <button class="btn" type="button" id="meeting-mic-toggle" aria-pressed="false"${stream && stream.getAudioTracks().length ? '' : ' disabled'}>${t('Mute')}</button>
         <button class="btn" type="button" id="meeting-cam-toggle" aria-pressed="false"${stream && stream.getVideoTracks().length ? '' : ' disabled'}>${t('Turn camera off')}</button>
@@ -176,7 +180,8 @@
     const me = root.querySelector('[data-tile="me"] video');
     me.srcObject = stream || new MediaStream(); me.play().catch(() => {});
     if (!stream || !stream.getVideoTracks().length) root.querySelector('[data-tile="me"]').classList.add('is-off');
-    document.getElementById('meeting-mic-toggle').addEventListener('click', event => { micOn = !micOn; room && room.setMic(micOn); event.currentTarget.textContent = micOn ? t('Mute') : t('Unmute'); event.currentTarget.setAttribute('aria-pressed', String(!micOn)); });
+    if (!stream || !stream.getAudioTracks().length) root.querySelector('[data-tile="me"]').classList.add('is-muted');
+    document.getElementById('meeting-mic-toggle').addEventListener('click', event => { micOn = !micOn; room && room.setMic(micOn); event.currentTarget.textContent = micOn ? t('Mute') : t('Unmute'); event.currentTarget.setAttribute('aria-pressed', String(!micOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-muted', !micOn); });
     document.getElementById('meeting-cam-toggle').addEventListener('click', event => { camOn = !camOn; room && room.setCam(camOn); event.currentTarget.textContent = camOn ? t('Turn camera off') : t('Turn camera on'); event.currentTarget.setAttribute('aria-pressed', String(!camOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-off', !camOn); });
     document.getElementById('meeting-leave').addEventListener('click', leave);
     document.getElementById('meeting-copy').addEventListener('click', async event => {
@@ -199,12 +204,17 @@
       if (!tile) {
         tile = document.createElement('div');
         tile.className = 'meeting-tile'; tile.dataset.tile = person.id;
-        tile.innerHTML = '<video autoplay playsinline></video><span class="meeting-label"></span><span class="meeting-badge"></span>';
+        tile.innerHTML = tileInner(person.name, '');
+        tile.querySelector('video').addEventListener('resize', paintPeople);
         grid.appendChild(tile);
       }
       const video = tile.querySelector('video');
       if (video.srcObject !== person.stream) { video.srcObject = person.stream; video.play().catch(() => {}); }
-      tile.querySelector('.meeting-label').textContent = person.name;
+      tile.querySelector('.meeting-name').textContent = person.name;
+      tile.querySelector('.meeting-initials').textContent = initials(person.name);
+      const picture = person.stream.getVideoTracks().some(track => track.readyState === 'live' && !track.muted);
+      tile.classList.toggle('is-off', !person.cam || !picture);
+      tile.classList.toggle('is-muted', !person.mic);
       const trouble = person.state === 'disconnected' || person.state === 'failed';
       tile.querySelector('.meeting-badge').textContent = trouble ? t('Reconnecting…') : (person.state === 'connected' ? '' : t('Connecting…'));
     }
