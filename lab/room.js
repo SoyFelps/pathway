@@ -42,7 +42,13 @@
       peers.set(id, peer);
       if (localStream) for (const track of localStream.getTracks()) pc.addTrack(track, localStream);
       else { pc.addTransceiver('audio', { direction: 'recvonly' }); pc.addTransceiver('video', { direction: 'recvonly' }); }
-      pc.ontrack = ({ track }) => { peer.stream.addTrack(track); emit('peers', list()); };
+      pc.ontrack = ({ track }) => {
+        peer.stream.addTrack(track);
+        // A phone that locks its screen stops sending its camera: the track goes "muted" until it comes back.
+        track.onmute = () => log(peer.name + ': ' + track.kind + ' paused');
+        track.onunmute = () => log(peer.name + ': ' + track.kind + ' back');
+        emit('peers', list());
+      };
       pc.onicecandidate = ({ candidate }) => { if (candidate) queueCandidate(peer, candidate.toJSON()); };
       pc.onnegotiationneeded = async () => {
         try {
@@ -54,7 +60,7 @@
       };
       pc.onconnectionstatechange = async () => {
         log(peer.name + ': ' + pc.connectionState);
-        if (pc.connectionState === 'connected' && !peer.connectedAt) { peer.connectedAt = Date.now(); peer.candidateType = await selectedCandidateType(pc); }
+        if (pc.connectionState === 'connected' && !peer.connectedAt) { peer.connectedAt = Date.now(); peer.candidateType = await selectedCandidateType(pc); await capVideo(peer); }
         if (pc.connectionState === 'failed') pc.restartIce();
         emit('peers', list());
       };
@@ -94,6 +100,18 @@
           }
         }
       } catch (error) { log('signal error with ' + peer.name + ': ' + error.message); }
+    }
+
+    // A ceiling on the video sent (phones on 4G have little upload: sending more than fits makes a queue and seconds of delay).
+    async function capVideo(peer) {
+      if (!options.videoMaxBitrate) return;
+      for (const sender of peer.pc.getSenders()) {
+        if (!sender.track || sender.track.kind !== 'video') continue;
+        const params = sender.getParameters();
+        if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+        params.encodings[0].maxBitrate = options.videoMaxBitrate;
+        await sender.setParameters(params).then(() => log('vídeo enviado limitado a ' + Math.round(options.videoMaxBitrate / 1000) + ' kbps para ' + peer.name)).catch(error => log('limite de vídeo: ' + error.message));
+      }
     }
 
     function dropPeer(id) {
@@ -142,9 +160,20 @@
       emit('left');
     }
 
+    // New camera/microphone (for example after the phone screen was locked): swapped in every connection without renegotiating.
+    async function replaceStream(stream) {
+      const old = localStream;
+      localStream = stream;
+      for (const peer of peers.values()) for (const sender of peer.pc.getSenders()) {
+        const track = sender.track ? stream.getTracks().find(item => item.kind === sender.track.kind) : null;
+        if (track) await sender.replaceTrack(track).catch(error => log('replace ' + track.kind + ': ' + error.message));
+      }
+      if (old && old !== stream) for (const track of old.getTracks()) if (!stream.getTracks().includes(track)) track.stop();
+    }
+
     const setTrack = (kind, on) => { if (localStream) for (const track of localStream.getTracks()) if (track.kind === kind) track.enabled = on; };
 
-    return { id: myId, join, leave, setMic: on => setTrack('audio', on), setCam: on => setTrack('video', on), peers: list, stats: () => Promise.all([...peers.values()].map(async peer => ({ name: peer.name, ...(await pairStats(peer.pc)) }))) };
+    return { id: myId, join, leave, replaceStream, localStream: () => localStream, setMic: on => setTrack('audio', on), setCam: on => setTrack('video', on), peers: list, stats: () => Promise.all([...peers.values()].map(async peer => ({ name: peer.name, ...(await pairStats(peer.pc)) }))) };
   }
 
   // Which path the connection took: host (same network), srflx (straight through the internet), relay (through TURN).

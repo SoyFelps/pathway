@@ -73,6 +73,9 @@
   const cfg = window.PATHWAY_SUPABASE_CONFIG || {};
   const supabase = window.supabase.createClient(cfg.url, cfg.anonKey || cfg.publishableKey || cfg.key, { auth: { persistSession: false }, realtime: { params: { eventsPerSecond: 20 } } });
   const ICE = [{ urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:stun.l.google.com:19302' }];
+  // Phones start lower (360p, 24 fps, at most ~600 kbps): the 4G upload is small; computers keep 720p.
+  const PHONE = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+  const VIDEO = PHONE ? { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24, max: 24 } } : { width: { ideal: 1280 }, height: { ideal: 720 } };
   const PATH = { host: 'mesma rede', srflx: 'direto pela internet', prflx: 'direto pela internet', relay: 'retransmitido (TURN)' };
   let room = null, stream = null, micOn = true, camOn = true, wakeLock = null;
   const logLines = [];
@@ -120,7 +123,7 @@
     if (!room) return;
     const stats = await room.stats();
     const list = room.peers();
-    stats.forEach((s, i) => { const cell = document.querySelector('[data-rtt="' + (list[i] && list[i].id) + '"]'); if (cell) cell.textContent = s.rttMs != null ? s.rttMs + ' ms' : '—'; });
+    stats.forEach((s, i) => { if (s.rttMs != null && s.rttMs > 1000) log('atraso alto com ' + s.name + ': ' + s.rttMs + ' ms (tela ' + (document.hidden ? 'escondida' : 'visível') + ')'); const cell = document.querySelector('[data-rtt="' + (list[i] && list[i].id) + '"]'); if (cell) cell.textContent = s.rttMs != null ? s.rttMs + ' ms' : '—'; });
   }
 
   $('join').addEventListener('click', async () => {
@@ -131,7 +134,7 @@
     stream = null;
     if ($('fake').checked) stream = fakeStream(name);
     else if ($('media').checked) {
-      try { stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+      try { stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
       catch (error) { log('câmera/microfone: ' + error.name + ' ' + error.message); $('lobby-msg').textContent = 'Não foi possível usar câmera/microfone (' + error.name + '). Entrando só para ver e ouvir.'; }
     }
     // TURN credentials from our own function (the Cloudflare key stays on the server); without them, STUN only.
@@ -143,7 +146,7 @@
       else log('TURN: indisponível (' + answer.status + ' ' + (data.error || '') + ')');
     } catch (error) { log('TURN: erro ' + error.message); }
     if ($('relay').checked && iceServers === ICE) log('forçar TURN sem TURN configurado: a conexão vai falhar (isso é esperado)');
-    room = window.NellioRoom.createRoom({ supabase, roomId: code, name, iceServers, relayOnly: $('relay').checked, on: (event, detail) => {
+    room = window.NellioRoom.createRoom({ supabase, roomId: code, name, iceServers, relayOnly: $('relay').checked, videoMaxBitrate: PHONE ? 600000 : 0, on: (event, detail) => {
       if (event === 'log') log(detail.text);
       if (event === 'peers') paint(detail);
       if (event === 'full') alert('A sala já tem 4 pessoas.');
@@ -153,6 +156,8 @@
       await room.join(stream);
       location.hash = 'room=' + code;
       $('room-label').textContent = 'Sala ' + code + ' · você: ' + name;
+      const sent = stream && stream.getVideoTracks()[0] && stream.getVideoTracks()[0].getSettings();
+      if (sent) log('qualidade da câmera: ' + sent.width + 'x' + sent.height + (sent.frameRate ? ' a ' + Math.round(sent.frameRate) + ' fps' : '') + (PHONE ? ' (celular)' : ''));
       $('lobby').classList.add('hidden'); $('stage').classList.remove('hidden'); $('lobby-msg').textContent = '';
       tile('me', name + ' (você)', stream || new MediaStream(), true);
       $('mic').disabled = $('cam').disabled = !stream;
@@ -170,6 +175,24 @@
     try { await navigator.clipboard.writeText(JSON.stringify(report, null, 2)); log('relatório copiado'); } catch { log(JSON.stringify(report)); }
   });
   window.addEventListener('pagehide', () => room && room.leave());
+  // Screen locked / app in the background and back: log it, and bring the camera back if the phone stopped it.
+  document.addEventListener('visibilitychange', async () => {
+    log('tela ' + (document.hidden ? 'escondida' : 'visível'));
+    if (document.hidden || !room || !stream || $('fake').checked) return;
+    await new Promise(done => setTimeout(done, 1200)); // the phone often gives the camera back by itself in a moment
+    const tracks = stream.getTracks();
+    const dead = tracks.some(track => track.readyState === 'ended' || track.muted);
+    if (!dead) return;
+    try {
+      const fresh = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      fresh.getAudioTracks().forEach(track => { track.enabled = micOn; });
+      fresh.getVideoTracks().forEach(track => { track.enabled = camOn; });
+      await room.replaceStream(fresh);
+      stream = fresh;
+      tile('me', $('name').value.trim() + ' (você)', stream, true);
+      log('câmera e microfone religados');
+    } catch (error) { log('não foi possível religar a câmera: ' + error.name); }
+  });
   setInterval(refreshRtt, 3000);
 })();
 </script>
