@@ -92,6 +92,8 @@
   --shadow-lg:rgba(18,36,25,.25);
   --overlay:rgba(16,29,21,.47);
   --overlay-strong:rgba(16,29,21,.56);
+  --video-bg:#101713;
+  --video-label:rgba(10,16,12,.62);
   --glass-strong:rgba(255,255,255,.91);
   --glass:rgba(255,255,255,.7);
   --glass-soft:rgba(255,255,255,.56);
@@ -1372,3 +1374,37 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-alert span{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--amber-text);color:var(--amber-bg);font-size:11px;font-weight:800}
 .iv-alert:hover{filter:brightness(.97)}
 .iv-nolink{color:var(--amber-text);font-weight:600}
+/* Nellio meeting room (meeting.html, plano-reunioes.md Phase 1): lobby card like the interview answer page, then a video grid */
+.meeting-main{max-width:620px;margin:0 auto;padding:40px 20px 56px}
+.meeting-main.is-wide{max-width:1180px;padding:24px 20px 40px}
+.meeting-card{padding:28px;display:flex;flex-direction:column;gap:16px}
+.meeting-title{margin:6px 0 0;font-size:24px;line-height:1.25;color:var(--text-heading)}
+.meeting-sub{margin:4px 0 0;color:var(--text-subtle);font-size:14px}
+.meeting-note strong{display:block;color:var(--text-heading);font-size:16px;margin-bottom:4px}
+.meeting-note p{margin:0;color:var(--text-body);font-size:14px;line-height:1.55}
+.meeting-preview{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:var(--video-bg)}
+.meeting-preview video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
+.meeting-preview-empty{position:absolute;inset:0;display:grid;place-items:center;padding:20px;text-align:center;color:var(--text-faint);font-size:14px}
+.meeting-fields{display:grid;gap:12px}
+.meeting-field{display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--text-strong)}
+.meeting-field .text-input{height:40px;width:100%}
+.meeting-field .text-input.is-invalid{border-color:var(--red)}
+.meeting-hint{margin:0;color:var(--text-subtle);font-size:13px;line-height:1.5}
+.meeting-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.meeting-room{display:flex;flex-direction:column;gap:14px}
+.meeting-room-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.meeting-room-head strong{display:block;color:var(--text-heading);font-size:16px}
+.meeting-room-head span{color:var(--text-subtle);font-size:13px}
+.meeting-status{font-weight:600}
+.meeting-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.meeting-grid[data-count="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+.meeting-tile{position:relative;aspect-ratio:16/10;border-radius:12px;overflow:hidden;background:var(--video-bg)}
+.meeting-tile video{width:100%;height:100%;object-fit:cover;display:block}
+.meeting-tile.is-me video{transform:scaleX(-1)}
+.meeting-tile.is-off video{visibility:hidden}
+.meeting-label,.meeting-badge{position:absolute;bottom:10px;padding:4px 9px;border-radius:7px;background:var(--video-label);color:var(--surface);font-size:12px;font-weight:600}
+.meeting-label{left:10px}
+.meeting-badge{right:10px}
+.meeting-badge:empty{display:none}
+.meeting-controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+@media(max-width:640px){.meeting-main{padding:24px 14px 40px}.meeting-card{padding:20px 16px}.meeting-grid,.meeting-grid[data-count="2"]{grid-template-columns:1fr}.meeting-tile{aspect-ratio:4/3}.meeting-actions .btn,.meeting-controls .btn{flex:1}}
