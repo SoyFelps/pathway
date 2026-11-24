@@ -11,3 +11,5 @@ Used by the Nellio meeting room (`meeting-effects.js`) to separate the person fr
 The files are loaded only when someone chooses a background effect, and the browser keeps them in its cache.
 
 **To update:** download the same three files of a newer `@mediapipe/tasks-vision` version (at least two weeks old) into this folder, keep the folder layout, update the version here and in `meeting-effects.js` (`MEDIAPIPE_VERSION`), and test blur and images on a computer and a phone.
+
+**Landscape model (phones, since 2026-11-24):** `selfie_segmenter_landscape.tflite` (float16, 0.25 MB, sha256 `490e9ea734313e0de10fa0cd9e3c6133e36ea4db2b7a49bde9ef019f72796b8e`), from `https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter_landscape/float16/latest/selfie_segmenter_landscape.tflite` (Apache-2.0). It runs inside `meeting-effects-worker.js` (a module worker, so a slow phone never freezes the picture). Measured: about twice as fast as the square model, and it finds the person in upright pictures with no turning over, landscape or portrait.

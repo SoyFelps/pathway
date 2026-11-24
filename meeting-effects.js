@@ -7,6 +7,7 @@
    NellioEffects.lastStats keeps the numbers of the last effect (for "Copy connection details"), also after it was turned off. */
 (function (root) {
   const MEDIAPIPE_VERSION = '1.2.2';
+  const WORKER_VERSION = 'mw3-20261124h';
   const base = () => new URL('vendor/mediapipe/', document.baseURI).href;
   const segmenters = {};
 
@@ -27,14 +28,31 @@
     return segmenters[delegate];
   }
 
+  /** Starts the model in a worker (phones). Resolves to { worker } or to null when it cannot start (old browser, error, 20 s). */
+  function startHelper() {
+    return new Promise(resolve => {
+      let worker;
+      try {
+        if (typeof OffscreenCanvas === 'undefined' || typeof createImageBitmap !== 'function') return resolve(null);
+        worker = new Worker(new URL('meeting-effects-worker.js?v=' + WORKER_VERSION, document.baseURI).href, { type: 'module' });
+      } catch (_) { return resolve(null); }
+      const give = ok => { clearTimeout(limit); if (!ok) worker.terminate(); resolve(ok ? { worker } : null); };
+      const limit = setTimeout(() => give(false), 20000);
+      worker.onmessage = event => give(event.data && event.data.type === 'ready');
+      worker.onerror = () => give(false);
+      worker.postMessage({ type: 'init', base: base(), model: 'selfie_segmenter_landscape.tflite' });
+    });
+  }
+
   const supported = () => typeof HTMLCanvasElement !== 'undefined' && 'captureStream' in HTMLCanvasElement.prototype && typeof WebAssembly === 'object';
   const average = list => list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0;
 
   async function create(cameraStream, options = {}) {
     const phone = !!options.phone;
-    // Phones use the processor from the start: on some Android phones the graphics card gave back an empty cut-out (the person was
-    // never found and everything was blurred). Computers keep the graphics card, which works well there.
-    let { segmenter, delegate } = await loadSegmenter(phone ? 'CPU' : 'GPU');
+    // Phones: the model runs in its own worker (see meeting-effects-worker.js), as Google Meet does, so a slow phone never freezes the
+    // picture; if the worker cannot start, the model runs on the page with the processor. Computers use the graphics card on the page.
+    const helper = phone ? await startHelper() : null;
+    let { segmenter, delegate } = helper ? { segmenter: null, delegate: 'CPU-worker' } : await loadSegmenter(phone ? 'CPU' : 'GPU');
     let mode = options.mode === 'image' ? 'image' : 'blur';
     let image = options.image || null;
     const fps = phone ? 15 : 24;
@@ -69,7 +87,8 @@
     resize();
     // Phones: the blur is made by shrinking the picture a lot and enlarging it again (very cheap). The blur filter of the canvas,
     // used on computers, is far too slow on a phone and froze the picture.
-    const tiny = Object.assign(document.createElement('canvas'), { width: Math.max(8, Math.round(width / 24)), height: Math.max(6, Math.round(height / 24)) });
+    // (a canvas one eighth of the size, blurred there, where the filter is cheap; shrinking alone looked blocky)
+    const tiny = Object.assign(document.createElement('canvas'), { width: Math.max(16, Math.round(width / 8)), height: Math.max(12, Math.round(height / 8)) });
     const tinyCtx = tiny.getContext('2d');
 
     const drawCover = (target, img, w, h) => {
@@ -98,17 +117,19 @@
     // Measured 2026-11-24: this MediaPipe build reads a canvas upside down, so the model saw an upside-down person and was only
     // ~40% sure (a clear face gave 0.36 at most; turned over first, 1.0). On phones, where the person was not found at all, the
     // picture is turned over before the model and the cut-out turned back. Computers work well enough as they are (owner: keep them).
-    const flip = phone;
+    const flip = phone && !helper; // the landscape model of the worker sees the picture the right way up (measured)
 
     function readMask(result) {
       const masks = result.confidenceMasks || [];
       const conf = masks[masks.length - 1]; // the person (a model with "background, person" gives two masks)
-      if (!conf) return;
-      const values = conf.getAsFloat32Array();
-      if (mask.width !== conf.width || mask.height !== conf.height || !held || held.length !== values.length) {
-        mask.width = conf.width; mask.height = conf.height;
+      if (conf) readValues(conf.getAsFloat32Array(), conf.width, conf.height);
+    }
+
+    function readValues(values, maskWidth, maskHeight) {
+      if (mask.width !== maskWidth || mask.height !== maskHeight || !held || held.length !== values.length) {
+        mask.width = maskWidth; mask.height = maskHeight;
         held = new Float32Array(values.length);
-        pixels = maskCtx.createImageData(conf.width, conf.height);
+        pixels = maskCtx.createImageData(maskWidth, maskHeight);
       }
       // The model is often only "half sure" about the face and the hair (above all on a wall of a similar colour), and that
       // half certainty used as transparency made the person look like a ghost. So: (1) the certainty is held for a moment and
@@ -131,7 +152,7 @@
       // 1) background: the camera blurred, or the chosen image
       if (mode === 'image' && image) drawCover(ctx, image, width, height);
       else if (phone) {
-        tinyCtx.drawImage(video, 0, 0, tiny.width, tiny.height);
+        tinyCtx.filter = 'blur(3px)'; tinyCtx.drawImage(video, 0, 0, tiny.width, tiny.height); tinyCtx.filter = 'none';
         ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(tiny, 0, 0, width, height);
       } else { ctx.filter = 'blur(14px)'; ctx.drawImage(video, 0, 0, width, height); ctx.filter = 'none'; }
@@ -150,7 +171,7 @@
     }
 
     function blurredOnly() {
-      tinyCtx.drawImage(video, 0, 0, tiny.width, tiny.height);
+      tinyCtx.filter = 'blur(3px)'; tinyCtx.drawImage(video, 0, 0, tiny.width, tiny.height); tinyCtx.filter = 'none';
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(tiny, 0, 0, width, height);
     }
@@ -161,7 +182,8 @@
       if (busy || now - last < 1000 / fps - 2 || video.readyState < 2) return;
       last = now; busy = true;
       try {
-        if (count++ % modelEvery === 0 || !haveMask) {
+        if (helper) askHelper(now);
+        else if (count++ % modelEvery === 0 || !haveMask) {
           if (flip) smallCtx.setTransform(1, 0, 0, -1, 0, small.height);
           smallCtx.drawImage(video, 0, 0, small.width, small.height);
           if (flip) smallCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -176,10 +198,29 @@
       watchSpeed(performance.now() - now);
     }
 
+    // The worker gets the small picture as a bitmap (handed over, not copied) whenever it is free; the page keeps drawing meanwhile.
+    let helperBusy = false;
+    function askHelper(now) {
+      if (helperBusy) return;
+      helperBusy = true;
+      smallCtx.drawImage(video, 0, 0, small.width, small.height);
+      createImageBitmap(small).then(bitmap => {
+        if (!running) { bitmap.close(); helperBusy = false; return; }
+        helper.worker.postMessage({ type: 'frame', bitmap, timestamp: now }, [bitmap]);
+      }).catch(() => { helperBusy = false; });
+    }
+    if (helper) helper.worker.onmessage = event => {
+      const data = event.data || {};
+      if (data.type !== 'mask') return;
+      helperBusy = false;
+      modelTimes.push(data.ms || 0); if (modelTimes.length > 30) modelTimes.shift();
+      if (running && data.values) readValues(data.values, data.width, data.height);
+    };
+
     function stats() {
       const seconds = (performance.now() - startedAt) / 1000;
       return {
-        mode, phone, delegate, switchedToCpu, size: width + 'x' + height, modelInput: small.width + 'x' + small.height,
+        mode, phone, delegate, model: helper ? 'landscape' : 'square', switchedToCpu, size: width + 'x' + height, modelInput: small.width + 'x' + small.height,
         frameMs: Math.round(average(times)), modelMs: Math.round(average(modelTimes)),
         personShare: Math.round(average(coverage) * 100) / 100, framesPerSecond: Math.round(sentFrames / Math.max(1, seconds) * 10) / 10,
       };
@@ -202,6 +243,14 @@
     function watchSpeed(ms) {
       times.push(ms); if (times.length > 30) times.shift();
       if (times.length < 30) return;
+      if (helper) {
+        // With the worker the picture stays smooth even when the model is slow; only a model slower than 1.5 s turns the effect off.
+        if (modelTimes.length >= 10 && average(modelTimes) > 1500) {
+          slowSince = slowSince || performance.now();
+          if (performance.now() - slowSince > 3000 && options.onSlow) { const report = options.onSlow; options.onSlow = null; root.NellioEffects.lastStats = stats(); report(); }
+        } else slowSince = 0;
+        return;
+      }
       if (phone && coverage.length >= 30 && average(coverage) < 0.01 && delegate !== 'CPU') { tryCpu(); return; }
       if (average(times) > 1000 / fps) {
         if (scale > 0.2) { scale = Math.max(0.2, scale - 0.1); resize(); times.length = 0; return; }
@@ -237,6 +286,7 @@
         running = false;
         cancelAnimationFrame(timer);
         if (ticker) { ticker.postMessage(0); ticker.terminate(); }
+        if (helper) helper.worker.terminate();
         for (const track of outStream.getVideoTracks()) track.stop();
         video.srcObject = null;
         video.remove();
