@@ -2119,6 +2119,9 @@
   'Upgrade': 'Suscríbete',
   // Meeting rooms, Phase 2 (schedule window and Join meeting)
   'Generate Nellio link': 'Generar enlace de Nellio',
+  'Transcription': 'Transcripción',
+  'Minutes': 'Acta',
+  'Automatic transcription and minutes use AI credits.': 'La transcripción automática y el acta usan créditos de IA.',
   'Generating…': 'Generando…',
   'A video room in Nellio, nothing to install. It opens 30 minutes before the interview.': 'Una sala de video en Nellio, sin instalar nada. Se abre 30 minutos antes de la entrevista.',
   'Join meeting': 'Unirse a la reunión',
