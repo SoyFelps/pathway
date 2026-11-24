@@ -1453,7 +1453,8 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-ai[hidden]{display:none}
 .iv-ai .team-permission-hint{margin:0;flex:1 1 100%}
 /* Interview tab: transcript and minutes of the Nellio meeting room (Phase 3 of plano-reunioes.md) */
-.iv-transcript{margin-top:18px}
+.iv-transcript{margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.iv-transcript + h4{margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
 .iv-transcript h4{margin-bottom:8px}
 .iv-minutes{border:1px solid var(--line);border-radius:10px;background:var(--bg-page);padding:12px 14px;font-size:13px;line-height:1.55;color:var(--text-body)}
 .iv-minutes h5{margin:12px 0 4px;font-size:13px;color:var(--text-heading)}
