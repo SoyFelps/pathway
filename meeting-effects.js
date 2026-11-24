@@ -7,7 +7,7 @@
    NellioEffects.lastStats keeps the numbers of the last effect (for "Copy connection details"), also after it was turned off. */
 (function (root) {
   const MEDIAPIPE_VERSION = '1.2.2';
-  const WORKER_VERSION = 'mw3-20261124i';
+  const WORKER_VERSION = 'mw3-20261124j';
   const base = () => new URL('vendor/mediapipe/', document.baseURI).href;
   const segmenters = {};
 
@@ -87,8 +87,9 @@
     resize();
     // Phones: the blur is made by shrinking the picture a lot and enlarging it again (very cheap). The blur filter of the canvas,
     // used on computers, is far too slow on a phone and froze the picture.
-    // (a canvas one eighth of the size, blurred there, where the filter is cheap; shrinking alone looked blocky)
-    const tiny = Object.assign(document.createElement('canvas'), { width: Math.max(16, Math.round(width / 8)), height: Math.max(12, Math.round(height / 8)) });
+    // (a canvas one quarter of the size, blurred there, where the filter is cheap; shrinking alone looked blocky. Strength: 3 px there =
+    // about 12 px on the picture, ~3% of its width; one eighth was twice as strong and the owner found it too much, 2026-11-24)
+    const tiny = Object.assign(document.createElement('canvas'), { width: Math.max(16, Math.round(width / 4)), height: Math.max(12, Math.round(height / 4)) });
     const tinyCtx = tiny.getContext('2d');
 
     const drawCover = (target, img, w, h) => {

@@ -109,7 +109,7 @@ test('phones: a cheap blur, the camera video kept on the page, the processor tri
   const effects = read('meeting-effects.js');
   const page = read('meeting.js');
   assert.ok(effects.includes('document.body.appendChild(video)') && effects.includes('video.remove()'), 'Chrome on Android stops updating a video that is not on the page');
-  assert.ok(/else if \(phone\) \{\s*tinyCtx\.filter = 'blur\(3px\)'; tinyCtx\.drawImage/.test(effects), 'phones blur only a picture one eighth of the size (the full-size filter froze phones)');
+  assert.ok(/else if \(phone\) \{\s*tinyCtx\.filter = 'blur\(3px\)'; tinyCtx\.drawImage/.test(effects), 'phones blur only a picture one quarter of the size (the full-size filter froze phones)');
   assert.ok(effects.includes("loadSegmenter('CPU')") && effects.includes("loadSegmenter(phone ? 'CPU' : 'GPU')") && effects.includes('else if (phone) blurredOnly();'));
   assert.ok(effects.includes('const modelEvery = phone ? 2 : 1;'));
   assert.ok(page.includes('effect: effect ? effect.stats() : (window.NellioEffects && window.NellioEffects.lastStats) || null'));
@@ -131,4 +131,9 @@ test('phones run the model in a worker with the landscape model, as Google Meet 
   assert.ok(worker.includes("canvas: new OffscreenCanvas(1, 1)") && worker.includes('(0, eval)(loader') && worker.includes('bitmap.close()'));
   assert.ok(fs.existsSync(path.join(__dirname, '..', 'vendor', 'mediapipe', 'selfie_segmenter_landscape.tflite')));
   assert.ok(effects.includes("const WORKER_VERSION = '") && /meeting-effects\.js\?v=([\w-]+)/.exec(read('meeting.html'))[1] === /WORKER_VERSION = '([\w-]+)'/.exec(effects)[1], 'the worker version follows the page');
+});
+
+test('the phone blur is about 3% of the picture width (half of the first version, owner 2026-11-24)', () => {
+  const effects = read('meeting-effects.js');
+  assert.ok(effects.includes('Math.round(width / 4)') && effects.includes("tinyCtx.filter = 'blur(3px)'"));
 });
