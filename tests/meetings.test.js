@@ -79,3 +79,22 @@ test('10 minutes before closing the people in the room see a warning, and at the
   assert.ok(page.includes('if (left <= 0) { clearInterval(closingTimer); endMeeting(); return; }'));
   assert.ok(page.includes('watchClosing();'));
 });
+
+test('background effects: run in the browser with self-hosted files, keep their pace in a hidden tab, phones only blur, the choice is remembered', () => {
+  const effects = read('meeting-effects.js');
+  const page = read('meeting.js');
+  const html = read('meeting.html');
+  assert.ok(effects.includes("new URL('vendor/mediapipe/', document.baseURI)") && !/https?:\/\/(cdn|storage)/.test(effects.split('*/')[1]), 'the model and its files come from our own site, never a CDN');
+  for (const file of ['vision_bundle.mjs', 'wasm/vision_wasm_internal.js', 'wasm/vision_wasm_internal.wasm', 'selfie_segmenter.tflite', 'README.md']) {
+    assert.ok(fs.existsSync(path.join(__dirname, '..', 'vendor', 'mediapipe', file)), file);
+  }
+  assert.ok(effects.includes('new Worker(') && effects.includes('ticker.terminate()'), 'frames are paced by a worker, so a hidden tab does not freeze the picture the others see');
+  assert.ok(effects.includes('for (const track of cameraStream.getAudioTracks()) outStream.addTrack(track)'), 'the processed video keeps the original microphone');
+  assert.ok(page.includes("const choice = () => (PHONE && background.kind !== 'blur') ? { kind: 'none' } : background;"), 'phones: only none or blur');
+  assert.ok(page.includes("const BG_KEY = 'nellio-meeting-background';") && page.includes("indexedDB.open('nellio-meeting', 1)"), 'the choice and the own image stay in this browser');
+  assert.ok(page.includes('await room.replaceStream(stream, { stop: false })'), 'changing the background in the room never stops the camera');
+  for (const id of ['office-elegant', 'office-elegant-desk', 'home-office', 'meeting-room', 'meeting-room-desk', 'lobby', 'nellio-forest', 'nellio-mint']) {
+    for (const suffix of ['.jpg', '-thumb.jpg']) assert.ok(fs.existsSync(path.join(__dirname, '..', 'brand', 'backgrounds', id + suffix)), id + suffix);
+  }
+  assert.ok(html.indexOf('meeting-effects.js') < html.indexOf('meeting.js?'));
+});

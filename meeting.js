@@ -17,7 +17,11 @@
   const VIDEO = PHONE ? { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24, max: 24 } } : { width: { ideal: 1280 }, height: { ideal: 720 } };
   const AUDIO = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
   let view = null;
-  let stream = null;
+  let stream = null; // what is sent: the camera itself, or the camera with the background effect
+  let camera = null; // the camera and microphone as the browser gives them
+  let effect = null; // NellioEffects pipeline while a background effect is on
+  let effectNote = '';
+  let bgBusy = false;
   let room = null;
   let supabase = null;
   let micOn = true, camOn = true;
@@ -90,13 +94,159 @@
     const audio = micId ? { ...AUDIO, deviceId: { exact: micId } } : AUDIO;
     try {
       const fresh = await navigator.mediaDevices.getUserMedia({ video, audio });
-      if (stream) for (const track of stream.getTracks()) track.stop();
-      stream = fresh;
+      stopCamera();
+      camera = fresh;
     } catch (error) {
       // Without a camera, try the microphone alone before giving up.
-      try { if (!stream) stream = await navigator.mediaDevices.getUserMedia({ audio }); deviceError = deviceMessage(error); }
+      try { if (!camera) camera = await navigator.mediaDevices.getUserMedia({ audio }); deviceError = deviceMessage(error); }
       catch (_) { deviceError = deviceMessage(error); }
     }
+    stream = camera;
+    (await applyBackground())(); // the background chosen last time comes back by itself
+  }
+
+  // ---- Background (blur or an image behind the person, Phase 1b) ----------------------------------------------------------
+  // The browser remembers the last choice (none, blur, an image of ours or the person's own image) and applies it in the next meeting.
+  // The person's own image stays in this browser (IndexedDB), reduced to 1280x720 on the device: it is never sent to us. Phones: none or blur.
+  const BG_KEY = 'nellio-meeting-background';
+  const STOCK = () => [
+    { id: 'office-elegant', label: t('Office') }, { id: 'office-elegant-desk', label: t('Office') }, { id: 'home-office', label: t('Home office') },
+    { id: 'meeting-room', label: t('Meeting room') }, { id: 'meeting-room-desk', label: t('Meeting room') }, { id: 'lobby', label: t('Hotel lobby') },
+    { id: 'nellio-forest', label: t('Nellio green') }, { id: 'nellio-mint', label: t('Nellio light') },
+  ];
+  let background = { kind: 'none' };
+  try { const saved = JSON.parse(localStorage.getItem(BG_KEY) || 'null'); if (saved && ['none', 'blur', 'stock', 'custom'].includes(saved.kind)) background = saved; } catch (_) {}
+  let customImage = null, customUrl = '';
+  const choice = () => (PHONE && background.kind !== 'blur') ? { kind: 'none' } : background;
+  const saveChoice = () => { try { localStorage.setItem(BG_KEY, JSON.stringify(background)); } catch (_) {} };
+  const effectsReady = () => !!(window.NellioEffects && window.NellioEffects.supported());
+
+  function idb() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('nellio-meeting', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('files');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+  async function idbGet(key) { try { const db = await idb(); return await new Promise(done => { const q = db.transaction('files').objectStore('files').get(key); q.onsuccess = () => done(q.result || null); q.onerror = () => done(null); }); } catch (_) { return null; } }
+  async function idbPut(key, value) { const db = await idb(); await new Promise((done, fail) => { const tx = db.transaction('files', 'readwrite'); tx.objectStore('files').put(value, key); tx.oncomplete = done; tx.onerror = () => fail(tx.error); }); }
+  async function useCustomBlob(blob) {
+    if (customUrl) URL.revokeObjectURL(customUrl);
+    customUrl = URL.createObjectURL(blob);
+    customImage = await createImageBitmap(blob);
+  }
+  const customLoaded = (async () => { if (PHONE) return; const blob = await idbGet('custom-background'); if (blob) { try { await useCustomBlob(blob); } catch (_) {} } })();
+
+  /** A file chosen by the person, made 1280x720 (cover) and JPEG on the device, kept in this browser only. */
+  async function storeCustom(file) {
+    const bitmap = await createImageBitmap(file);
+    const canvas = Object.assign(document.createElement('canvas'), { width: 1280, height: 720 });
+    const g = canvas.getContext('2d');
+    const scale = Math.max(1280 / bitmap.width, 720 / bitmap.height);
+    g.drawImage(bitmap, (1280 - bitmap.width * scale) / 2, (720 - bitmap.height * scale) / 2, bitmap.width * scale, bitmap.height * scale);
+    const blob = await new Promise(done => canvas.toBlob(done, 'image/jpeg', 0.85));
+    if (!blob) throw new Error('image');
+    await idbPut('custom-background', blob).catch(() => {});
+    await useCustomBlob(blob);
+  }
+
+  const loadStock = id => new Promise((done, fail) => { const img = new Image(); img.onload = () => done(img); img.onerror = fail; img.src = 'brand/backgrounds/' + id + '.jpg'; });
+
+  /** Makes "stream" match the background choice. Returns a cleanup to run once the new stream is in use (stops an effect no longer needed). */
+  async function applyBackground() {
+    const old = effect;
+    const done = keep => () => { if (old && old !== keep) old.stop(); };
+    if (!camera || !camera.getVideoTracks().length) { effect = null; stream = camera; return done(null); }
+    const want = choice();
+    if (want.kind === 'none' || !effectsReady()) { effect = null; stream = camera; return done(null); }
+    let image = null;
+    try {
+      if (want.kind === 'stock') image = await loadStock(want.id);
+      if (want.kind === 'custom') { await customLoaded; image = customImage; }
+    } catch (_) { image = null; }
+    if (want.kind !== 'blur' && !image) { background = { kind: 'none' }; saveChoice(); effect = null; stream = camera; return done(null); }
+    const mode = want.kind === 'blur' ? 'blur' : 'image';
+    try {
+      if (!effect) effect = await window.NellioEffects.create(camera, { mode, image, phone: PHONE, onSlow: () => chooseBackground('none', t('Your device could not keep up with the background effect, so it was turned off.')) });
+      else effect.setMode(mode, image);
+      stream = effect.stream;
+      return done(effect);
+    } catch (error) {
+      console.debug('[effects]', error && error.message);
+      effectNote = t('The background effect could not be started.');
+      background = { kind: 'none' }; saveChoice();
+      effect = null; stream = camera;
+      return done(null);
+    }
+  }
+
+  const applyEnabled = () => { if (stream) { stream.getAudioTracks().forEach(track => { track.enabled = micOn; }); stream.getVideoTracks().forEach(track => { track.enabled = camOn; }); } };
+  function showSelf() {
+    const preview = document.getElementById('preview') || root.querySelector('[data-tile="me"] video');
+    if (preview && preview.srcObject !== stream) { preview.srcObject = stream; preview.play().catch(() => {}); }
+  }
+
+  async function chooseBackground(key, note = '') {
+    if (bgBusy) return;
+    bgBusy = true;
+    background = key === 'none' || key === 'blur' || key === 'custom' ? { kind: key } : { kind: 'stock', id: key.replace(/^stock:/, '') };
+    saveChoice();
+    effectNote = note || (background.kind !== 'none' && !effect ? t('Loading the background effect…') : '');
+    paintPicker();
+    try {
+      const cleanup = await applyBackground();
+      applyEnabled();
+      if (room) await room.replaceStream(stream, { stop: false });
+      showSelf();
+      cleanup();
+      if (effectNote === t('Loading the background effect…')) effectNote = '';
+    } finally { bgBusy = false; paintPicker(); }
+  }
+
+  function backgroundPicker() {
+    if (!camera || !camera.getVideoTracks().length || !effectsReady()) return '';
+    const now = choice();
+    const key = now.kind === 'stock' ? 'stock:' + now.id : now.kind;
+    const option = (value, label, inner) => '<button type="button" class="meeting-bg-option' + (value === key ? ' is-selected' : '') + '" data-bg="' + esc(value) + '" aria-pressed="' + (value === key) + '" title="' + esc(label) + '" aria-label="' + esc(label) + '"' + (bgBusy ? ' disabled' : '') + '>' + inner + '</button>';
+    const options = [
+      option('none', t('No background effect'), '<span class="meeting-bg-none" aria-hidden="true"></span>'),
+      option('blur', t('Blur'), '<span class="meeting-bg-blur" aria-hidden="true"></span>'),
+    ];
+    if (!PHONE) {
+      if (customUrl) options.push(option('custom', t('Your image'), '<img src="' + esc(customUrl) + '" alt="">'));
+      for (const item of STOCK()) options.push(option('stock:' + item.id, item.label, '<img src="brand/backgrounds/' + item.id + '-thumb.jpg" alt="" loading="lazy">'));
+      options.push('<button type="button" class="meeting-bg-option is-upload" data-bg="upload" title="' + esc(t('Upload an image')) + '" aria-label="' + esc(t('Upload an image')) + '"' + (bgBusy ? ' disabled' : '') + '><span aria-hidden="true">+</span></button><input type="file" accept="image/jpeg,image/png,image/webp" hidden data-bg-file>');
+    }
+    return '<div class="meeting-bg"><span class="meeting-bg-title">' + t('Background') + '</span><div class="meeting-bg-options">' + options.join('') + '</div>'
+      + (effectNote ? '<p class="meeting-bg-note" role="status">' + esc(effectNote) + '</p>' : '')
+      + (PHONE ? '<p class="meeting-bg-note">' + t('On phones, only the blur is available.') + '</p>' : '') + '</div>';
+  }
+
+  function paintPicker() {
+    for (const slot of root.querySelectorAll('[data-bg-slot]')) {
+      slot.innerHTML = backgroundPicker();
+      if (slot.dataset.bound) continue;
+      slot.dataset.bound = '1';
+      slot.addEventListener('click', event => {
+        const button = event.target.closest('[data-bg]');
+        if (!button || button.disabled) return;
+        if (button.dataset.bg === 'upload') { slot.querySelector('[data-bg-file]')?.click(); return; }
+        chooseBackground(button.dataset.bg);
+      });
+      slot.addEventListener('change', async event => {
+        const input = event.target.closest('[data-bg-file]');
+        if (!input || !input.files || !input.files[0]) return;
+        try { await storeCustom(input.files[0]); await chooseBackground('custom'); }
+        catch (_) { effectNote = t('This image could not be used. Try a JPG or PNG file.'); paintPicker(); }
+      });
+    }
+  }
+
+  function stopCamera() {
+    if (effect) { effect.stop(); effect = null; }
+    if (camera) for (const track of camera.getTracks()) track.stop();
+    camera = null; stream = null;
   }
 
   async function deviceOptions() {
@@ -108,13 +258,14 @@
   async function renderLobby() {
     let name = '';
     try { name = localStorage.getItem('nellio-meeting-name') || ''; } catch (_) {}
-    const current = kind => stream && stream.getTracks().find(track => track.kind === kind);
-    const { cameras, mics } = stream ? await deviceOptions() : { cameras: [], mics: [] };
+    const current = kind => camera && camera.getTracks().find(track => track.kind === kind);
+    const { cameras, mics } = camera ? await deviceOptions() : { cameras: [], mics: [] };
     const select = (id, label, list, kind) => list.length > 1 ? `<label class="meeting-field"><span>${label}</span><select class="text-input" id="${id}">${list.map(d => `<option value="${esc(d.deviceId)}"${current(kind) && current(kind).getSettings().deviceId === d.deviceId ? ' selected' : ''}>${esc(d.label)}</option>`).join('')}</select></label>` : '';
     stopMeter();
     const hasMic = !!current('audio');
     root.innerHTML = shell(`<section class="candidate-form-card meeting-card">${heading()}
       <div class="meeting-preview">${stream && current('video') ? '<video id="preview" autoplay playsinline muted></video>' : `<div class="meeting-preview-empty">${stream ? t('Camera off') : t('Your camera is not on yet.')}</div>`}</div>
+      <div data-bg-slot></div>
       ${hasMic ? `<div class="meeting-meter"><span>${t('Microphone')}</span><div class="meeting-meter-track" role="meter" aria-label="${t('Microphone level')}" aria-valuemin="0" aria-valuemax="100"><div class="meeting-meter-fill" id="meeting-meter"></div></div><small>${t('Speak to see the bar move.')}</small></div>` : ''}
       ${deviceError ? `<div class="ai-note is-warn" role="alert">${esc(deviceError)}</div>` : ''}
       <div class="meeting-fields">
@@ -127,10 +278,11 @@
     const preview = document.getElementById('preview');
     if (preview) { preview.srcObject = stream; preview.play().catch(() => {}); }
     if (hasMic) startMeter();
+    paintPicker();
     const reselect = async () => { await startDevices(document.getElementById('meeting-camera')?.value, document.getElementById('meeting-mic')?.value); rememberName(); renderLobby(); };
     document.getElementById('meeting-camera')?.addEventListener('change', reselect);
     document.getElementById('meeting-mic')?.addEventListener('change', reselect);
-    document.getElementById('meeting-check')?.addEventListener('click', async () => { rememberName(); await startDevices(); renderLobby(); });
+    document.getElementById('meeting-check')?.addEventListener('click', async event => { const button = event.currentTarget; button.disabled = true; button.textContent = t('Checking…'); rememberName(); await startDevices(); renderLobby(); });
     document.getElementById('meeting-join')?.addEventListener('click', join);
   }
 
@@ -139,7 +291,7 @@
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       const audio = new AudioCtx();
-      const source = audio.createMediaStreamSource(new MediaStream(stream.getAudioTracks()));
+      const source = audio.createMediaStreamSource(new MediaStream(camera.getAudioTracks()));
       const analyser = audio.createAnalyser();
       analyser.fftSize = 512;
       source.connect(analyser);
@@ -210,8 +362,10 @@
       <div class="meeting-controls">
         <button class="btn" type="button" id="meeting-mic-toggle" aria-pressed="false"${stream && stream.getAudioTracks().length ? '' : ' disabled'}>${t('Mute')}</button>
         <button class="btn" type="button" id="meeting-cam-toggle" aria-pressed="false"${stream && stream.getVideoTracks().length ? '' : ' disabled'}>${t('Turn camera off')}</button>
+        ${camera && camera.getVideoTracks().length && effectsReady() ? `<button class="btn" type="button" id="meeting-bg-toggle" aria-expanded="false" aria-controls="meeting-bg-panel">${t('Background')}</button>` : ''}
         <button class="btn btn-danger" type="button" id="meeting-leave">${t('Leave')}</button>
       </div>
+      <div class="meeting-bg-panel" id="meeting-bg-panel" data-bg-slot hidden></div>
       <div class="meeting-support"><button class="meeting-copy" type="button" id="meeting-copy">${t('Copy connection details')}</button></div>
     </section>`, true);
     const me = root.querySelector('[data-tile="me"] video');
@@ -221,6 +375,8 @@
     document.getElementById('meeting-mic-toggle').addEventListener('click', event => { micOn = !micOn; room && room.setMic(micOn); event.currentTarget.textContent = micOn ? t('Mute') : t('Unmute'); event.currentTarget.setAttribute('aria-pressed', String(!micOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-muted', !micOn); });
     document.getElementById('meeting-cam-toggle').addEventListener('click', event => { camOn = !camOn; room && room.setCam(camOn); event.currentTarget.textContent = camOn ? t('Turn camera off') : t('Turn camera on'); event.currentTarget.setAttribute('aria-pressed', String(!camOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-off', !camOn); });
     document.getElementById('meeting-leave').addEventListener('click', leave);
+    document.getElementById('meeting-bg-toggle')?.addEventListener('click', event => { const panel = document.getElementById('meeting-bg-panel'); panel.hidden = !panel.hidden; event.currentTarget.setAttribute('aria-expanded', String(!panel.hidden)); });
+    paintPicker();
     watchClosing();
     document.getElementById('meeting-copy').addEventListener('click', async event => {
       const button = event.currentTarget;
@@ -283,7 +439,8 @@
 
   function endMeeting() {
     if (room) room.leave();
-    room = null; peers = []; stream = null; checked = false;
+    stopCamera();
+    room = null; peers = []; checked = false;
     if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
     view = { ...view, status: 'closed' };
     renderMessage(t('This meeting room is closed.'), t('The room closes 2 hours after the interview starts. Contact the hiring team if you need a new time.'));
@@ -292,8 +449,8 @@
   function leave() {
     clearInterval(closingTimer);
     if (room) room.leave();
+    stopCamera(); // the camera itself, and the background effect that was sending a copy of it
     room = null; peers = [];
-    stream = null; // room.leave() stopped the camera and microphone
     checked = false;
     if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
     renderMessage(t('You left the meeting.'), t('You can join again while the room is open.'), `<div class="meeting-actions"><button class="btn btn-primary" type="button" id="meeting-again">${t('Join again')}</button></div>`);
@@ -302,18 +459,21 @@
 
   // A phone that locked its screen may not give the camera back: bring it back when the page is visible again.
   document.addEventListener('visibilitychange', async () => {
-    if (document.hidden || !room || !stream) return;
+    if (document.hidden || !room || !camera) return;
     await new Promise(done => setTimeout(done, 1200));
-    const dead = stream.getTracks().some(track => track.readyState === 'ended');
+    const dead = camera.getTracks().some(track => track.readyState === 'ended');
     if (!dead || !room) return;
     try {
       const fresh = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: AUDIO });
-      fresh.getAudioTracks().forEach(track => { track.enabled = micOn; });
-      fresh.getVideoTracks().forEach(track => { track.enabled = camOn; });
-      await room.replaceStream(fresh);
-      stream = fresh;
-      const me = root.querySelector('[data-tile="me"] video');
-      if (me) { me.srcObject = stream; me.play().catch(() => {}); }
+      const oldCamera = camera;
+      camera = fresh;
+      if (effect) { effect.stop(); effect = null; }
+      const cleanup = await applyBackground();
+      applyEnabled();
+      await room.replaceStream(stream, { stop: false });
+      cleanup();
+      for (const track of oldCamera.getTracks()) track.stop();
+      showSelf();
     } catch (_) { /* the person can leave and join again */ }
   });
   window.addEventListener('pagehide', () => { if (room) room.leave(); });

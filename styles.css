@@ -1422,3 +1422,16 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .meeting-meter-track{height:8px;border-radius:99px;background:var(--border-subtle);overflow:hidden}
 .meeting-meter-fill{height:100%;width:0;border-radius:99px;background:var(--green-2);transition:width .08s linear}
 .meeting-closing{text-align:center;font-weight:600}
+.meeting-bg{display:grid;gap:8px}
+.meeting-bg-title{font-size:13px;font-weight:600;color:var(--text-strong)}
+.meeting-bg-options{display:flex;gap:8px;flex-wrap:wrap}
+.meeting-bg-option{position:relative;width:72px;height:42px;padding:0;border:2px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface);cursor:pointer;display:grid;place-items:center}
+.meeting-bg-option img{width:100%;height:100%;object-fit:cover;display:block}
+.meeting-bg-option.is-selected{border-color:var(--green);box-shadow:0 0 0 2px var(--ring)}
+.meeting-bg-option:disabled{opacity:.6;cursor:wait}
+.meeting-bg-option.is-upload span{font-size:22px;line-height:1;color:var(--text-subtle)}
+.meeting-bg-none{width:20px;height:20px;border:2px solid var(--text-subtle);border-radius:50%;position:relative}
+.meeting-bg-none::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:2px;background:var(--text-subtle);transform:translateX(-50%) rotate(45deg)}
+.meeting-bg-blur{width:100%;height:100%;background:linear-gradient(135deg,var(--green-soft),var(--mint-strong),var(--slate));filter:blur(3px);transform:scale(1.2)}
+.meeting-bg-note{margin:0;font-size:12px;color:var(--text-subtle)}
+.meeting-bg-panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;max-width:760px;margin:0 auto;width:100%}

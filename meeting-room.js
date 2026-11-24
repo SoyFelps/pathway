@@ -190,14 +190,15 @@
     }
 
     // New camera/microphone (for example after the phone screen was locked): swapped in every connection without renegotiating.
-    async function replaceStream(stream) {
+    async function replaceStream(stream, options = {}) {
       const old = localStream;
       localStream = stream;
       for (const peer of peers.values()) for (const sender of peer.pc.getSenders()) {
         const track = sender.track ? stream.getTracks().find(item => item.kind === sender.track.kind) : null;
         if (track) await sender.replaceTrack(track).catch(error => log('replace ' + track.kind + ': ' + error.message));
       }
-      if (old && old !== stream) for (const track of old.getTracks()) if (!stream.getTracks().includes(track)) track.stop();
+      // { stop: false }: the page stops the old tracks itself (a background effect is fed by the camera, which must keep running)
+      if (options.stop !== false && old && old !== stream) for (const track of old.getTracks()) if (!stream.getTracks().includes(track)) track.stop();
     }
 
     const setTrack = (kind, on) => {
