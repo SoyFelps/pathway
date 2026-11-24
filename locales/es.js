@@ -2143,6 +2143,7 @@
   'End transcription': 'Finalizar transcripción',
   'End it? Click again': '¿Finalizar? Haga clic de nuevo',
   '{count} line': { one: '{count} línea', other: '{count} líneas' },
+  'Download': 'Descargar',
   'Transcription': 'Transcripción',
   'Re-send link': 'Reenviar enlace',
   'Sent again to the candidate and the responsible people.': 'Reenviado al candidato y a los responsables.',
