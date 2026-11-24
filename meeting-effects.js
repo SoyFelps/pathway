@@ -69,6 +69,8 @@
     let slowSince = 0;
     let last = 0;
     let timer = null;
+    let held = null, pixels = null;
+    const MASK_LOW = 0.2, MASK_HIGH = 0.55;
 
     function frame() {
       if (!running) return;
@@ -82,9 +84,21 @@
           const conf = masks[masks.length - 1]; // the person (a model with "background, person" gives two masks)
           if (!conf) return;
           const values = conf.getAsFloat32Array();
-          mask.width = conf.width; mask.height = conf.height;
-          const pixels = maskCtx.createImageData(conf.width, conf.height);
-          for (let i = 0, j = 3; i < values.length; i++, j += 4) pixels.data[j] = values[i] * 255;
+          if (mask.width !== conf.width || mask.height !== conf.height || !held || held.length !== values.length) {
+            mask.width = conf.width; mask.height = conf.height;
+            held = new Float32Array(values.length);
+            pixels = maskCtx.createImageData(conf.width, conf.height);
+          }
+          // The model is often only "half sure" about the face and the hair (above all on a wall of a similar colour), and that
+          // half certainty used as transparency made the person look like a ghost. So: (1) the certainty is held for a moment and
+          // fades slowly, so a one-frame doubt does not erase the person; (2) a contrast curve turns "fairly sure" into fully visible.
+          for (let i = 0, j = 3; i < values.length; i++, j += 4) {
+            const v = values[i];
+            const h = held[i] = v >= held[i] ? v : held[i] * 0.75 + v * 0.25;
+            let a = (h - MASK_LOW) / (MASK_HIGH - MASK_LOW);
+            a = a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a);
+            pixels.data[j] = a * 255;
+          }
           maskCtx.putImageData(pixels, 0, 0);
           // 1) background: the camera blurred, or the chosen image
           if (mode === 'image' && image) drawCover(ctx, image, width, height);
