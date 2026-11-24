@@ -1435,3 +1435,8 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .meeting-bg-blur{width:100%;height:100%;background:linear-gradient(135deg,var(--green-soft),var(--mint-strong),var(--slate));filter:blur(3px);transform:scale(1.2)}
 .meeting-bg-note{margin:0;font-size:12px;color:var(--text-subtle)}
 .meeting-bg-panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;max-width:760px;margin:0 auto;width:100%}
+
+/* Meeting rooms, Phase 2: the "Generate Nellio link" button under the meeting link field of the schedule window */
+.iv-nellio{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
+.iv-nellio[hidden]{display:none}
+.iv-nellio .team-permission-hint{margin:0;flex:1 1 220px}

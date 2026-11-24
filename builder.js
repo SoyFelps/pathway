@@ -480,6 +480,10 @@
   let pendingOpenInterviewTab = false;
   const INTERVIEW_OPEN = ['awaiting_schedule', 'invited', 'confirmed', 'declined', 'reschedule_requested'];
   const INTERVIEW_ON = ['invited', 'confirmed', 'declined', 'reschedule_requested']; // scheduled and not finalized
+  // Nellio meeting rooms (plano-reunioes.md, Phase 2): a link of our own room, and "Join meeting" for any online interview that is on.
+  const NELLIO_MEETING_LINK = /\/(meeting\.html|lab\/room\.html)#[A-Za-z0-9_-]{20,}$/;
+  const interviewJoinable = row => Boolean(row && row.kind === 'online' && row.meetingLink && INTERVIEW_ON.includes(row.state));
+  const openInterviewMeeting = row => { if (interviewJoinable(row)) window.open(row.meetingLink, '_blank', 'noopener'); };
   const interviewStarted = row => Boolean(row && row.startsAt && new Date(row.startsAt).getTime() <= Date.now());
   // The time has passed and nobody registered the result yet ("Waiting for results": the screen decides, the state still says invited / confirmed /...).
   // Interviews that an older version closed by itself (finished, no result) count too, so a person can still register how they went.
@@ -633,7 +637,7 @@
       <form id="schedule-interview-form" novalidate>
         ${pastNote}${requestNote}${suggestedHtml}
         <div class="field-group"><div class="interview-kind" role="group" aria-label="${t('Format')}"><button class="btn${kind === 'online' ? ' btn-primary' : ''}" type="button" data-iv-kind="online" aria-pressed="${kind === 'online'}">${t('Online')}</button><button class="btn${kind === 'in_person' ? ' btn-primary' : ''}" type="button" data-iv-kind="in_person" aria-pressed="${kind === 'in_person'}">${t('In person')}</button></div><input type="hidden" id="iv-kind" value="${kind === 'in_person' ? 'in_person' : 'online'}"></div>
-        <div class="field-group" id="iv-link-field"><label for="iv-link">${t('Meeting link')}</label><input class="text-input" id="iv-link" type="url" maxlength="500" placeholder="${esc(t('https://link.com or leave empty to send later.'))}" value="${esc(row.meetingLink || '')}"></div>
+        <div class="field-group" id="iv-link-field"><label for="iv-link">${t('Meeting link')}</label><input class="text-input" id="iv-link" type="url" maxlength="500" placeholder="${esc(t('https://link.com or leave empty to send later.'))}" value="${esc(row.meetingLink || '')}">${B.meetingsEnabled ? `<div class="iv-nellio"><button class="btn btn-sm" type="button" id="iv-nellio">${t('Generate Nellio link')}</button><p class="team-permission-hint" id="iv-nellio-hint">${t('A video room in Nellio, nothing to install. It opens 30 minutes before the interview.')}</p></div>` : ''}</div>
         <div class="field-group" id="iv-address-field" hidden><label for="iv-address">${t('Address')}</label><input class="text-input" id="iv-address" maxlength="300" value="${esc(row.address || '')}"></div>
         <div class="field-row"><div class="field-group"><label for="iv-day">${t('Day')}</label><input class="text-input" id="iv-day" type="date" min="${isoDay(today)}" max="${isoDay(lastDay)}" value="${esc(day)}"></div><div class="field-group"><label for="iv-time">${t('Time')}</label><input class="text-input" id="iv-time" type="time" value="${esc(time)}"></div></div>
         <div class="field-group"><label for="iv-zone">${t('Time zone')}</label><select class="text-input" id="iv-zone">${interviewTimeZones(zone).map(name => `<option value="${esc(name)}"${name === zone ? ' selected' : ''}>${esc(interviewZoneLabel(name, day))}</option>`).join('')}</select></div>
@@ -655,6 +659,25 @@
     field('iv-day').addEventListener('change', () => { for (const option of field('iv-zone').options) option.textContent = interviewZoneLabel(option.value, field('iv-day').value); });
     if (!editing) mountResponsibleField(form.querySelector('#iv-responsible'), 'iv-responsible-label', () => responsibleIds, ids => { responsibleIds = ids; });
     field('iv-kind').addEventListener('change', showKind);
+    // "Generate Nellio link": the room is made on the server and its link goes into the same field, so the invitation, the calendar
+    // files, the reminders and the Interview tab carry it like any other link. Hidden while the field already holds a Nellio link.
+    const nellio = field('iv-nellio');
+    if (nellio) {
+      const showNellio = () => { nellio.closest('.iv-nellio').hidden = NELLIO_MEETING_LINK.test(field('iv-link').value.trim()); };
+      showNellio();
+      field('iv-link').addEventListener('input', showNellio);
+      nellio.addEventListener('click', async () => {
+        error.hidden = true;
+        nellio.disabled = true; nellio.textContent = t('Generating…');
+        try {
+          const interviewId = pendingRow ? (await pendingRow).id : row.id;
+          field('iv-link').value = await B.createMeetingRoom(interviewId);
+          showNellio();
+        } catch (failure) {
+          error.textContent = failure.message || t('Something went wrong. Please try again.'); error.hidden = false;
+        } finally { nellio.disabled = false; nellio.textContent = t('Generate Nellio link'); }
+      });
+    }
     form.querySelectorAll('[data-iv-kind]').forEach(button => button.addEventListener('click', () => {
       field('iv-kind').value = button.dataset.ivKind;
       form.querySelectorAll('[data-iv-kind]').forEach(other => { const on = other === button; other.classList.toggle('btn-primary', on); other.setAttribute('aria-pressed', String(on)); });
@@ -850,7 +873,8 @@
         const actions = awaiting
           ? button('finalize', t('Finalize interview'), 'btn-primary') + (row.state === 'finished' ? button('new', t('Schedule another interview')) : button('schedule', scheduleLabel))
           : button('schedule', scheduleLabel, row.state === 'reschedule_requested' ? 'btn-primary' : '') + (row.state === 'declined' ? '' : button('resend', t('Re-send e-mail'))) + cancelControl;
-        body = '<p>' + esc(text) + '</p>' + requested + detailsGrid(row) + responsibleField + away + '<div class="ai-actions">' + actions + '</div>';
+        const join = interviewJoinable(row) ? '<a class="btn btn-sm btn-primary" href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(t('Join meeting')) + '</a>' : '';
+        body = '<p>' + esc(text) + '</p>' + requested + detailsGrid(row) + responsibleField + away + '<div class="ai-actions">' + join + actions + '</div>';
       }
       // Every finished or cancelled round, newest first, each in a fold with what happened, the scheduling details and its own history.
       const historyList = list => '<ul class="interview-history">' + list.map(item => '<li><span>' + (item.kind === 'responsibles_changed' ? t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'finalized' ? t('{name} finalized the interview', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'result_corrected' ? t('{name} corrected the interview result', { name: esc(interviewActorName(item.actorUserId)) }) : esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind)) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>';
@@ -2496,6 +2520,7 @@
     const actions = ivConfirmId === row.id
       ? '<span class="ai-confirm">' + t('Cancel this interview?') + ' ' + btn('cancel-yes', t('Yes, cancel'), 'btn-danger') + btn('cancel-no', t('Keep it')) + '</span>'
       : (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '') + ivMenuHtml(row, [
+        interviewJoinable(row) ? ['join', t('Join meeting'), '', ''] : null,
         on ? ['edit', t('Edit interview'), '', locked] : null,
         on ? ['responsibles', t('Change responsible'), '', locked] : null,
         on && !started && !waiting ? ['cancel', t('Cancel interview'), ' is-danger', locked] : null,
@@ -2653,7 +2678,7 @@
     const on = INTERVIEW_ON.includes(row.state);
     const locked = workspaceIsFree() ? ' disabled' : '';
     const btn = (action, label, extra = '', off = '') => '<button type="button" class="btn' + (extra ? ' ' + extra : '') + '" data-ivd="' + action + '"' + off + '>' + esc(label) + '</button>';
-    const actions = (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '') + (on ? btn('edit', t('Edit interview'), '', locked) : '') + (on ? btn('responsibles', t('Change responsible'), '', locked) : '') + (on && !started ? btn('cancel', t('Cancel interview'), 'btn-danger-ghost', locked) : '') + btn('open', t('Open candidate'));
+    const actions = (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '') + (interviewJoinable(row) ? btn('join', t('Join meeting'), waiting ? '' : 'btn-primary') : '') + (on ? btn('edit', t('Edit interview'), '', locked) : '') + (on ? btn('responsibles', t('Change responsible'), '', locked) : '') + (on && !started ? btn('cancel', t('Cancel interview'), 'btn-danger-ghost', locked) : '') + btn('open', t('Open candidate'));
     const result = row.state === 'finished' && row.resultAt
       ? '<div class="applicant-info-grid">' + info(t('What happened'), esc(reasons[row.resultReason] || '')) + (row.resultImpression ? info(t('Impression'), aiImpressionLabelled(row.resultImpression)) : '') + (row.resultRecommended === null ? '' : info(t('Recommended'), row.resultRecommended ? t('Yes') : t('No'))) + '</div>' + (row.resultNotes ? '<div class="ai-note"><strong>' + t('Notes') + '</strong> ' + esc(row.resultNotes).replace(/\n/g, '<br>') + '</div>' : '')
       : '';
@@ -2669,7 +2694,8 @@
       const control = event.target.closest('[data-ivd]');
       if (!control) return;
       const action = control.dataset.ivd;
-      if (action === 'edit') { closeLayer(); openScheduleInterviewModal(row, { afterClose: reload }); }
+      if (action === 'join') { openInterviewMeeting(row); }
+      else if (action === 'edit') { closeLayer(); openScheduleInterviewModal(row, { afterClose: reload }); }
       else if (action === 'finalize') { closeLayer(); openFinalizeInterviewModal(row, { afterClose: reload }); }
       else if (action === 'responsibles') { closeLayer(); openInterviewResponsiblesModal(row); }
       else if (action === 'open') { closeLayer(); ivOpenCandidate(row); }
@@ -2741,6 +2767,7 @@
       if (action === 'more') { ivShown += IV_PAGE_SIZE; renderInterviewsBody(); return; }
       const row = ivRows.find(item => item.id === control.dataset.ivpId);
       if (!row) return;
+      if (action === 'join') { openInterviewMeeting(row); return; }
       if (action === 'edit') { openScheduleInterviewModal(row, { afterClose: () => { void loadInterviewsPage(); } }); return; }
       if (action === 'finalize') { openFinalizeInterviewModal(row, { afterClose: () => { void loadInterviewsPage(); } }); return; }
       if (action === 'responsibles') { openInterviewResponsiblesModal(row); return; }

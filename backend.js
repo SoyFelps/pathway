@@ -227,6 +227,21 @@
   // A new round for a candidate whose earlier interview is over or was cancelled: the function makes a waiting row, ready to be scheduled.
   // Only the responsible people change (no e-mail to the candidate); the history of the interview says who did it.
   async function setInterviewResponsibles(interviewId, responsibleIds) { const payload = await callInterviews({ action: 'setResponsibles', interviewId, responsibleIds }); return mapInterviewResult(payload.interview); }
+  // Nellio meeting rooms (plano-reunioes.md, Phase 2). Turned on per backend: only a config with meetings: true shows the button
+  // (the local staging config does; production's committed config does not until the rooms are released there).
+  const MEETINGS_FUNCTION = `${config.url.replace(/\/$/, '')}/functions/v1/meetings`;
+  const meetingsEnabled = config.meetings === true;
+  async function createMeetingRoom(interviewId) {
+    const session = await requireSession();
+    let result;
+    try {
+      result = await fetch(MEETINGS_FUNCTION, { method: 'POST', headers: { apikey: config.publishableKey, 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ action: 'create', interviewId }) });
+    } catch (_) { throw new Error(t('Could not reach the meeting service. Check your connection and try again.')); }
+    let payload = {};
+    try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
+    if (!result.ok || !payload.link) throw new Error(payload.error ? t(payload.error) : t('Something went wrong. Please try again.'));
+    return payload.link;
+  }
   async function startInterviewRound(flowId, email) { const payload = await callInterviews({ action: 'newRound', flowId, email }); return mapInterviewResult(payload.interview); }
   // The function answers with its own field names (camelCase); the window wants the same shape as the rows read from the database.
   const mapInterviewResult = row => row ? ({ id: row.id, workspaceId: row.workspaceId || null, flowId: row.flowId, email: row.email, state: row.state, kind: row.kind || null, localStart: row.localStart || null, timeZone: row.timeZone || null, startsAt: row.startsAt || null, durationMinutes: row.durationMinutes || null, meetingLink: row.meetingLink || null, address: row.address || null, notes: row.notes || null, sequence: row.sequence || 0, responseNote: row.responseNote || null, proposedTimes: row.proposedTimes || [], responsibleIds: row.responsibleIds || [], resultReason: row.resultReason || null, resultImpression: row.resultImpression || null, resultRecommended: typeof row.resultRecommended === 'boolean' ? row.resultRecommended : null, resultNotes: row.resultNotes || null, resultAt: row.resultAt || null, resultBy: row.resultBy || null }) : null;
@@ -1317,6 +1332,8 @@
     listCandidateInterviewEvents,
     listInterviewCandidateNames,
     scheduleInterview,
+    meetingsEnabled,
+    createMeetingRoom,
     setInterviewResponsibles,
     cancelInterview,
     finalizeInterview,

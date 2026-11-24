@@ -1767,7 +1767,6 @@
   'Microphone': 'Microfone',
   'Mute': 'Desligar microfone',
   'No camera or microphone was found. You can still join to see and hear the others.': 'Nenhuma câmera ou microfone foi encontrado. Você ainda pode entrar para ver e ouvir os outros.',
-  'Only online interviews have a meeting room.': 'Só entrevistas online têm sala de reunião.',
   'Reconnecting…': 'Reconectando…',
   'Sign in to create a meeting room.': 'Entre na sua conta para criar uma sala de reunião.',
   'The browser blocked the camera and microphone. Allow them for this site (usually in the address bar) and try again.': 'O navegador bloqueou a câmera e o microfone. Permita o uso neste site (normalmente na barra de endereço) e tente novamente.',
@@ -1775,7 +1774,6 @@
   'The meeting service is not configured.': 'O serviço de reunião não está configurado.',
   'The room is not open yet.': 'A sala ainda não está aberta.',
   'The room opens 30 minutes before the interview, once it is scheduled.': 'A sala abre 30 minutos antes da entrevista, assim que ela for agendada.',
-  'This interview already has a meeting room.': 'Esta entrevista já tem uma sala de reunião.',
   'This interview has no date yet.': 'Esta entrevista ainda não tem data.',
   'This meeting is full.': 'Esta reunião está cheia.',
   'This meeting link was not found.': 'Este link de reunião não foi encontrado.',
@@ -2118,5 +2116,11 @@
   'The scheduled change could not be cancelled. Try again.': 'Não foi possível cancelar a mudança agendada. Tente de novo.',
   'The scheduled change could not be updated.': 'Não foi possível atualizar a mudança agendada.',
   // Phase 5 (short labels for phones)
-  'Upgrade': 'Assinar'
+  'Upgrade': 'Assinar',
+  // Meeting rooms, Phase 2 (schedule window and Join meeting)
+  'Generate Nellio link': 'Gerar link Nellio',
+  'Generating…': 'Gerando…',
+  'A video room in Nellio, nothing to install. It opens 30 minutes before the interview.': 'Uma sala de vídeo no Nellio, sem instalar nada. Ela abre 30 minutos antes da entrevista.',
+  'Join meeting': 'Entrar na reunião',
+  'Could not reach the meeting service. Check your connection and try again.': 'Não foi possível acessar o serviço de reuniões. Verifique sua conexão e tente de novo.'
 };

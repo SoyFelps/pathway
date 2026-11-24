@@ -39,7 +39,7 @@ test('the function hands out the channel and TURN only to someone with the secre
   assert.ok(index.includes('view.channel = `meeting:${room.channel_key}`') && index.includes('view.iceServers = await turnServers()'));
   assert.ok(!/CLOUDFLARE_TURN_API_TOKEN[^\n]*response\(/.test(index), 'the TURN key never goes to the browser');
   assert.ok(index.includes('await userClient.from("candidate_interviews").select("id,workspace_id,state,kind")'), 'creating a room needs a person who can see the interview');
-  assert.ok(index.includes('Only online interviews have a meeting room.') && index.includes('planActive(seen.workspace_id)'));
+  assert.ok(index.includes('planActive(seen.workspace_id)'));
 });
 
 test('the room page asks for the camera only after a click, follows the job language and starts phones at a lower quality', () => {
@@ -136,4 +136,17 @@ test('phones run the model in a worker with the landscape model, as Google Meet 
 test('the phone blur is about 3% of the picture width (half of the first version, owner 2026-11-24)', () => {
   const effects = read('meeting-effects.js');
   assert.ok(effects.includes('Math.round(width / 4)') && effects.includes("tinyCtx.filter = 'blur(3px)'"));
+});
+
+test('Phase 2: "Generate Nellio link" fills the meeting link field, only where the rooms are turned on, and "Join meeting" opens it', () => {
+  const builder = read('builder.js');
+  const backend = read('backend.js');
+  const index = read('supabase/functions/meetings/index.ts');
+  assert.ok(backend.includes('const meetingsEnabled = config.meetings === true;'), 'production shows no button until the rooms are released there');
+  const committed = require('node:child_process').execFileSync('git', ['show', 'HEAD:supabase-config.js'], { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
+  assert.ok(committed.includes('gftnghlkuiuhuwyaajdn') && !/meetings\s*:/.test(committed), 'the committed (production) config does not turn the rooms on');
+  assert.ok(builder.includes("${B.meetingsEnabled ? `<div class=\"iv-nellio\">") && builder.includes("field('iv-link').value = await B.createMeetingRoom(interviewId);"));
+  assert.ok(builder.includes('NELLIO_MEETING_LINK.test(') && builder.includes("interviewJoinable(row) ? ['join', t('Join meeting'), '', ''] : null"));
+  assert.ok(index.includes('await hashSecret(savedSecret) === existing.secret_hash) return response(req, 200, { link: savedLink })'), 'a link already saved in the interview keeps working');
+  assert.ok(index.includes('projectUrl.includes(STAGING_REF) ? "https://nellio.app/lab/room.html"'), 'staging links go to the test copy that talks to staging');
 });
