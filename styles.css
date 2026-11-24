@@ -1470,3 +1470,4 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-transcript-lines span{color:var(--text-body);white-space:pre-wrap;overflow-wrap:anywhere}
 .iv-minutes-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
 .iv-minutes-head h4{margin:0}
+.iv-minutes .iv-minutes-ai{margin:12px 0 0;padding-top:10px;border-top:1px solid var(--line);font-size:12px;font-style:italic;color:var(--text-subtle)}

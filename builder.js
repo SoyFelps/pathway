@@ -854,7 +854,7 @@
     const clock = iso => window.PathwayI18n.formatDate(iso, { hour: '2-digit', minute: '2-digit', timeZone: row.timeZone || undefined });
     const lines = item.transcript.map(line => '<li class="' + (line.role === 'team' ? 'is-team' : 'is-candidate') + '"><time>' + esc(clock(line.at)) + '</time><strong>' + esc(line.name) + '</strong><span>' + esc(line.text) + '</span></li>').join('');
     return '<div class="iv-transcript">'
-      + (item.minutes ? '<div class="iv-minutes-head"><h4>' + t('Minutes') + '</h4><button type="button" class="btn btn-sm" data-iv-action="minutes-txt" data-iv-id="' + esc(row.id) + '">' + t('Download') + '</button></div><div class="iv-minutes">' + minutesHtml(item.minutes) + '</div>' : '')
+      + (item.minutes ? '<div class="iv-minutes-head"><h4>' + t('Minutes') + '</h4><button type="button" class="btn btn-sm" data-iv-action="minutes-txt" data-iv-id="' + esc(row.id) + '">' + t('Download') + '</button></div><div class="iv-minutes">' + minutesHtml(item.minutes) + '<p class="iv-minutes-ai">' + t('Minutes written by AI. They may contain errors.') + '</p></div>' : '')
       + '<details class="iv-fold iv-transcript-fold"><summary>' + esc(t('Transcription') + ' · ' + tn('{count} line', '{count} lines', item.transcript.length)) + '</summary>'
       + (lines ? '<ol class="iv-transcript-lines">' + lines + '</ol>' : '<p class="muted">' + t('Nothing was said in the meeting while it was transcribed.') + '</p>') + '</details></div>';
   }
@@ -897,7 +897,8 @@
       const plain = text => text.split('\n').map(line => { const head = line.match(/^#{1,4}\s+(.*)$/); return (head ? head[1].toUpperCase() : line).replace(/\*\*([^*]+)\*\*/g, '$1'); }).join('\n');
       const top = t('Minutes').toUpperCase() + (job ? ' · ' + job : '') + '\n' + t('Candidate') + ': ' + person + '\n' + t('Interview') + ': ' + when + '\n\n';
       const slug = (t('Minutes') + '-' + person + '-' + String(row.startsAt || '').slice(0, 10)).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      downloadTextFile(slug + '.txt', top + plain(item.minutes) + '\n', 'text/plain;charset=utf-8');
+      // the AI notice is added here, never asked of the model (owner decision, 2026-11-24), so it is always there
+      downloadTextFile(slug + '.txt', top + plain(item.minutes) + '\n\n' + t('Minutes written by AI. They may contain errors.') + '\n', 'text/plain;charset=utf-8');
     };
     const render = (rows, eventsById, errorText = '') => {
       const mine = rows.filter(item => item.flowId === flowId && item.email === wanted);
