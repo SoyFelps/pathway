@@ -854,7 +854,7 @@
     const clock = iso => window.PathwayI18n.formatDate(iso, { hour: '2-digit', minute: '2-digit', timeZone: row.timeZone || undefined });
     const lines = item.transcript.map(line => '<li class="' + (line.role === 'team' ? 'is-team' : 'is-candidate') + '"><time>' + esc(clock(line.at)) + '</time><strong>' + esc(line.name) + '</strong><span>' + esc(line.text) + '</span></li>').join('');
     return '<div class="iv-transcript">'
-      + (item.minutes ? '<div class="iv-minutes-head"><h4>' + t('Minutes') + '</h4><span class="iv-minutes-download">' + t('Download') + ' <button type="button" class="btn btn-sm" data-iv-action="minutes-md" data-iv-id="' + esc(row.id) + '">.md</button><button type="button" class="btn btn-sm" data-iv-action="minutes-txt" data-iv-id="' + esc(row.id) + '">.txt</button></span></div><div class="iv-minutes">' + minutesHtml(item.minutes) + '</div>' : '')
+      + (item.minutes ? '<div class="iv-minutes-head"><h4>' + t('Minutes') + '</h4><button type="button" class="btn btn-sm" data-iv-action="minutes-txt" data-iv-id="' + esc(row.id) + '">' + t('Download') + '</button></div><div class="iv-minutes">' + minutesHtml(item.minutes) + '</div>' : '')
       + '<details class="iv-fold iv-transcript-fold"><summary>' + esc(t('Transcription') + ' · ' + tn('{count} line', '{count} lines', item.transcript.length)) + '</summary>'
       + (lines ? '<ol class="iv-transcript-lines">' + lines + '</ol>' : '<p class="muted">' + t('Nothing was said in the meeting while it was transcribed.') + '</p>') + '</details></div>';
   }
@@ -887,18 +887,17 @@
         + '<p class="muted">' + t('Finalized by {name} on {date}', { name: esc(person), date: esc(window.PathwayI18n.formatDate(row.resultAt, { dateStyle: 'medium', timeStyle: 'short' })) }) + '</p>';
     };
     let transcripts = new Map();
-    // The minutes of one round as a file: Markdown as Gemini wrote it (.md), or plain text without the marks (.txt), with the job, candidate and date on top.
-    const downloadMinutes = (row, markdown) => {
+    // The minutes of one round as a plain-text file (.txt, without the Markdown marks), with the job, candidate and date on top (owner decision: .txt only).
+    const downloadMinutes = row => {
       const item = row && transcripts.get(row.id);
       if (!item || !item.minutes) return;
       const job = (flows.find(flow => flow.cloudId === flowId) || {}).jobTitle || '';
       const person = (applicants.find(entry => entry.flow_id === flowId && String(entry.candidate_email || '').trim().toLowerCase() === wanted) || {}).candidate_name || wanted;
       const when = interviewWhen(row, { dateStyle: 'long', timeStyle: 'short' });
       const plain = text => text.split('\n').map(line => { const head = line.match(/^#{1,4}\s+(.*)$/); return (head ? head[1].toUpperCase() : line).replace(/\*\*([^*]+)\*\*/g, '$1'); }).join('\n');
-      const top = markdown ? '# ' + t('Minutes') + (job ? ' · ' + job : '') + '\n\n' + t('Candidate') + ': ' + person + '  \n' + t('Interview') + ': ' + when + '\n\n'
-        : t('Minutes').toUpperCase() + (job ? ' · ' + job : '') + '\n' + t('Candidate') + ': ' + person + '\n' + t('Interview') + ': ' + when + '\n\n';
+      const top = t('Minutes').toUpperCase() + (job ? ' · ' + job : '') + '\n' + t('Candidate') + ': ' + person + '\n' + t('Interview') + ': ' + when + '\n\n';
       const slug = (t('Minutes') + '-' + person + '-' + String(row.startsAt || '').slice(0, 10)).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      downloadTextFile(slug + (markdown ? '.md' : '.txt'), top + (markdown ? item.minutes : plain(item.minutes)) + '\n', (markdown ? 'text/markdown' : 'text/plain') + ';charset=utf-8');
+      downloadTextFile(slug + '.txt', top + plain(item.minutes) + '\n', 'text/plain;charset=utf-8');
     };
     const render = (rows, eventsById, errorText = '') => {
       const mine = rows.filter(item => item.flowId === flowId && item.email === wanted);
@@ -984,7 +983,7 @@
       const action = control.dataset.ivAction;
       if (action === 'schedule' && row) { openScheduleInterviewModal(row, { afterClose: () => { pendingOpenInterviewTab = true; const open = C.groupApplicants(applicants).find(item => item.latest.flow_id === flowId && String(item.latest.candidate_email || '').trim().toLowerCase() === wanted); if (open) showApplicantDetails(open.latest.id); } }); return; }
       if (action === 'finalize' && row) { openFinalizeInterviewModal(row, { afterClose: () => reopenInterviewTab(flowId, wanted) }); return; }
-      if (action === 'minutes-md' || action === 'minutes-txt') { downloadMinutes((host._interviewRows || []).find(item => item.id === control.dataset.ivId), action === 'minutes-md'); return; }
+      if (action === 'minutes-txt') { downloadMinutes((host._interviewRows || []).find(item => item.id === control.dataset.ivId)); return; }
       if (action === 'correct') { const target = (host._interviewRows || []).find(item => item.id === control.dataset.ivId) || row; if (target) openFinalizeInterviewModal(target, { correcting: true, afterClose: () => reopenInterviewTab(flowId, wanted) }); return; }
       if (action === 'cancel') { confirming = true; void load(); return; }
       if (action === 'cancel-no') { confirming = false; void load(); return; }

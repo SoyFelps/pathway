@@ -1469,4 +1469,3 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-transcript-lines span{color:var(--text-body);white-space:pre-wrap;overflow-wrap:anywhere}
 .iv-minutes-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
 .iv-minutes-head h4{margin:0}
-.iv-minutes-download{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-subtle)}
