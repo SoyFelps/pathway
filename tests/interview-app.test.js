@@ -82,7 +82,7 @@ test('the Interview tab after the time has passed: waiting for results, no re-se
   assert.ok(builder.includes("const interviewAwaitingResult = row =>") && builder.includes("if (interviewAwaitingResult(row)) return ['Waiting for results', 'warn'];"), 'a card tag as well');
   assert.ok(panel.includes("button('finalize', t('Finalize interview'), 'btn-primary')"), 'finalize is offered');
   assert.ok(panel.includes("const actions = awaiting\n"), 'a different list of buttons once the time has passed');
-  assert.ok(/awaiting\s*\n\s*\? button\('finalize'[^\n]*\n\s*: button\('schedule'[^\n]*button\('resend'[^\n]*cancelControl/.test(panel), 're-send and cancel only before the time');
+  assert.ok(panel.includes("? button('finalize', t('Finalize interview'), 'btn-primary') + resend + ") && panel.includes("+ resend + (opened ? '' : cancelControl);") && builder.includes('const interviewResendable = row =>'), 'cancel only before the time; re-send until the interview ends');
   assert.ok(panel.includes("'<h4>' + t('Scheduling details') + '</h4>' + detailsGrid(item)") && panel.includes('<details class=\"iv-fold\"'), 'the scheduling details are inside the fold of each round');
   assert.ok(panel.includes('data-iv-action=\"correct\" data-iv-id=') && panel.includes("t('Correct result')"), 'a correction is possible, for the round it belongs to');
   const modal = slice(builder, 'function openFinalizeInterviewModal(', 'function offerInterviewScheduling');

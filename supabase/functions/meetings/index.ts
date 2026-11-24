@@ -150,6 +150,12 @@ async function actionJoin(req: Request, body: Record<string, unknown>) {
     opensAt: window?.opensAt.toISOString() || null, closesAt: window?.closesAt.toISOString() || null, maxPeople: MAX_PEOPLE,
   };
   if (status === "open" && body.enter === true) {
+    // The first person who enters marks the room as opened: from then on the interview can no longer be edited or cancelled (owner decision, 2026-11-24).
+    const { data: first } = await admin!.from("candidate_interviews").update({ room_opened_at: new Date().toISOString() }).eq("id", ctx.iv.id).is("room_opened_at", null).select("id,workspace_id").maybeSingle();
+    if (first) {
+      const { error: eventError } = await admin!.from("candidate_interview_events").insert({ interview_id: first.id, workspace_id: first.workspace_id, kind: "room_opened", actor: "system", actor_user_id: null, data: {} });
+      if (eventError) console.error("meetings: event not saved", eventError.message);
+    }
     view.channel = `meeting:${room.channel_key}`;
     view.iceServers = await turnServers();
   }

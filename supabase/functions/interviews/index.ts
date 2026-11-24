@@ -258,6 +258,7 @@ function recruiterRow(iv: Row) {
     responsibleIds: iv.responsible_user_ids || [],
     resultReason: iv.result_reason ?? null, resultImpression: iv.result_impression ?? null, resultRecommended: iv.result_recommended ?? null,
     resultNotes: iv.result_notes ?? null, resultAt: iv.result_at ?? null, resultBy: iv.result_by ?? null,
+    roomOpenedAt: iv.room_opened_at ?? null,
   };
 }
 
@@ -302,7 +303,7 @@ async function authenticate(req: Request): Promise<{ userId: string; userClient:
 async function visibleInterview(userClient: SupabaseClient, body: Record<string, unknown>): Promise<Row | null> {
   const id = typeof body.interviewId === "string" && UUID_RE.test(body.interviewId) ? body.interviewId : "";
   if (!id) return null;
-  const { data, error } = await userClient.from("candidate_interviews").select("id,workspace_id,state").eq("id", id).maybeSingle();
+  const { data, error } = await userClient.from("candidate_interviews").select("id,workspace_id,state,room_opened_at").eq("id", id).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -327,6 +328,7 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
   const seen = await visibleInterview(userClient, body);
   if (!seen) return fail(req, 404, "The interview was not found.");
   if (seen.state !== "awaiting_schedule" && !(OPEN_STATES as readonly string[]).includes(seen.state)) return fail(req, 409, "This interview can no longer be changed.");
+  if (seen.room_opened_at) return fail(req, 409, "The meeting room of this interview was already opened, so it can no longer be edited or cancelled.");
   const parsed = parseScheduleInput(body);
   if (!parsed.ok) return fail(req, 400, parsed.error);
   if (!(await planActive(seen.workspace_id))) return fail(req, 402, "An active plan is needed to schedule interviews.");
@@ -422,27 +424,34 @@ async function actionDiscardRound(req: Request, userClient: SupabaseClient, body
 async function actionCancel(req: Request, userId: string, userClient: SupabaseClient, body: Record<string, unknown>) {
   const seen = await visibleInterview(userClient, body);
   if (!seen) return fail(req, 404, "The interview was not found.");
-  if (!(OPEN_STATES as readonly string[]).includes(seen.state)) return fail(req, 409, "This interview can no longer be changed.");
+  // an interview still waiting to be scheduled may be cancelled too (it never had a date, nothing was sent to the candidate)
+  if (seen.state !== "awaiting_schedule" && !(OPEN_STATES as readonly string[]).includes(seen.state)) return fail(req, 409, "This interview can no longer be changed.");
+  if (seen.room_opened_at) return fail(req, 409, "The meeting room of this interview was already opened, so it can no longer be edited or cancelled.");
   const { data: updated, error } = await admin!.from("candidate_interviews").update({ state: "cancelled", notice_at: null, notice_reason: null }).eq("id", seen.id).eq("state", seen.state).select("*").maybeSingle();
   if (error) return databaseFailure(req, error);
   if (!updated) return fail(req, 409, "This interview can no longer be changed.");
   await addEvent(updated, "cancelled", "recruiter", userId);
+  if (!updated.starts_at) return response(req, 200, { interview: recruiterRow(updated) });
   const ctx = await loadContext(updated.id);
   const sent = ctx ? await sendToCandidate(ctx, "cancel", String(updated.sequence)) : false;
   return response(req, 200, sent ? { interview: recruiterRow(updated), emailSent: true } : { interview: recruiterRow(updated), emailSent: false, warning: "The interview was cancelled, but the e-mail could not be sent." });
 }
 
+/** "Re-send link" (owner decision, 2026-11-24): a reminder with the interview details and the meeting link goes to the candidate AND to the responsible
+    people. Only while the interview is on (invited or confirmed) and until its end time, also once the meeting room was opened (a late candidate). */
 async function actionResend(req: Request, userId: string, userClient: SupabaseClient, body: Record<string, unknown>) {
   const seen = await visibleInterview(userClient, body);
   if (!seen) return fail(req, 404, "The interview was not found.");
-  if (!(OPEN_STATES as readonly string[]).includes(seen.state)) return fail(req, 409, "This interview can no longer be changed.");
+  if (seen.state !== "invited" && seen.state !== "confirmed") return fail(req, 409, "This interview can no longer be changed.");
   if (await recentEvents(seen.id, ["resent"], 60) >= 3) return fail(req, 429, "The e-mail was already sent again several times. Try again later.");
   const ctx = await loadContext(seen.id);
   if (!ctx) return fail(req, 404, "The interview was not found.");
-  if (new Date(ctx.iv.starts_at).getTime() <= Date.now()) return fail(req, 409, "This interview has already taken place.");
+  if (Date.parse(ctx.iv.starts_at) + ctx.iv.duration_minutes * 60_000 <= Date.now()) return fail(req, 409, "This interview has already taken place.");
   if (!(await planActive(ctx.iv.workspace_id))) return fail(req, 402, "An active plan is needed to schedule interviews.");
   await addEvent(ctx.iv, "resent", "recruiter", userId);
-  const sent = await sendToCandidate(ctx, "invite", `resend-${Date.now()}`);
+  const stamp = String(Date.now());
+  const sent = await sendToCandidate(ctx, ctx.iv.state === "invited" ? "resendInvited" : "resend", `resend-${stamp}`);
+  await notifyRecruiters(ctx, "resent", stamp);
   return response(req, 200, sent ? { interview: recruiterRow(ctx.iv), emailSent: true } : { interview: recruiterRow(ctx.iv), emailSent: false, warning: "The e-mail could not be sent. Try again." });
 }
 

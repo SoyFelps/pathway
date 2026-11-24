@@ -175,12 +175,13 @@
     invitedAt: row.invited_at || null, respondedAt: row.responded_at || null, createdAt: row.created_at, updatedAt: row.updated_at || null,
     responsibleIds: Array.isArray(row.responsible_user_ids) ? row.responsible_user_ids : [],
     resultReason: row.result_reason || null, resultImpression: row.result_impression || null, resultRecommended: typeof row.result_recommended === 'boolean' ? row.result_recommended : null,
-    resultNotes: row.result_notes || null, resultAt: row.result_at || null, resultBy: row.result_by || null
+    resultNotes: row.result_notes || null, resultAt: row.result_at || null, resultBy: row.result_by || null,
+    roomOpenedAt: row.room_opened_at || null
   });
   // The interviews of the candidates this person may review (the database policy decides which). Newest first.
   async function listCandidateInterviews(workspaceId, flowId = '') {
     await requireSession();
-    let query = client.from('candidate_interviews').select('id,workspace_id,flow_id,candidate_email,applicant_id,state,kind,local_start,time_zone,starts_at,duration_minutes,meeting_link,address,notes,sequence,response_note,proposed_times,invited_at,responded_at,created_at,updated_at,responsible_user_ids,result_reason,result_impression,result_recommended,result_notes,result_at,result_by')
+    let query = client.from('candidate_interviews').select('id,workspace_id,flow_id,candidate_email,applicant_id,state,kind,local_start,time_zone,starts_at,duration_minutes,meeting_link,address,notes,sequence,response_note,proposed_times,invited_at,responded_at,created_at,updated_at,responsible_user_ids,result_reason,result_impression,result_recommended,result_notes,result_at,result_by,room_opened_at')
       .eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(2000);
     if (flowId) query = query.eq('flow_id', flowId);
     const { data, error } = await query;

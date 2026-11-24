@@ -150,3 +150,18 @@ test('Phase 2: "Generate Nellio link" fills the meeting link field, only where t
   assert.ok(index.includes('await hashSecret(savedSecret) === existing.secret_hash) return response(req, 200, { link: savedLink })'), 'a link already saved in the interview keeps working');
   assert.ok(index.includes('projectUrl.includes(STAGING_REF) ? "https://nellio.app/lab/room.html"'), 'staging links go to the test copy that talks to staging');
 });
+
+test('2026-11-24: cancel while waiting, re-send link to candidate and team, no edit once the room was opened, no "opens by itself" line', () => {
+  const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+  const iv = read('supabase/functions/interviews/index.ts');
+  const meetings = read('supabase/functions/meetings/index.ts');
+  const migration = read('supabase/migrations/20261124100000_interview_cancel_waiting_room_opened.sql');
+  assert.ok(migration.includes("or (state = 'cancelled' and local_start is null)") && migration.includes('grant select (room_opened_at)') && migration.includes("'room_opened'"), 'the database accepts a cancelled row with no date, keeps the first opening and the new history line');
+  assert.ok(iv.includes('if (seen.state !== "awaiting_schedule" && !(OPEN_STATES as readonly string[]).includes(seen.state))') && iv.includes('if (!updated.starts_at) return response(req, 200, { interview: recruiterRow(updated) });'), 'a waiting interview can be cancelled, without an e-mail');
+  assert.equal((iv.match(/if \(seen\.room_opened_at\) return fail\(req, 409,/g) || []).length, 2, 'edit and cancel are refused once the room was opened');
+  assert.ok(iv.includes('await notifyRecruiters(ctx, "resent", stamp);') && iv.includes('"resendInvited" : "resend"'), 're-send goes to the candidate and the responsible people');
+  assert.ok(meetings.includes('.update({ room_opened_at: new Date().toISOString() }).eq("id", ctx.iv.id).is("room_opened_at", null)') && meetings.includes('kind: "room_opened"'), 'the first person who enters marks the room as opened');
+  const builder = read('builder.js');
+  assert.ok(builder.includes("on && !interviewRoomOpened(row) ? ['edit'") && builder.includes("interviewResendable(row) ? ['resend', interviewResendLabel(row)"), 'the Interviews page hides edit once opened and offers re-send');
+  assert.ok(!read('meeting.js').includes('This page opens it by itself.'), 'the waiting page no longer says it opens by itself');
+});

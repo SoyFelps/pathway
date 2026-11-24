@@ -70,7 +70,7 @@
   function renderState() {
     clearTimeout(pollTimer);
     if (view.status === 'early') {
-      renderMessage(t('The room is not open yet.'), t('It opens at {time}, 30 minutes before the interview. This page opens it by itself.', { time: esc(localTime(view.opensAt, { hour: '2-digit', minute: '2-digit' })) }));
+      renderMessage(t('The room is not open yet.'), t('It opens at {time}, 30 minutes before the interview.', { time: esc(localTime(view.opensAt, { hour: '2-digit', minute: '2-digit' })) }));
       pollTimer = setTimeout(load, Math.max(5000, Math.min(60000, Date.parse(view.opensAt) - Date.now() + 1000)));
     } else if (view.status === 'closed') renderMessage(t('This meeting room is closed.'), t('The room closes 2 hours after the interview starts. Contact the hiring team if you need a new time.'));
     else if (view.status === 'cancelled') renderMessage(t('This interview was cancelled.'), t('The hiring team may contact you about a new time.'));

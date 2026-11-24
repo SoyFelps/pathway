@@ -59,7 +59,7 @@ interface CandidateCopy {
   htmlLang: string; fallbackName: string; fallbackJob: string; fallbackCompany: string;
   greeting: (name: string) => string;
   labels: { when: string; format: string; online: string; inPerson: string; link: string; address: string; notes: string };
-  kinds: Record<"invite" | "update" | "cancel" | "reminder24" | "reminder2" | "reminder10", {
+  kinds: Record<"invite" | "update" | "cancel" | "reminder24" | "reminder2" | "reminder10" | "resend", {
     subject: (job: string, company: string) => string;
     eyebrow: string;
     heading: (company: string) => string;
@@ -82,6 +82,7 @@ const CANDIDATE: Record<Language, CandidateCopy> = {
       reminder24: { subject: (j) => `Reminder: your interview for ${j} is in 24 hours`, eyebrow: "Interview reminder", heading: () => "Your interview is tomorrow.", intro: (j, c) => `A reminder that your interview for ${j} at ${c} is coming up in about 24 hours.` },
       reminder2: { subject: (j) => `Reminder: your interview for ${j} is in 2 hours`, eyebrow: "Interview reminder", heading: () => "Your interview is in 2 hours.", intro: (j, c) => `A reminder that your interview for ${j} at ${c} starts in about 2 hours.` },
       reminder10: { subject: (j) => `Reminder: your interview for ${j} starts in 10 minutes`, eyebrow: "Interview reminder", heading: () => "Your interview starts in 10 minutes.", intro: (j, c) => `A reminder that your interview for ${j} at ${c} starts in about 10 minutes.` },
+      resend: { subject: (j, c) => `Your interview link: ${j} – ${c}`, eyebrow: "Interview reminder", heading: () => "Here is the link to your interview.", intro: (j, c) => `The hiring team sent you again the details of your interview for ${j} at ${c}.` },
     },
     respondLine: "Confirm you can attend, ask for another time or add the interview to your calendar with the button below.",
     cancelLine: "", reminderLine: "You can see the details and add the interview to your calendar with the button below.",
@@ -99,6 +100,7 @@ const CANDIDATE: Record<Language, CandidateCopy> = {
       reminder24: { subject: (j) => `Lembrete: sua entrevista para ${j} é em 24 horas`, eyebrow: "Lembrete de entrevista", heading: () => "Sua entrevista é amanhã.", intro: (j, c) => `Um lembrete de que sua entrevista para ${j} – ${c} acontece em cerca de 24 horas.` },
       reminder2: { subject: (j) => `Lembrete: sua entrevista para ${j} é em 2 horas`, eyebrow: "Lembrete de entrevista", heading: () => "Sua entrevista é em 2 horas.", intro: (j, c) => `Um lembrete de que sua entrevista para ${j} – ${c} começa em cerca de 2 horas.` },
       reminder10: { subject: (j) => `Lembrete: sua entrevista para ${j} começa em 10 minutos`, eyebrow: "Lembrete de entrevista", heading: () => "Sua entrevista começa em 10 minutos.", intro: (j, c) => `Um lembrete de que sua entrevista para ${j} – ${c} começa em cerca de 10 minutos.` },
+      resend: { subject: (j, c) => `Link da sua entrevista: ${j} – ${c}`, eyebrow: "Lembrete de entrevista", heading: () => "Aqui está o link da sua entrevista.", intro: (j, c) => `A equipe de contratação reenviou os dados da sua entrevista para ${j} – ${c}.` },
     },
     respondLine: "Confirme sua presença, peça outro horário ou adicione a entrevista à sua agenda pelo botão abaixo.",
     cancelLine: "", reminderLine: "Veja os detalhes e adicione a entrevista à sua agenda pelo botão abaixo.",
@@ -116,6 +118,7 @@ const CANDIDATE: Record<Language, CandidateCopy> = {
       reminder24: { subject: (j) => `Recordatorio: su entrevista para ${j} es en 24 horas`, eyebrow: "Recordatorio de entrevista", heading: () => "Su entrevista es mañana.", intro: (j, c) => `Le recordamos que su entrevista para ${j} – ${c} es en aproximadamente 24 horas.` },
       reminder2: { subject: (j) => `Recordatorio: su entrevista para ${j} es en 2 horas`, eyebrow: "Recordatorio de entrevista", heading: () => "Su entrevista es en 2 horas.", intro: (j, c) => `Le recordamos que su entrevista para ${j} – ${c} comienza en aproximadamente 2 horas.` },
       reminder10: { subject: (j) => `Recordatorio: su entrevista para ${j} empieza en 10 minutos`, eyebrow: "Recordatorio de entrevista", heading: () => "Su entrevista empieza en 10 minutos.", intro: (j, c) => `Le recordamos que su entrevista para ${j} – ${c} empieza en aproximadamente 10 minutos.` },
+      resend: { subject: (j, c) => `Enlace de su entrevista: ${j} – ${c}`, eyebrow: "Recordatorio de entrevista", heading: () => "Aquí está el enlace de su entrevista.", intro: (j, c) => `El equipo de selección le reenvió los datos de su entrevista para ${j} – ${c}.` },
     },
     respondLine: "Confirme su asistencia, pida otro horario o agregue la entrevista a su calendario con el botón de abajo.",
     cancelLine: "", reminderLine: "Vea los detalles y agregue la entrevista a su calendario con el botón de abajo.",
@@ -124,7 +127,8 @@ const CANDIDATE: Record<Language, CandidateCopy> = {
   },
 };
 
-export type CandidateEmailKind = "invite" | "update" | "cancel" | "reminder24" | "reminder2" | "reminder10";
+/** "resend": the link sent again by the team to a confirmed interview; "resendInvited": the same, while the candidate has not answered yet (the button asks for the answer). */
+export type CandidateEmailKind = "invite" | "update" | "cancel" | "reminder24" | "reminder2" | "reminder10" | "resend" | "resendInvited";
 
 export interface CandidateEmailInput {
   kind: CandidateEmailKind;
@@ -207,7 +211,11 @@ function layout(i: LayoutInput): { html: string; text: string } {
 function detailRows(copy: CandidateCopy["labels"], d: InterviewDetails, language: Language): Row[] {
   const rows: Row[] = [[copy.when, formatWhen(d.startsAt, d.durationMinutes, d.timeZone, language)]];
   rows.push([copy.format, d.kind === "online" ? copy.online : copy.inPerson]);
-  if (d.kind === "online" && d.meetingLink) rows.push([copy.link, singleLine(d.meetingLink, 500)]);
+  if (d.kind === "online" && d.meetingLink) {
+    // the meeting link is a real link in the HTML version (the database only accepts http(s) addresses); the text version shows it as it is
+    const link = singleLine(d.meetingLink, 500);
+    rows.push(/^https?:\/\//i.test(link) ? [copy.link, link, [{ label: link, url: link }]] : [copy.link, link]);
+  }
   if (d.kind === "in_person" && d.address) rows.push([copy.address, singleLine(d.address, 300)]);
   const notes = multiLine(d.notes, 1000);
   if (notes) rows.push([copy.notes, notes]);
@@ -220,9 +228,9 @@ export function buildCandidateEmail(input: CandidateEmailInput): BuiltEmail {
   const name = singleLine(input.candidateName, 120) || copy.fallbackName;
   const job = singleLine(input.jobTitle, 120) || copy.fallbackJob;
   const company = singleLine(input.companyName, 80) || copy.fallbackCompany;
-  const k = copy.kinds[input.kind];
+  const k = copy.kinds[input.kind === "resendInvited" ? "resend" : input.kind];
   const isCancel = input.kind === "cancel";
-  const isReminder = input.kind === "reminder24" || input.kind === "reminder2" || input.kind === "reminder10";
+  const isReminder = input.kind === "reminder24" || input.kind === "reminder2" || input.kind === "reminder10" || input.kind === "resend";
   const closing = isCancel ? "" : isReminder ? copy.reminderLine : copy.respondLine;
   const built = layout({
     htmlLang: copy.htmlLang,
@@ -232,7 +240,7 @@ export function buildCandidateEmail(input: CandidateEmailInput): BuiltEmail {
     paragraphs: [k.intro(job, company), closing],
     // a cancelled interview shows only the date and time (so the person knows which one): no meeting link, address or notes
     rows: isCancel ? detailRows(copy.labels, input.interview, language).slice(0, 1) : detailRows(copy.labels, input.interview, language),
-    button: isCancel ? undefined : { url: input.pageUrl, label: input.kind === "invite" || input.kind === "update" ? copy.buttonRespond : copy.buttonView },
+    button: isCancel ? undefined : { url: input.pageUrl, label: input.kind === "invite" || input.kind === "update" || input.kind === "resendInvited" ? copy.buttonRespond : copy.buttonView },
     footer: copy.footer(company),
   });
   return { subject: singleLine(k.subject(job, company), 200), text: built.text, html: built.html, fromName: safeDisplayName(`${company} via Nellio`) };
@@ -242,7 +250,7 @@ export function buildCandidateEmail(input: CandidateEmailInput): BuiltEmail {
 // To the recruiter
 interface RecruiterCopy {
   htmlLang: string;
-  kinds: Record<"confirmed" | "declined" | "reschedule" | "no_link" | "assigned", {
+  kinds: Record<"confirmed" | "declined" | "reschedule" | "no_link" | "assigned" | "resent", {
     subject: (name: string, job: string) => string; eyebrow: string; heading: (name: string) => string; intro: (name: string, job: string, company: string) => string;
   }>;
   labels: CandidateCopy["labels"] & { message: string; suggested: string; addToCalendar: string; email: string };
@@ -259,6 +267,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       reschedule: { subject: (n, j) => `${n} asked for another time – ${j}`, eyebrow: "Another time requested", heading: (n) => `${n} asked for another time.`, intro: (n, j, c) => `${n} asked for another time for the interview for ${j} at ${c}. Open the candidate and schedule a new time to send a new invitation.` },
       no_link: { subject: (n, j) => `Add the meeting link: interview with ${n} – ${j}`, eyebrow: "Meeting link missing", heading: (n) => `The interview with ${n} has no meeting link.`, intro: (n, j, c) => `The interview with ${n} for ${j} at ${c} is in about 24 hours and has no meeting link yet. Open the candidate, edit the interview and add the link: the candidate receives the updated invitation.` },
       assigned: { subject: (n, j) => `You are now responsible for the interview with ${n} – ${j}`, eyebrow: "Responsible for an interview", heading: (n) => `You were added as responsible for the interview with ${n}.`, intro: (n, j, c) => `You were added as one of the people responsible for the interview with ${n} for ${j} at ${c}. You will be told when the candidate answers.` },
+      resent: { subject: (n, j) => `Interview link sent again: ${n} – ${j}`, eyebrow: "Interview link", heading: (n) => `The interview link was sent again to ${n}.`, intro: (n, j, c) => `The details and the meeting link of the interview with ${n} for ${j} at ${c} were sent again to the candidate. Here they are for you too.` },
     },
     labels: { when: "When", format: "Format", online: "Online", inPerson: "In person", link: "Meeting link", address: "Address", notes: "Notes", message: "Candidate message", suggested: "Suggested times", addToCalendar: "Add to my calendar", email: "E-mail" },
     button: "Open candidates",
@@ -272,6 +281,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       reschedule: { subject: (n, j) => `${n} pediu outro horário – ${j}`, eyebrow: "Pedido de outro horário", heading: (n) => `${n} pediu outro horário.`, intro: (n, j, c) => `${n} pediu outro horário para a entrevista para ${j} – ${c}. Abra o candidato e agende um novo horário para enviar um novo convite.` },
       no_link: { subject: (n, j) => `Falta o link da reunião: entrevista com ${n} – ${j}`, eyebrow: "Falta o link da reunião", heading: (n) => `A entrevista com ${n} está sem link.`, intro: (n, j, c) => `A entrevista com ${n} para ${j} – ${c} será em cerca de 24 horas e ainda não tem link de reunião. Abra o candidato, edite a entrevista e adicione o link: a pessoa recebe o convite atualizado.` },
       assigned: { subject: (n, j) => `Você agora é responsável pela entrevista com ${n} – ${j}`, eyebrow: "Responsável por uma entrevista", heading: (n) => `Você foi incluído como responsável pela entrevista com ${n}.`, intro: (n, j, c) => `Você foi incluído como um dos responsáveis pela entrevista com ${n} para ${j} – ${c}. Você será avisado quando o candidato responder.` },
+      resent: { subject: (n, j) => `Link da entrevista reenviado: ${n} – ${j}`, eyebrow: "Link da entrevista", heading: (n) => `O link da entrevista foi reenviado para ${n}.`, intro: (n, j, c) => `Os dados e o link da reunião da entrevista com ${n} para ${j} – ${c} foram reenviados ao candidato. Aqui estão eles para você também.` },
     },
     labels: { when: "Quando", format: "Formato", online: "Online", inPerson: "Presencial", link: "Link da reunião", address: "Endereço", notes: "Observações", message: "Mensagem do candidato", suggested: "Horários sugeridos", addToCalendar: "Adicionar à minha agenda", email: "E-mail" },
     button: "Abrir candidatos",
@@ -285,6 +295,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       reschedule: { subject: (n, j) => `${n} pidió otro horario – ${j}`, eyebrow: "Solicitud de otro horario", heading: (n) => `${n} pidió otro horario.`, intro: (n, j, c) => `${n} pidió otro horario para la entrevista para ${j} – ${c}. Abre el candidato y programa un nuevo horario para enviar una nueva invitación.` },
       no_link: { subject: (n, j) => `Falta el enlace de la reunión: entrevista con ${n} – ${j}`, eyebrow: "Falta el enlace de la reunión", heading: (n) => `La entrevista con ${n} no tiene enlace.`, intro: (n, j, c) => `La entrevista con ${n} para ${j} – ${c} es en unas 24 horas y aún no tiene enlace de reunión. Abre el candidato, edita la entrevista y agrega el enlace: la persona recibe la invitación actualizada.` },
       assigned: { subject: (n, j) => `Ahora eres responsable de la entrevista con ${n} – ${j}`, eyebrow: "Responsable de una entrevista", heading: (n) => `Te agregaron como responsable de la entrevista con ${n}.`, intro: (n, j, c) => `Te agregaron como uno de los responsables de la entrevista con ${n} para ${j} – ${c}. Se te avisará cuando el candidato responda.` },
+      resent: { subject: (n, j) => `Enlace de la entrevista reenviado: ${n} – ${j}`, eyebrow: "Enlace de la entrevista", heading: (n) => `El enlace de la entrevista se reenvió a ${n}.`, intro: (n, j, c) => `Los datos y el enlace de la reunión de la entrevista con ${n} para ${j} – ${c} se reenviaron al candidato. Aquí los tienes también.` },
     },
     labels: { when: "Cuándo", format: "Formato", online: "En línea", inPerson: "Presencial", link: "Enlace de la reunión", address: "Dirección", notes: "Observaciones", message: "Mensaje del candidato", suggested: "Horarios sugeridos", addToCalendar: "Agregar a mi calendario", email: "Correo" },
     button: "Abrir candidatos",
@@ -292,7 +303,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
   },
 };
 
-export type RecruiterEmailKind = "confirmed" | "declined" | "reschedule" | "no_link" | "assigned";
+export type RecruiterEmailKind = "confirmed" | "declined" | "reschedule" | "no_link" | "assigned" | "resent";
 
 export interface RecruiterEmailInput {
   kind: RecruiterEmailKind;
