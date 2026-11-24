@@ -6,14 +6,14 @@ const path = require('node:path');
 const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 const loadLogic = () => import('../supabase/functions/meetings/logic.ts');
 
-test('the room opens 30 minutes before the interview and closes one day after it; cancelled or unscheduled never opens', async () => {
+test('the room opens 30 minutes before the interview and closes 2 hours after it starts; cancelled or unscheduled never opens', async () => {
   const { roomStatus, roomWindow } = await loadLogic();
   const start = new Date('2026-12-01T17:00:00Z');
   const at = iso => new Date(iso);
   assert.equal(roomStatus('confirmed', start.toISOString(), at('2026-12-01T16:29:00Z')), 'early');
   assert.equal(roomStatus('confirmed', start.toISOString(), at('2026-12-01T16:30:00Z')), 'open');
-  assert.equal(roomStatus('invited', start.toISOString(), at('2026-12-02T16:59:00Z')), 'open', 'the day after, still open');
-  assert.equal(roomStatus('finished', start.toISOString(), at('2026-12-02T17:01:00Z')), 'closed');
+  assert.equal(roomStatus('invited', start.toISOString(), at('2026-12-01T18:59:00Z')), 'open', 'still open 1 h 59 min after the start');
+  assert.equal(roomStatus('finished', start.toISOString(), at('2026-12-01T19:00:01Z')), 'closed', 'closed 2 hours after the start');
   assert.equal(roomStatus('cancelled', start.toISOString(), at('2026-12-01T17:00:00Z')), 'cancelled');
   assert.equal(roomStatus('awaiting_schedule', null, at('2026-12-01T17:00:00Z')), 'unscheduled');
   assert.equal(roomWindow(start).opensAt.toISOString(), '2026-12-01T16:30:00.000Z');
@@ -71,4 +71,11 @@ test('the camera and microphone check is required: "Join" appears only after it,
   assert.ok(page.includes('if (busy || !checked) return;'), 'joining without the check is refused');
   assert.ok(!page.includes('if (!stream) await startDevices();'), 'joining never asks for the devices by itself');
   assert.ok(page.includes('function startMeter()') && page.includes("id=\"meeting-meter\""));
+});
+
+test('10 minutes before closing the people in the room see a warning, and at the closing time the meeting ends', () => {
+  const page = read('meeting.js');
+  assert.ok(page.includes('if (left <= 10 * 60000)') && page.includes("tr.tn('This room closes in {count} minute, at {time}.'"));
+  assert.ok(page.includes('if (left <= 0) { clearInterval(closingTimer); endMeeting(); return; }'));
+  assert.ok(page.includes('watchClosing();'));
 });

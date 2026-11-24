@@ -1,8 +1,9 @@
 // Pure rules of the meeting rooms (no Deno, no network), so they can be tested in Node.
 
-/** The room opens this many minutes before the interview and closes this many hours after it starts (owner decisions, 2026-11-21). */
+/** The room opens 30 minutes before the interview (owner decision, 2026-11-21) and closes 2 hours after it starts (owner decision, 2026-11-24; it was 1 day).
+ *  The page warns the people inside 10 minutes before it closes and ends the meeting at that moment. */
 export const OPEN_BEFORE_MINUTES = 30;
-export const CLOSE_AFTER_HOURS = 24;
+export const CLOSE_AFTER_MINUTES = 120;
 export const MAX_PEOPLE = 4;
 
 export type RoomStatus = "open" | "early" | "closed" | "cancelled" | "unscheduled";
@@ -10,7 +11,7 @@ export type RoomStatus = "open" | "early" | "closed" | "cancelled" | "unschedule
 export function roomWindow(startsAt: Date): { opensAt: Date; closesAt: Date } {
   return {
     opensAt: new Date(startsAt.getTime() - OPEN_BEFORE_MINUTES * 60_000),
-    closesAt: new Date(startsAt.getTime() + CLOSE_AFTER_HOURS * 3600_000),
+    closesAt: new Date(startsAt.getTime() + CLOSE_AFTER_MINUTES * 60_000),
   };
 }
 

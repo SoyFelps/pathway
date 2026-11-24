@@ -26,6 +26,7 @@
   let deviceError = '';
   let checked = false; // the camera/microphone check is required before "Join" appears (owner decision, 2026-11-23)
   let meterStop = null;
+  let closingTimer = null; // the 10-minute warning and the end of the meeting at the closing time
   let busy = false;
   let peers = [];
   const logLines = []; // what happened in the connections, for "Copy connection details" (support)
@@ -67,7 +68,7 @@
     if (view.status === 'early') {
       renderMessage(t('The room is not open yet.'), t('It opens at {time}, 30 minutes before the interview. This page opens it by itself.', { time: esc(localTime(view.opensAt, { hour: '2-digit', minute: '2-digit' })) }));
       pollTimer = setTimeout(load, Math.max(5000, Math.min(60000, Date.parse(view.opensAt) - Date.now() + 1000)));
-    } else if (view.status === 'closed') renderMessage(t('This meeting room is closed.'), t('The room closes one day after the interview. Contact the hiring team if you need a new time.'));
+    } else if (view.status === 'closed') renderMessage(t('This meeting room is closed.'), t('The room closes 2 hours after the interview starts. Contact the hiring team if you need a new time.'));
     else if (view.status === 'cancelled') renderMessage(t('This interview was cancelled.'), t('The hiring team may contact you about a new time.'));
     else if (view.status === 'unscheduled') renderMessage(t('This interview has no date yet.'), t('The room opens 30 minutes before the interview, once it is scheduled.'));
     else renderLobby();
@@ -203,6 +204,7 @@
 
   function renderRoom(name) {
     root.innerHTML = shell(`<section class="meeting-room">
+      <div class="ai-note is-warn meeting-closing" id="meeting-closing" role="status" hidden></div>
       <div class="meeting-room-head"><div><strong>${esc(view.jobTitle || t('Interview'))}</strong><span>${esc(view.companyName || '')}</span></div><span class="meeting-status" id="meeting-status"></span></div>
       <div class="meeting-grid" id="meeting-grid"><div class="meeting-tile is-me" data-tile="me">${tileInner(name, t('{name} (you)', { name }))}</div></div>
       <div class="meeting-controls">
@@ -219,6 +221,7 @@
     document.getElementById('meeting-mic-toggle').addEventListener('click', event => { micOn = !micOn; room && room.setMic(micOn); event.currentTarget.textContent = micOn ? t('Mute') : t('Unmute'); event.currentTarget.setAttribute('aria-pressed', String(!micOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-muted', !micOn); });
     document.getElementById('meeting-cam-toggle').addEventListener('click', event => { camOn = !camOn; room && room.setCam(camOn); event.currentTarget.textContent = camOn ? t('Turn camera off') : t('Turn camera on'); event.currentTarget.setAttribute('aria-pressed', String(!camOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-off', !camOn); });
     document.getElementById('meeting-leave').addEventListener('click', leave);
+    watchClosing();
     document.getElementById('meeting-copy').addEventListener('click', async event => {
       const button = event.currentTarget;
       const report = { when: new Date().toISOString(), userAgent: navigator.userAgent, phone: PHONE, peers: room ? room.peers().map(({ stream: _s, ...p }) => p) : [], stats: room ? await room.stats().catch(() => []) : [], log: logLines.slice(-120) };
@@ -258,7 +261,36 @@
     if (status) status.textContent = peers.length ? tr.tn('{count} other person in the room', '{count} other people in the room', peers.length) : t('Waiting for the others to join…');
   }
 
+  // 10 minutes before the room closes, a warning with the minutes left; at the closing time the meeting ends for everyone in it.
+  function watchClosing() {
+    clearInterval(closingTimer);
+    if (!view || !view.closesAt) return;
+    const closesAt = Date.parse(view.closesAt);
+    const tick = () => {
+      const left = closesAt - Date.now();
+      if (left <= 0) { clearInterval(closingTimer); endMeeting(); return; }
+      const box = document.getElementById('meeting-closing');
+      if (!box) { clearInterval(closingTimer); return; }
+      if (left <= 10 * 60000) {
+        const minutes = Math.max(1, Math.ceil(left / 60000));
+        box.textContent = tr.tn('This room closes in {count} minute, at {time}.', 'This room closes in {count} minutes, at {time}.', minutes, { time: localTime(view.closesAt, { hour: '2-digit', minute: '2-digit' }) });
+        box.hidden = false;
+      }
+    };
+    tick();
+    closingTimer = setInterval(tick, 5000);
+  }
+
+  function endMeeting() {
+    if (room) room.leave();
+    room = null; peers = []; stream = null; checked = false;
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+    view = { ...view, status: 'closed' };
+    renderMessage(t('This meeting room is closed.'), t('The room closes 2 hours after the interview starts. Contact the hiring team if you need a new time.'));
+  }
+
   function leave() {
+    clearInterval(closingTimer);
     if (room) room.leave();
     room = null; peers = [];
     stream = null; // room.leave() stopped the camera and microphone

@@ -1,7 +1,7 @@
 -- Nellio's own meeting rooms (Phase 1 of plano-reunioes.md, owner decision 2026-11-23: our own video rooms, no Google Meet).
 -- One room per human interview. Its link is https://nellio.app/meeting.html#<secret>; only the SHA-256 of the secret is kept here,
 -- like the answer page of the candidate (candidate_interview_tokens). Anyone with the link may join (owner decision): no sign-in.
--- The room is open from 30 minutes before the interview until 1 day after it, read from the interview itself, so a new time moves the window.
+-- The room is open from 30 minutes before the interview until 2 hours after it starts (rule in the meetings function, logic.ts), read from the interview itself, so a new time moves the window.
 -- The video goes straight between the browsers; the server only hands out, to whoever has the secret and is inside the window, the name of the
 -- Realtime channel the browsers use to find each other (channel_key, never derived from the secret) and short-lived TURN credentials.
 -- Only the `meetings` edge function (service role) reads or writes this table: no grant to the browser.
