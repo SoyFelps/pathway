@@ -36,6 +36,8 @@ const publicKey = envJsonValue("SUPABASE_PUBLISHABLE_KEYS") || Deno.env.get("SUP
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const EMAIL_FROM_ADDRESS = Deno.env.get("EMAIL_FROM") || "onboarding@resend.dev";
 const APP_URL = (Deno.env.get("PATHWAY_APP_URL") || "https://nellio.app/").replace(/\/?$/, "/");
+/** A link of a Nellio meeting room (same rule as the app and the meetings function). */
+const NELLIO_ROOM_LINK = /\/(meeting\.html|lab\/room\.html)#[A-Za-z0-9_-]{20,}$/;
 const admin = projectUrl && serviceKey
   ? createClient(projectUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
   : null;
@@ -173,6 +175,8 @@ async function sendToCandidate(ctx: Context, kind: CandidateEmailKind, keySuffix
   const mail = buildCandidateEmail({
     kind, language: ctx.language, candidateName: ctx.candidateName, jobTitle: ctx.jobTitle, companyName: ctx.companyName,
     interview: detailsOf(ctx.iv), pageUrl,
+    // a Nellio meeting room with the transcription on: the candidate is told before (they accept or refuse when entering the room)
+    transcribed: ctx.iv.kind === "online" && ctx.iv.transcription_enabled !== false && NELLIO_ROOM_LINK.test(String(ctx.iv.meeting_link || "")),
   });
   return await sendMail(ctx.iv.candidate_email, mail, `interview-${kind}/${ctx.iv.id}/${keySuffix}`);
 }
@@ -259,6 +263,7 @@ function recruiterRow(iv: Row) {
     resultReason: iv.result_reason ?? null, resultImpression: iv.result_impression ?? null, resultRecommended: iv.result_recommended ?? null,
     resultNotes: iv.result_notes ?? null, resultAt: iv.result_at ?? null, resultBy: iv.result_by ?? null,
     roomOpenedAt: iv.room_opened_at ?? null,
+    transcriptionEnabled: iv.transcription_enabled !== false, minutesEnabled: iv.minutes_enabled !== false,
   };
 }
 
@@ -341,7 +346,7 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
   if (before?.starts_at && Date.parse(before.starts_at) <= Date.now() && String(before.local_start).slice(0, 16).replace(" ", "T") === v.localStart && before.time_zone === v.timeZone) return fail(req, 422, "The interview must be in the future.");
   const { data: updated, error } = await admin!.from("candidate_interviews").update({
     state: "invited", kind: v.kind, local_start: v.localStart, time_zone: v.timeZone, duration_minutes: v.durationMinutes,
-    meeting_link: v.meetingLink, address: v.address, notes: v.notes, sequence: (before?.sequence ?? 0) + 1, invited_at: now,
+    meeting_link: v.meetingLink, address: v.address, notes: v.notes, transcription_enabled: v.transcription, minutes_enabled: v.minutes, transcription_refused_at: null, sequence: (before?.sequence ?? 0) + 1, invited_at: now,
     responded_at: null, notice_at: null, notice_reason: null, response_note: null, proposed_times: [], reminder_24h_sent_at: null, reminder_2h_sent_at: null, reminder_10m_sent_at: null, scheduled_by: userId,
     ...(responsibles.ids !== null ? { responsible_user_ids: responsibles.ids } : {}),
   }).eq("id", seen.id).eq("state", seen.state).select("*").maybeSingle();

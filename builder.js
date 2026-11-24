@@ -483,7 +483,9 @@
   // Nellio meeting rooms (plano-reunioes.md, Phase 2): a link of our own room, and "Join meeting" for any online interview that is on.
   const NELLIO_MEETING_LINK = /\/(meeting\.html|lab\/room\.html)#[A-Za-z0-9_-]{20,}$/;
   const interviewJoinable = row => Boolean(row && row.kind === 'online' && row.meetingLink && INTERVIEW_ON.includes(row.state));
-  const openInterviewMeeting = row => { if (interviewJoinable(row)) window.open(row.meetingLink, '_blank', 'noopener'); };
+  // On the local app (localhost), a staging room link (nellio.app/lab/room.html) opens the local copy of the room, which shares the sign-in of the app.
+  const meetingHref = link => (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /^https:\/\/nellio\.app\/lab\/room\.html#/.test(link) ? 'meeting.html' + link.slice(link.indexOf('#')) : link);
+  const openInterviewMeeting = row => { if (interviewJoinable(row)) window.open(meetingHref(row.meetingLink), '_blank', 'noopener'); };
   const interviewStarted = row => Boolean(row && row.startsAt && new Date(row.startsAt).getTime() <= Date.now());
   // Once someone opened the Nellio meeting room the interview can no longer be edited or cancelled (owner decision, 2026-11-24; the server refuses too).
   const interviewRoomOpened = row => Boolean(row && row.roomOpenedAt);
@@ -643,7 +645,7 @@
       <form id="schedule-interview-form" novalidate>
         ${pastNote}${requestNote}${suggestedHtml}
         <div class="field-group"><div class="interview-kind" role="group" aria-label="${t('Format')}"><button class="btn${kind === 'online' ? ' btn-primary' : ''}" type="button" data-iv-kind="online" aria-pressed="${kind === 'online'}">${t('Online')}</button><button class="btn${kind === 'in_person' ? ' btn-primary' : ''}" type="button" data-iv-kind="in_person" aria-pressed="${kind === 'in_person'}">${t('In person')}</button></div><input type="hidden" id="iv-kind" value="${kind === 'in_person' ? 'in_person' : 'online'}"></div>
-        <div class="field-group" id="iv-link-field"><label for="iv-link">${t('Meeting link')}</label><input class="text-input" id="iv-link" type="url" maxlength="500" placeholder="${esc(t('https://link.com or leave empty to send later.'))}" value="${esc(row.meetingLink || '')}">${B.meetingsEnabled ? `<div class="iv-nellio"><button class="btn btn-sm" type="button" id="iv-nellio">${t('Generate Nellio link')}</button><p class="team-permission-hint" id="iv-nellio-hint">${t('A video room in Nellio, nothing to install. It opens 30 minutes before the interview.')}</p></div><div class="iv-ai" id="iv-ai" hidden><label class="iv-switch"><input type="checkbox" id="iv-ai-transcript" role="switch" checked><span class="iv-switch-track" aria-hidden="true"></span><span class="iv-switch-text">${t('Transcription')}</span></label><label class="iv-switch"><input type="checkbox" id="iv-ai-minutes" role="switch" checked><span class="iv-switch-track" aria-hidden="true"></span><span class="iv-switch-text">${t('Minutes')}</span></label><p class="team-permission-hint">${t('Automatic transcription and minutes use AI credits.')}</p></div>` : ''}</div>
+        <div class="field-group" id="iv-link-field"><label for="iv-link">${t('Meeting link')}</label><input class="text-input" id="iv-link" type="url" maxlength="500" placeholder="${esc(t('https://link.com or leave empty to send later.'))}" value="${esc(row.meetingLink || '')}">${B.meetingsEnabled ? `<div class="iv-nellio"><button class="btn btn-sm" type="button" id="iv-nellio">${t('Generate Nellio link')}</button><p class="team-permission-hint" id="iv-nellio-hint">${t('A video room in Nellio, nothing to install. It opens 30 minutes before the interview.')}</p></div><div class="iv-ai" id="iv-ai" hidden><label class="iv-switch"><input type="checkbox" id="iv-ai-transcript" role="switch"${row.transcriptionEnabled === false ? '' : ' checked'}><span class="iv-switch-track" aria-hidden="true"></span><span class="iv-switch-text">${t('Transcription')}</span></label><label class="iv-switch"><input type="checkbox" id="iv-ai-minutes" role="switch"${row.transcriptionEnabled === false || row.minutesEnabled === false ? '' : ' checked'}${row.transcriptionEnabled === false ? ' disabled' : ''}><span class="iv-switch-track" aria-hidden="true"></span><span class="iv-switch-text">${t('Minutes')}</span></label><p class="team-permission-hint">${t('Automatic transcription and minutes use AI credits.')}</p></div>` : ''}</div>
         <div class="field-group" id="iv-address-field" hidden><label for="iv-address">${t('Address')}</label><input class="text-input" id="iv-address" maxlength="300" value="${esc(row.address || '')}"></div>
         <div class="field-row"><div class="field-group"><label for="iv-day">${t('Day')}</label><input class="text-input" id="iv-day" type="date" min="${isoDay(today)}" max="${isoDay(lastDay)}" value="${esc(day)}"></div><div class="field-group"><label for="iv-time">${t('Time')}</label><input class="text-input" id="iv-time" type="time" value="${esc(time)}"></div></div>
         <div class="field-group"><label for="iv-zone">${t('Time zone')}</label><select class="text-input" id="iv-zone">${interviewTimeZones(zone).map(name => `<option value="${esc(name)}"${name === zone ? ' selected' : ''}>${esc(interviewZoneLabel(name, day))}</option>`).join('')}</select></div>
@@ -673,6 +675,8 @@
       const showNellio = () => { const nellioLink = NELLIO_MEETING_LINK.test(field('iv-link').value.trim()); nellio.closest('.iv-nellio').hidden = nellioLink; field('iv-ai').hidden = !nellioLink; };
       showNellio();
       field('iv-link').addEventListener('input', showNellio);
+      // the minutes are written from the transcript: no transcription, no minutes
+      field('iv-ai-transcript').addEventListener('change', () => { const on = field('iv-ai-transcript').checked; field('iv-ai-minutes').disabled = !on; if (!on) field('iv-ai-minutes').checked = false; });
       nellio.addEventListener('click', async () => {
         error.hidden = true;
         nellio.disabled = true; nellio.textContent = t('Generating…');
@@ -710,7 +714,9 @@
         const result = await B.scheduleInterview(interviewId, {
           kind: online ? 'online' : 'in_person', localStart: `${field('iv-day').value}T${field('iv-time').value}`, timeZone: field('iv-zone').value,
           durationMinutes: Number(field('iv-minutes').value), meetingLink: online ? field('iv-link').value : '', address: online ? '' : field('iv-address').value, notes: field('iv-notes').value,
-          responsibleIds: !editing && people.length ? currentResponsibleIds(responsibleIds) : undefined // chosen only when the interview is created; afterwards they change in the Interview tab
+          responsibleIds: !editing && people.length ? currentResponsibleIds(responsibleIds) : undefined, // chosen only when the interview is created; afterwards they change in the Interview tab
+          // Nellio meeting room switches (Phase 3); without the room feature they stay on, as the database default
+          transcription: field('iv-ai-transcript') ? field('iv-ai-transcript').checked : true, minutes: field('iv-ai-minutes') ? field('iv-ai-minutes').checked : true
         });
         showToast(result.emailSent === false ? t(result.warning || 'The interview was saved, but the e-mail could not be sent. Use Resend to try again.') : t('Invitation sent.'), result.emailSent === false ? 6000 : 2400);
         invitationSent = true;
@@ -822,7 +828,36 @@
     openScheduleInterviewModal(row, { afterClose });
   }
   const INTERVIEW_STATE_LABEL = () => ({ awaiting_schedule: t('Waiting to be scheduled'), invited: t('Invite sent'), confirmed: t('Confirmed'), declined: t('Denied the interview'), reschedule_requested: t('Asked for another time'), cancelled: t('Cancelled'), finished: t('Finished') });
-  const INTERVIEW_EVENT_LABEL = () => ({ scheduled: t('Invitation sent'), updated: t('Invitation updated'), cancelled: t('Interview cancelled'), resent: t('E-mail sent again'), confirmed: t('Candidate confirmed'), declined: t('Candidate denied the interview'), reschedule_requested: t('Candidate asked for another time'), reminder_24h: t('Reminder sent (24 hours before)'), reminder_2h: t('Reminder sent (2 hours before)'), reminder_10m: t('Reminder sent (10 minutes before)'), link_missing: t('Team warned: no meeting link'), room_opened: t('Meeting room opened'), finished: t('Interview time passed'), finalized: t('Interview finalized'), result_corrected: t('Result corrected') });
+  const INTERVIEW_EVENT_LABEL = () => ({ scheduled: t('Invitation sent'), updated: t('Invitation updated'), cancelled: t('Interview cancelled'), resent: t('E-mail sent again'), confirmed: t('Candidate confirmed'), declined: t('Candidate denied the interview'), reschedule_requested: t('Candidate asked for another time'), reminder_24h: t('Reminder sent (24 hours before)'), reminder_2h: t('Reminder sent (2 hours before)'), reminder_10m: t('Reminder sent (10 minutes before)'), link_missing: t('Team warned: no meeting link'), room_opened: t('Meeting room opened'), transcription_accepted: t('Candidate accepted the transcription'), transcription_refused: t('Candidate refused the transcription'), transcription_ended: t('Transcription ended'), finished: t('Interview time passed'), finalized: t('Interview finalized'), result_corrected: t('Result corrected') });
+  // Transcript and minutes of the Nellio meeting room of one interview (Phase 3 of plano-reunioes.md): team only, inside the Interview tab.
+  // The minutes come from Gemini as short Markdown (## headings and - bullets): only those two are turned into HTML, everything is escaped first.
+  function minutesHtml(text) {
+    const lines = String(text || '').split('\n');
+    let html = '', list = false;
+    const inline = value => esc(value).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    for (const raw of lines) {
+      const line = raw.trim();
+      const bullet = line.match(/^[-*]\s+(.*)$/);
+      if (bullet && bullet[1] === '-') { html += '<p class="muted">—</p>'; continue; } // a section with nothing to say
+      if (bullet && bullet[1]) { if (!list) { html += '<ul>'; list = true; } html += '<li>' + inline(bullet[1]) + '</li>'; continue; }
+      if (list) { html += '</ul>'; list = false; }
+      const head = line.match(/^#{1,4}\s+(.*)$/);
+      if (head) html += '<h5>' + inline(head[1]) + '</h5>';
+      else if (line && line !== '-') html += '<p>' + inline(line) + '</p>';
+    }
+    return html + (list ? '</ul>' : '');
+  }
+  function transcriptHtml(row, item) {
+    if (!item) return '';
+    const states = { recording: t('The meeting is being transcribed. The transcript and the minutes appear here a few minutes after it ends.'), processing: t('The transcript and the minutes are being prepared.'), failed: t('The transcript could not be prepared.') };
+    if (item.state !== 'done') return '<div class="iv-transcript"><h4>' + t('Transcription') + '</h4><p class="muted">' + esc(states[item.state] || '') + '</p></div>';
+    const clock = iso => window.PathwayI18n.formatDate(iso, { hour: '2-digit', minute: '2-digit', timeZone: row.timeZone || undefined });
+    const lines = item.transcript.map(line => '<li class="' + (line.role === 'team' ? 'is-team' : 'is-candidate') + '"><time>' + esc(clock(line.at)) + '</time><strong>' + esc(line.name) + '</strong><span>' + esc(line.text) + '</span></li>').join('');
+    return '<div class="iv-transcript">'
+      + (item.minutes ? '<h4>' + t('Minutes') + '</h4><div class="iv-minutes">' + minutesHtml(item.minutes) + '</div>' : '')
+      + '<details class="iv-fold iv-transcript-fold"><summary>' + esc(t('Transcription') + ' · ' + tn('{count} line', '{count} lines', item.transcript.length)) + '</summary>'
+      + (lines ? '<ol class="iv-transcript-lines">' + lines + '</ol>' : '<p class="muted">' + t('Nothing was said in the meeting while it was transcribed.') + '</p>') + '</details></div>';
+  }
   // The Interview tab of a candidate: what is scheduled, what the candidate answered, what the recruiter can still do, and the history.
   // stage.getStage() says in which column the candidate is; stage.close() goes back to the resume tab.
   function mountInterviewPanel(host, flowId, email, stage = {}) {
@@ -851,6 +886,7 @@
         + (row.resultNotes ? '<div class="ai-note"><strong>' + t('Notes') + '</strong> ' + esc(row.resultNotes).replace(/\n/g, '<br>') + '</div>' : '')
         + '<p class="muted">' + t('Finalized by {name} on {date}', { name: esc(person), date: esc(window.PathwayI18n.formatDate(row.resultAt, { dateStyle: 'medium', timeStyle: 'short' })) }) + '</p>';
     };
+    let transcripts = new Map();
     const render = (rows, eventsById, errorText = '') => {
       const mine = rows.filter(item => item.flowId === flowId && item.email === wanted);
       const row = mine.find(item => INTERVIEW_OPEN.includes(item.state)) || mine[0] || null;
@@ -870,7 +906,7 @@
       else if (terminal) body = '<div class="ai-actions">' + button('new', t('Schedule another interview'), 'btn-primary') + '</div>';
       else {
         const awaiting = interviewAwaitingResult(row);
-        const text = awaiting ? t('The time of this interview has passed. Finalize it to record how it went, or edit it to a new date if it did not happen.') : { invited: t('Waiting for the candidate to answer.'), confirmed: t('The candidate confirmed that they can attend.'), declined: t('The candidate denied the interview. Nothing was changed on the board: moving or rejecting the candidate is your decision.'), reschedule_requested: t('The candidate asked for another time. Schedule a new time to send a new invitation.') }[row.state];
+        const text = awaiting ? t('The time of this interview has passed. Finalize it to record how it went, or edit it to a new date if it did not happen.') : { invited: t('Waiting for the candidate to answer.'), confirmed: t('The candidate confirmed that they can attend.'), declined: row.transcriptionRefusedAt ? t('The candidate refused the transcription when entering the meeting room, so the interview was marked as declined. Nothing was changed on the board: moving or rejecting the candidate is your decision.') : t('The candidate denied the interview. Nothing was changed on the board: moving or rejecting the candidate is your decision.'), reschedule_requested: t('The candidate asked for another time. Schedule a new time to send a new invitation.') }[row.state];
         const requested = row.state === 'reschedule_requested'
           ? ((row.proposedTimes.length ? '<div class="applicant-info-grid">' + info(t('Suggested times'), row.proposedTimes.map(item => esc(interviewSlotText(item.local, 'full'))).join('<br>')) + '</div>' : '') + (row.responseNote ? '<div class="ai-note"><strong>' + t('Message from the candidate') + '</strong> ' + esc(row.responseNote) + '</div>' : ''))
           : (row.state === 'declined' && row.responseNote ? '<div class="ai-note"><strong>' + t('Message from the candidate') + '</strong> ' + esc(row.responseNote) + '</div>' : '');
@@ -883,19 +919,20 @@
           ? button('finalize', t('Finalize interview'), 'btn-primary') + resend + (row.state === 'finished' ? button('new', t('Schedule another interview')) : opened ? '' : button('schedule', scheduleLabel))
           : (opened ? '' : button('schedule', scheduleLabel, row.state === 'reschedule_requested' ? 'btn-primary' : '')) + resend + (opened ? '' : cancelControl);
         const lockedNote = opened && row.state !== 'finished' ? '<p class="muted">' + t('The meeting room was already opened, so this interview can no longer be edited or cancelled.') + '</p>' : '';
-        const join = interviewJoinable(row) ? '<a class="btn btn-sm btn-primary" href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(t('Join meeting')) + '</a>' : '';
+        const join = interviewJoinable(row) ? '<a class="btn btn-sm btn-primary" href="' + esc(meetingHref(row.meetingLink)) + '" target="_blank" rel="noopener noreferrer">' + esc(t('Join meeting')) + '</a>' : '';
         body = '<p>' + esc(text) + '</p>' + requested + detailsGrid(row) + responsibleField + away + lockedNote + '<div class="ai-actions">' + join + actions + '</div>';
       }
       // Every finished or cancelled round, newest first, each in a fold with what happened, the scheduling details and its own history.
-      const historyList = list => '<ul class="interview-history">' + list.map(item => '<li><span>' + (item.kind === 'cancelled' && item.actorUserId ? t('{name} cancelled the interview', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'resent' && item.actorUserId ? t('{name} sent the interview again', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'responsibles_changed' ? t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'finalized' ? t('{name} finalized the interview', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'result_corrected' ? t('{name} corrected the interview result', { name: esc(interviewActorName(item.actorUserId)) }) : esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind)) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>';
+      const historyList = list => '<ul class="interview-history">' + list.map(item => '<li><span>' + (item.kind === 'transcription_ended' && item.actorUserId ? t('{name} ended the transcription', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'cancelled' && item.actorUserId ? t('{name} cancelled the interview', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'resent' && item.actorUserId ? t('{name} sent the interview again', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'responsibles_changed' ? t('{name} changed the responsible people', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'finalized' ? t('{name} finalized the interview', { name: esc(interviewActorName(item.actorUserId)) }) : item.kind === 'result_corrected' ? t('{name} corrected the interview result', { name: esc(interviewActorName(item.actorUserId)) }) : esc((INTERVIEW_EVENT_LABEL()[item.kind]) || item.kind)) + '</span><time>' + esc(window.PathwayI18n.formatDate(item.createdAt, { dateStyle: 'medium', timeStyle: 'short' })) + '</time></li>').join('') + '</ul>';
       const folds = (terminal ? rounds : rounds.filter(item => item !== row));
       const foldHtml = item => '<details class="iv-fold"' + (terminal && rounds.length === 1 ? ' open' : '') + '><summary>' + esc(t('Interview') + ' · ' + (interviewWhen(item, { dateStyle: 'medium', timeStyle: 'short' }) || t('Not scheduled')) + ' · ' + (item.state === 'cancelled' ? t('Cancelled') : t('Finished'))) + '</summary>'
-        + (item.resultAt ? resultHtml(item) : '') + (item.startsAt ? '<h4>' + t('Scheduling details') + '</h4>' + detailsGrid(item) : '')
+        + (item.resultAt ? resultHtml(item) : '') + transcriptHtml(item, transcripts.get(item.id)) + (item.startsAt ? '<h4>' + t('Scheduling details') + '</h4>' + detailsGrid(item) : '')
         + (item.resultAt ? '<div class="ai-actions"><button type="button" class="btn btn-sm" data-iv-action="correct" data-iv-id="' + esc(item.id) + '"' + (busy ? ' disabled' : '') + '>' + t('Correct result') + '</button></div>' : '')
         + ((eventsById.get(item.id) || []).length ? '<h4>' + t('History') + '</h4>' + historyList(eventsById.get(item.id)) : '') + '</details>';
       const earlierHtml = folds.length ? (terminal ? '' : '<h4>' + t('Previous interviews') + '</h4>') + folds.map(foldHtml).join('') : '';
       const history = !terminal && events.length ? '<h4>' + t('History') + '</h4>' + historyList(events) : '';
-      host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + history + earlierHtml + '</div>';
+      const meetingNotes = row && !terminal ? transcriptHtml(row, transcripts.get(row.id)) : '';
+      host.innerHTML = head + '<div class="applicant-ai-body">' + (errorText ? '<div class="ai-note is-warn" role="alert">' + esc(errorText) + '</div>' : '') + body + meetingNotes + history + earlierHtml + '</div>';
       host.dataset.interviewId = row ? row.id : '';
       host._interviewRow = row;
       host._interviewRows = mine;
@@ -922,6 +959,7 @@
         const current = mine.find(item => INTERVIEW_OPEN.includes(item.state)) || mine[0] || null;
         const eventsById = new Map();
         await Promise.all(mine.filter(item => item === current || item.state === 'finished' || item.state === 'cancelled').map(async item => { eventsById.set(item.id, await B.listCandidateInterviewEvents(item.id).catch(() => [])); }));
+        transcripts = B.listMeetingTranscripts ? await B.listMeetingTranscripts(mine.filter(item => item.kind === 'online').map(item => item.id)).catch(() => new Map()) : new Map();
         render(rows, eventsById, errorText);
       } catch (failure) { host.innerHTML = '<div class="ai-note is-warn" role="alert">' + esc(failure.message || t('Something went wrong. Try again.')) + '</div>'; }
     };

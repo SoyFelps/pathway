@@ -23,8 +23,9 @@
     // What the others are told about me through presence: name, arrival time (who stays when the room is full), camera and microphone on/off.
     // Presence is sent ONCE, when entering: updating it makes the person vanish from the list for a moment, which would drop their connection.
     // Camera/microphone changes go as a separate broadcast message instead ("state"), and again to anyone who arrives later.
-    const me = { name, at: 0, cam: false, mic: false };
-    const announce = () => channel && channel.track({ name: me.name, at: me.at, cam: me.cam, mic: me.mic }).catch(() => {});
+    // role: 'team' (signed in) or 'candidate', so every browser knows when the transcription should run (Phase 3).
+    const me = { name, at: 0, cam: false, mic: false, role: options.role === 'team' ? 'team' : 'candidate' };
+    const announce = () => channel && channel.track({ name: me.name, at: me.at, cam: me.cam, mic: me.mic, role: me.role }).catch(() => {});
     const sendState = () => channel && channel.send({ type: 'broadcast', event: 'state', payload: { from: myId, cam: me.cam, mic: me.mic } }).catch(() => {});
     const lastState = new Map(); // id -> { cam, mic } from the latest "state" message (it may arrive before that person is in my list)
     const missing = new Map(); // id -> timer: someone absent from the presence list is dropped only if they stay absent for a few seconds
@@ -46,7 +47,7 @@
       let peer = peers.get(id);
       if (peer) { if (peerName) peer.name = peerName; return peer; }
       const pc = new RTCPeerConnection({ iceServers, iceTransportPolicy: options.relayOnly ? 'relay' : 'all' });
-      peer = { id, name: peerName || '?', pc, stream: new MediaStream(), polite: myId > id, makingOffer: false, ignoreOffer: false, pending: [], outbox: [], flushTimer: null, retries: 0, joinedAt: Date.now(), connectedAt: null, candidateType: null };
+      peer = { id, name: peerName || '?', role: 'candidate', pc, stream: new MediaStream(), polite: myId > id, makingOffer: false, ignoreOffer: false, pending: [], outbox: [], flushTimer: null, retries: 0, joinedAt: Date.now(), connectedAt: null, candidateType: null };
       peers.set(id, peer);
       if (localStream) for (const track of localStream.getTracks()) pc.addTrack(track, localStream);
       else { pc.addTransceiver('audio', { direction: 'recvonly' }); pc.addTransceiver('video', { direction: 'recvonly' }); }
@@ -133,7 +134,7 @@
     }
 
     function list() {
-      return [...peers.values()].map(peer => ({ id: peer.id, name: peer.name, cam: peer.cam !== false, mic: peer.mic !== false, stream: peer.stream, state: peer.pc.connectionState, candidateType: peer.candidateType, connectMs: peer.connectedAt ? peer.connectedAt - peer.joinedAt : null }));
+      return [...peers.values()].map(peer => ({ id: peer.id, name: peer.name, role: peer.role, cam: peer.cam !== false, mic: peer.mic !== false, stream: peer.stream, state: peer.pc.connectionState, candidateType: peer.candidateType, connectMs: peer.connectedAt ? peer.connectedAt - peer.joinedAt : null }));
     }
 
     async function join(stream) {
@@ -144,6 +145,8 @@
       channel.on('broadcast', { event: 'signal' }, ({ payload }) => onSignal(payload));
       // Someone pressing "Leave" says so, so their tile goes away at once (a lost connection waits for the presence list instead).
       channel.on('broadcast', { event: 'bye' }, ({ payload }) => { if (payload && peers.has(payload.from)) dropPeer(payload.from); });
+      // A short notice to everyone in the room (for example: the team ended the transcription).
+      channel.on('broadcast', { event: 'notice' }, ({ payload }) => { if (payload && payload.from !== myId) emit('notice', payload); });
       channel.on('broadcast', { event: 'state' }, ({ payload }) => {
         if (!payload || !payload.from) return;
         lastState.set(payload.from, { cam: !!payload.cam, mic: !!payload.mic });
@@ -154,7 +157,7 @@
       });
       channel.on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
-        const present = Object.entries(state).map(([id, metas]) => ({ id, name: (metas[0] && metas[0].name) || '?', at: (metas[0] && metas[0].at) || 0, cam: !!(metas[0] && metas[0].cam), mic: !!(metas[0] && metas[0].mic) }));
+        const present = Object.entries(state).map(([id, metas]) => ({ id, name: (metas[0] && metas[0].name) || '?', at: (metas[0] && metas[0].at) || 0, cam: !!(metas[0] && metas[0].cam), mic: !!(metas[0] && metas[0].mic), role: metas[0] && metas[0].role === 'team' ? 'team' : 'candidate' }));
         // Room full: the four who arrived first stay; a fifth leaves on its own.
         const ordered = present.slice().sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
         if (ordered.length > MAX_PEOPLE && ordered.findIndex(item => item.id === myId) >= MAX_PEOPLE) { emit('full'); leave(); return; }
@@ -162,7 +165,8 @@
         for (const person of present) {
           if (person.id === myId) continue;
           if (missing.has(person.id)) { clearTimeout(missing.get(person.id)); missing.delete(person.id); }
-          if (!peers.has(person.id)) { const peer = peerFor(person.id, person.name); const known = lastState.get(person.id); peer.cam = known ? known.cam : person.cam; peer.mic = known ? known.mic : person.mic; arrived = true; }
+        if (peers.has(person.id)) peers.get(person.id).role = person.role;
+        if (!peers.has(person.id)) { const peer = peerFor(person.id, person.name); peer.role = person.role; const known = lastState.get(person.id); peer.cam = known ? known.cam : person.cam; peer.mic = known ? known.mic : person.mic; arrived = true; }
         }
         for (const id of [...peers.keys()]) if (!state[id] && !missing.has(id)) missing.set(id, setTimeout(() => { missing.delete(id); if (!channel || !channel.presenceState()[id]) dropPeer(id); }, 4000));
         if (arrived) { sendState(); setTimeout(sendState, 1500); } // the newcomer learns my current camera/microphone state (presence only has the state at my arrival)
@@ -208,7 +212,9 @@
       if (has) { me[kind === 'video' ? 'cam' : 'mic'] = on; sendState(); }
     };
 
-    return { id: myId, join, leave, replaceStream, localStream: () => localStream, setMic: on => setTrack('audio', on), setCam: on => setTrack('video', on), peers: list, stats: () => Promise.all([...peers.values()].map(async peer => ({ name: peer.name, ...(await pairStats(peer.pc)) }))) };
+    const notice = payload => channel && channel.send({ type: 'broadcast', event: 'notice', payload: { ...payload, from: myId } }).catch(() => {});
+
+    return { id: myId, role: me.role, notice, join, leave, replaceStream, localStream: () => localStream, setMic: on => setTrack('audio', on), setCam: on => setTrack('video', on), peers: list, stats: () => Promise.all([...peers.values()].map(async peer => ({ name: peer.name, ...(await pairStats(peer.pc)) }))) };
   }
 
   // Which path the connection took: host (same network), srflx (straight through the internet), relay (through TURN).

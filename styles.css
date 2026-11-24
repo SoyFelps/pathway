@@ -1396,6 +1396,15 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .meeting-room-head strong{display:block;color:var(--text-heading);font-size:16px}
 .meeting-room-head span{color:var(--text-subtle);font-size:13px}
 .meeting-status{font-weight:600}
+.meeting-head-side{display:inline-flex;align-items:center;gap:12px;flex-wrap:wrap}
+.meeting-room-head .meeting-rec{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--red-bg);border:1px solid var(--red-border);color:var(--red-dark);font-size:12px;font-weight:700}
+.meeting-rec::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;animation:meeting-rec-pulse 1.6s ease-in-out infinite}
+.meeting-room-head .meeting-rec[hidden]{display:none}
+@keyframes meeting-rec-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.meeting-rec::before{animation:none}}
+.meeting-consent p+p{margin-top:10px}
+.meeting-consent .meeting-actions{margin-top:16px}
+.meeting-transcribed{color:var(--text-body)}
 .meeting-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
 .meeting-grid[data-count="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
 .meeting-tile{position:relative;aspect-ratio:16/10;border-radius:12px;overflow:hidden;background:var(--video-bg)}
@@ -1443,3 +1452,18 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-ai{display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap;margin-top:10px}
 .iv-ai[hidden]{display:none}
 .iv-ai .team-permission-hint{margin:0;flex:1 1 100%}
+/* Interview tab: transcript and minutes of the Nellio meeting room (Phase 3 of plano-reunioes.md) */
+.iv-transcript{margin-top:18px}
+.iv-transcript h4{margin-bottom:8px}
+.iv-minutes{border:1px solid var(--line);border-radius:10px;background:var(--bg-page);padding:12px 14px;font-size:13px;line-height:1.55;color:var(--text-body)}
+.iv-minutes h5{margin:12px 0 4px;font-size:13px;color:var(--text-heading)}
+.iv-minutes h5:first-child{margin-top:0}
+.iv-minutes ul{margin:0 0 4px;padding-left:18px}
+.iv-minutes p{margin:0 0 6px}
+.iv-transcript-fold{margin-top:10px}
+.iv-transcript-lines{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto}
+.iv-transcript-lines li{display:grid;grid-template-columns:44px 1fr;column-gap:10px;font-size:13px;line-height:1.5}
+.iv-transcript-lines time{grid-row:span 2;color:var(--text-subtle);font-size:11px;padding-top:2px}
+.iv-transcript-lines strong{font-size:12px;color:var(--text-heading)}
+.iv-transcript-lines li.is-candidate strong{color:var(--green-text)}
+.iv-transcript-lines span{color:var(--text-body);white-space:pre-wrap;overflow-wrap:anywhere}

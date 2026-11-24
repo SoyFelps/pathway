@@ -18,6 +18,9 @@ export interface ScheduleInput {
   meetingLink: string | null;
   address: string | null;
   notes: string | null;
+  /** The two switches of the schedule window (Nellio meeting rooms, Phase 3): on unless sent as false; the minutes need the transcription. */
+  transcription: boolean;
+  minutes: boolean;
 }
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -33,15 +36,17 @@ export function parseScheduleInput(body: Record<string, unknown>): Parsed<Schedu
   const duration = Number(body.durationMinutes);
   if (!Number.isInteger(duration) || duration < 5 || duration > 480) return { ok: false, error: "The duration must be between 5 minutes and 8 hours." };
   const notes = multiLine(body.notes, 1000) || null;
+  const transcription = body.transcription !== false;
+  const minutes = transcription && body.minutes !== false;
   if (kind === "online") {
     const link = singleLine(body.meetingLink, 500);
     // The link may be left empty and added later by editing the interview (owner decision, 2026-11-21); the 24 h reminder warns the team if it is still missing.
     if (link && !/^https?:\/\/\S+$/i.test(link)) return { ok: false, error: "Enter a meeting link that starts with http:// or https://." };
-    return { ok: true, value: { kind, localStart, timeZone, durationMinutes: duration, meetingLink: link || null, address: null, notes } };
+    return { ok: true, value: { kind, localStart, timeZone, durationMinutes: duration, meetingLink: link || null, address: null, notes, transcription, minutes } };
   }
   const address = singleLine(body.address, 300);
   if (address.length < 3) return { ok: false, error: "Enter the address of the interview." };
-  return { ok: true, value: { kind, localStart, timeZone, durationMinutes: duration, meetingLink: null, address, notes } };
+  return { ok: true, value: { kind, localStart, timeZone, durationMinutes: duration, meetingLink: null, address, notes, transcription, minutes } };
 }
 
 export type Answer = { response: "confirm" } | { response: "decline"; note: string | null } | { response: "reschedule"; note: string | null; times: string[] };

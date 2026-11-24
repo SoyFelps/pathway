@@ -132,7 +132,7 @@ test('the card shows the result of the latest interview (a cancelled one only wh
   assert.ok(builder.includes("if (row && row.state === 'cancelled') return ['Interview cancelled', 'warn'];") && builder.includes("return [row.resultReason === 'held' ? 'Interview held' : 'Interview finished', tone];"), 'tags for a result and for a cancellation');
   assert.ok(builder.includes('aiImpressionBadge(row.resultImpression)') && builder.includes('class=\"ai-recommend\"') && builder.includes("interviewBadges(row)"), 'the impression thumb and, when recommended, a seal next to it (no word on the card)');
   const panel = slice(builder, 'function mountInterviewPanel(', 'const notifInterviewText');
-  assert.ok(panel.includes("+ body + history + earlierHtml + '</div>';"), 'history first, then the earlier rounds');
+  assert.ok(panel.includes("+ body + meetingNotes + history + earlierHtml + '</div>';"), 'the transcript and minutes, then the history, then the earlier rounds');
   const modal = slice(builder, 'function openFinalizeInterviewModal(', 'function offerInterviewScheduling');
   assert.ok(modal.includes("if (submitting) return;") && modal.includes("t('Saving…')") && modal.includes("form.querySelectorAll('button, textarea, input').forEach(item => { item.disabled = busy; });"), 'one submit only, with a visible waiting state');
   assert.ok(fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8').includes('.btn:disabled,.btn[disabled]{opacity:.6;cursor:progress}'), 'a disabled button looks disabled');

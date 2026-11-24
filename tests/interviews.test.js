@@ -14,7 +14,8 @@ test('the schedule form is checked: kind, day and time, zone, duration, link or 
   const { parseScheduleInput } = await loadLogic();
   const ok = parseScheduleInput(online);
   assert.equal(ok.ok, true);
-  assert.deepEqual(ok.value, { kind: 'online', localStart: '2026-12-01T14:00', timeZone: 'America/Sao_Paulo', durationMinutes: 30, meetingLink: 'https://meet.example.test/abc', address: null, notes: 'Join 5 minutes early' });
+  assert.deepEqual(ok.value, { kind: 'online', localStart: '2026-12-01T14:00', timeZone: 'America/Sao_Paulo', durationMinutes: 30, meetingLink: 'https://meet.example.test/abc', address: null, notes: 'Join 5 minutes early', transcription: true, minutes: true });
+  assert.deepEqual([parseScheduleInput({ ...online, transcription: false, minutes: true }).value.minutes, parseScheduleInput({ ...online, minutes: false }).value.transcription], [false, true], 'the minutes need the transcription; each switch is on unless sent as false');
   const person = parseScheduleInput({ ...online, kind: 'in_person', address: 'Av. Paulista, 1000' });
   assert.equal(person.value.address, 'Av. Paulista, 1000');
   assert.equal(person.value.meetingLink, null, 'the other kind of detail is dropped');
@@ -237,7 +238,7 @@ test('each interview has its own responsible people: chosen in the schedule wind
   const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
   assert.ok(builder.includes("if (!editing) mountResponsibleField(form.querySelector('#iv-responsible'), 'iv-responsible-label'"), 'the same multi-select as the job responsible field, at the end of the window, only when the interview is created');
   assert.ok(builder.includes('responsibleIds: !editing && people.length ? currentResponsibleIds(responsibleIds) : undefined'), 'sent with the first invitation, never with an edit (which e-mails the candidate)');
-  assert.ok(fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8').includes(",responsible_user_ids,result_reason,result_impression,result_recommended,result_notes,result_at,result_by,room_opened_at')"), 'read with the interviews');
+  assert.ok(fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8').includes(",responsible_user_ids,result_reason,result_impression,result_recommended,result_notes,result_at,result_by,room_opened_at,transcription_enabled,minutes_enabled,transcription_refused_at')"), 'read with the interviews');
 });
 
 test('after the invitation the responsible people change in the Interview tab at any time: no e-mail to the candidate and a line in the history with the name', () => {

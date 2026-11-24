@@ -35,9 +35,36 @@
   let peers = [];
   const logLines = []; // what happened in the connections, for "Copy connection details" (support)
 
+  // Phase 3: a person signed in to Nellio in this browser (the hiring team) sends the session along, so the server knows they are "team";
+  // anyone else is the candidate. Only read here, never changed (no sign-in on this page).
+  let authClient = null;
+  async function sessionToken() {
+    // First the session the app keeps in this browser (read directly: the Supabase client can wait on a lock for a long time); only when it
+    // is missing or expired, the client (which can renew it), never for more than 2 seconds.
+    try {
+      const ref = new URL(config.url).hostname.split('.')[0];
+      const saved = JSON.parse(localStorage.getItem(`sb-${ref}-auth-token`) || 'null');
+      const session = saved && (saved.currentSession || saved);
+      if (session && session.access_token && Number(session.expires_at || 0) * 1000 > Date.now() + 60000) return session.access_token;
+      if (!session || !session.refresh_token) return '';
+    } catch (_) { return ''; }
+    try {
+      if (!window.supabase || !config.url) return '';
+      authClient = authClient || window.supabase.createClient(config.url, config.publishableKey, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false } });
+      // never wait long for it: without an answer in 2 seconds the person is treated as the candidate (the page must not hang)
+      const result = await Promise.race([authClient.auth.getSession(), new Promise(done => setTimeout(() => done(null), 2000))]);
+      const data = result && result.data;
+      return (data && data.session && data.session.access_token) || '';
+    } catch (_) { return ''; }
+  }
+  async function headers(extra = {}) {
+    const token = await sessionToken();
+    return { apikey: config.publishableKey || '', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...extra };
+  }
+
   async function call(body) {
     let result;
-    try { result = await fetch(FUNCTION_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: config.publishableKey || '' }, body: JSON.stringify(body) }); }
+    try { result = await fetch(FUNCTION_URL, { method: 'POST', headers: await headers({ 'Content-Type': 'application/json' }), body: JSON.stringify(body) }); }
     catch (_) { throw new Error(t('Could not reach the meeting service. Check your connection and try again.')); }
     let payload = {};
     try { payload = await result.json(); } catch (_) { /* stable fallback below */ }
@@ -74,9 +101,29 @@
       pollTimer = setTimeout(load, Math.max(5000, Math.min(60000, Date.parse(view.opensAt) - Date.now() + 1000)));
     } else if (view.status === 'closed') renderMessage(t('This meeting room is closed.'), t('The room closes 2 hours after the interview starts. Contact the hiring team if you need a new time.'));
     else if (view.status === 'cancelled') renderMessage(t('This interview was cancelled.'), t('The hiring team may contact you about a new time.'));
+    else if (view.status === 'refused') renderMessage(t('You refused the transcription.'), t('The hiring team was told. Contact them if you change your mind.'));
+    else if (view.consentNeeded) renderConsent();
     else if (view.status === 'unscheduled') renderMessage(t('This interview has no date yet.'), t('The room opens 30 minutes before the interview, once it is scheduled.'));
     else renderLobby();
   }
+
+  // ---- Transcription consent (Phase 3): the candidate accepts or refuses before entering; refusing = the interview is declined -------------
+  function renderConsent(confirming = false) {
+    const body = confirming
+      ? '<p>' + t('If you refuse, you will not join the meeting and the interview will be marked as declined. Refuse the transcription?') + '</p><div class="meeting-actions"><button class="btn" type="button" id="consent-back">' + t('Back') + '</button><button class="btn btn-danger" type="button" id="consent-refuse-yes">' + t('Yes, refuse') + '</button></div>'
+      : '<p>' + t('To help the hiring team, what is said in this meeting is transcribed and summarized by artificial intelligence. Only the hiring team sees the transcript, and the audio is deleted as soon as it is transcribed.') + '</p><p>' + t('You need to accept the transcription to join this interview.') + '</p><div class="meeting-actions"><button class="btn" type="button" id="consent-refuse">' + t('Refuse') + '</button><button class="btn btn-primary" type="button" id="consent-accept">' + t('Accept and continue') + '</button></div>';
+    root.innerHTML = shell('<section class="candidate-form-card meeting-card">' + heading() + '<div class="meeting-note meeting-consent"><strong>' + t('This interview will be transcribed') + '</strong>' + body + '</div></section>');
+    const answer = async (accept, button) => {
+      button.disabled = true;
+      try { await call({ action: 'consent', secret, accept }); await load(); }
+      catch (error) { button.disabled = false; renderMessage(t('Could not save your answer.'), esc(t(error.message || 'Something went wrong. Please try again.')), '<div class="meeting-actions"><button class="btn btn-primary" type="button" id="meeting-retry">' + t('Try again') + '</button></div>'); document.getElementById('meeting-retry').addEventListener('click', load); }
+    };
+    document.getElementById('consent-accept')?.addEventListener('click', event => answer(true, event.currentTarget));
+    document.getElementById('consent-refuse')?.addEventListener('click', () => renderConsent(true));
+    document.getElementById('consent-back')?.addEventListener('click', () => renderConsent(false));
+    document.getElementById('consent-refuse-yes')?.addEventListener('click', event => answer(false, event.currentTarget));
+  }
+  const transcriptionNote = () => !view || !view.transcription || view.transcriptionEnded ? '' : '<p class="meeting-hint meeting-transcribed">' + (view.role === 'team' ? t('This meeting is transcribed. The transcription starts by itself when the candidate and someone of the team are in the room.') : t('This meeting is transcribed. Only the hiring team sees the transcript.')) + '</p>';
 
   // ---- Lobby: name, camera preview, devices ----------------------------------------------------------------------------
   function deviceMessage(error) {
@@ -278,6 +325,7 @@
         <label class="meeting-field"><span>${t('Your name')}</span><input class="text-input" id="meeting-name" maxlength="40" autocomplete="name" value="${esc(name)}"></label>
         ${select('meeting-camera', t('Camera'), cameras, 'video')}${select('meeting-mic', t('Microphone'), mics, 'audio')}
       </div>
+      ${transcriptionNote()}
       <p class="meeting-hint">${!checked ? t('Before joining, check your camera and microphone. The browser will ask for permission to use them.') : stream ? t('Your camera and microphone will be on when you join. You can turn them off in the room.') : ''}</p>
       <div class="meeting-actions">${!checked ? `<button class="btn btn-primary" type="button" id="meeting-check">${t('Check camera and microphone')}</button>` : `${deviceError ? `<button class="btn" type="button" id="meeting-check">${t('Check again')}</button>` : ''}<button class="btn btn-primary" type="button" id="meeting-join">${t('Join the meeting')}</button>`}</div>
     </section>`);
@@ -342,10 +390,12 @@
       if (view.status !== 'open' || !view.channel) { busy = false; renderState(); return; }
       supabase = supabase || window.supabase.createClient(config.url, config.publishableKey, { auth: { persistSession: false, autoRefreshToken: false }, realtime: { params: { eventsPerSecond: 20 } } });
       const iceServers = [{ urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:stun.l.google.com:19302' }].concat(view.iceServers || []);
-      room = window.NellioRoom.createRoom({ supabase, channelName: view.channel, name, iceServers, videoMaxBitrate: PHONE ? 600000 : 0, on: onRoomEvent });
+      room = window.NellioRoom.createRoom({ supabase, channelName: view.channel, name, role: view.role, iceServers, videoMaxBitrate: PHONE ? 600000 : 0, on: onRoomEvent });
       await room.join(stream);
       peers = room.peers();
+      myName = name;
       renderRoom(name);
+      checkRecording();
       if ('wakeLock' in navigator) navigator.wakeLock.request('screen').then(lock => { wakeLock = lock; }).catch(() => {});
     } catch (error) {
       room = null;
@@ -356,19 +406,21 @@
 
   function onRoomEvent(event, detail) {
     if (event === 'log') { logLines.push(new Date().toISOString().slice(11, 19) + '  ' + detail.text); if (logLines.length > 300) logLines.shift(); console.debug('[meeting]', detail.text); return; }
-    if (event === 'peers') { peers = detail; paintPeople(); return; }
+    if (event === 'peers') { peers = detail; paintPeople(); checkRecording(); return; }
+    if (event === 'notice' && detail && detail.kind === 'transcription-ended') { transcriptionEnded(); return; }
     if (event === 'full') { room = null; renderMessage(t('This meeting is full.'), t('Up to {count} people can be in the room at the same time.', { count: view.maxPeople || 4 })); return; }
   }
 
   function renderRoom(name) {
     root.innerHTML = shell(`<section class="meeting-room">
       <div class="ai-note is-warn meeting-closing" id="meeting-closing" role="status" hidden></div>
-      <div class="meeting-room-head"><div><strong>${esc(view.jobTitle || t('Interview'))}</strong><span>${esc(view.companyName || '')}</span></div><span class="meeting-status" id="meeting-status"></span></div>
+      <div class="meeting-room-head"><div><strong>${esc(view.jobTitle || t('Interview'))}</strong><span>${esc(view.companyName || '')}</span></div><span class="meeting-head-side"><span class="meeting-rec" id="meeting-rec" hidden>${t('Transcribing')}</span><span class="meeting-status" id="meeting-status"></span></span></div>
       <div class="meeting-grid" id="meeting-grid"><div class="meeting-tile is-me" data-tile="me">${tileInner(name, t('{name} (you)', { name }))}</div></div>
       <div class="meeting-controls">
         <button class="btn" type="button" id="meeting-mic-toggle" aria-pressed="false"${stream && stream.getAudioTracks().length ? '' : ' disabled'}>${t('Mute')}</button>
         <button class="btn" type="button" id="meeting-cam-toggle" aria-pressed="false"${stream && stream.getVideoTracks().length ? '' : ' disabled'}>${t('Turn camera off')}</button>
         ${camera && camera.getVideoTracks().length && effectsReady() ? `<button class="btn" type="button" id="meeting-bg-toggle" aria-expanded="false" aria-controls="meeting-bg-panel">${t('Background')}</button>` : ''}
+        ${view.role === 'team' && view.transcription && !view.transcriptionEnded ? `<button class="btn" type="button" id="meeting-end-transcription">${t('End transcription')}</button>` : ''}
         <button class="btn btn-danger" type="button" id="meeting-leave">${t('Leave')}</button>
       </div>
       <div class="meeting-bg-panel" id="meeting-bg-panel" data-bg-slot hidden></div>
@@ -381,6 +433,13 @@
     document.getElementById('meeting-mic-toggle').addEventListener('click', event => { micOn = !micOn; room && room.setMic(micOn); event.currentTarget.textContent = micOn ? t('Mute') : t('Unmute'); event.currentTarget.setAttribute('aria-pressed', String(!micOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-muted', !micOn); });
     document.getElementById('meeting-cam-toggle').addEventListener('click', event => { camOn = !camOn; room && room.setCam(camOn); event.currentTarget.textContent = camOn ? t('Turn camera off') : t('Turn camera on'); event.currentTarget.setAttribute('aria-pressed', String(!camOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-off', !camOn); });
     document.getElementById('meeting-leave').addEventListener('click', leave);
+    document.getElementById('meeting-end-transcription')?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      if (button.dataset.confirm !== '1') { button.dataset.confirm = '1'; button.textContent = t('End it? Click again'); setTimeout(() => { if (button.isConnected && button.dataset.confirm === '1') { button.dataset.confirm = ''; button.textContent = t('End transcription'); } }, 5000); return; }
+      button.disabled = true;
+      try { await stopRecording(true); await call({ action: 'end', secret }); if (room) room.notice({ kind: 'transcription-ended' }); transcriptionEnded(); }
+      catch (error) { button.disabled = false; button.dataset.confirm = ''; button.textContent = t('End transcription'); }
+    });
     document.getElementById('meeting-bg-toggle')?.addEventListener('click', event => { const panel = document.getElementById('meeting-bg-panel'); panel.hidden = !panel.hidden; event.currentTarget.setAttribute('aria-expanded', String(!panel.hidden)); });
     paintPicker();
     watchClosing();
@@ -444,6 +503,7 @@
   }
 
   function endMeeting() {
+    stopRecording(true);
     if (room) room.leave();
     stopCamera();
     room = null; peers = []; checked = false;
@@ -452,8 +512,9 @@
     renderMessage(t('This meeting room is closed.'), t('The room closes 2 hours after the interview starts. Contact the hiring team if you need a new time.'));
   }
 
-  function leave() {
+  async function leave() {
     clearInterval(closingTimer);
+    await stopRecording(true);
     if (room) room.leave();
     stopCamera(); // the camera itself, and the background effect that was sending a copy of it
     room = null; peers = [];
@@ -461,6 +522,110 @@
     if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
     renderMessage(t('You left the meeting.'), t('You can join again while the room is open.'), `<div class="meeting-actions"><button class="btn btn-primary" type="button" id="meeting-again">${t('Join again')}</button></div>`);
     document.getElementById('meeting-again').addEventListener('click', load);
+  }
+
+  // ---- Transcription (Phase 3): each browser records ONLY its own microphone, in pieces of about a minute -------------------------------
+  // It runs while the transcription is on and not ended and the room has the candidate AND someone of the team (owner decision); when one of
+  // them leaves it goes on for 5 more minutes (a dropped connection comes back), then stops. A piece where nobody spoke is not sent (it would
+  // cost tokens for nothing): the browser only says the meeting goes on. The audio is deleted on the server as soon as it is transcribed.
+  const SEGMENT_MS = 60000;
+  const GRACE_MS = 5 * 60000;
+  let myName = '';
+  let rec = null; // { recorder, startedAt, voiced, mimeType, timer }
+  let recGraceTimer = null;
+  let recMeter = null; // { audio, analyser, timer, track }
+  const recMime = () => ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm'].find(type => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) || '';
+  const micTrack = () => (camera && camera.getAudioTracks().find(track => track.readyState === 'live')) || null;
+  function wantRecording() {
+    if (!room || !view || !view.transcription || view.transcriptionEnded || !micTrack() || !recMime()) return false;
+    const roles = [view.role].concat(peers.map(p => p.role));
+    return roles.includes('team') && roles.includes('candidate');
+  }
+  function setRecBadge(on) { const badge = document.getElementById('meeting-rec'); if (badge) badge.hidden = !on; }
+  function checkRecording() {
+    if (wantRecording()) {
+      clearTimeout(recGraceTimer); recGraceTimer = null;
+      setRecBadge(true);
+      if (!rec) startSegment();
+    } else if (rec && !recGraceTimer) {
+      recGraceTimer = setTimeout(() => { recGraceTimer = null; if (!wantRecording()) stopRecording(true); }, GRACE_MS);
+    } else if (!rec) setRecBadge(false);
+  }
+  // Is anyone speaking? A light level check of the microphone, four times a second.
+  function watchLevel(track) {
+    if (recMeter && recMeter.track === track) return;
+    stopLevel();
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const audio = new AudioCtx();
+      const source = audio.createMediaStreamSource(new MediaStream([track]));
+      const analyser = audio.createAnalyser();
+      analyser.fftSize = 1024;
+      source.connect(analyser);
+      const data = new Float32Array(analyser.fftSize);
+      const timer = setInterval(() => {
+        analyser.getFloatTimeDomainData(data);
+        let sum = 0; for (const v of data) sum += v * v;
+        if (rec && track.enabled && Math.sqrt(sum / data.length) > 0.012) rec.voiced++;
+      }, 250);
+      recMeter = { audio, timer, track };
+    } catch (_) { recMeter = null; }
+  }
+  function stopLevel() { if (recMeter) { clearInterval(recMeter.timer); recMeter.audio.close().catch(() => {}); recMeter = null; } }
+  function startSegment() {
+    const track = micTrack();
+    const mimeType = recMime();
+    if (!track || !mimeType) { rec = null; return; }
+    let recorder;
+    try { recorder = new MediaRecorder(new MediaStream([track]), { mimeType, audioBitsPerSecond: 24000 }); }
+    catch (_) { rec = null; return; }
+    const piece = { recorder, startedAt: Date.now(), voiced: 0, mimeType, chunks: [], done: null };
+    piece.done = new Promise(resolve => { recorder.onstop = resolve; });
+    recorder.ondataavailable = event => { if (event.data && event.data.size) piece.chunks.push(event.data); };
+    recorder.start();
+    watchLevel(track);
+    piece.timer = setTimeout(() => { rotate(); }, SEGMENT_MS);
+    rec = piece;
+  }
+  // Closes the current piece and sends it; starts the next one unless asked to stop.
+  async function finishSegment(next) {
+    const piece = rec;
+    if (!piece) return;
+    rec = null;
+    clearTimeout(piece.timer);
+    try { if (piece.recorder.state !== 'inactive') piece.recorder.stop(); } catch (_) {}
+    if (next) startSegment();
+    await Promise.race([piece.done, new Promise(done => setTimeout(done, 3000))]);
+    const durationMs = Date.now() - piece.startedAt;
+    const voiced = piece.voiced >= 4; // about a second of speech in the piece
+    if (voiced && piece.chunks.length && durationMs >= 1000) await sendPiece(new Blob(piece.chunks, { type: piece.mimeType.split(';')[0] }), piece.startedAt, durationMs);
+    else call({ action: 'alive', secret }).catch(error => { if (error.status === 409) transcriptionEnded(); });
+  }
+  const rotate = () => finishSegment(wantRecording() || !!recGraceTimer);
+  async function sendPiece(blob, startedAt, durationMs) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await fetch(FUNCTION_URL, { method: 'POST', headers: await headers({ 'Content-Type': blob.type || 'audio/webm', 'x-meeting-secret': secret, 'x-speaker-key': (room && room.id) || 'unknown-speaker', 'x-speaker-name': encodeURIComponent(myName || '?'), 'x-started-at': new Date(startedAt).toISOString(), 'x-duration-ms': String(durationMs) }), body: blob });
+        if (result.ok) return;
+        if (result.status === 409) { transcriptionEnded(); return; }
+        if (result.status < 500 && result.status !== 429) return; // a refused piece will not get better
+      } catch (_) { /* network: try again */ }
+      await new Promise(done => setTimeout(done, 2000 * (attempt + 1)));
+    }
+  }
+  async function stopRecording(send) {
+    clearTimeout(recGraceTimer); recGraceTimer = null;
+    setRecBadge(false);
+    if (!rec) { stopLevel(); return; }
+    if (send) await finishSegment(false);
+    else { try { rec.recorder.stop(); } catch (_) {} clearTimeout(rec.timer); rec = null; }
+    stopLevel();
+  }
+  function transcriptionEnded() {
+    if (view) view.transcriptionEnded = true;
+    stopRecording(true);
+    const button = document.getElementById('meeting-end-transcription');
+    if (button) button.remove();
   }
 
   // A phone that locked its screen may not give the camera back: bring it back when the page is visible again.
@@ -482,7 +647,7 @@
       showSelf();
     } catch (_) { /* the person can leave and join again */ }
   });
-  window.addEventListener('pagehide', () => { if (room) room.leave(); });
+  window.addEventListener('pagehide', () => { stopRecording(false); if (room) room.leave(); });
 
   async function load() {
     clearTimeout(pollTimer);

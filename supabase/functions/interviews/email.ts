@@ -65,7 +65,7 @@ interface CandidateCopy {
     heading: (company: string) => string;
     intro: (job: string, company: string) => string;
   }>;
-  respondLine: string; cancelLine: string; reminderLine: string;
+  respondLine: string; cancelLine: string; reminderLine: string; transcribedLine: string;
   buttonRespond: string; buttonView: string;
   footer: (company: string) => string;
 }
@@ -86,6 +86,7 @@ const CANDIDATE: Record<Language, CandidateCopy> = {
     },
     respondLine: "Confirm you can attend, ask for another time or add the interview to your calendar with the button below.",
     cancelLine: "", reminderLine: "You can see the details and add the interview to your calendar with the button below.",
+    transcribedLine: "This interview takes place in a Nellio meeting room and will be transcribed to help the hiring team. You will be asked to accept the transcription when you enter the room.",
     buttonRespond: "View and reply", buttonView: "View details",
     footer: (c) => `Automated message sent by Nellio on behalf of ${c}. Please do not reply to this e-mail.`,
   },
@@ -104,6 +105,7 @@ const CANDIDATE: Record<Language, CandidateCopy> = {
     },
     respondLine: "Confirme sua presença, peça outro horário ou adicione a entrevista à sua agenda pelo botão abaixo.",
     cancelLine: "", reminderLine: "Veja os detalhes e adicione a entrevista à sua agenda pelo botão abaixo.",
+    transcribedLine: "Esta entrevista acontece numa sala de reunião do Nellio e será transcrita para ajudar a equipe de contratação. Você precisará aceitar a transcrição ao entrar na sala.",
     buttonRespond: "Ver e responder", buttonView: "Ver detalhes",
     footer: (c) => `Mensagem automática enviada pelo Nellio em nome de ${c}. Por favor, não responda a este e-mail.`,
   },
@@ -122,6 +124,7 @@ const CANDIDATE: Record<Language, CandidateCopy> = {
     },
     respondLine: "Confirme su asistencia, pida otro horario o agregue la entrevista a su calendario con el botón de abajo.",
     cancelLine: "", reminderLine: "Vea los detalles y agregue la entrevista a su calendario con el botón de abajo.",
+    transcribedLine: "Esta entrevista se realiza en una sala de reunión de Nellio y será transcrita para ayudar al equipo de selección. Se le pedirá que acepte la transcripción al entrar en la sala.",
     buttonRespond: "Ver y responder", buttonView: "Ver detalles",
     footer: (c) => `Mensaje automático enviado por Nellio en nombre de ${c}. Por favor, no responda a este correo.`,
   },
@@ -139,6 +142,8 @@ export interface CandidateEmailInput {
   interview: InterviewDetails;
   /** The answer page with the secret of this interview in the part after the #. */
   pageUrl: string;
+  /** A Nellio meeting room with the transcription on: one more paragraph tells the candidate before the meeting. */
+  transcribed?: boolean;
 }
 
 export interface BuiltEmail { subject: string; text: string; html: string; fromName: string }
@@ -237,7 +242,7 @@ export function buildCandidateEmail(input: CandidateEmailInput): BuiltEmail {
     eyebrow: k.eyebrow,
     heading: k.heading(company),
     greeting: copy.greeting(name),
-    paragraphs: [k.intro(job, company), closing],
+    paragraphs: [k.intro(job, company), closing, input.transcribed && !isCancel ? copy.transcribedLine : ""],
     // a cancelled interview shows only the date and time (so the person knows which one): no meeting link, address or notes
     rows: isCancel ? detailRows(copy.labels, input.interview, language).slice(0, 1) : detailRows(copy.labels, input.interview, language),
     button: isCancel ? undefined : { url: input.pageUrl, label: input.kind === "invite" || input.kind === "update" || input.kind === "resendInvited" ? copy.buttonRespond : copy.buttonView },
