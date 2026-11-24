@@ -36,8 +36,18 @@
   const logLines = []; // what happened in the connections, for "Copy connection details" (support)
 
   // Phase 3: a person signed in to Nellio in this browser (the hiring team) sends the session along, so the server knows they are "team";
-  // anyone else is the candidate. Only read here, never changed (no sign-in on this page).
+  // anyone else is the candidate. No sign-in on this page: the session of the app is read, and renewed when it expires.
   let authClient = null;
+  const authOf = () => (authClient = authClient || window.supabase.createClient(config.url, config.publishableKey, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false } }));
+  // The session of a team member can expire during a long meeting: the server refuses their next piece (401) instead of taking them for the
+  // candidate, and the page renews the session here (it is saved for the app too) and sends the piece again.
+  async function renewSession() {
+    try {
+      if (!window.supabase || !config.url) return false;
+      const result = await Promise.race([authOf().auth.refreshSession(), new Promise(done => setTimeout(() => done(null), 8000))]);
+      return Boolean(result && result.data && result.data.session);
+    } catch (_) { return false; }
+  }
   async function sessionToken() {
     // First the session the app keeps in this browser (read directly: the Supabase client can wait on a lock for a long time); only when it
     // is missing or expired, the client (which can renew it), never for more than 2 seconds.
@@ -50,9 +60,8 @@
     } catch (_) { return ''; }
     try {
       if (!window.supabase || !config.url) return '';
-      authClient = authClient || window.supabase.createClient(config.url, config.publishableKey, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false } });
-      // never wait long for it: without an answer in 2 seconds the person is treated as the candidate (the page must not hang)
-      const result = await Promise.race([authClient.auth.getSession(), new Promise(done => setTimeout(() => done(null), 2000))]);
+      // never wait long for it (the page must not hang); an expired session is renewed here, and a piece refused for it is sent again
+      const result = await Promise.race([authOf().auth.getSession(), new Promise(done => setTimeout(() => done(null), 2000))]);
       const data = result && result.data;
       return (data && data.session && data.session.access_token) || '';
     } catch (_) { return ''; }
@@ -620,6 +629,7 @@
         const result = await fetch(FUNCTION_URL, { method: 'POST', headers: await headers({ 'Content-Type': blob.type || 'audio/webm', 'x-meeting-secret': secret, 'x-speaker-key': (room && room.id) || 'unknown-speaker', 'x-speaker-name': encodeURIComponent(myName || '?'), 'x-started-at': new Date(startedAt).toISOString(), 'x-duration-ms': String(durationMs) }), body: blob });
         if (result.ok) return;
         if (result.status === 409) { transcriptionEnded(); return; }
+        if (result.status === 401) { if (await renewSession()) continue; return; } // session expired: renewed, the piece goes again
         if (result.status < 500 && result.status !== 429) return; // a refused piece will not get better
       } catch (_) { /* network: try again */ }
       await new Promise(done => setTimeout(done, 2000 * (attempt + 1)));

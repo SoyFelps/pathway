@@ -200,3 +200,10 @@ test('Phase 3: the room page knows the team by the session of the app without ha
     assert.doesNotThrow(() => new Function(stripTypeScriptTypes(read(file)).replace(/^import\s[\s\S]*?;[ \t]*$/gm, '').replace(/^export /gm, '')), file + ' is valid code');
   }
 });
+
+test('Phase 3: a team member whose session expired is never taken for the candidate; the room renews the session and sends again', () => {
+  const index = read('supabase/functions/meetings/index.ts');
+  assert.ok(index.includes('.eq("speaker_key", speakerKey).eq("speaker_role", "team")') && index.includes('return fail(req, 401, "Your session expired. Sign in again.");'), 'the server refuses the piece instead of changing the role');
+  const page = read('meeting.js');
+  assert.ok(page.includes('async function renewSession()') && page.includes('if (result.status === 401) { if (await renewSession()) continue; return; }'), 'the page renews the session and sends the piece again');
+});

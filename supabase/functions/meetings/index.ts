@@ -278,6 +278,10 @@ async function audioSender(req: Request, secret: unknown) {
 
 /** One piece of one person's microphone (raw audio in the body; who, when and how long in the headers). Stored, then transcribed right away. */
 async function actionAudio(req: Request) {
+  // The audio is always read BEFORE any answer: answering a refusal while the browser is still sending the body leaves the connection
+  // hanging (seen 2026-11-24). Anything announced as too large is refused before reading it.
+  if (Number(req.headers.get("content-length") || 0) > MAX_AUDIO_BYTES) return fail(req, 413, "This piece of audio is too large.");
+  const audio = new Uint8Array(await req.arrayBuffer());
   const allowed = await audioSender(req, req.headers.get("x-meeting-secret"));
   if (allowed.error) return allowed.error;
   const { ctx, teamId } = allowed as { ctx: Context; teamId: string | null };
@@ -291,9 +295,14 @@ async function actionAudio(req: Request) {
     return fail(req, 400, "Send a valid request.");
   }
   if (Math.abs(startedAt - Date.now()) > 30 * 60_000) return fail(req, 400, "Send a valid request.");
-  const audio = new Uint8Array(await req.arrayBuffer());
+  // Someone who already spoke as the hiring team is never turned into the candidate: without a valid session now (it expired during the
+  // meeting) the piece is refused, the room page renews the session and sends it again (bug seen in the 4-person test, 2026-11-24).
+  if (!teamId) {
+    const { count: asTeam } = await admin!.from("meeting_audio_segments").select("id", { count: "exact", head: true }).eq("interview_id", ctx.iv.id).eq("speaker_key", speakerKey).eq("speaker_role", "team");
+    if ((asTeam ?? 0) > 0) return fail(req, 401, "Your session expired. Sign in again.");
+  }
   if (!audio.length || audio.length > MAX_AUDIO_BYTES) return fail(req, 413, "This piece of audio is too large.");
-  const { count } = await admin!.from("meeting_audio_segments").select("id", { count: "exact", head: true }).eq("interview_id", ctx.iv.id);
+  const { count } =await admin!.from("meeting_audio_segments").select("id", { count: "exact", head: true }).eq("interview_id", ctx.iv.id);
   if ((count ?? 0) >= MAX_SEGMENTS_PER_INTERVIEW) return fail(req, 429, "Too many pieces of audio for this meeting.");
   const id = crypto.randomUUID();
   const path = `${ctx.iv.workspace_id}/${ctx.iv.id}/${id}`;
