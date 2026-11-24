@@ -104,3 +104,13 @@ test('the person never turns into a ghost: the mask is held for a moment and mad
   assert.ok(effects.includes('held[i] = v >= held[i] ? v : held[i] * 0.75 + v * 0.25'), 'a one-frame doubt does not erase the person');
   assert.ok(effects.includes('a * a * (3 - 2 * a)') && /MASK_LOW = 0\.\d+, MASK_HIGH = 0\.\d+/.test(effects), '"fairly sure" becomes fully visible');
 });
+
+test('phones: a cheap blur, the camera video kept on the page, the processor tried before giving up, and the numbers in the support report', () => {
+  const effects = read('meeting-effects.js');
+  const page = read('meeting.js');
+  assert.ok(effects.includes('document.body.appendChild(video)') && effects.includes('video.remove()'), 'Chrome on Android stops updating a video that is not on the page');
+  assert.ok(/else if \(phone\) \{\s*tinyCtx\.drawImage/.test(effects), 'phones never use the slow canvas blur filter');
+  assert.ok(effects.includes("loadSegmenter('CPU')") && effects.includes('if (phone && !switchedToCpu) { tryCpu(); return; }'));
+  assert.ok(effects.includes('const modelEvery = phone ? 2 : 1;'));
+  assert.ok(page.includes('effect: effect ? effect.stats() : (window.NellioEffects && window.NellioEffects.lastStats) || null'));
+});

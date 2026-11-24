@@ -184,7 +184,13 @@
   const applyEnabled = () => { if (stream) { stream.getAudioTracks().forEach(track => { track.enabled = micOn; }); stream.getVideoTracks().forEach(track => { track.enabled = camOn; }); } };
   function showSelf() {
     const preview = document.getElementById('preview') || root.querySelector('[data-tile="me"] video');
-    if (preview && preview.srcObject !== stream) { preview.srcObject = stream; preview.play().catch(() => {}); }
+    if (!preview) return;
+    // Always given again (also when it looks the same) and played: on Android the preview stayed black after the effect was turned off.
+    preview.srcObject = null;
+    preview.srcObject = stream;
+    preview.play().catch(() => {});
+    const shown = stream;
+    setTimeout(() => { if (stream === shown && preview.isConnected && !preview.videoWidth) { preview.srcObject = null; preview.srcObject = stream; preview.play().catch(() => {}); } }, 1500);
   }
 
   async function chooseBackground(key, note = '') {
@@ -380,7 +386,7 @@
     watchClosing();
     document.getElementById('meeting-copy').addEventListener('click', async event => {
       const button = event.currentTarget;
-      const report = { when: new Date().toISOString(), userAgent: navigator.userAgent, phone: PHONE, peers: room ? room.peers().map(({ stream: _s, ...p }) => p) : [], stats: room ? await room.stats().catch(() => []) : [], log: logLines.slice(-120) };
+      const report = { when: new Date().toISOString(), userAgent: navigator.userAgent, phone: PHONE, peers: room ? room.peers().map(({ stream: _s, ...p }) => p) : [], stats: room ? await room.stats().catch(() => []) : [], background: choice().kind, effect: effect ? effect.stats() : (window.NellioEffects && window.NellioEffects.lastStats) || null, log: logLines.slice(-120) };
       try { await navigator.clipboard.writeText(JSON.stringify(report, null, 2)); button.textContent = t('Copied'); }
       catch (_) { button.textContent = t('Could not copy'); }
       setTimeout(() => { button.textContent = t('Copy connection details'); }, 2500);
