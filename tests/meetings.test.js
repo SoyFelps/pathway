@@ -188,7 +188,8 @@ test('Phase 3: each piece of one microphone is transcribed alone, the meeting is
   assert.ok(index.includes('GEMINI_API_KEY_FOR_MEETINGS') && index.includes('storage_path: null') && index.includes('await removeAudio();'), 'own key; the audio is deleted once transcribed');
   assert.ok(index.includes('if (!teamId && !ctx.iv.transcription_consent_at) return') && index.includes('status = "refused"'), 'the candidate sends audio only after accepting; who refused does not enter');
   const page = read('meeting.js');
-  assert.ok(page.includes("return roles.includes('team') && roles.includes('candidate');") && page.includes('const GRACE_MS = 5 * 60000;') && page.includes("const voiced = piece.voiced >= 4;"), 'records only with team and candidate in the room, 5 minutes of grace, silent pieces are not sent');
+  assert.ok(page.includes("return roles.includes('team') && roles.includes('candidate');") && page.includes('const GRACE_MS = 5 * 60000;') && page.includes('const PAUSE_MS = 1500;') && page.includes('if (voice) { lastVoiceAt = now; if (!rec) startPiece(track); else rec.voiced++; }') && page.includes('else if (rec && now - lastVoiceAt > PAUSE_MS) finishPiece();'), 'records only with team and candidate in the room, 5 minutes of grace, and only while the person speaks (a piece per stretch of speech)');
+  assert.equal(T.parseMinutes({ candidates: [{ content: { parts: [{ text: 'Here are the minutes:\n\n## Summary\n- ok' }] } }] }), '## Summary\n- ok', 'no opening sentence before the first heading');
 });
 
 test('Phase 3: the room page knows the team by the session of the app without hanging, and both server functions parse', () => {

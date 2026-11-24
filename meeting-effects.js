@@ -7,7 +7,7 @@
    NellioEffects.lastStats keeps the numbers of the last effect (for "Copy connection details"), also after it was turned off. */
 (function (root) {
   const MEDIAPIPE_VERSION = '1.2.2';
-  const WORKER_VERSION = 'mw3-20261124s';
+  const WORKER_VERSION = 'mw3-20261124t';
   const base = () => new URL('vendor/mediapipe/', document.baseURI).href;
   const segmenters = {};
 

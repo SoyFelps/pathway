@@ -524,16 +524,24 @@
     document.getElementById('meeting-again').addEventListener('click', load);
   }
 
-  // ---- Transcription (Phase 3): each browser records ONLY its own microphone, in pieces of about a minute -------------------------------
+  // ---- Transcription (Phase 3): each browser records ONLY its own microphone, and only WHILE the person speaks ---------------------------
   // It runs while the transcription is on and not ended and the room has the candidate AND someone of the team (owner decision); when one of
-  // them leaves it goes on for 5 more minutes (a dropped connection comes back), then stops. A piece where nobody spoke is not sent (it would
-  // cost tokens for nothing): the browser only says the meeting goes on. The audio is deleted on the server as soon as it is transcribed.
-  const SEGMENT_MS = 60000;
+  // them leaves it goes on for 5 more minutes (a dropped connection comes back), then stops. A piece starts when the person starts to speak
+  // and ends after a pause of 1.5 seconds (or after a minute of speech): silence is never sent (it would cost tokens for nothing) and the time
+  // of each piece is the moment the person started to speak, so the transcript keeps everyone in the right order (2026-11-24, 4-person test).
+  // While nobody speaks, the browser tells the server every 2 minutes that the meeting goes on. The audio is deleted once transcribed.
+  const MAX_PIECE_MS = 60000;
+  const PAUSE_MS = 1500;
+  const ALIVE_MS = 120000;
   const GRACE_MS = 5 * 60000;
+  const VOICE_RMS = 0.012;
   let myName = '';
-  let rec = null; // { recorder, startedAt, voiced, mimeType, timer }
+  let active = false; // the transcription runs in this browser now
+  let rec = null; // the piece being recorded: { recorder, startedAt, voiced, mimeType, chunks, done }
+  let lastVoiceAt = 0;
   let recGraceTimer = null;
-  let recMeter = null; // { audio, analyser, timer, track }
+  let aliveTimer = null;
+  let recMeter = null; // { audio, timer, track }
   const recMime = () => ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm'].find(type => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) || '';
   const micTrack = () => (camera && camera.getAudioTracks().find(track => track.readyState === 'live')) || null;
   function wantRecording() {
@@ -542,18 +550,25 @@
     return roles.includes('team') && roles.includes('candidate');
   }
   function setRecBadge(on) { const badge = document.getElementById('meeting-rec'); if (badge) badge.hidden = !on; }
+  const sayAlive = () => call({ action: 'alive', secret }).catch(error => { if (error.status === 409) transcriptionEnded(); });
   function checkRecording() {
     if (wantRecording()) {
       clearTimeout(recGraceTimer); recGraceTimer = null;
       setRecBadge(true);
-      if (!rec) startSegment();
-    } else if (rec && !recGraceTimer) {
+      const track = micTrack();
+      if (track && (!recMeter || recMeter.track !== track)) watchLevel(track);
+      if (!active) {
+        active = true;
+        sayAlive();
+        clearInterval(aliveTimer);
+        aliveTimer = setInterval(() => { if (active && !rec) sayAlive(); }, ALIVE_MS);
+      }
+    } else if (active && !recGraceTimer) {
       recGraceTimer = setTimeout(() => { recGraceTimer = null; if (!wantRecording()) stopRecording(true); }, GRACE_MS);
-    } else if (!rec) setRecBadge(false);
+    } else if (!active) setRecBadge(false);
   }
-  // Is anyone speaking? A light level check of the microphone, four times a second.
+  // Is the person speaking? The level of the microphone ten times a second starts and ends the pieces.
   function watchLevel(track) {
-    if (recMeter && recMeter.track === track) return;
     stopLevel();
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -564,44 +579,41 @@
       source.connect(analyser);
       const data = new Float32Array(analyser.fftSize);
       const timer = setInterval(() => {
+        if (!active) return;
+        if (track.readyState !== 'live') { const fresh = micTrack(); if (rec) finishPiece(); if (fresh && fresh !== track) watchLevel(fresh); return; }
         analyser.getFloatTimeDomainData(data);
         let sum = 0; for (const v of data) sum += v * v;
-        if (rec && track.enabled && Math.sqrt(sum / data.length) > 0.012) rec.voiced++;
-      }, 250);
+        const now = Date.now();
+        const voice = track.enabled && Math.sqrt(sum / data.length) > VOICE_RMS;
+        if (voice) { lastVoiceAt = now; if (!rec) startPiece(track); else rec.voiced++; }
+        else if (rec && now - lastVoiceAt > PAUSE_MS) finishPiece();
+        if (rec && now - rec.startedAt > MAX_PIECE_MS) finishPiece();
+      }, 100);
       recMeter = { audio, timer, track };
     } catch (_) { recMeter = null; }
   }
   function stopLevel() { if (recMeter) { clearInterval(recMeter.timer); recMeter.audio.close().catch(() => {}); recMeter = null; } }
-  function startSegment() {
-    const track = micTrack();
+  function startPiece(track) {
     const mimeType = recMime();
-    if (!track || !mimeType) { rec = null; return; }
+    if (!mimeType) return;
     let recorder;
-    try { recorder = new MediaRecorder(new MediaStream([track]), { mimeType, audioBitsPerSecond: 24000 }); }
-    catch (_) { rec = null; return; }
-    const piece = { recorder, startedAt: Date.now(), voiced: 0, mimeType, chunks: [], done: null };
+    try { recorder = new MediaRecorder(new MediaStream([track]), { mimeType, audioBitsPerSecond: 24000 }); recorder.start(); }
+    catch (_) { return; }
+    const piece = { recorder, startedAt: Date.now(), voiced: 1, mimeType, chunks: [], done: null };
     piece.done = new Promise(resolve => { recorder.onstop = resolve; });
     recorder.ondataavailable = event => { if (event.data && event.data.size) piece.chunks.push(event.data); };
-    recorder.start();
-    watchLevel(track);
-    piece.timer = setTimeout(() => { rotate(); }, SEGMENT_MS);
     rec = piece;
   }
-  // Closes the current piece and sends it; starts the next one unless asked to stop.
-  async function finishSegment(next) {
+  // Closes the current piece and sends it, unless it was only a noise (under about a third of a second of voice).
+  async function finishPiece() {
     const piece = rec;
     if (!piece) return;
     rec = null;
-    clearTimeout(piece.timer);
-    try { if (piece.recorder.state !== 'inactive') piece.recorder.stop(); } catch (_) {}
-    if (next) startSegment();
-    await Promise.race([piece.done, new Promise(done => setTimeout(done, 3000))]);
     const durationMs = Date.now() - piece.startedAt;
-    const voiced = piece.voiced >= 4; // about a second of speech in the piece
-    if (voiced && piece.chunks.length && durationMs >= 1000) await sendPiece(new Blob(piece.chunks, { type: piece.mimeType.split(';')[0] }), piece.startedAt, durationMs);
-    else call({ action: 'alive', secret }).catch(error => { if (error.status === 409) transcriptionEnded(); });
+    try { if (piece.recorder.state !== 'inactive') piece.recorder.stop(); } catch (_) {}
+    await Promise.race([piece.done, new Promise(done => setTimeout(done, 3000))]);
+    if (piece.voiced >= 3 && piece.chunks.length && durationMs >= 800) await sendPiece(new Blob(piece.chunks, { type: piece.mimeType.split(';')[0] }), piece.startedAt, durationMs);
   }
-  const rotate = () => finishSegment(wantRecording() || !!recGraceTimer);
   async function sendPiece(blob, startedAt, durationMs) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -615,11 +627,13 @@
   }
   async function stopRecording(send) {
     clearTimeout(recGraceTimer); recGraceTimer = null;
+    clearInterval(aliveTimer); aliveTimer = null;
+    active = false;
     setRecBadge(false);
-    if (!rec) { stopLevel(); return; }
-    if (send) await finishSegment(false);
-    else { try { rec.recorder.stop(); } catch (_) {} clearTimeout(rec.timer); rec = null; }
     stopLevel();
+    if (!rec) return;
+    if (send) await finishPiece();
+    else { try { rec.recorder.stop(); } catch (_) {} rec = null; }
   }
   function transcriptionEnded() {
     if (view) view.transcriptionEnded = true;
