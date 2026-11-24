@@ -7,7 +7,7 @@
    NellioEffects.lastStats keeps the numbers of the last effect (for "Copy connection details"), also after it was turned off. */
 (function (root) {
   const MEDIAPIPE_VERSION = '1.2.2';
-  const WORKER_VERSION = 'mw3-20261124h';
+  const WORKER_VERSION = 'mw3-20261124i';
   const base = () => new URL('vendor/mediapipe/', document.baseURI).href;
   const segmenters = {};
 
@@ -117,6 +117,9 @@
     // Measured 2026-11-24: this MediaPipe build reads a canvas upside down, so the model saw an upside-down person and was only
     // ~40% sure (a clear face gave 0.36 at most; turned over first, 1.0). On phones, where the person was not found at all, the
     // picture is turned over before the model and the cut-out turned back. Computers work well enough as they are (owner: keep them).
+    // How much of the old cut-out a new one keeps where the model became less sure. Phones (worker): 0.3, so where the person was a
+    // moment ago turns back to background quickly when they move (with 0.75 the real background showed around them for about a second).
+    const KEEP = helper ? 0.3 : 0.75;
     const flip = phone && !helper; // the landscape model of the worker sees the picture the right way up (measured)
 
     function readMask(result) {
@@ -137,7 +140,7 @@
       let sum = 0;
       for (let i = 0, j = 3; i < values.length; i++, j += 4) {
         const v = values[i];
-        const h = held[i] = v >= held[i] ? v : held[i] * 0.75 + v * 0.25;
+        const h = held[i] = v >= held[i] ? v : held[i] * KEEP + v * (1 - KEEP);
         let a = (h - MASK_LOW) / (MASK_HIGH - MASK_LOW);
         a = a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a);
         pixels.data[j] = a * 255;

@@ -101,7 +101,7 @@ test('background effects: run in the browser with self-hosted files, keep their 
 
 test('the person never turns into a ghost: the mask is held for a moment and made firm with a contrast curve', () => {
   const effects = read('meeting-effects.js');
-  assert.ok(effects.includes('held[i] = v >= held[i] ? v : held[i] * 0.75 + v * 0.25'), 'a one-frame doubt does not erase the person');
+  assert.ok(effects.includes('held[i] = v >= held[i] ? v : held[i] * KEEP + v * (1 - KEEP)') && effects.includes('const KEEP = helper ? 0.3 : 0.75;'), 'a one-frame doubt does not erase the person; phones let go faster so the blur follows movement');
   assert.ok(effects.includes('a * a * (3 - 2 * a)') && /MASK_LOW = 0\.\d+, MASK_HIGH = 0\.\d+/.test(effects), '"fairly sure" becomes fully visible');
 });
 
