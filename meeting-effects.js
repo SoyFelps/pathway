@@ -31,10 +31,12 @@
   const average = list => list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0;
 
   async function create(cameraStream, options = {}) {
-    let { segmenter, delegate } = await loadSegmenter('GPU');
+    const phone = !!options.phone;
+    // Phones use the processor from the start: on some Android phones the graphics card gave back an empty cut-out (the person was
+    // never found and everything was blurred). Computers keep the graphics card, which works well there.
+    let { segmenter, delegate } = await loadSegmenter(phone ? 'CPU' : 'GPU');
     let mode = options.mode === 'image' ? 'image' : 'blur';
     let image = options.image || null;
-    const phone = !!options.phone;
     const fps = phone ? 15 : 24;
     // On phones the model runs on every other picture and the last cut-out is reused in between: half the work, hardly visible.
     const modelEvery = phone ? 2 : 1;
@@ -56,7 +58,7 @@
     const out = Object.assign(document.createElement('canvas'), { width, height });
     const ctx = out.getContext('2d');
     // The model sees a small copy of the picture: cheaper, and the mask is smoothed when it is enlarged (softer edges).
-    let scale = phone ? 0.25 : 0.4;
+    let scale = 0.4; // phones too: a smaller picture (160x90) was too small for the model to find the person
     const small = document.createElement('canvas');
     const smallCtx = small.getContext('2d');
     const mask = document.createElement('canvas');
@@ -93,6 +95,10 @@
     const startedAt = performance.now();
     let held = null, pixels = null;
     const MASK_LOW = 0.2, MASK_HIGH = 0.55;
+    // Measured 2026-11-24: this MediaPipe build reads a canvas upside down, so the model saw an upside-down person and was only
+    // ~40% sure (a clear face gave 0.36 at most; turned over first, 1.0). On phones, where the person was not found at all, the
+    // picture is turned over before the model and the cut-out turned back. Computers work well enough as they are (owner: keep them).
+    const flip = phone;
 
     function readMask(result) {
       const masks = result.confidenceMasks || [];
@@ -134,11 +140,19 @@
       personCtx.drawImage(video, 0, 0, width, height);
       personCtx.globalCompositeOperation = 'destination-in';
       if (!phone) personCtx.filter = 'blur(2px)';
+      if (flip) personCtx.setTransform(1, 0, 0, -1, 0, height);
       personCtx.drawImage(mask, 0, 0, width, height);
+      if (flip) personCtx.setTransform(1, 0, 0, 1, 0, 0);
       personCtx.filter = 'none';
       personCtx.globalCompositeOperation = 'source-over';
       ctx.drawImage(person, 0, 0);
       sentFrames++;
+    }
+
+    function blurredOnly() {
+      tinyCtx.drawImage(video, 0, 0, tiny.width, tiny.height);
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(tiny, 0, 0, width, height);
     }
 
     function frame() {
@@ -148,12 +162,15 @@
       last = now; busy = true;
       try {
         if (count++ % modelEvery === 0 || !haveMask) {
+          if (flip) smallCtx.setTransform(1, 0, 0, -1, 0, small.height);
           smallCtx.drawImage(video, 0, 0, small.width, small.height);
+          if (flip) smallCtx.setTransform(1, 0, 0, 1, 0, 0);
           const before = performance.now();
           segmenter.segmentForVideo(small, now, readMask);
           modelTimes.push(performance.now() - before); if (modelTimes.length > 30) modelTimes.shift();
         }
         if (haveMask) compose();
+        else if (phone) blurredOnly(); // while the first cut-out is not ready: the whole picture blurred, never a black square
       } catch (error) { console.debug('[effects]', error && error.message); }
       finally { busy = false; }
       watchSpeed(performance.now() - now);
@@ -185,10 +202,10 @@
     function watchSpeed(ms) {
       times.push(ms); if (times.length > 30) times.shift();
       if (times.length < 30) return;
-      if (phone && coverage.length >= 30 && average(coverage) < 0.01 && !switchedToCpu) { tryCpu(); return; }
+      if (phone && coverage.length >= 30 && average(coverage) < 0.01 && delegate !== 'CPU') { tryCpu(); return; }
       if (average(times) > 1000 / fps) {
         if (scale > 0.2) { scale = Math.max(0.2, scale - 0.1); resize(); times.length = 0; return; }
-        if (phone && !switchedToCpu) { tryCpu(); return; }
+        if (phone && delegate !== 'CPU' && !switchedToCpu) { tryCpu(); return; }
         slowSince = slowSince || performance.now();
         if (performance.now() - slowSince > 3000 && options.onSlow) { const report = options.onSlow; options.onSlow = null; root.NellioEffects.lastStats = stats(); report(); }
       } else slowSince = 0;

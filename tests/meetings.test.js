@@ -110,7 +110,13 @@ test('phones: a cheap blur, the camera video kept on the page, the processor tri
   const page = read('meeting.js');
   assert.ok(effects.includes('document.body.appendChild(video)') && effects.includes('video.remove()'), 'Chrome on Android stops updating a video that is not on the page');
   assert.ok(/else if \(phone\) \{\s*tinyCtx\.drawImage/.test(effects), 'phones never use the slow canvas blur filter');
-  assert.ok(effects.includes("loadSegmenter('CPU')") && effects.includes('if (phone && !switchedToCpu) { tryCpu(); return; }'));
+  assert.ok(effects.includes("loadSegmenter('CPU')") && effects.includes("loadSegmenter(phone ? 'CPU' : 'GPU')") && effects.includes('else if (phone) blurredOnly();'));
   assert.ok(effects.includes('const modelEvery = phone ? 2 : 1;'));
   assert.ok(page.includes('effect: effect ? effect.stats() : (window.NellioEffects && window.NellioEffects.lastStats) || null'));
+});
+
+test('phones turn the picture over before the model and turn the cut-out back (this MediaPipe build reads a canvas upside down)', () => {
+  const effects = read('meeting-effects.js');
+  assert.ok(effects.includes('const flip = phone;'));
+  assert.ok(effects.includes('if (flip) smallCtx.setTransform(1, 0, 0, -1, 0, small.height);') && effects.includes('if (flip) personCtx.setTransform(1, 0, 0, -1, 0, height);'));
 });
