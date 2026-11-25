@@ -263,3 +263,12 @@ test('2026-11-25: 10 minutes before a confirmed interview the responsible people
   assert.ok(sql.includes("not (i.notice_reason = 'starting_soon' and i.starts_at + make_interval(mins => i.duration_minutes) <= now())"), 'the bell drops it once the interview is over');
   assert.ok(read('builder.js').includes("if (state === 'starting_soon') return t('The interview with {name} starts in 10 minutes', { name });"));
 });
+
+test('2026-11-25: audio left behind by a deleted interview is deleted by the minute job (never kept)', () => {
+  const sql = read('supabase/migrations/20261125140000_meeting_audio_orphans.sql');
+  assert.ok(sql.includes("o.bucket_id = 'meeting-audio'") && sql.includes("o.created_at < now() - interval '10 minutes'") && sql.includes('not exists (select 1 from public.meeting_audio_segments s where s.storage_path = o.name)'));
+  assert.ok(sql.includes('revoke all on function public.meeting_audio_orphans(integer) from public, anon, authenticated;') && sql.includes('grant execute on function public.meeting_audio_orphans(integer) to service_role;'));
+  assert.ok(sql.includes('and not exists (select 1 from public.meeting_audio_orphans(1))'), 'the minute job wakes the function for leftover audio too');
+  const index = read('supabase/functions/meetings/index.ts');
+  assert.ok(index.includes('admin!.rpc("meeting_audio_orphans", { p_limit: 100 })') && index.includes('admin!.storage.from(AUDIO_BUCKET).remove(names)'));
+});

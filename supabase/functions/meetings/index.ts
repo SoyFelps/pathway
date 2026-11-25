@@ -413,7 +413,17 @@ async function actionTick(req: Request) {
   const quiet = new Date(Date.now() - 6 * 60_000).toISOString();
   const { data: due } = await admin!.from("meeting_transcripts").select("interview_id,ended_at,last_audio_at").eq("state", "recording").or(`ended_at.not.is.null,last_audio_at.lt.${quiet}`).limit(5);
   for (const item of due || []) await finalize(item.interview_id);
-  return response(req, 200, { transcribed: (pending || []).length, finished: (due || []).length });
+  // Audio whose piece no longer exists (the interview was deleted while the meeting was going on): no audio stays behind (owner, 2026-11-25).
+  let removed = 0;
+  const { data: orphans, error: orphanError } = await admin!.rpc("meeting_audio_orphans", { p_limit: 100 });
+  if (orphanError) console.error("meetings: leftover audio not checked", orphanError.message);
+  const names = (Array.isArray(orphans) ? orphans : []).map((name: unknown) => String(name || "")).filter(Boolean);
+  if (names.length) {
+    const { error: removeError } = await admin!.storage.from(AUDIO_BUCKET).remove(names);
+    if (removeError) console.error("meetings: leftover audio not removed", removeError.message);
+    else removed = names.length;
+  }
+  return response(req, 200, { transcribed: (pending || []).length, finished: (due || []).length, leftoverAudioRemoved: removed });
 }
 
 // ---------------------------------------------------------------------------------------------------------------
