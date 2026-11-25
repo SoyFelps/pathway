@@ -224,3 +224,20 @@ test('2026-11-25: minutes drop the sections with nothing under their heading, on
   const builder = read('builder.js');
   assert.ok(builder.includes('const lines = minutesWithoutEmptySections(text).split') && builder.includes('plain(minutesWithoutEmptySections(item.minutes))'));
 });
+
+test('2026-11-25: team e-mails carry "Do not share this link with the candidate." right under the team link of a Nellio room, never in candidate e-mails', () => {
+  const { stripTypeScriptTypes } = require('node:module');
+  const src = stripTypeScriptTypes(read('supabase/functions/interviews/email.ts')).replace(/^import\s[\s\S]*?;[ \t]*$/gm, '').replace(/^export /gm, '');
+  const m = new Function(src + ';return { buildRecruiterEmail, buildCandidateEmail };')();
+  const iv = link => ({ kind: 'online', startsAt: new Date('2026-12-01T13:00:00Z'), durationMinutes: 30, timeZone: 'America/Sao_Paulo', meetingLink: link });
+  const room = 'https://nellio.app/meeting.html#kdl7A30_ySAHZF5N_RAuBJDqmdAslpIsL9r3gxRap7M';
+  const base = { candidateName: 'Olivia', candidateEmail: 'o@example.test', jobTitle: 'X', companyName: 'Y', appUrl: 'https://nellio.app/' };
+  for (const [language, note] of [['en', 'Do not share this link with the candidate.'], ['pt', 'Não compartilhe este link com o candidato.'], ['es', 'No compartas este enlace con el candidato.']]) {
+    const mail = m.buildRecruiterEmail({ ...base, kind: 'confirmed', language, interview: iv(room) });
+    const lines = mail.text.split('\n');
+    assert.equal(lines[lines.findIndex(l => l.includes(room)) + 1], note);
+    assert.ok(mail.html.includes(note));
+  }
+  assert.ok(!m.buildRecruiterEmail({ ...base, kind: 'confirmed', language: 'en', interview: iv('https://meet.google.com/abc-defg-hij') }).text.includes('Do not share'));
+  assert.ok(!m.buildCandidateEmail({ kind: 'invite', language: 'en', interview: iv(room), pageUrl: 'https://nellio.app/interview.html#x' }).text.includes('Do not share'));
+});

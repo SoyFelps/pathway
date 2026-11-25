@@ -31,6 +31,9 @@ export function safeDisplayName(value: string): string {
   return singleLine(value, 60).replace(/["<>@\\,;:()[\]]/g, "").trim() || "Nellio";
 }
 
+/** A link of a Nellio meeting room (same rule as the app and the functions). */
+const NELLIO_ROOM_LINK = /\/(meeting\.html|lab\/room\.html)#[A-Za-z0-9_-]{20,}$/;
+
 const LOCALE: Record<Language, string> = { en: "en-US", pt: "pt-BR", es: "es" };
 
 /** "Tuesday, December 1, 2026, 14:00–14:30 (GMT-3, America/Sao_Paulo)": the wall-clock time of the interview's own time zone. */
@@ -148,8 +151,9 @@ export interface CandidateEmailInput {
 
 export interface BuiltEmail { subject: string; text: string; html: string; fromName: string }
 
-/** A line of the details box: label, plain text (used in the text version) and, optionally, short links shown instead of the text in the HTML version. */
-type Row = [string, string] | [string, string, Array<{ label: string; url: string }>];
+/** A line of the details box: label, plain text (used in the text version), optionally short links shown instead of the text in the HTML
+    version, and optionally a small note shown under it (the warning under the team link of a Nellio room). */
+type Row = [string, string] | [string, string, Array<{ label: string; url: string }> | undefined] | [string, string, Array<{ label: string; url: string }> | undefined, string];
 
 interface LayoutInput {
   htmlLang: string; eyebrow: string; heading: string; paragraphs: string[]; rows: Row[];
@@ -159,9 +163,9 @@ interface LayoutInput {
 function layout(i: LayoutInput): { html: string; text: string } {
   const rowsHtml = i.rows.length
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;background:#f3f7f4;border-radius:8px;"><tr><td style="padding:16px;font-size:15px;line-height:1.7;color:#17251e;">${
-      i.rows.map(([k, v, links]) => `<strong>${escapeHtml(k)}:</strong> ${links?.length
+      i.rows.map(([k, v, links, note]) => `<strong>${escapeHtml(k)}:</strong> ${links?.length
         ? links.map((a) => `<a href="${escapeHtml(a.url)}" style="color:#1f6b4a;font-weight:600;">${escapeHtml(a.label)}</a>`).join(" &middot; ")
-        : escapeHtml(v).replace(/\n/g, "<br>")}`).join("<br>")}</td></tr></table>`
+        : escapeHtml(v).replace(/\n/g, "<br>")}${note ? `<br><span style="font-size:13px;line-height:1.5;color:#748178;">${escapeHtml(note)}</span>` : ""}`).join("<br>")}</td></tr></table>`
     : "";
   const paragraphs = i.paragraphs.filter(Boolean).map((p) => `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#34463a;">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`).join("\n");
   const button = i.button
@@ -204,7 +208,7 @@ function layout(i: LayoutInput): { html: string; text: string } {
     i.heading,
     "",
     ...i.paragraphs.filter(Boolean).flatMap((p) => [p, ""]),
-    ...i.rows.map(([k, v]) => `${k}: ${v}`),
+    ...i.rows.map(([k, v, , note]) => `${k}: ${v}` + (note ? `\n${note}` : "")),
     i.rows.length ? "" : "",
     i.button ? `${i.button.label}: ${i.button.url}` : "",
     "",
@@ -258,7 +262,7 @@ interface RecruiterCopy {
   kinds: Record<"confirmed" | "declined" | "reschedule" | "no_link" | "assigned" | "resent", {
     subject: (name: string, job: string) => string; eyebrow: string; heading: (name: string) => string; intro: (name: string, job: string, company: string) => string;
   }>;
-  labels: CandidateCopy["labels"] & { message: string; suggested: string; addToCalendar: string; email: string };
+  labels: CandidateCopy["labels"] & { message: string; suggested: string; addToCalendar: string; email: string; linkNote: string };
   button: string;
   footer: string;
 }
@@ -274,7 +278,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       assigned: { subject: (n, j) => `You are now responsible for the interview with ${n} – ${j}`, eyebrow: "Responsible for an interview", heading: (n) => `You were added as responsible for the interview with ${n}.`, intro: (n, j, c) => `You were added as one of the people responsible for the interview with ${n} for ${j} at ${c}. You will be told when the candidate answers.` },
       resent: { subject: (n, j) => `Interview link sent again: ${n} – ${j}`, eyebrow: "Interview link", heading: (n) => `The interview link was sent again to ${n}.`, intro: (n, j, c) => `The details and the meeting link of the interview with ${n} for ${j} at ${c} were sent again to the candidate. Here they are for you too.` },
     },
-    labels: { when: "When", format: "Format", online: "Online", inPerson: "In person", link: "Meeting link", address: "Address", notes: "Notes", message: "Candidate message", suggested: "Suggested times", addToCalendar: "Add to my calendar", email: "E-mail" },
+    labels: { when: "When", format: "Format", online: "Online", inPerson: "In person", link: "Meeting link", address: "Address", notes: "Notes", message: "Candidate message", suggested: "Suggested times", addToCalendar: "Add to my calendar", email: "E-mail", linkNote: "Do not share this link with the candidate." },
     button: "Open candidates",
     footer: "Automated message from Nellio. Please do not reply to this e-mail.",
   },
@@ -288,7 +292,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       assigned: { subject: (n, j) => `Você agora é responsável pela entrevista com ${n} – ${j}`, eyebrow: "Responsável por uma entrevista", heading: (n) => `Você foi incluído como responsável pela entrevista com ${n}.`, intro: (n, j, c) => `Você foi incluído como um dos responsáveis pela entrevista com ${n} para ${j} – ${c}. Você será avisado quando o candidato responder.` },
       resent: { subject: (n, j) => `Link da entrevista reenviado: ${n} – ${j}`, eyebrow: "Link da entrevista", heading: (n) => `O link da entrevista foi reenviado para ${n}.`, intro: (n, j, c) => `Os dados e o link da reunião da entrevista com ${n} para ${j} – ${c} foram reenviados ao candidato. Aqui estão eles para você também.` },
     },
-    labels: { when: "Quando", format: "Formato", online: "Online", inPerson: "Presencial", link: "Link da reunião", address: "Endereço", notes: "Observações", message: "Mensagem do candidato", suggested: "Horários sugeridos", addToCalendar: "Adicionar à minha agenda", email: "E-mail" },
+    labels: { when: "Quando", format: "Formato", online: "Online", inPerson: "Presencial", link: "Link da reunião", address: "Endereço", notes: "Observações", message: "Mensagem do candidato", suggested: "Horários sugeridos", addToCalendar: "Adicionar à minha agenda", email: "E-mail", linkNote: "Não compartilhe este link com o candidato." },
     button: "Abrir candidatos",
     footer: "Mensagem automática do Nellio. Por favor, não responda a este e-mail.",
   },
@@ -302,7 +306,7 @@ const RECRUITER: Record<Language, RecruiterCopy> = {
       assigned: { subject: (n, j) => `Ahora eres responsable de la entrevista con ${n} – ${j}`, eyebrow: "Responsable de una entrevista", heading: (n) => `Te agregaron como responsable de la entrevista con ${n}.`, intro: (n, j, c) => `Te agregaron como uno de los responsables de la entrevista con ${n} para ${j} – ${c}. Se te avisará cuando el candidato responda.` },
       resent: { subject: (n, j) => `Enlace de la entrevista reenviado: ${n} – ${j}`, eyebrow: "Enlace de la entrevista", heading: (n) => `El enlace de la entrevista se reenvió a ${n}.`, intro: (n, j, c) => `Los datos y el enlace de la reunión de la entrevista con ${n} para ${j} – ${c} se reenviaron al candidato. Aquí los tienes también.` },
     },
-    labels: { when: "Cuándo", format: "Formato", online: "En línea", inPerson: "Presencial", link: "Enlace de la reunión", address: "Dirección", notes: "Observaciones", message: "Mensaje del candidato", suggested: "Horarios sugeridos", addToCalendar: "Agregar a mi calendario", email: "Correo" },
+    labels: { when: "Cuándo", format: "Formato", online: "En línea", inPerson: "Presencial", link: "Enlace de la reunión", address: "Dirección", notes: "Observaciones", message: "Mensaje del candidato", suggested: "Horarios sugeridos", addToCalendar: "Agregar a mi calendario", email: "Correo", linkNote: "No compartas este enlace con el candidato." },
     button: "Abrir candidatos",
     footer: "Mensaje automático de Nellio. Por favor, no respondas a este correo.",
   },
@@ -338,6 +342,9 @@ export function buildRecruiterEmail(input: RecruiterEmailInput): BuiltEmail {
   const company = singleLine(input.companyName, 80) || "—";
   const k = copy.kinds[input.kind];
   const rows = input.interview ? detailRows(copy.labels, input.interview, language) : [];
+  // The link of a Nellio room in a team e-mail is the TEAM link: whoever opens it enters as the hiring team, so it must not reach the candidate (owner, 2026-11-25).
+  const linkRow = rows.find((row) => row[0] === copy.labels.link);
+  if (linkRow && NELLIO_ROOM_LINK.test(linkRow[1])) rows[rows.indexOf(linkRow)] = [linkRow[0], linkRow[1], linkRow[2], copy.labels.linkNote];
   // The title and the text name the person; the address is in the body, so the team has both.
   if (candidateEmail) rows.unshift([copy.labels.email, candidateEmail]);
   const message = multiLine(input.message, 1000);
