@@ -490,6 +490,8 @@
   const meetingHref = link => (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /^https:\/\/nellio\.app\/lab\/room\.html#/.test(link) ? 'meeting.html' + link.slice(link.indexOf('#')) : link);
   const openInterviewMeeting = row => { if (interviewJoinable(row)) window.open(meetingHref(teamJoinLink(row)), '_blank', 'noopener'); };
   // The label of the link shown in the details: for a Nellio room it is the CANDIDATE link (the team enters with "Join meeting").
+  // Under the candidate link of a Nellio room: the team sends it with Re-send link (registered in the history), not by hand (owner, 2026-11-25).
+  const candidateLinkNote = row => (NELLIO_MEETING_LINK.test(String(row.meetingLink || '')) ? '<span class="team-permission-hint iv-link-note">' + esc(t('Do not share this link with the candidate. If needed, click Re-send link below.')) + '</span>' : '');
   const meetingLinkLabel = row => (NELLIO_MEETING_LINK.test(String(row.meetingLink || '')) ? t('Candidate link') : t('Meeting link'));
   const interviewStarted = row => Boolean(row && row.startsAt && new Date(row.startsAt).getTime() <= Date.now());
   // Once someone opened the Nellio meeting room the interview can no longer be edited or cancelled (owner decision, 2026-11-24; the server refuses too).
@@ -879,7 +881,7 @@
     // What was scheduled (shown as it is while the interview is on, and inside a fold once it was finalized).
     const detailsGrid = row => '<div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>')
       + info(t('Format'), row.kind === 'online' ? t('Online') : t('In person')) + info(t('Duration'), row.durationMinutes ? esc(tn('{count} minute', '{count} minutes', row.durationMinutes)) : '')
-      + (row.kind === 'online' ? info(meetingLinkLabel(row), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '<span class="iv-nolink">' + esc(t('No link yet')) + '</span>') : info(t('Address'), esc(row.address || '')))
+      + (row.kind === 'online' ? info(meetingLinkLabel(row), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' + candidateLinkNote(row) : '<span class="iv-nolink">' + esc(t('No link yet')) + '</span>') : info(t('Address'), esc(row.address || '')))
       + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>';
     // The result of a finalized interview: what happened, the impression, the recommendation, the notes, who registered it and when.
     const resultHtml = row => {
@@ -2757,7 +2759,7 @@
     setLayer('<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">' + t('Interview') + '</div><h2>' + esc(ivName(row)) + '</h2><p>' + esc(ivJobTitle(row.flowId)) + '</p></div><button class="modal-x" data-close aria-label="' + t('Close') + '">×</button></div>'
       + '<div class="iv-detail"><div class="iv-status"><span class="iv-chip ai-tone-' + tag[1] + '"><span class="iv-chip-icon">' + INTERVIEW_ICON + '</span>' + esc(t(tag[0])) + '</span>' + interviewBadges(row) + '</div>'
       + '<div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>') + info(t('Format'), row.kind === 'online' ? t('Online') : t('In person')) + info(t('Duration'), row.durationMinutes ? esc(tn('{count} minute', '{count} minutes', row.durationMinutes)) : '')
-      + (row.kind === 'online' ? info(meetingLinkLabel(row), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' : '<span class="iv-nolink">' + esc(t('No link yet')) + '</span>') : info(t('Address'), esc(row.address || ''))) + info(t('Responsible'), esc(ivResponsibleText(row))) + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>'
+      + (row.kind === 'online' ? info(meetingLinkLabel(row), row.meetingLink ? '<a href="' + esc(row.meetingLink) + '" target="_blank" rel="noopener noreferrer">' + esc(row.meetingLink) + '</a>' + candidateLinkNote(row) : '<span class="iv-nolink">' + esc(t('No link yet')) + '</span>') : info(t('Address'), esc(row.address || ''))) + info(t('Responsible'), esc(ivResponsibleText(row))) + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>'
       + result + '</div><div class="modal-actions iv-detail-actions">' + actions + '</div>');
     const layer = modalRoot.querySelector('#modal-layer');
     const actionBox = layer.querySelector('.iv-detail-actions');

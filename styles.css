@@ -1374,6 +1374,7 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-alert span{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--amber-text);color:var(--amber-bg);font-size:11px;font-weight:800}
 .iv-alert:hover{filter:brightness(.97)}
 .iv-nolink{color:var(--amber-text);font-weight:600}
+.iv-link-note{display:block;margin:6px 0 0;font-weight:400}
 /* Nellio meeting room (meeting.html, plano-reunioes.md Phase 1): lobby card like the interview answer page, then a video grid */
 .meeting-main{max-width:620px;margin:0 auto;padding:40px 20px 56px}
 .meeting-main.is-wide{max-width:1180px;padding:24px 20px 40px}

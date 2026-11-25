@@ -2145,6 +2145,7 @@
   '{count} line': { one: '{count} línea', other: '{count} líneas' },
   'Minutes written by AI. They may contain errors.': 'Acta generada por IA. Puede contener errores.',
   'Candidate link': 'Enlace del candidato',
+  'Do not share this link with the candidate. If needed, click Re-send link below.': 'No compartas este enlace con el candidato. Si es necesario, haz clic en Reenviar enlace abajo.',
   'Download': 'Descargar',
   'Transcription': 'Transcripción',
   'Re-send link': 'Reenviar enlace',
