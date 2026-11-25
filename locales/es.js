@@ -2144,6 +2144,7 @@
   'End it? Click again': '¿Finalizar? Haga clic de nuevo',
   '{count} line': { one: '{count} línea', other: '{count} líneas' },
   'Minutes written by AI. They may contain errors.': 'Acta generada por IA. Puede contener errores.',
+  'Candidate link': 'Enlace del candidato',
   'Download': 'Descargar',
   'Transcription': 'Transcripción',
   'Re-send link': 'Reenviar enlace',

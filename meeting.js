@@ -35,40 +35,10 @@
   let peers = [];
   const logLines = []; // what happened in the connections, for "Copy connection details" (support)
 
-  // Phase 3: a person signed in to Nellio in this browser (the hiring team) sends the session along, so the server knows they are "team";
-  // anyone else is the candidate. No sign-in on this page: the session of the app is read, and renewed when it expires.
-  let authClient = null;
-  const authOf = () => (authClient = authClient || window.supabase.createClient(config.url, config.publishableKey, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false } }));
-  // The session of a team member can expire during a long meeting: the server refuses their next piece (401) instead of taking them for the
-  // candidate, and the page renews the session here (it is saved for the app too) and sends the piece again.
-  async function renewSession() {
-    try {
-      if (!window.supabase || !config.url) return false;
-      const result = await Promise.race([authOf().auth.refreshSession(), new Promise(done => setTimeout(() => done(null), 8000))]);
-      return Boolean(result && result.data && result.data.session);
-    } catch (_) { return false; }
-  }
-  async function sessionToken() {
-    // First the session the app keeps in this browser (read directly: the Supabase client can wait on a lock for a long time); only when it
-    // is missing or expired, the client (which can renew it), never for more than 2 seconds.
-    try {
-      const ref = new URL(config.url).hostname.split('.')[0];
-      const saved = JSON.parse(localStorage.getItem(`sb-${ref}-auth-token`) || 'null');
-      const session = saved && (saved.currentSession || saved);
-      if (session && session.access_token && Number(session.expires_at || 0) * 1000 > Date.now() + 60000) return session.access_token;
-      if (!session || !session.refresh_token) return '';
-    } catch (_) { return ''; }
-    try {
-      if (!window.supabase || !config.url) return '';
-      // never wait long for it (the page must not hang); an expired session is renewed here, and a piece refused for it is sent again
-      const result = await Promise.race([authOf().auth.getSession(), new Promise(done => setTimeout(() => done(null), 2000))]);
-      const data = result && result.data;
-      return (data && data.session && data.session.access_token) || '';
-    } catch (_) { return ''; }
-  }
+  // Phase 3: the role (hiring team or candidate) comes only from the link that was opened: each room has a candidate link and a separate
+  // hiring-team link (owner decision, 2026-11-25). Being signed in to Nellio plays no part, so nothing about a session is read here.
   async function headers(extra = {}) {
-    const token = await sessionToken();
-    return { apikey: config.publishableKey || '', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...extra };
+    return { apikey: config.publishableKey || '', ...extra };
   }
 
   async function call(body) {
@@ -629,7 +599,6 @@
         const result = await fetch(FUNCTION_URL, { method: 'POST', headers: await headers({ 'Content-Type': blob.type || 'audio/webm', 'x-meeting-secret': secret, 'x-speaker-key': (room && room.id) || 'unknown-speaker', 'x-speaker-name': encodeURIComponent(myName || '?'), 'x-started-at': new Date(startedAt).toISOString(), 'x-duration-ms': String(durationMs) }), body: blob });
         if (result.ok) return;
         if (result.status === 409) { transcriptionEnded(); return; }
-        if (result.status === 401) { if (await renewSession()) continue; return; } // session expired: renewed, the piece goes again
         if (result.status < 500 && result.status !== 429) return; // a refused piece will not get better
       } catch (_) { /* network: try again */ }
       await new Promise(done => setTimeout(done, 2000 * (attempt + 1)));

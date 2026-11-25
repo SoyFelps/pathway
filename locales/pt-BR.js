@@ -2144,6 +2144,7 @@
   'End it? Click again': 'Encerrar? Clique de novo',
   '{count} line': { one: '{count} linha', other: '{count} linhas' },
   'Minutes written by AI. They may contain errors.': 'Ata gerada por IA. Pode conter erros.',
+  'Candidate link': 'Link do candidato',
   'Download': 'Baixar',
   'Transcription': 'Transcrição',
   'Re-send link': 'Reenviar link',

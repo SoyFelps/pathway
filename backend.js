@@ -177,7 +177,7 @@
     resultReason: row.result_reason || null, resultImpression: row.result_impression || null, resultRecommended: typeof row.result_recommended === 'boolean' ? row.result_recommended : null,
     resultNotes: row.result_notes || null, resultAt: row.result_at || null, resultBy: row.result_by || null,
     roomOpenedAt: row.room_opened_at || null,
-    transcriptionEnabled: row.transcription_enabled !== false, minutesEnabled: row.minutes_enabled !== false, transcriptionRefusedAt: row.transcription_refused_at || null
+    transcriptionEnabled: row.transcription_enabled !== false, minutesEnabled: row.minutes_enabled !== false, transcriptionRefusedAt: row.transcription_refused_at || null, teamMeetingLink: row.team_meeting_link || null
   });
   // Transcript and minutes of the Nellio meeting room of some interviews (team only; the database policy decides). Phase 3 of plano-reunioes.md.
   async function listMeetingTranscripts(interviewIds) {
@@ -191,7 +191,7 @@
   // The interviews of the candidates this person may review (the database policy decides which). Newest first.
   async function listCandidateInterviews(workspaceId, flowId = '') {
     await requireSession();
-    let query = client.from('candidate_interviews').select('id,workspace_id,flow_id,candidate_email,applicant_id,state,kind,local_start,time_zone,starts_at,duration_minutes,meeting_link,address,notes,sequence,response_note,proposed_times,invited_at,responded_at,created_at,updated_at,responsible_user_ids,result_reason,result_impression,result_recommended,result_notes,result_at,result_by,room_opened_at,transcription_enabled,minutes_enabled,transcription_refused_at')
+    let query = client.from('candidate_interviews').select('id,workspace_id,flow_id,candidate_email,applicant_id,state,kind,local_start,time_zone,starts_at,duration_minutes,meeting_link,address,notes,sequence,response_note,proposed_times,invited_at,responded_at,created_at,updated_at,responsible_user_ids,result_reason,result_impression,result_recommended,result_notes,result_at,result_by,room_opened_at,transcription_enabled,minutes_enabled,transcription_refused_at,team_meeting_link')
       .eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(2000);
     if (flowId) query = query.eq('flow_id', flowId);
     const { data, error } = await query;
@@ -255,7 +255,7 @@
   }
   async function startInterviewRound(flowId, email) { const payload = await callInterviews({ action: 'newRound', flowId, email }); return mapInterviewResult(payload.interview); }
   // The function answers with its own field names (camelCase); the window wants the same shape as the rows read from the database.
-  const mapInterviewResult = row => row ? ({ id: row.id, workspaceId: row.workspaceId || null, flowId: row.flowId, email: row.email, state: row.state, kind: row.kind || null, localStart: row.localStart || null, timeZone: row.timeZone || null, startsAt: row.startsAt || null, durationMinutes: row.durationMinutes || null, meetingLink: row.meetingLink || null, address: row.address || null, notes: row.notes || null, sequence: row.sequence || 0, responseNote: row.responseNote || null, proposedTimes: row.proposedTimes || [], responsibleIds: row.responsibleIds || [], resultReason: row.resultReason || null, resultImpression: row.resultImpression || null, resultRecommended: typeof row.resultRecommended === 'boolean' ? row.resultRecommended : null, resultNotes: row.resultNotes || null, resultAt: row.resultAt || null, resultBy: row.resultBy || null }) : null;
+  const mapInterviewResult = row => row ? ({ id: row.id, workspaceId: row.workspaceId || null, flowId: row.flowId, email: row.email, state: row.state, kind: row.kind || null, localStart: row.localStart || null, timeZone: row.timeZone || null, startsAt: row.startsAt || null, durationMinutes: row.durationMinutes || null, meetingLink: row.meetingLink || null, address: row.address || null, notes: row.notes || null, sequence: row.sequence || 0, responseNote: row.responseNote || null, proposedTimes: row.proposedTimes || [], responsibleIds: row.responsibleIds || [], resultReason: row.resultReason || null, resultImpression: row.resultImpression || null, resultRecommended: typeof row.resultRecommended === 'boolean' ? row.resultRecommended : null, resultNotes: row.resultNotes || null, resultAt: row.resultAt || null, resultBy: row.resultBy || null, roomOpenedAt: row.roomOpenedAt || null, transcriptionEnabled: row.transcriptionEnabled !== false, minutesEnabled: row.minutesEnabled !== false, teamMeetingLink: row.teamMeetingLink || null }) : null;
   // Bell notices: a candidate answered an interview invitation (one per interview and answer; each person marks it seen on their own).
   async function listCandidateInterviewNotices(workspaceId) {
     await requireSession();

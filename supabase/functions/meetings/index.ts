@@ -11,8 +11,8 @@ import {
 // "create" checks the signed-in person itself (they must be able to see the interview, the database policy decides) and needs an active plan.
 // The video never passes here: this function only checks the secret and the time window, and hands out the Realtime channel name and
 // short-lived TURN credentials from Cloudflare (secrets CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN, set in the Supabase dashboard).
-// Phase 3 (transcription and minutes): a person who sends their session along is "team" (they must be able to see the interview); anyone else
-// is the candidate, who accepts or refuses the transcription before entering. Each browser sends pieces of its own microphone ("audio"), each
+// Phase 3 (transcription and minutes): the role comes from the link: each room has a candidate link and a separate hiring-team link (2026-11-25);
+// the candidate accepts or refuses the transcription before entering. Each browser sends pieces of its own microphone ("audio"), each
 // piece is transcribed by Gemini (secret GEMINI_API_KEY_FOR_MEETINGS) and its audio deleted; when the meeting ends the transcript is put in order
 // and the minutes are written ("tick", woken every minute by the database job meeting-transcription-tick, or "end" by the team).
 
@@ -119,32 +119,36 @@ async function context(interviewId: string) {
 }
 type Context = NonNullable<Awaited<ReturnType<typeof context>>>;
 
-/** The room and its interview from the secret of the link (null when the link is unknown). */
+/** The room, its interview and the ROLE from the secret of the link (null when the link is unknown). Each room has two unrelated secrets
+    (owner decision, 2026-11-25): the candidate link and the hiring-team link. The role comes only from the link that was used, never from a
+    sign-in: someone of the team in a browser without Nellio is still the team, a signed-in person who opens a candidate link is the candidate. */
 async function roomFromSecret(secret: unknown) {
   if (!looksLikeSecret(secret)) return null;
-  const { data: room } = await admin!.from("meeting_rooms").select("interview_id,channel_key").eq("secret_hash", await hashSecret(secret)).maybeSingle();
+  const hash = await hashSecret(secret);
+  const { data: room } = await admin!.from("meeting_rooms").select("interview_id,channel_key,secret_hash,team_secret_hash").or(`secret_hash.eq.${hash},team_secret_hash.eq.${hash}`).maybeSingle();
   if (!room) return null;
   const ctx = await context(room.interview_id);
-  return ctx ? { room, ctx } : null;
+  const role: Role = room.team_secret_hash === hash ? "team" : "candidate";
+  return ctx ? { room, ctx, role } : null;
 }
 
-/** The signed-in person, when the request carries a session AND that person may see this interview (team); otherwise null (the candidate). */
-async function teamMember(req: Request, interviewId: string): Promise<string | null> {
-  const token = (req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i)?.[1] || "";
-  if (!token || !publicKey || token === publicKey) return null;
-  const { data: auth, error } = await admin!.auth.getUser(token);
-  if (error || !auth.user) return null;
-  const userClient = createClient(projectUrl, publicKey, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: seen } = await userClient.from("candidate_interviews").select("id").eq("id", interviewId).maybeSingle();
-  return seen ? auth.user.id : null;
+/** A new team secret for a room: its hash in the room, the link kept so the app and the internal e-mails can show it. */
+async function newTeamLink(roomId: string): Promise<string> {
+  const teamSecret = newSecret();
+  const teamLink = `${MEETING_PAGE}#${teamSecret}`;
+  const { error } = await admin!.from("meeting_rooms").update({ team_secret_hash: await hashSecret(teamSecret), team_link: teamLink }).eq("id", roomId);
+  if (error) throw error;
+  return teamLink;
 }
 
 const transcriptionOn = (ctx: Context) => ctx.iv.transcription_enabled === true && ctx.iv.kind === "online";
 
 // ---------------------------------------------------------------------------------------------------------------
 /** A signed-in team member makes the room of an interview (one per interview) from the "Generate Nellio link" button of the schedule window.
-    Only the hash of the secret is kept. When the room already exists: if the interview already carries its link (it was saved and sent),
-    that same link is given back, so the link the candidate has keeps working; otherwise nobody has it yet, and a new secret replaces it. */
+    A room has two links: the CANDIDATE link (goes in the field, so in the candidate's e-mails) and the TEAM link (internal e-mails and "Join
+    meeting"; saved on the interview by the interviews function when the candidate link is saved). Only the hashes of the secrets are kept,
+    plus the team link itself. When the room already exists: if the interview already carries its candidate link (it was saved and sent), the
+    same links are given back, so the links people have keep working; otherwise nobody has them yet, and new secrets replace them. */
 async function actionCreate(req: Request, body: Record<string, unknown>) {
   const token = (req.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i)?.[1] || "";
   if (!token || !publicKey) return fail(req, 401, "Sign in to create a meeting room.");
@@ -160,26 +164,28 @@ async function actionCreate(req: Request, body: Record<string, unknown>) {
   if (!OPEN_STATES.includes(seen.state)) return fail(req, 409, "This interview can no longer be changed.");
   // (no check of the format here: the window may be switching an in-person interview to online; a room nobody uses costs nothing)
   if (!(await planActive(seen.workspace_id))) return fail(req, 402, "An active plan is needed to schedule interviews.");
-  const { data: existing, error: existingError } = await admin!.from("meeting_rooms").select("id,secret_hash").eq("interview_id", seen.id).maybeSingle();
+  const { data: existing, error: existingError } = await admin!.from("meeting_rooms").select("id,secret_hash,team_link").eq("interview_id", seen.id).maybeSingle();
   if (existingError) throw existingError;
   const secret = newSecret();
   if (existing) {
     const { data: saved } = await admin!.from("candidate_interviews").select("meeting_link").eq("id", seen.id).maybeSingle();
     const savedLink = String(saved?.meeting_link || "");
     const savedSecret = savedLink.includes("#") ? savedLink.slice(savedLink.lastIndexOf("#") + 1) : "";
-    if (looksLikeSecret(savedSecret) && await hashSecret(savedSecret) === existing.secret_hash) return response(req, 200, { link: savedLink });
+    if (looksLikeSecret(savedSecret) && await hashSecret(savedSecret) === existing.secret_hash) {
+      return response(req, 200, { link: savedLink, teamLink: existing.team_link || await newTeamLink(existing.id) });
+    }
     const { error: updateError } = await admin!.from("meeting_rooms").update({ secret_hash: await hashSecret(secret), channel_key: newChannelKey(), created_by: auth.user.id }).eq("id", existing.id);
     if (updateError) throw updateError;
-    return response(req, 201, { link: `${MEETING_PAGE}#${secret}` });
+    return response(req, 201, { link: `${MEETING_PAGE}#${secret}`, teamLink: await newTeamLink(existing.id) });
   }
-  const { error: insertError } = await admin!.from("meeting_rooms").insert({
+  const { data: created, error: insertError } = await admin!.from("meeting_rooms").insert({
     workspace_id: seen.workspace_id, interview_id: seen.id, secret_hash: await hashSecret(secret), channel_key: newChannelKey(), created_by: auth.user.id,
-  });
-  if (insertError) {
-    if (insertError.code === "23505") return fail(req, 409, "Something went wrong. Please try again.");
-    throw insertError;
+  }).select("id").maybeSingle();
+  if (insertError || !created) {
+    if (insertError?.code === "23505") return fail(req, 409, "Something went wrong. Please try again.");
+    throw insertError || new Error("room not created");
   }
-  return response(req, 201, { link: `${MEETING_PAGE}#${secret}` });
+  return response(req, 201, { link: `${MEETING_PAGE}#${secret}`, teamLink: await newTeamLink(created.id) });
 }
 
 async function transcriptRow(interviewId: string): Promise<Row | null> {
@@ -187,14 +193,12 @@ async function transcriptRow(interviewId: string): Promise<Row | null> {
   return data;
 }
 
-/** Anyone with the link: what the room is, whether it is open, and (only when open) the channel and the TURN credentials.
-    A team member (session sent along) is "team"; anyone else is the candidate, who must accept the transcription first when it is on. */
+/** Anyone with a link: what the room is, whether it is open, and (only when open) the channel and the TURN credentials.
+    The team link is "team"; the candidate link is the candidate, who must accept the transcription first when it is on. */
 async function actionJoin(req: Request, body: Record<string, unknown>) {
   const found = await roomFromSecret(body.secret);
   if (!found) return fail(req, 404, "This meeting link was not found.");
-  const { room, ctx } = found;
-  const teamId = await teamMember(req, ctx.iv.id);
-  const role: Role = teamId ? "team" : "candidate";
+  const { room, ctx, role } = found;
   let status: string = roomStatus(ctx.iv.state, ctx.iv.starts_at);
   // The candidate who refused the transcription does not enter (the interview became "Denied the interview").
   if (role === "candidate" && ctx.iv.transcription_refused_at && status !== "cancelled") status = "refused";
@@ -221,11 +225,13 @@ async function actionJoin(req: Request, body: Record<string, unknown>) {
   return response(req, 200, { room: view });
 }
 
-/** The candidate accepts or refuses the transcription on the entry screen. Refusing makes the interview "declined" (Denied the interview). */
+/** The candidate accepts or refuses the transcription on the entry screen (only with the CANDIDATE link). Refusing makes the interview
+    "declined" (Denied the interview). The team link never asks and can never refuse for the candidate. */
 async function actionConsent(req: Request, body: Record<string, unknown>) {
   const found = await roomFromSecret(body.secret);
   if (!found) return fail(req, 404, "This meeting link was not found.");
-  const { ctx } = found;
+  const { ctx, role } = found;
+  if (role !== "candidate") return fail(req, 403, "Only the candidate answers about the transcription.");
   const status = roomStatus(ctx.iv.state, ctx.iv.starts_at);
   if (status !== "open" && status !== "early") return fail(req, 409, "This meeting room is not open.");
   if (!transcriptionOn(ctx)) return response(req, 200, { ok: true });
@@ -262,21 +268,21 @@ async function touchTranscript(iv: Row) {
   await admin!.from("meeting_transcripts").update({ state: existing.state === "processing" ? "processing" : "recording", last_audio_at: now, updated_at: now }).eq("interview_id", iv.id);
 }
 
-/** Who may send audio now: the transcription is on and not ended, the room is open; team (session) or the candidate who accepted. */
+/** Who may send audio now: the transcription is on and not ended, the room is open; the team link, or the candidate link once accepted. */
 async function audioSender(req: Request, secret: unknown) {
   const found = await roomFromSecret(secret);
   if (!found) return { error: fail(req, 404, "This meeting link was not found.") };
-  const { ctx } = found;
+  const { ctx, role } = found;
   if (roomStatus(ctx.iv.state, ctx.iv.starts_at) !== "open") return { error: fail(req, 409, "This meeting room is not open.") };
   if (!transcriptionOn(ctx)) return { error: fail(req, 409, "This meeting is not transcribed.") };
   const tr = await transcriptRow(ctx.iv.id);
   if (tr?.ended_at) return { error: fail(req, 409, "The transcription of this meeting was ended.") };
-  const teamId = await teamMember(req, ctx.iv.id);
-  if (!teamId && !ctx.iv.transcription_consent_at) return { error: fail(req, 403, "Accept the transcription to join the meeting.") };
-  return { ctx, teamId };
+  if (role === "candidate" && !ctx.iv.transcription_consent_at) return { error: fail(req, 403, "Accept the transcription to join the meeting.") };
+  return { ctx, role };
 }
 
-/** One piece of one person's microphone (raw audio in the body; who, when and how long in the headers). Stored, then transcribed right away. */
+/** One piece of one person's microphone (raw audio in the body; who, when and how long in the headers). Stored, then transcribed right away.
+    The role of the speaker is the role of the link the piece came with. */
 async function actionAudio(req: Request) {
   // The audio is always read BEFORE any answer: answering a refusal while the browser is still sending the body leaves the connection
   // hanging (seen 2026-11-24). Anything announced as too large is refused before reading it.
@@ -284,7 +290,7 @@ async function actionAudio(req: Request) {
   const audio = new Uint8Array(await req.arrayBuffer());
   const allowed = await audioSender(req, req.headers.get("x-meeting-secret"));
   if (allowed.error) return allowed.error;
-  const { ctx, teamId } = allowed as { ctx: Context; teamId: string | null };
+  const { ctx, role } = allowed as { ctx: Context; role: Role };
   const speakerKey = String(req.headers.get("x-speaker-key") || "");
   let speakerName = "";
   try { speakerName = decodeURIComponent(String(req.headers.get("x-speaker-name") || "")).replace(/\s+/g, " ").trim().slice(0, 60); } catch { speakerName = ""; }
@@ -295,14 +301,8 @@ async function actionAudio(req: Request) {
     return fail(req, 400, "Send a valid request.");
   }
   if (Math.abs(startedAt - Date.now()) > 30 * 60_000) return fail(req, 400, "Send a valid request.");
-  // Someone who already spoke as the hiring team is never turned into the candidate: without a valid session now (it expired during the
-  // meeting) the piece is refused, the room page renews the session and sends it again (bug seen in the 4-person test, 2026-11-24).
-  if (!teamId) {
-    const { count: asTeam } = await admin!.from("meeting_audio_segments").select("id", { count: "exact", head: true }).eq("interview_id", ctx.iv.id).eq("speaker_key", speakerKey).eq("speaker_role", "team");
-    if ((asTeam ?? 0) > 0) return fail(req, 401, "Your session expired. Sign in again.");
-  }
   if (!audio.length || audio.length > MAX_AUDIO_BYTES) return fail(req, 413, "This piece of audio is too large.");
-  const { count } =await admin!.from("meeting_audio_segments").select("id", { count: "exact", head: true }).eq("interview_id", ctx.iv.id);
+  const { count } = await admin!.from("meeting_audio_segments").select("id", { count: "exact", head: true }).eq("interview_id", ctx.iv.id);
   if ((count ?? 0) >= MAX_SEGMENTS_PER_INTERVIEW) return fail(req, 429, "Too many pieces of audio for this meeting.");
   const id = crypto.randomUUID();
   const path = `${ctx.iv.workspace_id}/${ctx.iv.id}/${id}`;
@@ -310,7 +310,7 @@ async function actionAudio(req: Request) {
   if (uploadError) { console.error("meetings: audio not stored", uploadError.message); return fail(req, 500, "Something went wrong. Please try again."); }
   const { error } = await admin!.from("meeting_audio_segments").insert({
     id, workspace_id: ctx.iv.workspace_id, interview_id: ctx.iv.id, speaker_key: speakerKey, speaker_name: speakerName,
-    speaker_role: teamId ? "team" : "candidate", speaker_user_id: teamId, started_at: new Date(startedAt).toISOString(), duration_ms: durationMs,
+    speaker_role: role, speaker_user_id: null, started_at: new Date(startedAt).toISOString(), duration_ms: durationMs,
     mime_type: mimeType, bytes: audio.length, storage_path: path,
   });
   if (error) { await admin!.storage.from(AUDIO_BUCKET).remove([path]); throw error; }
@@ -327,19 +327,18 @@ async function actionAlive(req: Request, body: Record<string, unknown>) {
   return response(req, 200, { ok: true });
 }
 
-/** A team member ends the transcription (the meeting may go on without it): the transcript and minutes are written now. */
+/** Someone with the TEAM link ends the transcription (the meeting may go on without it): the transcript and minutes are written now. */
 async function actionEnd(req: Request, body: Record<string, unknown>) {
   const found = await roomFromSecret(body.secret);
   if (!found) return fail(req, 404, "This meeting link was not found.");
-  const { ctx } = found;
-  const teamId = await teamMember(req, ctx.iv.id);
-  if (!teamId) return fail(req, 403, "Only the hiring team can end the transcription.");
+  const { ctx, role } = found;
+  if (role !== "team") return fail(req, 403, "Only the hiring team can end the transcription.");
   const now = new Date().toISOString();
   const { data: existing } = await admin!.from("meeting_transcripts").select("ended_at").eq("interview_id", ctx.iv.id).maybeSingle();
   if (existing?.ended_at) return response(req, 200, { ok: true });
   if (existing) await admin!.from("meeting_transcripts").update({ ended_at: now, updated_at: now }).eq("interview_id", ctx.iv.id);
   else await admin!.from("meeting_transcripts").insert({ interview_id: ctx.iv.id, workspace_id: ctx.iv.workspace_id, state: "recording", ended_at: now });
-  await addEvent(ctx.iv, "transcription_ended", "recruiter", teamId);
+  await addEvent(ctx.iv, "transcription_ended", "recruiter");
   later(finalize(ctx.iv.id));
   return response(req, 200, { ok: true });
 }

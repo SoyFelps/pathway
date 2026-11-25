@@ -95,21 +95,32 @@ async function loadContext(id: string) {
 }
 type Context = NonNullable<Awaited<ReturnType<typeof loadContext>>>;
 
-function detailsOf(iv: Row): InterviewDetails {
+/** The details shown in an e-mail or a calendar entry. `team`: for the hiring team, a Nellio room gives its TEAM link (2026-11-25), so
+    someone of the team who opens it is the team even in a browser without Nellio; the candidate always gets the candidate link. */
+function detailsOf(iv: Row, team = false): InterviewDetails {
   return {
     kind: iv.kind, startsAt: new Date(iv.starts_at), durationMinutes: iv.duration_minutes, timeZone: iv.time_zone,
-    meetingLink: iv.meeting_link, address: iv.address, notes: iv.notes,
+    meetingLink: team && iv.team_meeting_link ? iv.team_meeting_link : iv.meeting_link, address: iv.address, notes: iv.notes,
   };
 }
 
 /** Null while the interview has no date (it is still waiting to be scheduled). */
-function detailsOrNull(iv: Row): InterviewDetails | null {
-  return iv.starts_at ? detailsOf(iv) : null;
+function detailsOrNull(iv: Row, team = false): InterviewDetails | null {
+  return iv.starts_at ? detailsOf(iv, team) : null;
 }
 
-function calendarEventOf(ctx: Context): CalendarEvent {
+/** The team link of the Nellio room whose CANDIDATE link is in meeting_link (null for any other link). */
+async function teamLinkFor(iv: Row): Promise<string | null> {
+  const link = String(iv.meeting_link || "");
+  if (iv.kind !== "online" || !NELLIO_ROOM_LINK.test(link)) return null;
+  const { data: room } = await admin!.from("meeting_rooms").select("secret_hash,team_link").eq("interview_id", iv.id).maybeSingle();
+  if (!room?.team_link || await hashToken(link.slice(link.lastIndexOf("#") + 1)) !== room.secret_hash) return null;
+  return room.team_link;
+}
+
+function calendarEventOf(ctx: Context, team = false): CalendarEvent {
   const iv = ctx.iv;
-  const d = detailsOf(iv);
+  const d = detailsOf(iv, team);
   const lines = [formatWhen(d.startsAt, d.durationMinutes, d.timeZone, ctx.language)];
   if (iv.notes) lines.push(String(iv.notes));
   return {
@@ -204,7 +215,7 @@ async function recruiterRecipients(ctx: Context): Promise<Array<{ email: string;
 
 async function notifyRecruiters(ctx: Context, kind: RecruiterEmailKind, keySuffix: string, extra: { message?: string | null; suggestedTimes?: string[] } = {}) {
   try {
-    const base = calendarEventOf(ctx);
+    const base = calendarEventOf(ctx, true);
     const who = singleLine(ctx.candidateName, 120) || ctx.iv.candidate_email;
     for (const person of await recruiterRecipients(ctx)) {
       // In the recruiter's own calendar the entry names the candidate (the candidate's entry names the company).
@@ -214,7 +225,7 @@ async function notifyRecruiters(ctx: Context, kind: RecruiterEmailKind, keySuffi
       };
       const mail = buildRecruiterEmail({
         kind, language: person.language, candidateName: ctx.candidateName, candidateEmail: ctx.iv.candidate_email, jobTitle: ctx.jobTitle, companyName: ctx.companyName,
-        interview: detailsOf(ctx.iv), message: extra.message, suggestedTimes: extra.suggestedTimes, appUrl: `${APP_URL}#applicants`,
+        interview: detailsOf(ctx.iv, true), message: extra.message, suggestedTimes: extra.suggestedTimes, appUrl: `${APP_URL}#applicants`,
         calendarLinks: kind === "confirmed" ? { google: googleCalendarUrl(event), outlook: outlookCalendarUrl(event) } : undefined,
       });
       await sendMail(person.email, mail, `interview-recruiter-${kind}/${ctx.iv.id}/${keySuffix}/${person.email}`);
@@ -243,7 +254,7 @@ async function notifyNewResponsibles(ctx: Context, before: string[], after: stri
       const language = languageOfProfile(profiles?.find((p: Row) => p.user_id === id)?.ui_language);
       const mail = buildRecruiterEmail({
         kind: "assigned", language, candidateName: ctx.candidateName, candidateEmail: ctx.iv.candidate_email, jobTitle: ctx.jobTitle, companyName: ctx.companyName,
-        interview: detailsOrNull(ctx.iv), appUrl: `${APP_URL}#applicants`,
+        interview: detailsOrNull(ctx.iv, true), appUrl: `${APP_URL}#applicants`,
       });
       await sendMail(email, mail, `interview-recruiter-assigned/${ctx.iv.id}/${Date.parse(now)}/${email}`);
     }
@@ -263,7 +274,7 @@ function recruiterRow(iv: Row) {
     resultReason: iv.result_reason ?? null, resultImpression: iv.result_impression ?? null, resultRecommended: iv.result_recommended ?? null,
     resultNotes: iv.result_notes ?? null, resultAt: iv.result_at ?? null, resultBy: iv.result_by ?? null,
     roomOpenedAt: iv.room_opened_at ?? null,
-    transcriptionEnabled: iv.transcription_enabled !== false, minutesEnabled: iv.minutes_enabled !== false,
+    transcriptionEnabled: iv.transcription_enabled !== false, minutesEnabled: iv.minutes_enabled !== false, teamMeetingLink: iv.team_meeting_link ?? null,
   };
 }
 
@@ -352,6 +363,12 @@ async function actionSchedule(req: Request, userId: string, userClient: Supabase
   }).eq("id", seen.id).eq("state", seen.state).select("*").maybeSingle();
   if (error) return databaseFailure(req, error);
   if (!updated) return fail(req, 409, "This interview can no longer be changed.");
+  // the hiring-team link of a Nellio room goes with its candidate link (any other link: none)
+  const teamLink = await teamLinkFor(updated);
+  if ((updated.team_meeting_link || null) !== teamLink) {
+    await admin!.from("candidate_interviews").update({ team_meeting_link: teamLink }).eq("id", updated.id);
+    updated.team_meeting_link = teamLink;
+  }
   await refreshTokenExpiry(updated);
   const wasFirst = seen.state === "awaiting_schedule";
   await addEvent(updated, wasFirst ? "scheduled" : "updated", "recruiter", userId, { startsAt: updated.starts_at, kind: updated.kind });

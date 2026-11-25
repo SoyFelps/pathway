@@ -147,7 +147,7 @@ test('Phase 2: "Generate Nellio link" fills the meeting link field, only where t
   assert.ok(committed.includes('gftnghlkuiuhuwyaajdn') && !/meetings\s*:/.test(committed), 'the committed (production) config does not turn the rooms on');
   assert.ok(builder.includes("${B.meetingsEnabled ? `<div class=\"iv-nellio\">") && builder.includes("field('iv-link').value = await B.createMeetingRoom(interviewId);"));
   assert.ok(builder.includes('NELLIO_MEETING_LINK.test(') && builder.includes("interviewJoinable(row) ? ['join', t('Join meeting'), '', ''] : null"));
-  assert.ok(index.includes('await hashSecret(savedSecret) === existing.secret_hash) return response(req, 200, { link: savedLink })'), 'a link already saved in the interview keeps working');
+  assert.ok(index.includes('await hashSecret(savedSecret) === existing.secret_hash) {') && index.includes('return response(req, 200, { link: savedLink, teamLink: existing.team_link || await newTeamLink(existing.id) });'), 'a link already saved in the interview keeps working, with its team link');
   assert.ok(index.includes('projectUrl.includes(STAGING_REF) ? "https://nellio.app/lab/room.html"'), 'staging links go to the test copy that talks to staging');
 });
 
@@ -186,24 +186,25 @@ test('Phase 3: each piece of one microphone is transcribed alone, the meeting is
   assert.ok(/Never comment on age, gender/.test(minutes.contents[0].parts[0].text), 'no personal characteristics in the minutes');
   const index = read('supabase/functions/meetings/index.ts');
   assert.ok(index.includes('GEMINI_API_KEY_FOR_MEETINGS') && index.includes('storage_path: null') && index.includes('await removeAudio();'), 'own key; the audio is deleted once transcribed');
-  assert.ok(index.includes('if (!teamId && !ctx.iv.transcription_consent_at) return') && index.includes('status = "refused"'), 'the candidate sends audio only after accepting; who refused does not enter');
+  assert.ok(index.includes('if (role === "candidate" && !ctx.iv.transcription_consent_at) return') && index.includes('status = "refused"'), 'the candidate sends audio only after accepting; who refused does not enter');
   const page = read('meeting.js');
   assert.ok(page.includes("return roles.includes('team') && roles.includes('candidate');") && page.includes('const GRACE_MS = 5 * 60000;') && page.includes('const PAUSE_MS = 1500;') && page.includes('if (voice) { lastVoiceAt = now; if (!rec) startPiece(track); else rec.voiced++; }') && page.includes('else if (rec && now - lastVoiceAt > PAUSE_MS) finishPiece();'), 'records only with team and candidate in the room, 5 minutes of grace, and only while the person speaks (a piece per stretch of speech)');
   assert.equal(T.parseMinutes({ candidates: [{ content: { parts: [{ text: 'Here are the minutes:\n\n## Summary\n- ok' }] } }] }), '## Summary\n- ok', 'no opening sentence before the first heading');
 });
 
-test('Phase 3: the room page knows the team by the session of the app without hanging, and both server functions parse', () => {
+test('Phase 3 (2026-11-25): the role comes from the link (candidate link or team link), never from a sign-in; both server functions parse', () => {
+  const index = read('supabase/functions/meetings/index.ts');
+  assert.ok(index.includes('.or(`secret_hash.eq.${hash},team_secret_hash.eq.${hash}`)') && index.includes('const role: Role = room.team_secret_hash === hash ? "team" : "candidate";'), 'two unrelated secrets per room; the one that matched gives the role');
+  assert.ok(!index.includes('teamMember(') && index.includes('speaker_role: role, speaker_user_id: null'), 'no sign-in decides anything in the room');
+  assert.ok(index.includes('if (role !== "candidate") return fail(req, 403, "Only the candidate answers about the transcription.");') && index.includes('if (role !== "team") return fail(req, 403, "Only the hiring team can end the transcription.");'), 'only the candidate link answers about the transcription; only the team link ends it');
   const page = read('meeting.js');
-  assert.ok(page.includes('localStorage.getItem(`sb-${ref}-auth-token`)') && page.includes('setTimeout(() => done(null), 2000)'), 'the session is read directly, the client never waits more than 2 seconds');
+  assert.ok(!page.includes('sessionToken') && !page.includes('auth-token') && !page.includes('Authorization'), 'the room page sends no session at all');
+  const interviews = read('supabase/functions/interviews/index.ts');
+  assert.ok(interviews.includes('const teamLink = await teamLinkFor(updated);') && interviews.includes('const base = calendarEventOf(ctx, true);') && interviews.includes('interview: detailsOf(ctx.iv, true), message'), 'the team link is saved with the candidate link and goes in the internal e-mails');
+  const builder = read('builder.js');
+  assert.ok(builder.includes("row.teamMeetingLink || null") && builder.includes("esc(meetingHref(teamJoinLink(row)))"), 'Join meeting uses the team link of a Nellio room');
   const { stripTypeScriptTypes } = require('node:module');
   for (const file of ['supabase/functions/meetings/index.ts', 'supabase/functions/interviews/index.ts']) {
     assert.doesNotThrow(() => new Function(stripTypeScriptTypes(read(file)).replace(/^import\s[\s\S]*?;[ \t]*$/gm, '').replace(/^export /gm, '')), file + ' is valid code');
   }
-});
-
-test('Phase 3: a team member whose session expired is never taken for the candidate; the room renews the session and sends again', () => {
-  const index = read('supabase/functions/meetings/index.ts');
-  assert.ok(index.includes('.eq("speaker_key", speakerKey).eq("speaker_role", "team")') && index.includes('return fail(req, 401, "Your session expired. Sign in again.");'), 'the server refuses the piece instead of changing the role');
-  const page = read('meeting.js');
-  assert.ok(page.includes('async function renewSession()') && page.includes('if (result.status === 401) { if (await renewSession()) continue; return; }'), 'the page renews the session and sends the piece again');
 });
