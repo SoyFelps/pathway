@@ -39,7 +39,7 @@ test('the favicon is the Nellio icon on every page, and the logo CSS is versione
   const css = read('styles.css');
   assert.match(css, /\.brand-logo\{display:block;height:36px;width:auto\}/);
   assert.ok(!css.includes('.brand-symbol'));
-  assert.ok(read('legal.html').includes('styles.css?v=mw3-20261125e'));
+  assert.ok(read('legal.html').includes('styles.css?v=mw3-20261125f'));
 });
 
 // ---- E-mails (2026-11-17): the header is a PNG hosted on the Nellio site (dark green, curved bottom edge, white logo), because e-mail clients do not show SVG ----

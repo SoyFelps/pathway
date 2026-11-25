@@ -2160,7 +2160,7 @@
   'Minutes': 'Acta',
   'Automatic transcription and minutes use AI credits.': 'La transcripción automática y el acta usan créditos de IA.',
   'Generating…': 'Generando…',
-  'A video room in Nellio, nothing to install. It opens 30 minutes before the interview.': 'Una sala de video en Nellio, sin instalar nada. Se abre 30 minutos antes de la entrevista.',
+  'A video room in Nellio, nothing to install. Transcript and minutes.': 'Una sala de video en Nellio, sin instalar nada. Transcripción y acta.',
   'Join meeting': 'Unirse a la reunión',
   'Could not reach the meeting service. Check your connection and try again.': 'No se pudo conectar con el servicio de reuniones. Revisa tu conexión e inténtalo de nuevo.'
 };
