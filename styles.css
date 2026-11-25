@@ -528,7 +528,10 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field-row .field-group{min-width:0}
 /* Schedule window: day, time and time zone on one line, the first two only as wide as they need (2026-11-25) */
 .field-row.iv-when-row{grid-template-columns:max-content max-content minmax(0,1fr)}
-.modal:has(.iv-when-row){width:min(100%,580px)}
+.modal:has(.iv-when-row){width:min(100%,580px);scrollbar-gutter:stable}
+#iv-notes{min-height:64px}
+/* where the window fits on the screen it never scrolls: the time zone list opens over it instead of making it taller (2026-11-25) */
+@media(min-width:561px) and (min-height:780px){.modal:has(.iv-when-row){overflow:visible;max-height:none}}
 .iv-when-row #iv-day,.iv-when-row #iv-time{width:auto;flex:none}
 @media(max-width:560px){.field-row.iv-when-row{grid-template-columns:max-content minmax(0,1fr)}.iv-when-row .field-group:last-child{grid-column:1 / -1}}
 .multi-select-person{display:flex;flex-direction:column;min-width:0;flex:1}.multi-select-name{overflow:hidden;text-overflow:ellipsis}.multi-select-email{display:block;color:var(--text-subtle);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
