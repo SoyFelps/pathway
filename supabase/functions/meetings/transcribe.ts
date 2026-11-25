@@ -141,11 +141,29 @@ export function buildMinutesRequest(text: string, language: Language, jobTitle: 
   };
 }
 
+/** The minutes without the sections that have nothing under their heading (only blank lines or a lone dash). The app applies the same rule to minutes written before it. */
+export function dropEmptySections(text: string): string {
+  const out: string[] = [];
+  let head: string | null = null, body: string[] = [];
+  const flush = () => {
+    if (head === null) out.push(...body);
+    else if (body.some((line) => !EMPTY_LINE.test(line))) out.push(head, ...body);
+  };
+  for (const line of text.split("\n")) {
+    if (/^#{1,4}\s/.test(line)) { flush(); head = line; body = []; } else body.push(line);
+  }
+  flush();
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+/** A line that says nothing: blank, or only dashes, asterisks or long dashes. */
+const EMPTY_LINE = /^\s*([-*—–]\s*)*$/;
+
 export function parseMinutes(answer: unknown): string {
   let text = answerText(answer).replace(/\r\n?/g, "\n").trim();
   // anything the model wrote before the first heading ("Here are the minutes...") is dropped (seen in the 4-person test, 2026-11-24)
   const first = text.search(/^#{1,4}\s/m);
   if (first > 0) text = text.slice(first).trim();
+  text = dropEmptySections(text);
   if (!text) throw new Error("minutes_empty");
   return text.slice(0, 30_000);
 }

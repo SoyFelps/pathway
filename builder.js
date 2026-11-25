@@ -839,14 +839,26 @@
   const INTERVIEW_EVENT_LABEL = () => ({ scheduled: t('Invitation sent'), updated: t('Invitation updated'), cancelled: t('Interview cancelled'), resent: t('E-mail sent again'), confirmed: t('Candidate confirmed'), declined: t('Candidate denied the interview'), reschedule_requested: t('Candidate asked for another time'), reminder_24h: t('Reminder sent (24 hours before)'), reminder_2h: t('Reminder sent (2 hours before)'), reminder_10m: t('Reminder sent (10 minutes before)'), link_missing: t('Team warned: no meeting link'), room_opened: t('Meeting room opened'), transcription_accepted: t('Candidate accepted the transcription'), transcription_refused: t('Candidate refused the transcription'), transcription_ended: t('Transcription ended'), finished: t('Interview time passed'), finalized: t('Interview finalized'), result_corrected: t('Result corrected') });
   // Transcript and minutes of the Nellio meeting room of one interview (Phase 3 of plano-reunioes.md): team only, inside the Interview tab.
   // The minutes come from Gemini as short Markdown (## headings and - bullets): only those two are turned into HTML, everything is escaped first.
+  // The same rule as dropEmptySections of the meetings function, also for minutes written before it: a heading with nothing under it
+  // (only blank lines or a lone dash) is not shown nor downloaded (owner, 2026-11-25).
+  function minutesWithoutEmptySections(text) {
+    const out = [];
+    let head = null, body = [];
+    const empty = line => /^\s*([-*—–]\s*)*$/.test(line);
+    const flush = () => { if (head === null) out.push(...body); else if (body.some(line => !empty(line))) out.push(head, ...body); };
+    for (const line of String(text || '').replace(/\r\n?/g, '\n').split('\n')) {
+      if (/^#{1,4}\s/.test(line)) { flush(); head = line; body = []; } else body.push(line);
+    }
+    flush();
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
   function minutesHtml(text) {
-    const lines = String(text || '').split('\n');
+    const lines = minutesWithoutEmptySections(text).split('\n');
     let html = '', list = false;
     const inline = value => esc(value).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     for (const raw of lines) {
       const line = raw.trim();
       const bullet = line.match(/^[-*]\s+(.*)$/);
-      if (bullet && bullet[1] === '-') { html += '<p class="muted">—</p>'; continue; } // a section with nothing to say
       if (bullet && bullet[1]) { if (!list) { html += '<ul>'; list = true; } html += '<li>' + inline(bullet[1]) + '</li>'; continue; }
       if (list) { html += '</ul>'; list = false; }
       const head = line.match(/^#{1,4}\s+(.*)$/);
@@ -906,7 +918,7 @@
       const top = t('Minutes').toUpperCase() + (job ? ' · ' + job : '') + '\n' + t('Candidate') + ': ' + person + '\n' + t('Interview') + ': ' + when + '\n\n';
       const slug = (t('Minutes') + '-' + person + '-' + String(row.startsAt || '').slice(0, 10)).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       // the AI notice is added here, never asked of the model (owner decision, 2026-11-24), so it is always there
-      downloadTextFile(slug + '.txt', top + plain(item.minutes) + '\n\n' + t('Minutes written by AI. They may contain errors.') + '\n', 'text/plain;charset=utf-8');
+      downloadTextFile(slug + '.txt', top + plain(minutesWithoutEmptySections(item.minutes)) + '\n\n' + t('Minutes written by AI. They may contain errors.') + '\n', 'text/plain;charset=utf-8');
     };
     const render = (rows, eventsById, errorText = '') => {
       const mine = rows.filter(item => item.flowId === flowId && item.email === wanted);

@@ -213,3 +213,14 @@ test('Phase 3 (2026-11-25): the role comes from the link (candidate link or team
     assert.doesNotThrow(() => new Function(stripTypeScriptTypes(read(file)).replace(/^import\s[\s\S]*?;[ \t]*$/gm, '').replace(/^export /gm, '')), file + ' is valid code');
   }
 });
+
+test('2026-11-25: minutes drop the sections with nothing under their heading, on the server and in the app (old minutes too)', () => {
+  const { stripTypeScriptTypes } = require('node:module');
+  const src = stripTypeScriptTypes(read('supabase/functions/meetings/transcribe.ts')).replace(/^import\s[\s\S]*?;[ \t]*$/gm, '').replace(/^export /gm, '');
+  const { dropEmptySections } = new Function(src + ';return { dropEmptySections };')();
+  const text = '## Resumo\n- a\n\n## Pontos a verificar\n-\n\n## Próximos passos\n- b\n\n## Vazio\n\n—\n';
+  assert.equal(dropEmptySections(text), '## Resumo\n- a\n\n## Próximos passos\n- b');
+  assert.ok(read('supabase/functions/meetings/transcribe.ts').includes('text = dropEmptySections(text);'));
+  const builder = read('builder.js');
+  assert.ok(builder.includes('const lines = minutesWithoutEmptySections(text).split') && builder.includes('plain(minutesWithoutEmptySections(item.minutes))'));
+});
