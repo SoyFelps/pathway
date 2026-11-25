@@ -1052,6 +1052,7 @@
     const name = '<strong>' + esc(candidate) + '</strong>';
     if (state === 'responsible_added') return t('You were added as responsible for the interview with {name}', { name });
     if (state === 'link_missing') return t('The interview with {name} has no meeting link yet', { name });
+    if (state === 'starting_soon') return t('The interview with {name} starts in 10 minutes', { name });
     return state === 'confirmed' ? t('{name} confirmed the interview', { name }) : state === 'declined' ? t('{name} denied the interview', { name }) : t('{name} asked for another time for the interview', { name });
   };
   // ---- AI interview: tags on the cards, the tab in the candidate panel, the questions of a job -------------------------------

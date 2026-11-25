@@ -1750,6 +1750,7 @@
   'https://link.com or leave empty to send later.': 'https://link.com o déjalo vacío para enviarlo después.',
   'No link yet': 'Aún sin enlace',
   'The interview with {name} has no meeting link yet': 'La entrevista con {name} aún no tiene enlace de reunión',
+  'The interview with {name} starts in 10 minutes': 'La entrevista con {name} empieza en 10 minutos',
   'Team warned: no meeting link': 'Equipo avisado: sin enlace de la reunión',
   'Change responsible': 'Cambiar responsable',
   'You were added as responsible for the interview with {name}': 'Te agregaron como responsable de la entrevista con {name}',

@@ -241,3 +241,25 @@ test('2026-11-25: team e-mails carry "Do not share this link with the candidate.
   assert.ok(!m.buildRecruiterEmail({ ...base, kind: 'confirmed', language: 'en', interview: iv('https://meet.google.com/abc-defg-hij') }).text.includes('Do not share'));
   assert.ok(!m.buildCandidateEmail({ kind: 'invite', language: 'en', interview: iv(room), pageUrl: 'https://nellio.app/interview.html#x' }).text.includes('Do not share'));
 });
+
+test('2026-11-25: 10 minutes before a confirmed interview the responsible people get an e-mail (button into the meeting) and a bell notice', () => {
+  const { stripTypeScriptTypes } = require('node:module');
+  const src = stripTypeScriptTypes(read('supabase/functions/interviews/email.ts')).replace(/^import\s[\s\S]*?;[ \t]*$/gm, '').replace(/^export /gm, '');
+  const m = new Function(src + ';return { buildRecruiterEmail };')();
+  const room = 'https://nellio.app/meeting.html#kdl7A30_ySAHZF5N_RAuBJDqmdAslpIsL9r3gxRap7M';
+  const iv = { kind: 'online', startsAt: new Date('2026-12-01T13:00:00Z'), durationMinutes: 30, timeZone: 'America/Sao_Paulo', meetingLink: room };
+  const base = { candidateName: 'Olivia', candidateEmail: 'o@example.test', jobTitle: 'X', companyName: 'Y', appUrl: 'https://nellio.app/#applicants', interview: iv };
+  for (const [language, subject, join] of [['en', 'The interview with Olivia starts in 10 minutes', 'Join meeting'], ['pt', 'A entrevista com Olivia começa em 10 minutos', 'Entrar na reunião'], ['es', 'La entrevista con Olivia empieza en 10 minutos', 'Entrar a la reunión']]) {
+    const mail = m.buildRecruiterEmail({ ...base, kind: 'reminder10', language, joinUrl: room });
+    assert.ok(mail.subject.startsWith(subject));
+    assert.ok(mail.text.includes(join + ': ' + room), 'the button enters the meeting with the team link');
+  }
+  assert.ok(m.buildRecruiterEmail({ ...base, kind: 'reminder10', language: 'en', joinUrl: null }).text.includes('Open candidates: https://nellio.app/#applicants'), 'no link: the button opens the app');
+  const index = read('supabase/functions/interviews/index.ts');
+  assert.ok(index.includes('if (item.reminder === "10m") await alertStartingSoon(ctx);') && index.includes('notice_reason: "starting_soon"') && index.includes('notifyRecruiters(ctx, "reminder10"'));
+  const sql = read('supabase/migrations/20261125120000_interview_starting_soon.sql');
+  assert.ok(sql.includes("notice_reason in ('link_missing', 'starting_soon')"));
+  assert.equal((sql.match(/coalesce\(i\.notice_reason, i\.state\)/g) || []).length, 2, 'the bell and the notifications page');
+  assert.ok(sql.includes("not (i.notice_reason = 'starting_soon' and i.starts_at + make_interval(mins => i.duration_minutes) <= now())"), 'the bell drops it once the interview is over');
+  assert.ok(read('builder.js').includes("if (state === 'starting_soon') return t('The interview with {name} starts in 10 minutes', { name });"));
+});

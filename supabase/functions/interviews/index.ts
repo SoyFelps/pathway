@@ -213,7 +213,7 @@ async function recruiterRecipients(ctx: Context): Promise<Array<{ email: string;
   return out;
 }
 
-async function notifyRecruiters(ctx: Context, kind: RecruiterEmailKind, keySuffix: string, extra: { message?: string | null; suggestedTimes?: string[] } = {}) {
+async function notifyRecruiters(ctx: Context, kind: RecruiterEmailKind, keySuffix: string, extra: { message?: string | null; suggestedTimes?: string[]; joinUrl?: string | null } = {}) {
   try {
     const base = calendarEventOf(ctx, true);
     const who = singleLine(ctx.candidateName, 120) || ctx.iv.candidate_email;
@@ -227,6 +227,7 @@ async function notifyRecruiters(ctx: Context, kind: RecruiterEmailKind, keySuffi
         kind, language: person.language, candidateName: ctx.candidateName, candidateEmail: ctx.iv.candidate_email, jobTitle: ctx.jobTitle, companyName: ctx.companyName,
         interview: detailsOf(ctx.iv, true), message: extra.message, suggestedTimes: extra.suggestedTimes, appUrl: `${APP_URL}#applicants`,
         calendarLinks: kind === "confirmed" ? { google: googleCalendarUrl(event), outlook: outlookCalendarUrl(event) } : undefined,
+        joinUrl: extra.joinUrl,
       });
       await sendMail(person.email, mail, `interview-recruiter-${kind}/${ctx.iv.id}/${keySuffix}/${person.email}`);
     }
@@ -558,6 +559,14 @@ async function alertNoLink(ctx: Context) {
   await notifyRecruiters(ctx, "no_link", `nolink-${ctx.iv.sequence}`);
 }
 
+/** 10 minutes before a confirmed interview the responsible people are told too (owner decision, 2026-11-25: only this reminder, not the 24 h or
+    2 h ones): a notice in the bell and on the notifications page, and an e-mail whose button enters the meeting with the TEAM link. */
+async function alertStartingSoon(ctx: Context) {
+  await admin!.from("candidate_interviews").update({ notice_at: new Date().toISOString(), notice_reason: "starting_soon" }).eq("id", ctx.iv.id).eq("state", "confirmed");
+  const join = ctx.iv.kind === "online" ? detailsOf(ctx.iv, true).meetingLink : null;
+  await notifyRecruiters(ctx, "reminder10", `reminder10-${ctx.iv.sequence}`, { joinUrl: join });
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Reminders: woken every 5 minutes by the database, only when one is due. Harmless to call by hand: each reminder is claimed once.
 async function actionTick(req: Request) {
@@ -574,6 +583,7 @@ async function actionTick(req: Request) {
       sent++;
       await addEvent(ctx.iv, `reminder_${item.reminder}`, "system");
       if (item.reminder === "24h" && ctx.iv.kind === "online" && !ctx.iv.meeting_link) await alertNoLink(ctx);
+      if (item.reminder === "10m") await alertStartingSoon(ctx);
     }
     else await admin!.from("candidate_interviews").update({ [column]: null }).eq("id", item.interview_id); // try again on the next tick
   }
