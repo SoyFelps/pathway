@@ -526,6 +526,11 @@ select.select-input,select.applicants-filter,select.applicant-status-select{-web
 .applicant-resume-preview iframe[hidden]{display:none!important}
 /* Sign-up: first and last name side by side */
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field-row .field-group{min-width:0}
+/* Schedule window: day, time and time zone on one line, the first two only as wide as they need (2026-11-25) */
+.field-row.iv-when-row{grid-template-columns:max-content max-content minmax(0,1fr)}
+.modal:has(.iv-when-row){width:min(100%,580px)}
+.iv-when-row #iv-day,.iv-when-row #iv-time{width:auto;flex:none}
+@media(max-width:560px){.field-row.iv-when-row{grid-template-columns:max-content minmax(0,1fr)}.iv-when-row .field-group:last-child{grid-column:1 / -1}}
 .multi-select-person{display:flex;flex-direction:column;min-width:0;flex:1}.multi-select-name{overflow:hidden;text-overflow:ellipsis}.multi-select-email{display:block;color:var(--text-subtle);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .team-person-heading .team-person-email{color:var(--text-subtle);overflow-wrap:anywhere}
 .settings-profile-form{margin-top:4px}.settings-profile-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.settings-profile-status{font-size:12px;color:var(--text-subtle)}.settings-profile-status.is-ok{color:var(--green)}.settings-profile-status.is-error{color:var(--red)}
