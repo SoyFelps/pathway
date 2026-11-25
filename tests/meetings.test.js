@@ -145,7 +145,7 @@ test('Phase 2: "Generate Nellio link" fills the meeting link field, only where t
   assert.ok(backend.includes('const meetingsEnabled = config.meetings === true;'), 'production shows no button until the rooms are released there');
   const committed = require('node:child_process').execFileSync('git', ['show', 'HEAD:supabase-config.js'], { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
   assert.ok(committed.includes('gftnghlkuiuhuwyaajdn') && !/meetings\s*:/.test(committed), 'the committed (production) config does not turn the rooms on');
-  assert.ok(builder.includes("${B.meetingsEnabled ? `<div class=\"iv-nellio\">") && builder.includes("field('iv-link').value = await B.createMeetingRoom(interviewId);"));
+  assert.ok(builder.includes("${B.meetingsEnabled ? `<div class=\"iv-nellio iv-nellio-room\"") && builder.includes("<div class=\"iv-nellio\"><button") && builder.includes("field('iv-link').value = await B.createMeetingRoom(interviewId);"));
   assert.ok(builder.includes('NELLIO_MEETING_LINK.test(') && builder.includes("interviewJoinable(row) ? ['join', t('Join meeting'), '', ''] : null"));
   assert.ok(index.includes('await hashSecret(savedSecret) === existing.secret_hash) {') && index.includes('return response(req, 200, { link: savedLink, teamLink: existing.team_link || await newTeamLink(existing.id) });'), 'a link already saved in the interview keeps working, with its team link');
   assert.ok(index.includes('projectUrl.includes(STAGING_REF) ? "https://nellio.app/lab/room.html"'), 'staging links go to the test copy that talks to staging');
@@ -190,6 +190,11 @@ test('Phase 3: each piece of one microphone is transcribed alone, the meeting is
   const page = read('meeting.js');
   assert.ok(page.includes("return roles.includes('team') && roles.includes('candidate');") && page.includes('const GRACE_MS = 5 * 60000;') && page.includes('const PAUSE_MS = 1500;') && page.includes('if (voice) { lastVoiceAt = now; if (!rec) startPiece(track); else rec.voiced++; }') && page.includes('else if (rec && now - lastVoiceAt > PAUSE_MS) finishPiece();'), 'records only with team and candidate in the room, 5 minutes of grace, and only while the person speaks (a piece per stretch of speech)');
   assert.equal(T.parseMinutes({ candidates: [{ content: { parts: [{ text: 'Here are the minutes:\n\n## Summary\n- ok' }] } }] }), '## Summary\n- ok', 'no opening sentence before the first heading');
+});
+
+test('2026-11-25: the edit window shows a Nellio room as text, never the candidate link', () => {
+  const builder = read('builder.js');
+  assert.ok(builder.includes("field('iv-link').hidden = nellioLink; field('iv-nellio-room').hidden = !nellioLink;") && builder.includes("t('Nellio meeting room generated.')") && builder.includes("field('iv-nellio-remove').addEventListener('click'"));
 });
 
 test('Phase 3 (2026-11-25): the role comes from the link (candidate link or team link), never from a sign-in; both server functions parse', () => {

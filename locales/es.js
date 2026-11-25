@@ -2145,6 +2145,7 @@
   '{count} line': { one: '{count} línea', other: '{count} líneas' },
   'Minutes written by AI. They may contain errors.': 'Acta generada por IA. Puede contener errores.',
   'Team link': 'Enlace del equipo',
+  'Nellio meeting room generated.': 'Sala de reunión de Nellio generada.',
   'Do not share this link with the candidate. If needed, click Re-send link below.': 'No compartas este enlace con el candidato. Si es necesario, haz clic en Reenviar enlace abajo.',
   'Download': 'Descargar',
   'Transcription': 'Transcripción',

@@ -1449,6 +1449,9 @@ body:has(#canvas-stage) .toast{bottom:80px}
 /* Meeting rooms, Phase 2: the "Generate Nellio link" button under the meeting link field of the schedule window */
 .iv-nellio{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
 .iv-nellio[hidden]{display:none}
+.iv-nellio-room{margin-top:0}
+.iv-nellio-room-text{flex:1 1 220px;font-weight:600}
+#iv-link[hidden]{display:none}
 .iv-nellio .team-permission-hint{margin:0;flex:1 1 220px}
 .iv-ai{display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap;margin-top:10px}
 .iv-ai[hidden]{display:none}
