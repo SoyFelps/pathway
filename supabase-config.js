@@ -5,5 +5,6 @@
  */
 window.PATHWAY_SUPABASE_CONFIG = {
   url: 'https://gftnghlkuiuhuwyaajdn.supabase.co',
-  publishableKey: 'sb_publishable_YReNH0qn4Y68VHnCjpqg7g_x9lsdu_I'
+  publishableKey: 'sb_publishable_YReNH0qn4Y68VHnCjpqg7g_x9lsdu_I',
+  meetings: true // Nellio meeting rooms with transcription and minutes (plano-reunioes.md), in production since 2026-11-25
 };

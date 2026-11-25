@@ -144,7 +144,7 @@ test('Phase 2: "Generate Nellio link" fills the meeting link field, only where t
   const index = read('supabase/functions/meetings/index.ts');
   assert.ok(backend.includes('const meetingsEnabled = config.meetings === true;'), 'production shows no button until the rooms are released there');
   const committed = require('node:child_process').execFileSync('git', ['show', 'HEAD:supabase-config.js'], { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
-  assert.ok(committed.includes('gftnghlkuiuhuwyaajdn') && !/meetings\s*:/.test(committed), 'the committed (production) config does not turn the rooms on');
+  assert.ok(committed.includes('gftnghlkuiuhuwyaajdn') && /meetings\s*:\s*true/.test(committed), 'the committed (production) config turns the rooms on (released 2026-11-25)');
   assert.ok(builder.includes("${B.meetingsEnabled ? `<div class=\"iv-nellio iv-nellio-room\"") && builder.includes("<div class=\"iv-nellio\"><button") && builder.includes("field('iv-link').value = await B.createMeetingRoom(interviewId);"));
   assert.ok(builder.includes('NELLIO_MEETING_LINK.test(') && builder.includes("interviewJoinable(row) ? ['join', t('Join meeting'), '', ''] : null"));
   assert.ok(index.includes('await hashSecret(savedSecret) === existing.secret_hash) {') && index.includes('return response(req, 200, { link: savedLink, teamLink: existing.team_link || await newTeamLink(existing.id) });'), 'a link already saved in the interview keeps working, with its team link');
