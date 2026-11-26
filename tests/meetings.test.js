@@ -282,3 +282,10 @@ test('in the room, a Devices panel switches the microphone, camera and speaker w
   assert.ok(page.includes("'setSinkId' in HTMLMediaElement.prototype") && page.includes('applySpeaker(tile.querySelector(\'video\'))'), 'the speaker is chosen only where the browser allows it, and new tiles use it');
   assert.ok(page.includes('deviceSelects(devices, false)') && page.includes('deviceSelects(devices, true)'), 'the lobby and the room use the same lists');
 });
+
+test('the system default microphone comes first and is the one used when nothing was chosen (owner, 2026-11-26)', () => {
+  const page = read('meeting.js');
+  assert.ok(page.includes("{ ...AUDIO, deviceId: { ideal: 'default' } }"), 'without a choice the default microphone is asked for');
+  assert.ok(page.includes("d.deviceId === 'default' ? 0 : d.deviceId === 'communications' ? 2 : 1"), 'default first, communications last');
+  assert.ok(page.includes("|| list.find(d => d.deviceId === 'default')"), 'an unknown id selects the default, not the first line');
+});

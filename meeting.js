@@ -123,7 +123,9 @@
     checked = true;
     deviceError = '';
     const video = cameraId ? { ...VIDEO, deviceId: { exact: cameraId } } : VIDEO;
-    const audio = micId ? { ...AUDIO, deviceId: { exact: micId } } : AUDIO;
+    // Without a choice, the microphone the system marks as default (Chrome/Edge list it as "default"; other browsers ignore an ideal they
+    // do not know). Owner, 2026-11-26: the lobby showed another microphone than the system default.
+    const audio = micId ? { ...AUDIO, deviceId: { exact: micId } } : { ...AUDIO, deviceId: { ideal: 'default' } };
     try {
       const fresh = await navigator.mediaDevices.getUserMedia({ video, audio });
       stopCamera();
@@ -290,17 +292,22 @@
   async function deviceOptions() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return { cameras: [], mics: [], speakers: [] };
     const all = await navigator.mediaDevices.enumerateDevices().catch(() => []);
-    return { cameras: all.filter(d => d.kind === 'videoinput' && d.label), mics: all.filter(d => d.kind === 'audioinput' && d.label), speakers: all.filter(d => d.kind === 'audiooutput' && d.label) };
+    // The system default comes first and the Windows "communications" entry last, so the list starts with what the system uses.
+    const rank = d => (d.deviceId === 'default' ? 0 : d.deviceId === 'communications' ? 2 : 1);
+    const list = kind => all.filter(d => d.kind === kind && d.label).map((d, i) => ({ d, i })).sort((a, b) => rank(a.d) - rank(b.d) || a.i - b.i).map(x => x.d);
+    return { cameras: list('videoinput'), mics: list('audioinput'), speakers: list('audiooutput') };
   }
   const currentTrack = kind => camera && camera.getTracks().find(track => track.kind === kind);
   /** The camera, microphone and speaker lists of the lobby and of the Devices panel in the room (same ids, same look). The speaker list
       appears only where the browser lets a page choose the sound output (Chrome, Edge). In the room a list appears even with one device,
       and only for what is being sent (a microphone or camera that was not there when the person joined cannot be added without joining again). */
   function deviceSelects({ cameras, mics, speakers }, inRoom) {
-    const select = (id, label, list, selected) => list.length >= (inRoom ? 1 : 2) ? `<label class="meeting-field"><span>${label}</span><select class="text-input" id="${id}">${list.map(d => `<option value="${esc(d.deviceId)}"${selected === d.deviceId ? ' selected' : ''}>${esc(d.label)}</option>`).join('')}</select></label>` : '';
+    // The option of the device in use; when the browser reports an id that is not in the list, the system default (never just the first line).
+    const pick = (list, selected, label) => (list.find(d => d.deviceId === selected) || list.find(d => label && d.label === label) || list.find(d => d.deviceId === 'default') || list[0] || {}).deviceId;
+    const select = (id, label, list, selected, trackLabel) => { const chosen = pick(list, selected, trackLabel); return list.length >= (inRoom ? 1 : 2) ? `<label class="meeting-field"><span>${label}</span><select class="text-input" id="${id}">${list.map(d => `<option value="${esc(d.deviceId)}"${chosen === d.deviceId ? ' selected' : ''}>${esc(d.label)}</option>`).join('')}</select></label>` : ''; };
     const idOf = kind => (currentTrack(kind) ? currentTrack(kind).getSettings().deviceId : '');
-    return select('meeting-camera', t('Camera'), !inRoom || currentTrack('video') ? cameras : [], idOf('video'))
-      + select('meeting-mic', t('Microphone'), !inRoom || currentTrack('audio') ? mics : [], idOf('audio'))
+    return select('meeting-camera', t('Camera'), !inRoom || currentTrack('video') ? cameras : [], idOf('video'), currentTrack('video') && currentTrack('video').label)
+      + select('meeting-mic', t('Microphone'), !inRoom || currentTrack('audio') ? mics : [], idOf('audio'), currentTrack('audio') && currentTrack('audio').label)
       + select('meeting-speaker', t('Speaker'), CAN_PICK_SPEAKER ? speakers : [], speakerId || 'default');
   }
   // The chosen speaker plays every other person's sound (their tiles); remembered in this browser for the next meeting.
