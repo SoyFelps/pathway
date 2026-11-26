@@ -126,10 +126,10 @@
     // Without a choice, the microphone the system marks as default (Chrome/Edge list it as "default"; other browsers ignore an ideal they
     // do not know). Owner, 2026-11-26: the lobby showed another microphone than the system default.
     const audio = micId ? { ...AUDIO, deviceId: { exact: micId } } : { ...AUDIO, deviceId: { ideal: 'default' } };
+    // The devices in use are released BEFORE the new ones are opened: phones and many webcams cannot be opened twice (owner, 2026-11-26).
+    stopCamera();
     try {
-      const fresh = await navigator.mediaDevices.getUserMedia({ video, audio });
-      stopCamera();
-      camera = fresh;
+      camera = await navigator.mediaDevices.getUserMedia({ video, audio });
     } catch (error) {
       // Without a camera, try the microphone alone before giving up.
       try { if (!camera) camera = await navigator.mediaDevices.getUserMedia({ audio }); deviceError = deviceMessage(error); }
@@ -533,25 +533,33 @@
     devBusy = true; devNote = '';
     stopMeter();
     document.querySelectorAll('#meeting-dev-panel select').forEach(select => { select.disabled = true; });
-    const idOf = kind => (currentTrack(kind) ? currentTrack(kind).getSettings().deviceId : '');
-    const camId = change.camera || idOf('video');
-    const micId = change.mic || idOf('audio');
+    // Only the device that changes is opened again, and the old one is released FIRST: phones (and many webcams) cannot be opened twice,
+    // which gave "being used by another app" (owner, 2026-11-26). If the new one fails, the old one is opened again.
+    const kind = change.camera ? 'video' : 'audio';
+    const wanted = change.camera || change.mic;
+    const old = currentTrack(kind);
+    if (!old) { devBusy = false; paintDevices(); return; }
+    const oldId = old.getSettings().deviceId;
+    const open = async id => (await navigator.mediaDevices.getUserMedia({ [kind]: { ...(kind === 'video' ? VIDEO : AUDIO), deviceId: { exact: id } } })).getTracks().find(track => track.kind === kind);
+    if (kind === 'audio' && rec) finishPiece(); // what was being said with the old microphone is still sent
+    old.stop();
+    let track = null;
+    try { track = await open(wanted); }
+    catch (error) {
+      devNote = deviceMessage(error);
+      try { track = await open(oldId); } catch (_) { track = null; }
+    }
     try {
-      const fresh = await navigator.mediaDevices.getUserMedia({
-        video: currentTrack('video') ? (camId ? { ...VIDEO, deviceId: { exact: camId } } : VIDEO) : false,
-        audio: currentTrack('audio') ? (micId ? { ...AUDIO, deviceId: { exact: micId } } : AUDIO) : false,
-      });
-      if (rec) finishPiece(); // what was being said with the old microphone is still sent
-      const oldCamera = camera;
-      camera = fresh;
-      if (effect) { effect.stop(); effect = null; }
-      const cleanup = await applyBackground();
-      applyEnabled();
-      await room.replaceStream(stream, { stop: false });
-      cleanup();
-      for (const track of oldCamera.getTracks()) track.stop();
-      showSelf();
-      checkRecording(); // the transcription listens to the new microphone
+      if (track) {
+        camera = new MediaStream([track, ...camera.getTracks().filter(item => item.kind !== kind)]);
+        if (effect) { effect.stop(); effect = null; }
+        const cleanup = await applyBackground();
+        applyEnabled();
+        await room.replaceStream(stream, { stop: false });
+        cleanup();
+        showSelf();
+        checkRecording(); // the transcription listens to the new microphone
+      }
     } catch (error) {
       devNote = deviceMessage(error);
     } finally {

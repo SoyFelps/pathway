@@ -277,8 +277,8 @@ test('in the room, a Devices panel switches the microphone, camera and speaker w
   const page = read('meeting.js');
   assert.ok(page.includes("id=\"meeting-dev-toggle\"") && page.includes('id="meeting-dev-panel"'), 'a Devices button and panel in the room');
   const sw = page.slice(page.indexOf('async function switchDevices'), page.indexOf("navigator.mediaDevices.addEventListener('devicechange'"));
-  assert.ok(sw.includes('deviceId: { exact: micId }') && sw.includes('room.replaceStream(stream, { stop: false })') && sw.includes('applyEnabled()') && sw.includes('checkRecording()'), 'the new device goes to every connection, keeps mute/camera-off and the transcription follows it');
-  assert.ok(sw.includes('if (rec) finishPiece()'), 'what was being said with the old microphone is still sent');
+  assert.ok(sw.includes('deviceId: { exact: id }') && sw.includes('room.replaceStream(stream, { stop: false })') && sw.includes('applyEnabled()') && sw.includes('checkRecording()'), 'the new device goes to every connection, keeps mute/camera-off and the transcription follows it');
+  assert.ok(sw.includes("if (kind === 'audio' && rec) finishPiece()"), 'what was being said with the old microphone is still sent');
   assert.ok(page.includes("'setSinkId' in HTMLMediaElement.prototype") && page.includes('applySpeaker(tile.querySelector(\'video\'))'), 'the speaker is chosen only where the browser allows it, and new tiles use it');
   assert.ok(page.includes('deviceSelects(devices, false)') && page.includes('deviceSelects(devices, true)'), 'the lobby and the room use the same lists');
 });
@@ -288,4 +288,14 @@ test('the system default microphone comes first and is the one used when nothing
   assert.ok(page.includes("{ ...AUDIO, deviceId: { ideal: 'default' } }"), 'without a choice the default microphone is asked for');
   assert.ok(page.includes("d.deviceId === 'default' ? 0 : d.deviceId === 'communications' ? 2 : 1"), 'default first, communications last');
   assert.ok(page.includes("|| list.find(d => d.deviceId === 'default')"), 'an unknown id selects the default, not the first line');
+});
+
+test('switching a device releases the old one first and opens only what changed (owner, 2026-11-26: "being used by another app")', () => {
+  const page = read('meeting.js');
+  const sw = page.slice(page.indexOf('async function switchDevices'), page.indexOf("navigator.mediaDevices.addEventListener('devicechange'"));
+  assert.ok(sw.indexOf('old.stop()') > 0 && sw.indexOf('old.stop()') < sw.indexOf('track = await open(wanted)'), 'the old device is released before the new one is opened');
+  assert.ok(sw.includes('getUserMedia({ [kind]:'), 'only the kind that changes is opened');
+  assert.ok(sw.includes('track = await open(oldId)'), 'if the new one fails, the old one comes back');
+  const start = page.slice(page.indexOf('async function startDevices'), page.indexOf('// ---- Background'));
+  assert.ok(start.indexOf('stopCamera()') < start.indexOf('getUserMedia({ video, audio })'), 'the lobby releases the devices before opening others');
 });
