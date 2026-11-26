@@ -48,7 +48,7 @@ test('every fixed text of the page that does not go through t() literally has a 
   const locales = { 'pt-BR': read('locales/pt-BR.js'), es: read('locales/es.js') };
   const banners = [...js.slice(js.indexOf('const BANNERS'), js.indexOf('function detailsHtml')).matchAll(/: '([^']*)'/g)].map(m => m[1]).filter(text => text.includes(' '));
   assert.ok(banners.length >= 5, 'the banners are found');
-  const extra = ['Could not reach the interview service. Check your connection and try again.', 'This interview has already taken place.', 'This invitation was not found.'];
+  const extra = ['Could not reach the interview service. Check your connection and try again.', 'This interview has already taken place.', 'The time of this interview has come. If you have any questions, contact the hiring team.', 'This invitation was not found.'];
   for (const code of Object.keys(locales)) for (const text of [...banners, ...extra]) assert.ok(locales[code].includes(`'${text}':`), `${code} is missing: ${text}`);
 });
 

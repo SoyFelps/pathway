@@ -1873,6 +1873,7 @@
   'The interview was saved, but the e-mail could not be sent. Use Resend to try again.': 'A entrevista foi salva, mas não foi possível enviar o e-mail. Use Reenviar para tentar de novo.',
   'This interview can no longer be changed.': 'Esta entrevista não pode mais ser alterada.',
   'This interview has already taken place.': 'Esta entrevista já aconteceu.',
+  'The time of this interview has come. If you have any questions, contact the hiring team.': 'Chegou o horário desta entrevista. Se tiver alguma dúvida, fale com a equipe de recrutamento.',
   'This interview was cancelled.': 'Esta entrevista foi cancelada.',
   'This invitation is no longer available.': 'Este convite não está mais disponível.',
   'This invitation was not found.': 'Este convite não foi encontrado.',

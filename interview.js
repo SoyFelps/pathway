@@ -105,8 +105,14 @@
     document.documentElement.lang = tr.language;
     document.title = `${t('Interview')} · ${view.companyName || 'Nellio'}`;
     const known = Object.prototype.hasOwnProperty.call(BANNERS, view.state);
-    const finished = !view.canRespond && view.state !== 'cancelled';
-    const banner = view.state === 'cancelled' ? BANNERS.cancelled : finished ? 'This interview has already taken place.' : (known ? BANNERS[view.state] : '');
+    // Only the hiring team knows whether the interview happened, so "already taken place" is shown only once they registered it (finished).
+    // When the start time has come and the interview is still on, the page never says it is over: the candidate may simply be a few minutes
+    // late, and the meeting link stays above (owner, 2026-11-26).
+    const timeCame = !view.canRespond && (view.state === 'invited' || view.state === 'confirmed');
+    const banner = view.state === 'cancelled' ? BANNERS.cancelled
+      : view.state === 'finished' ? 'This interview has already taken place.'
+      : timeCame ? 'The time of this interview has come. If you have any questions, contact the hiring team.'
+      : (known ? BANNERS[view.state] : '');
     const intro = view.candidateName ? t('Hi {name}, here are the details of your interview.', { name: esc(view.candidateName) }) : t('Here are the details of your interview.');
     root.innerHTML = shell(`<main class="interview-main"><section class="candidate-form-card interview-card"><div class="job-kicker">${t('Interview')}</div><h1 class="interview-title">${esc(view.jobTitle || t('Interview'))}</h1><p class="form-intro">${esc(view.companyName || t('Hiring team'))}</p>${view.state === 'cancelled' ? '' : `<p class="interview-intro">${intro}</p>${detailsHtml()}`}${banner ? `<div class="prototype-note interview-banner interview-banner-${esc(view.state)}" role="status">${t(banner)}</div>` : ''}${sentTimesHtml()}${message ? `<p class="interview-error" role="alert">${esc(message)}</p>` : ''}${actionsHtml()}${panelHtml()}${calendarHtml()}</section></main>`);
     bind();

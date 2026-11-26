@@ -2577,8 +2577,11 @@
     if (needle && !(ivName(row) + ' ' + row.email + ' ' + ivJobTitle(row.flowId) + ' ' + ivResponsibleText(row)).toLowerCase().includes(needle)) return false;
     return true;
   }
-  // Upcoming: still to happen, or waiting for the team to register how it went. Past: everything else that already started.
-  const ivInScope = row => ivScope === 'all' || (ivScope === 'upcoming' ? !interviewStarted(row) : interviewStarted(row));
+  // Upcoming: still to happen, or started less than 5 minutes ago (owner, 2026-11-26: people are often a few minutes late, so the interview
+  // stays in Upcoming for 5 minutes after its start). Past: everything that started 5 minutes ago or more, including what waits for a result.
+  const IV_UPCOMING_GRACE_MS = 5 * 60000;
+  const ivIsPast = row => Boolean(row && row.startsAt && new Date(row.startsAt).getTime() + IV_UPCOMING_GRACE_MS <= Date.now());
+  const ivInScope = row => ivScope === 'all' || (ivScope === 'upcoming' ? !ivIsPast(row) : ivIsPast(row));
   function ivVisibleRows() {
     const rows = ivScheduled().filter(row => ivInScope(row) && ivMatches(row));
     return rows.sort((a, b) => (ivScope === 'upcoming' ? 1 : -1) * (new Date(a.startsAt) - new Date(b.startsAt)));
@@ -2656,7 +2659,7 @@
     const second = ivView === 'list'
       ? group(t('Which interviews'), [['upcoming', t('Upcoming')], ['past', t('Past')], ['all', t('All')]], 'data-ivp-scope', ivScope)
       : '<div class="iv-nav"><button type="button" class="btn btn-sm" data-ivp-nav="today">' + t('Today') + '</button><button type="button" class="iv-nav-btn" data-ivp-nav="prev" aria-label="' + t('Previous') + '">‹</button><button type="button" class="iv-nav-btn" data-ivp-nav="next" aria-label="' + t('Next') + '">›</button><strong class="iv-nav-title">' + esc(ivNavTitle(ivCalEvents())) + '</strong></div>';
-    const waitingCount = ivScheduled().filter(interviewAwaitingResult).length;
+    const waitingCount = ivScheduled().filter(row => interviewAwaitingResult(row) && ivIsPast(row)).length; // the same rows the alert opens in Past
     const alert = waitingCount ? '<button type="button" class="iv-alert" data-ivp-waiting="1" title="' + esc(t('Show them')) + '"><span aria-hidden="true">!</span>' + esc(tn('{count} interview waiting for results', '{count} interviews waiting for results', waitingCount)) + '</button>' : '';
     host.innerHTML = views + second + alert;
   }

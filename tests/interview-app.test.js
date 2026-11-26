@@ -174,7 +174,7 @@ test('the Interviews page: its own menu item below Applicants, its own route, a 
   assert.ok(!/class="[^"]*applicants-page/.test(page), 'it must not carry the class of the board page (the interview windows would try to redraw a board that is not there)');
   const list = slice(builder, 'const ivScheduled = () =>', 'function ivRowHtml(row)');
   assert.ok(list.includes("row.state !== 'awaiting_schedule' && row.startsAt") && list.includes('interviewFilterKeys(row).has(ivStatus)') && list.includes('applicantFlowHasResponsible(row.flowId, ivResponsible)'), 'only scheduled interviews; the status and responsible rules are the ones of the card and the filter');
-  assert.ok(list.includes("ivScope === 'upcoming' ? !interviewStarted(row) : interviewStarted(row)") && page.includes('data-ivp-waiting'), 'what waits for a result is in Past, with an alert that shows it');
+  assert.ok(list.includes("ivScope === 'upcoming' ? !ivIsPast(row) : ivIsPast(row)") && list.includes('IV_UPCOMING_GRACE_MS = 5 * 60000') && page.includes('data-ivp-waiting'), 'what waits for a result is in Past, with an alert that shows it');
   assert.ok(builder.includes("interviewNames.get(row.flowId + '|' + row.email)"), 'the windows know the candidate name without the Applicants list');
   assert.ok(fs.readFileSync(path.join(__dirname, '..', 'backend.js'), 'utf8').includes('listInterviewCandidateNames'), 'a light read of the candidate names');
 });
