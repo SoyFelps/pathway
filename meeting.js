@@ -434,7 +434,7 @@
         <button class="btn" type="button" id="meeting-cam-toggle" aria-pressed="false"${stream && stream.getVideoTracks().length ? '' : ' disabled'}>${t('Turn camera off')}</button>
         ${camera || CAN_PICK_SPEAKER ? `<button class="btn" type="button" id="meeting-dev-toggle" aria-expanded="false" aria-controls="meeting-dev-panel">${t('Devices')}</button>` : ''}
         ${camera && camera.getVideoTracks().length && effectsReady() ? `<button class="btn" type="button" id="meeting-bg-toggle" aria-expanded="false" aria-controls="meeting-bg-panel">${t('Background')}</button>` : ''}
-        ${view.role === 'team' && view.transcription && !view.transcriptionEnded ? `<button class="btn" type="button" id="meeting-end-transcription">${t('End transcription')}</button>` : ''}
+        ${view.role === 'team' && view.transcription && !view.transcriptionEnded ? `<button class="btn btn-primary" type="button" id="meeting-end-transcription">${t('End transcription')}</button>` : ''}
         <button class="btn btn-danger" type="button" id="meeting-leave">${t('Leave')}</button>
       </div>
       <div class="meeting-bg-panel" id="meeting-dev-panel" hidden></div>
@@ -447,12 +447,12 @@
     if (!stream || !stream.getAudioTracks().length) root.querySelector('[data-tile="me"]').classList.add('is-muted');
     document.getElementById('meeting-mic-toggle').addEventListener('click', event => { micOn = !micOn; room && room.setMic(micOn); event.currentTarget.textContent = micOn ? t('Mute') : t('Unmute'); event.currentTarget.setAttribute('aria-pressed', String(!micOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-muted', !micOn); paintDevices(); });
     document.getElementById('meeting-cam-toggle').addEventListener('click', event => { camOn = !camOn; room && room.setCam(camOn); event.currentTarget.textContent = camOn ? t('Turn camera off') : t('Turn camera on'); event.currentTarget.setAttribute('aria-pressed', String(!camOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-off', !camOn); });
-    document.getElementById('meeting-leave').addEventListener('click', leave);
+    document.getElementById('meeting-leave').addEventListener('click', askLeave);
     document.getElementById('meeting-end-transcription')?.addEventListener('click', async event => {
       const button = event.currentTarget;
       if (button.dataset.confirm !== '1') { button.dataset.confirm = '1'; button.textContent = t('End it? Click again'); setTimeout(() => { if (button.isConnected && button.dataset.confirm === '1') { button.dataset.confirm = ''; button.textContent = t('End transcription'); } }, 5000); return; }
       button.disabled = true;
-      try { await stopRecording(true); await call({ action: 'end', secret }); if (room) room.notice({ kind: 'transcription-ended' }); transcriptionEnded(); }
+      try { await endTranscription(); }
       catch (error) { button.disabled = false; button.dataset.confirm = ''; button.textContent = t('End transcription'); }
     });
     document.getElementById('meeting-bg-toggle')?.addEventListener('click', event => { const panel = document.getElementById('meeting-bg-panel'); panel.hidden = !panel.hidden; event.currentTarget.setAttribute('aria-expanded', String(!panel.hidden)); });
@@ -568,6 +568,49 @@
     }
   }
   if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => { if (room && !devBusy) paintDevices(); });
+
+  // Ends the transcription for everyone: the transcript and the minutes are written now. Throws when the server could not be reached.
+  async function endTranscription() {
+    await stopRecording(true);
+    try { await call({ action: 'end', secret }); }
+    catch (error) { checkRecording(); throw error; }
+    if (room) room.notice({ kind: 'transcription-ended' });
+    transcriptionEnded();
+  }
+
+  // Leaving (owner, 2026-11-26): the LAST person of the hiring team in the room is asked first while the transcription is still on, so
+  // nobody leaves without noticing it; with another team member still in the room, they just leave (the colleague ends it later).
+  // The End transcription button stays in the room for any moment.
+  const transcriptionRunning = () => Boolean(view && view.role === 'team' && view.transcription && !view.transcriptionEnded);
+  function askLeave() {
+    if (!transcriptionRunning() || peers.some(person => person.role === 'team')) { leave(); return; }
+    const layer = document.createElement('div');
+    layer.innerHTML = '<div class="modal-backdrop" role="presentation"><section class="modal meeting-leave-modal" role="dialog" aria-modal="true" aria-labelledby="leave-title">'
+      + '<h2 id="leave-title">' + t('The transcription is still on') + '</h2>'
+      + '<p>' + t('You are the last person of the hiring team in the room. End the transcription so the transcript and the minutes appear in Nellio now. If you leave without ending it, what the candidate says in the next few minutes may still be transcribed.') + '</p>'
+      + '<div class="ai-note is-warn meeting-leave-error" id="leave-error" role="alert" hidden></div>'
+      + '<div class="modal-actions meeting-leave-actions"><button class="btn" type="button" id="leave-back">' + t('Back') + '</button><button class="btn" type="button" id="leave-only">' + t('Leave without ending') + '</button><button class="btn btn-primary" type="button" id="leave-end">' + t('End transcription and leave') + '</button></div>'
+      + '</section></div>';
+    document.body.appendChild(layer);
+    const close = () => { document.removeEventListener('keydown', onKey); layer.remove(); };
+    const onKey = event => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    layer.querySelector('.modal-backdrop').addEventListener('click', event => { if (event.target === event.currentTarget) close(); });
+    layer.querySelector('#leave-back').addEventListener('click', close);
+    layer.querySelector('#leave-only').addEventListener('click', () => { close(); leave(); });
+    layer.querySelector('#leave-end').addEventListener('click', async () => {
+      const buttons = layer.querySelectorAll('button');
+      buttons.forEach(button => { button.disabled = true; });
+      try { await endTranscription(); close(); leave(); }
+      catch (error) {
+        buttons.forEach(button => { button.disabled = false; });
+        const box = layer.querySelector('#leave-error');
+        box.textContent = t('The transcription could not be ended. Check your connection and try again.');
+        box.hidden = false;
+      }
+    });
+    layer.querySelector('#leave-end').focus();
+  }
 
   // 10 minutes before the room closes, a warning with the minutes left; at the closing time the meeting ends for everyone in it.
   function watchClosing() {

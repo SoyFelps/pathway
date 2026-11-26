@@ -299,3 +299,14 @@ test('switching a device releases the old one first and opens only what changed 
   const start = page.slice(page.indexOf('async function startDevices'), page.indexOf('// ---- Background'));
   assert.ok(start.indexOf('stopCamera()') < start.indexOf('getUserMedia({ video, audio })'), 'the lobby releases the devices before opening others');
 });
+
+test('leaving: the last team member is asked while the transcription is on; End transcription stands out (owner, 2026-11-26)', () => {
+  const page = read('meeting.js');
+  assert.ok(page.includes('class="btn btn-primary" type="button" id="meeting-end-transcription"'), 'the End transcription button is highlighted');
+  assert.ok(page.includes("getElementById('meeting-leave').addEventListener('click', askLeave)"), 'Leave goes through the check');
+  const ask = page.slice(page.indexOf('function askLeave'), page.indexOf('// 10 minutes before the room closes'));
+  assert.ok(ask.includes("peers.some(person => person.role === 'team')") && ask.includes('leave(); return;'), 'with another team member in the room, no question');
+  for (const id of ['leave-back', 'leave-only', 'leave-end']) assert.ok(ask.includes(`id="${id}"`), id);
+  assert.ok(ask.includes('await endTranscription(); close(); leave();'), 'end and leave');
+  assert.ok(page.includes("view.role === 'team' && view.transcription && !view.transcriptionEnded"), 'only the hiring team, only while it is on');
+});

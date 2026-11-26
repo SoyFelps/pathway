@@ -1456,6 +1456,10 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .meeting-dev{display:grid;gap:12px}
 .meeting-dev-fields{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .meeting-dev .meeting-hint{margin:0}
+.meeting-leave-modal{width:min(100%,580px)}
+.meeting-leave-actions{flex-wrap:wrap}
+.meeting-leave-error{margin-top:14px}
+@media(max-width:640px){.meeting-leave-actions .btn{flex:1 1 100%}}
 
 /* Meeting rooms, Phase 2: the "Generate Nellio link" button under the meeting link field of the schedule window */
 .iv-nellio{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
