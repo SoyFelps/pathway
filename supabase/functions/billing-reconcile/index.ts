@@ -240,12 +240,27 @@ async function run(): Promise<Response> {
   }
 }
 
+/** Company logo files that no company points to any more (a deleted workspace or account, an old failed cleanup) are deleted once a day
+    (owner request, 2026-11-26). The database lists them (older than 1 day, so an upload in progress is never taken); Storage deletes them. */
+async function removeLeftoverLogos(): Promise<number> {
+  const { data, error } = await admin!.rpc("company_logo_orphans", { p_limit: 500 });
+  if (error) throw error;
+  const names = (Array.isArray(data) ? data : []).map((name: unknown) => String(name || "")).filter(Boolean);
+  for (let index = 0; index < names.length; index += 100) {
+    const { error: removeError } = await admin!.storage.from("company-logos").remove(names.slice(index, index + 100));
+    if (removeError) throw removeError;
+  }
+  return names.length;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return reply(405, { error: "method_not_allowed" });
   if (!stripe || !admin) return reply(503, { error: "not_configured" });
   try {
     try { await runDowngradeReminders(); } catch (reminderError) { console.error("Downgrade reminders failed:", reminderError instanceof Error ? reminderError.message : "unknown error"); }
     try { await runDueDowngrades(); } catch (downgradeError) { console.error("Scheduled downgrades failed:", downgradeError instanceof Error ? downgradeError.message : "unknown error"); }
+    // its own step: a failure here never stops the Stripe check
+    try { const removed = await removeLeftoverLogos(); if (removed) console.log("Leftover company logos removed:", removed); } catch (logoError) { console.error("Leftover logo cleanup failed:", logoError instanceof Error ? logoError.message : "unknown error"); }
     return await run();
   } catch (error) {
     console.error("billing-reconcile error:", error instanceof Error ? error.message : "unknown error");

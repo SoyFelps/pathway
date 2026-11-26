@@ -276,3 +276,14 @@ test('general upgrade buttons show the plans first and never open a checkout dir
   assert.match(body, /openSubscriptionPage\(plan\)/);
   assert.match(read('styles.css'), /\.modal:has\(#plan-choice-modal\)\{width:min\(100%,1000px\)\}/);
 });
+
+test('2026-11-26: the daily job deletes company logos no company uses (deleted workspace or account, old leftovers), in its own step', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase/migrations/20261126100000_company_logo_orphans.sql'), 'utf8');
+  assert.ok(sql.includes("o.bucket_id = 'company-logos'") && sql.includes("o.created_at < now() - interval '1 day'") && sql.includes('not exists (select 1 from public.workspace_companies c where c.logo_path = o.name)'));
+  assert.ok(sql.includes('revoke all on function public.company_logo_orphans(integer) from public, anon, authenticated;') && sql.includes('grant execute on function public.company_logo_orphans(integer) to service_role;'));
+  const index = fs.readFileSync(path.join(__dirname, '..', 'supabase/functions/billing-reconcile/index.ts'), 'utf8');
+  assert.ok(index.includes('admin!.rpc("company_logo_orphans", { p_limit: 500 })') && index.includes('admin!.storage.from("company-logos").remove('));
+  assert.ok(/try \{ const removed = await removeLeftoverLogos\(\);[^\n]*\} catch \(logoError\)/.test(index), 'a failure never stops the Stripe check');
+});
