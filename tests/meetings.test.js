@@ -310,3 +310,10 @@ test('leaving: the last team member is asked while the transcription is on; End 
   assert.ok(ask.includes('await endTranscription(); close(); leave();'), 'end and leave');
   assert.ok(page.includes("view.role === 'team' && view.transcription && !view.transcriptionEnded"), 'only the hiring team, only while it is on');
 });
+
+test('the lobby switches to the "default" microphone when the browser opened another one (Chrome remembers the last one; owner, 2026-11-26)', () => {
+  const page = read('meeting.js');
+  const start = page.slice(page.indexOf('async function startDevices'), page.indexOf('// ---- Background'));
+  assert.ok(start.includes('if (!micId) await useDefaultMic();'), 'only when nobody chose a microphone');
+  assert.ok(start.includes("deviceId: { exact: 'default' }") && start.indexOf('track.stop()') < start.indexOf("deviceId: { exact: 'default' }"), 'the default is required, after the other one is released');
+});

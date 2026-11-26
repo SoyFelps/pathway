@@ -135,8 +135,26 @@
       try { if (!camera) camera = await navigator.mediaDevices.getUserMedia({ audio }); deviceError = deviceMessage(error); }
       catch (_) { deviceError = deviceMessage(error); }
     }
+    if (!micId) await useDefaultMic();
     stream = camera;
     (await applyBackground())(); // the background chosen last time comes back by itself
+  }
+
+  // Chrome remembers the microphone a site used last and prefers it over an "ideal" default, so the lobby opened a USB microphone instead
+  // of the system default (owner, 2026-11-26, after the first fix). Once the browser lets the page see the devices, a microphone that is
+  // not the "default" entry is replaced by it, as a REQUIRED choice. A choice made in the lobby or in the room is kept (micId).
+  async function useDefaultMic() {
+    const track = camera && camera.getAudioTracks()[0];
+    if (!track || track.getSettings().deviceId === 'default') return;
+    const all = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+    if (!all.some(d => d.kind === 'audioinput' && d.deviceId === 'default')) return; // browsers without a "default" entry (Firefox, Safari)
+    track.stop(); // released first: some microphones cannot be opened twice
+    let fresh = null;
+    try { fresh = (await navigator.mediaDevices.getUserMedia({ audio: { ...AUDIO, deviceId: { exact: 'default' } } })).getAudioTracks()[0]; }
+    catch (_) {
+      try { fresh = (await navigator.mediaDevices.getUserMedia({ audio: { ...AUDIO, deviceId: { exact: track.getSettings().deviceId } } })).getAudioTracks()[0]; } catch (__) { fresh = null; }
+    }
+    camera = new MediaStream([...camera.getVideoTracks(), ...(fresh ? [fresh] : [])]);
   }
 
   // ---- Background (blur or an image behind the person, Phase 1b) ----------------------------------------------------------
