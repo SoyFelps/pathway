@@ -272,3 +272,13 @@ test('2026-11-25: audio left behind by a deleted interview is deleted by the min
   const index = read('supabase/functions/meetings/index.ts');
   assert.ok(index.includes('admin!.rpc("meeting_audio_orphans", { p_limit: 100 })') && index.includes('admin!.storage.from(AUDIO_BUCKET).remove(names)'));
 });
+
+test('in the room, a Devices panel switches the microphone, camera and speaker without leaving (owner, 2026-11-26)', () => {
+  const page = read('meeting.js');
+  assert.ok(page.includes("id=\"meeting-dev-toggle\"") && page.includes('id="meeting-dev-panel"'), 'a Devices button and panel in the room');
+  const sw = page.slice(page.indexOf('async function switchDevices'), page.indexOf("navigator.mediaDevices.addEventListener('devicechange'"));
+  assert.ok(sw.includes('deviceId: { exact: micId }') && sw.includes('room.replaceStream(stream, { stop: false })') && sw.includes('applyEnabled()') && sw.includes('checkRecording()'), 'the new device goes to every connection, keeps mute/camera-off and the transcription follows it');
+  assert.ok(sw.includes('if (rec) finishPiece()'), 'what was being said with the old microphone is still sent');
+  assert.ok(page.includes("'setSinkId' in HTMLMediaElement.prototype") && page.includes('applySpeaker(tile.querySelector(\'video\'))'), 'the speaker is chosen only where the browser allows it, and new tiles use it');
+  assert.ok(page.includes('deviceSelects(devices, false)') && page.includes('deviceSelects(devices, true)'), 'the lobby and the room use the same lists');
+});

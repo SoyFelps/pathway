@@ -33,6 +33,12 @@
   let closingTimer = null; // the 10-minute warning and the end of the meeting at the closing time
   let busy = false;
   let peers = [];
+  // The speaker (sound output) chosen in the lobby or in the room's Devices panel; only browsers with setSinkId let a page choose it.
+  const SPEAKER_KEY = 'nellio-meeting-speaker';
+  const CAN_PICK_SPEAKER = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
+  let speakerId = '';
+  try { speakerId = localStorage.getItem(SPEAKER_KEY) || ''; } catch (_) {}
+  let devBusy = false, devNote = '';
   const logLines = []; // what happened in the connections, for "Copy connection details" (support)
 
   // Phase 3: the role (hiring team or candidate) comes only from the link that was opened: each room has a candidate link and a separate
@@ -282,17 +288,37 @@
   }
 
   async function deviceOptions() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return { cameras: [], mics: [] };
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return { cameras: [], mics: [], speakers: [] };
     const all = await navigator.mediaDevices.enumerateDevices().catch(() => []);
-    return { cameras: all.filter(d => d.kind === 'videoinput' && d.label), mics: all.filter(d => d.kind === 'audioinput' && d.label) };
+    return { cameras: all.filter(d => d.kind === 'videoinput' && d.label), mics: all.filter(d => d.kind === 'audioinput' && d.label), speakers: all.filter(d => d.kind === 'audiooutput' && d.label) };
+  }
+  const currentTrack = kind => camera && camera.getTracks().find(track => track.kind === kind);
+  /** The camera, microphone and speaker lists of the lobby and of the Devices panel in the room (same ids, same look). The speaker list
+      appears only where the browser lets a page choose the sound output (Chrome, Edge). In the room a list appears even with one device,
+      and only for what is being sent (a microphone or camera that was not there when the person joined cannot be added without joining again). */
+  function deviceSelects({ cameras, mics, speakers }, inRoom) {
+    const select = (id, label, list, selected) => list.length >= (inRoom ? 1 : 2) ? `<label class="meeting-field"><span>${label}</span><select class="text-input" id="${id}">${list.map(d => `<option value="${esc(d.deviceId)}"${selected === d.deviceId ? ' selected' : ''}>${esc(d.label)}</option>`).join('')}</select></label>` : '';
+    const idOf = kind => (currentTrack(kind) ? currentTrack(kind).getSettings().deviceId : '');
+    return select('meeting-camera', t('Camera'), !inRoom || currentTrack('video') ? cameras : [], idOf('video'))
+      + select('meeting-mic', t('Microphone'), !inRoom || currentTrack('audio') ? mics : [], idOf('audio'))
+      + select('meeting-speaker', t('Speaker'), CAN_PICK_SPEAKER ? speakers : [], speakerId || 'default');
+  }
+  // The chosen speaker plays every other person's sound (their tiles); remembered in this browser for the next meeting.
+  function applySpeaker(video) {
+    if (!CAN_PICK_SPEAKER || !speakerId || !video) return;
+    video.setSinkId(speakerId).catch(error => console.debug('[meeting] speaker', error && error.message));
+  }
+  function chooseSpeaker(id) {
+    speakerId = id || '';
+    try { localStorage.setItem(SPEAKER_KEY, speakerId); } catch (_) {}
+    root.querySelectorAll('.meeting-tile:not(.is-me) video').forEach(applySpeaker);
   }
 
   async function renderLobby() {
     let name = '';
     try { name = localStorage.getItem('nellio-meeting-name') || ''; } catch (_) {}
-    const current = kind => camera && camera.getTracks().find(track => track.kind === kind);
-    const { cameras, mics } = camera ? await deviceOptions() : { cameras: [], mics: [] };
-    const select = (id, label, list, kind) => list.length > 1 ? `<label class="meeting-field"><span>${label}</span><select class="text-input" id="${id}">${list.map(d => `<option value="${esc(d.deviceId)}"${current(kind) && current(kind).getSettings().deviceId === d.deviceId ? ' selected' : ''}>${esc(d.label)}</option>`).join('')}</select></label>` : '';
+    const current = currentTrack;
+    const devices = camera ? await deviceOptions() : { cameras: [], mics: [], speakers: [] };
     stopMeter();
     const hasMic = !!current('audio');
     root.innerHTML = shell(`<section class="candidate-form-card meeting-card">${heading()}
@@ -302,7 +328,7 @@
       ${deviceError ? `<div class="ai-note is-warn" role="alert">${esc(deviceError)}</div>` : ''}
       <div class="meeting-fields">
         <label class="meeting-field"><span>${t('Your name')}</span><input class="text-input" id="meeting-name" maxlength="40" autocomplete="name" value="${esc(name)}"></label>
-        ${select('meeting-camera', t('Camera'), cameras, 'video')}${select('meeting-mic', t('Microphone'), mics, 'audio')}
+        ${deviceSelects(devices, false)}
       </div>
       ${transcriptionNote()}
       <p class="meeting-hint">${!checked ? t('Before joining, check your camera and microphone. The browser will ask for permission to use them.') : stream ? t('Your camera and microphone will be on when you join. You can turn them off in the room.') : ''}</p>
@@ -315,6 +341,7 @@
     const reselect = async () => { await startDevices(document.getElementById('meeting-camera')?.value, document.getElementById('meeting-mic')?.value); rememberName(); renderLobby(); };
     document.getElementById('meeting-camera')?.addEventListener('change', reselect);
     document.getElementById('meeting-mic')?.addEventListener('change', reselect);
+    document.getElementById('meeting-speaker')?.addEventListener('change', event => chooseSpeaker(event.currentTarget.value));
     document.getElementById('meeting-check')?.addEventListener('click', async event => { const button = event.currentTarget; button.disabled = true; button.textContent = t('Checking…'); rememberName(); await startDevices(); renderLobby(); });
     document.getElementById('meeting-join')?.addEventListener('click', join);
   }
@@ -398,10 +425,12 @@
       <div class="meeting-controls">
         <button class="btn" type="button" id="meeting-mic-toggle" aria-pressed="false"${stream && stream.getAudioTracks().length ? '' : ' disabled'}>${t('Mute')}</button>
         <button class="btn" type="button" id="meeting-cam-toggle" aria-pressed="false"${stream && stream.getVideoTracks().length ? '' : ' disabled'}>${t('Turn camera off')}</button>
+        ${camera || CAN_PICK_SPEAKER ? `<button class="btn" type="button" id="meeting-dev-toggle" aria-expanded="false" aria-controls="meeting-dev-panel">${t('Devices')}</button>` : ''}
         ${camera && camera.getVideoTracks().length && effectsReady() ? `<button class="btn" type="button" id="meeting-bg-toggle" aria-expanded="false" aria-controls="meeting-bg-panel">${t('Background')}</button>` : ''}
         ${view.role === 'team' && view.transcription && !view.transcriptionEnded ? `<button class="btn" type="button" id="meeting-end-transcription">${t('End transcription')}</button>` : ''}
         <button class="btn btn-danger" type="button" id="meeting-leave">${t('Leave')}</button>
       </div>
+      <div class="meeting-bg-panel" id="meeting-dev-panel" hidden></div>
       <div class="meeting-bg-panel" id="meeting-bg-panel" data-bg-slot hidden></div>
       <div class="meeting-support"><button class="meeting-copy" type="button" id="meeting-copy">${t('Copy connection details')}</button></div>
     </section>`, true);
@@ -409,7 +438,7 @@
     me.srcObject = stream || new MediaStream(); me.play().catch(() => {});
     if (!stream || !stream.getVideoTracks().length) root.querySelector('[data-tile="me"]').classList.add('is-off');
     if (!stream || !stream.getAudioTracks().length) root.querySelector('[data-tile="me"]').classList.add('is-muted');
-    document.getElementById('meeting-mic-toggle').addEventListener('click', event => { micOn = !micOn; room && room.setMic(micOn); event.currentTarget.textContent = micOn ? t('Mute') : t('Unmute'); event.currentTarget.setAttribute('aria-pressed', String(!micOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-muted', !micOn); });
+    document.getElementById('meeting-mic-toggle').addEventListener('click', event => { micOn = !micOn; room && room.setMic(micOn); event.currentTarget.textContent = micOn ? t('Mute') : t('Unmute'); event.currentTarget.setAttribute('aria-pressed', String(!micOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-muted', !micOn); paintDevices(); });
     document.getElementById('meeting-cam-toggle').addEventListener('click', event => { camOn = !camOn; room && room.setCam(camOn); event.currentTarget.textContent = camOn ? t('Turn camera off') : t('Turn camera on'); event.currentTarget.setAttribute('aria-pressed', String(!camOn)); root.querySelector('[data-tile="me"]').classList.toggle('is-off', !camOn); });
     document.getElementById('meeting-leave').addEventListener('click', leave);
     document.getElementById('meeting-end-transcription')?.addEventListener('click', async event => {
@@ -420,6 +449,12 @@
       catch (error) { button.disabled = false; button.dataset.confirm = ''; button.textContent = t('End transcription'); }
     });
     document.getElementById('meeting-bg-toggle')?.addEventListener('click', event => { const panel = document.getElementById('meeting-bg-panel'); panel.hidden = !panel.hidden; event.currentTarget.setAttribute('aria-expanded', String(!panel.hidden)); });
+    document.getElementById('meeting-dev-toggle')?.addEventListener('click', event => {
+      const panel = document.getElementById('meeting-dev-panel');
+      panel.hidden = !panel.hidden;
+      event.currentTarget.setAttribute('aria-expanded', String(!panel.hidden));
+      if (panel.hidden) stopMeter(); else paintDevices();
+    });
     paintPicker();
     watchClosing();
     document.getElementById('meeting-copy').addEventListener('click', async event => {
@@ -444,6 +479,7 @@
         tile.className = 'meeting-tile'; tile.dataset.tile = person.id;
         tile.innerHTML = tileInner(person.name, '');
         tile.querySelector('video').addEventListener('resize', paintPeople);
+        applySpeaker(tile.querySelector('video'));
         grid.appendChild(tile);
       }
       const video = tile.querySelector('video');
@@ -460,6 +496,63 @@
     const status = document.getElementById('meeting-status');
     if (status) status.textContent = peers.length ? tr.tn('{count} other person in the room', '{count} other people in the room', peers.length) : t('Waiting for the others to join…');
   }
+
+  // ---- Devices panel in the room (owner, 2026-11-26): a person whose microphone, camera or speaker fails can switch it without leaving.
+  // The same lists as the lobby and the same level bar; the new device replaces the old one in every connection (like the camera that
+  // comes back after a phone screen lock), the background effect follows, mute and camera-off stay as they were, and the transcription
+  // goes on with the new microphone.
+  async function paintDevices() {
+    const panel = document.getElementById('meeting-dev-panel');
+    if (!panel || panel.hidden) return;
+    stopMeter();
+    const devices = await deviceOptions();
+    if (panel.hidden || !panel.isConnected) return;
+    const hasMic = !!currentTrack('audio');
+    panel.innerHTML = `<div class="meeting-dev">
+      <div class="meeting-fields meeting-dev-fields">${deviceSelects(devices, true)}</div>
+      ${hasMic ? `<div class="meeting-meter"><span>${t('Microphone')}</span><div class="meeting-meter-track" role="meter" aria-label="${t('Microphone level')}" aria-valuemin="0" aria-valuemax="100"><div class="meeting-meter-fill" id="meeting-meter"></div></div><small>${micOn ? t('Speak to see the bar move.') : t('You are muted. Unmute to be heard.')}</small></div>` : ''}
+      ${devNote ? `<div class="ai-note is-warn" role="alert">${esc(devNote)}</div>` : ''}
+      <p class="meeting-hint">${t('If the others cannot hear you, choose another microphone here. If you cannot hear them, choose another speaker.')}</p>
+    </div>`;
+    panel.querySelectorAll('select').forEach(select => { select.disabled = devBusy; });
+    document.getElementById('meeting-camera')?.addEventListener('change', event => switchDevices({ camera: event.currentTarget.value }));
+    document.getElementById('meeting-mic')?.addEventListener('change', event => switchDevices({ mic: event.currentTarget.value }));
+    document.getElementById('meeting-speaker')?.addEventListener('change', event => chooseSpeaker(event.currentTarget.value));
+    if (hasMic) startMeter();
+  }
+
+  async function switchDevices(change) {
+    if (devBusy || !room || !camera) return;
+    devBusy = true; devNote = '';
+    stopMeter();
+    document.querySelectorAll('#meeting-dev-panel select').forEach(select => { select.disabled = true; });
+    const idOf = kind => (currentTrack(kind) ? currentTrack(kind).getSettings().deviceId : '');
+    const camId = change.camera || idOf('video');
+    const micId = change.mic || idOf('audio');
+    try {
+      const fresh = await navigator.mediaDevices.getUserMedia({
+        video: currentTrack('video') ? (camId ? { ...VIDEO, deviceId: { exact: camId } } : VIDEO) : false,
+        audio: currentTrack('audio') ? (micId ? { ...AUDIO, deviceId: { exact: micId } } : AUDIO) : false,
+      });
+      if (rec) finishPiece(); // what was being said with the old microphone is still sent
+      const oldCamera = camera;
+      camera = fresh;
+      if (effect) { effect.stop(); effect = null; }
+      const cleanup = await applyBackground();
+      applyEnabled();
+      await room.replaceStream(stream, { stop: false });
+      cleanup();
+      for (const track of oldCamera.getTracks()) track.stop();
+      showSelf();
+      checkRecording(); // the transcription listens to the new microphone
+    } catch (error) {
+      devNote = deviceMessage(error);
+    } finally {
+      devBusy = false;
+      paintDevices();
+    }
+  }
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => { if (room && !devBusy) paintDevices(); });
 
   // 10 minutes before the room closes, a warning with the minutes left; at the closing time the meeting ends for everyone in it.
   function watchClosing() {
