@@ -202,9 +202,9 @@ test('the Interviews page can change the responsible people of an interview that
 test('the interview details window: one row of buttons (menu left, main actions right), Open candidate next to the job, a short team link with Copy (owner, 2026-11-27)', () => {
   const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
   const details = builder.slice(builder.indexOf('function openInterviewDetails'), builder.indexOf('async function loadInterviewsPage'));
-  assert.ok(details.includes('data-ivd-menu') && details.includes('iv-menu-panel is-up'), 'a menu that opens upwards');
+  assert.ok(details.includes('data-ivd-menu') && details.includes('⋮</button>') && details.includes("+ menu + '</div>'"), 'a vertical three-dots menu at the top right, in the head');
   assert.ok(details.includes("menuItem('cancel', t('Cancel interview'), ' is-danger'") && details.includes('iv-menu-sep'), 'cancel last, in red, after a line');
-  assert.ok(details.includes('const actions = menu + '), 'the menu first (left), then the main actions');
+  assert.ok(details.includes("const actions = btn('close', t('Close'), 'iv-detail-close') + ") && details.includes("action === 'close'"), 'a Close button on the left, then the main actions');
   assert.ok(details.includes('class="company-link-btn iv-detail-open" data-ivd="open"'), 'Open candidate is a link next to the job');
   assert.ok(details.includes('data-ivd="copy"') && details.includes("action === 'copy'") && details.includes('candidateLinkNote(row, true)'), 'Copy link, and the note points to the menu');
   const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');

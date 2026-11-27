@@ -1357,8 +1357,8 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .iv-month-more{border:0;background:transparent;text-align:left;font:600 11px var(--sans);color:var(--green-text);cursor:pointer;padding:1px 4px}
 .iv-detail{display:grid;gap:14px;margin:4px 0 6px}
 .iv-detail-actions{flex-wrap:wrap;justify-content:flex-end;align-items:center;margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
-.iv-detail-actions .iv-menu{margin-right:auto}
-.iv-detail-actions .iv-menu-panel{left:0;right:auto}
+.iv-detail-actions .iv-detail-close{margin-right:auto}
+.iv-detail-menu .iv-menu-btn{font-size:20px;font-weight:700}
 .modal:has(.iv-detail){width:min(100%,560px)}
 .iv-detail .iv-link-item{grid-column:1/-1}
 .iv-detail .applicant-info-item{min-width:0}
@@ -1367,7 +1367,6 @@ body:has(#canvas-stage) .toast{bottom:80px}
 .applicant-info-item .iv-link-line a{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .iv-link-line .btn{flex:none}
 .modal-head .iv-detail-open{font-size:13px;padding:0 2px}
-.iv-detail-actions .iv-menu-btn{width:40px;height:40px}
 @media(max-width:760px){.iv-month-cell{min-height:78px}.iv-chip-ev time{display:none}.iv-ev em{display:none}}
 .iv-ev-more{position:absolute;right:3px;box-sizing:border-box;z-index:4;border:0;border-radius:6px;padding:3px 4px;font:700 10px var(--sans);text-align:center;background:var(--green);color:var(--surface);cursor:pointer}
 .iv-menu{position:relative}
