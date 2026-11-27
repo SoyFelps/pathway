@@ -491,7 +491,7 @@
   const openInterviewMeeting = row => { if (interviewJoinable(row)) window.open(meetingHref(teamJoinLink(row)), '_blank', 'noopener'); };
   // The link shown to the team in the details: for a Nellio room it is the TEAM link, never the candidate's (owner, 2026-11-25: the team
   // does not see the candidate link). Under it, a note: it is not for the candidate, who gets their own link with Re-send link.
-  const candidateLinkNote = row => (NELLIO_MEETING_LINK.test(String(row.meetingLink || '')) ? '<span class="team-permission-hint iv-link-note">' + esc(t('Do not share this link with the candidate. If needed, click Re-send link below.')) + '</span>' : '');
+  const candidateLinkNote = (row, inMenu) => (NELLIO_MEETING_LINK.test(String(row.meetingLink || '')) ? '<span class="team-permission-hint iv-link-note">' + esc(inMenu ? t('Do not share this link with the candidate. If needed, use Re-send link in the ⋯ menu.') : t('Do not share this link with the candidate. If needed, click Re-send link below.')) + '</span>' : '');
   const meetingLinkLabel = row => (NELLIO_MEETING_LINK.test(String(row.meetingLink || '')) ? t('Team link') : t('Meeting link'));
   const interviewStarted = row => Boolean(row && row.startsAt && new Date(row.startsAt).getTime() <= Date.now());
   // Once someone opened the Nellio meeting room the interview can no longer be edited or cancelled (owner decision, 2026-11-24; the server refuses too).
@@ -2762,28 +2762,29 @@
   }
   function openInterviewDetails(row) {
     const tag = ivTagOf(row);
-    const info = (label, value) => value ? '<div class="applicant-info-item"><span>' + esc(label) + '</span><strong>' + value + '</strong></div>' : '';
+    const info = (label, value, extra = '') => value ? '<div class="applicant-info-item' + extra + '"><span>' + esc(label) + '</span><strong>' + value + '</strong></div>' : '';
     const reasons = { held: t('The interview was held'), no_show: t('The candidate did not show up'), other: t('Other') };
     const started = interviewStarted(row);
     const waiting = interviewAwaitingResult(row);
     const on = INTERVIEW_ON.includes(row.state);
     const locked = workspaceIsFree() ? ' disabled' : '';
     const btn = (action, label, extra = '', off = '') => '<button type="button" class="btn' + (extra ? ' ' + extra : '') + '" data-ivd="' + action + '"' + off + '>' + esc(label) + '</button>';
-    // At most one or two visible buttons (owner, 2026-11-27: seven buttons in a row were too many): the main action on the right (Join
-    // meeting, or Finalize once the time has passed), the other actions in the same three-dots menu as the list rows, and "Open candidate"
-    // as a quiet button on the left. Cancel is last in the menu, in red, after a line.
+    // One row of buttons (owner, 2026-11-27: seven buttons were too many, and the first redesign broke into two rows): the three-dots
+    // menu on the left with the secondary actions (Cancel last, red, after a line), the main actions on the right (Join meeting; Finalize,
+    // green, once the time has passed). "Open candidate" is a link next to the job under the name; the team link is one short line with a
+    // Copy link button instead of the whole address.
     const menuItem = (action, label, extra = '', off = '') => '<button type="button" role="menuitem" class="iv-menu-item' + extra + '" data-ivd="' + action + '"' + off + '>' + esc(label) + '</button>';
     const menuItems = (interviewResendable(row) ? menuItem('resend', interviewResendLabel(row), '', locked) : '') + (on && !interviewRoomOpened(row) ? menuItem('edit', t('Edit interview'), '', locked) : '') + (on ? menuItem('responsibles', t('Change responsible'), '', locked) : '')
       + (on && !started && !interviewRoomOpened(row) ? '<div class="iv-menu-sep" role="separator"></div>' + menuItem('cancel', t('Cancel interview'), ' is-danger', locked) : '');
     const menu = menuItems ? '<div class="iv-menu"><button type="button" class="iv-menu-btn" data-ivd-menu aria-haspopup="menu" aria-expanded="false" aria-controls="iv-detail-menu" aria-label="' + esc(t('More actions')) + '" title="' + esc(t('More actions')) + '">⋯</button><div class="iv-menu-panel is-up" id="iv-detail-menu" role="menu" hidden>' + menuItems + '</div></div>' : '';
-    const actions = btn('open', t('Open candidate'), 'btn-quiet iv-detail-open') + menu + (interviewJoinable(row) ? btn('join', t('Join meeting'), waiting ? '' : 'btn-primary') : '') + (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '');
+    const actions = menu + (interviewJoinable(row) ? btn('join', t('Join meeting'), waiting ? '' : 'btn-primary') : '') + (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '');
     const result = row.state === 'finished' && row.resultAt
       ? '<div class="applicant-info-grid">' + info(t('What happened'), esc(reasons[row.resultReason] || '')) + (row.resultImpression ? info(t('Impression'), aiImpressionLabelled(row.resultImpression)) : '') + (row.resultRecommended === null ? '' : info(t('Recommended'), row.resultRecommended ? t('Yes') : t('No'))) + '</div>' + (row.resultNotes ? '<div class="ai-note"><strong>' + t('Notes') + '</strong> ' + esc(row.resultNotes).replace(/\n/g, '<br>') + '</div>' : '')
       : '';
-    setLayer('<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">' + t('Interview') + '</div><h2>' + esc(ivName(row)) + '</h2><p>' + esc(ivJobTitle(row.flowId)) + '</p></div><button class="modal-x" data-close aria-label="' + t('Close') + '">×</button></div>'
+    setLayer('<div class="modal-head"><div><div class="eyebrow" style="margin-bottom:8px">' + t('Interview') + '</div><h2>' + esc(ivName(row)) + '</h2><p>' + esc(ivJobTitle(row.flowId)) + ' · <button type="button" class="company-link-btn iv-detail-open" data-ivd="open">' + esc(t('Open candidate')) + '</button></p></div><button class="modal-x" data-close aria-label="' + t('Close') + '">×</button></div>'
       + '<div class="iv-detail"><div class="iv-status"><span class="iv-chip ai-tone-' + tag[1] + '"><span class="iv-chip-icon">' + INTERVIEW_ICON + '</span>' + esc(t(tag[0])) + '</span>' + interviewBadges(row) + '</div>'
       + '<div class="applicant-info-grid">' + info(t('When'), esc(interviewWhen(row, { dateStyle: 'full', timeStyle: 'short' })) + ' <small>(' + esc(row.timeZone || '') + ')</small>') + info(t('Format'), row.kind === 'online' ? t('Online') : t('In person')) + info(t('Duration'), row.durationMinutes ? esc(tn('{count} minute', '{count} minutes', row.durationMinutes)) : '')
-      + (row.kind === 'online' ? info(meetingLinkLabel(row), teamJoinLink(row) ? '<a href="' + esc(teamJoinLink(row)) + '" target="_blank" rel="noopener noreferrer">' + esc(teamJoinLink(row)) + '</a>' + candidateLinkNote(row) : '<span class="iv-nolink">' + esc(t('No link yet')) + '</span>') : info(t('Address'), esc(row.address || ''))) + info(t('Responsible'), esc(ivResponsibleText(row))) + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>'
+      + (row.kind === 'online' ? info(meetingLinkLabel(row), teamJoinLink(row) ? '<span class="iv-link-line"><a href="' + esc(teamJoinLink(row)) + '" target="_blank" rel="noopener noreferrer" title="' + esc(teamJoinLink(row)) + '">' + esc(teamJoinLink(row).replace('https://', '')) + '</a><button type="button" class="btn btn-sm" data-ivd="copy">' + esc(t('Copy link')) + '</button></span>' + candidateLinkNote(row, true) : '<span class="iv-nolink">' + esc(t('No link yet')) + '</span>', ' iv-link-item') : info(t('Address'), esc(row.address || ''))) + info(t('Responsible'), esc(ivResponsibleText(row))) + info(t('Notes'), esc(row.notes || '').replace(/\n/g, '<br>')) + info(t('Sent to'), esc(row.email)) + '</div>'
       + result + '</div><div class="modal-actions iv-detail-actions">' + actions + '</div>');
     const layer = modalRoot.querySelector('#modal-layer');
     const actionBox = layer.querySelector('.iv-detail-actions');
@@ -2800,6 +2801,7 @@
       closeMenu();
       const action = control.dataset.ivd;
       if (action === 'join') { openInterviewMeeting(row); }
+      else if (action === 'copy') { try { await copyText(teamJoinLink(row)); showToast(t('Link copied!')); } catch (_) { showToast(t('Could not copy')); } }
       else if (action === 'resend') { control.disabled = true; await ivResendInterview(row); control.disabled = false; }
       else if (action === 'edit') { closeLayer(); openScheduleInterviewModal(row, { afterClose: reload }); }
       else if (action === 'finalize') { closeLayer(); openFinalizeInterviewModal(row, { afterClose: reload }); }

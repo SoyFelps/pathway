@@ -2160,6 +2160,7 @@
   'Team link': 'Link da equipe',
   'Nellio meeting room generated.': 'Sala de reunião Nellio gerada.',
   'Do not share this link with the candidate. If needed, click Re-send link below.': 'Não compartilhe esse link com o candidato. Se necessário, clique em Reenviar link abaixo.',
+  'Do not share this link with the candidate. If needed, use Re-send link in the ⋯ menu.': 'Não compartilhe esse link com o candidato. Se necessário, use Reenviar link no menu ⋯.',
   'Download': 'Baixar',
   'Transcription': 'Transcrição',
   'Re-send link': 'Reenviar link',
