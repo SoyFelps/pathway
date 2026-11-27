@@ -2769,7 +2769,14 @@
     const on = INTERVIEW_ON.includes(row.state);
     const locked = workspaceIsFree() ? ' disabled' : '';
     const btn = (action, label, extra = '', off = '') => '<button type="button" class="btn' + (extra ? ' ' + extra : '') + '" data-ivd="' + action + '"' + off + '>' + esc(label) + '</button>';
-    const actions = (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '') + (interviewJoinable(row) ? btn('join', t('Join meeting'), waiting ? '' : 'btn-primary') : '') + (interviewResendable(row) ? btn('resend', interviewResendLabel(row), '', locked) : '') + (on && !interviewRoomOpened(row) ? btn('edit', t('Edit interview'), '', locked) : '') + (on ? btn('responsibles', t('Change responsible'), '', locked) : '') + (on && !started && !interviewRoomOpened(row) ? btn('cancel', t('Cancel interview'), 'btn-danger-ghost', locked) : '') + btn('open', t('Open candidate'));
+    // At most one or two visible buttons (owner, 2026-11-27: seven buttons in a row were too many): the main action on the right (Join
+    // meeting, or Finalize once the time has passed), the other actions in the same three-dots menu as the list rows, and "Open candidate"
+    // as a quiet button on the left. Cancel is last in the menu, in red, after a line.
+    const menuItem = (action, label, extra = '', off = '') => '<button type="button" role="menuitem" class="iv-menu-item' + extra + '" data-ivd="' + action + '"' + off + '>' + esc(label) + '</button>';
+    const menuItems = (interviewResendable(row) ? menuItem('resend', interviewResendLabel(row), '', locked) : '') + (on && !interviewRoomOpened(row) ? menuItem('edit', t('Edit interview'), '', locked) : '') + (on ? menuItem('responsibles', t('Change responsible'), '', locked) : '')
+      + (on && !started && !interviewRoomOpened(row) ? '<div class="iv-menu-sep" role="separator"></div>' + menuItem('cancel', t('Cancel interview'), ' is-danger', locked) : '');
+    const menu = menuItems ? '<div class="iv-menu"><button type="button" class="iv-menu-btn" data-ivd-menu aria-haspopup="menu" aria-expanded="false" aria-controls="iv-detail-menu" aria-label="' + esc(t('More actions')) + '" title="' + esc(t('More actions')) + '">⋯</button><div class="iv-menu-panel is-up" id="iv-detail-menu" role="menu" hidden>' + menuItems + '</div></div>' : '';
+    const actions = btn('open', t('Open candidate'), 'btn-quiet iv-detail-open') + menu + (interviewJoinable(row) ? btn('join', t('Join meeting'), waiting ? '' : 'btn-primary') : '') + (waiting ? btn('finalize', t('Finalize interview'), 'btn-primary', locked) : '');
     const result = row.state === 'finished' && row.resultAt
       ? '<div class="applicant-info-grid">' + info(t('What happened'), esc(reasons[row.resultReason] || '')) + (row.resultImpression ? info(t('Impression'), aiImpressionLabelled(row.resultImpression)) : '') + (row.resultRecommended === null ? '' : info(t('Recommended'), row.resultRecommended ? t('Yes') : t('No'))) + '</div>' + (row.resultNotes ? '<div class="ai-note"><strong>' + t('Notes') + '</strong> ' + esc(row.resultNotes).replace(/\n/g, '<br>') + '</div>' : '')
       : '';
@@ -2781,9 +2788,16 @@
     const layer = modalRoot.querySelector('#modal-layer');
     const actionBox = layer.querySelector('.iv-detail-actions');
     const reload = () => { void loadInterviewsPage(); };
+    const menuButton = () => layer.querySelector('[data-ivd-menu]');
+    const closeMenu = () => { const button = menuButton(); if (!button) return; button.setAttribute('aria-expanded', 'false'); button.nextElementSibling.hidden = true; };
+    layer.addEventListener('keydown', event => { if (event.key === 'Escape' && menuButton() && menuButton().getAttribute('aria-expanded') === 'true') { event.stopPropagation(); closeMenu(); menuButton().focus(); } });
     layer.addEventListener('click', async event => {
+      const toggle = event.target.closest('[data-ivd-menu]');
+      if (toggle) { const open = toggle.getAttribute('aria-expanded') !== 'true'; toggle.setAttribute('aria-expanded', String(open)); toggle.nextElementSibling.hidden = !open; if (open) toggle.nextElementSibling.querySelector('.iv-menu-item:not(:disabled)')?.focus(); return; }
+      if (!event.target.closest('.iv-menu-panel')) closeMenu();
       const control = event.target.closest('[data-ivd]');
       if (!control) return;
+      closeMenu();
       const action = control.dataset.ivd;
       if (action === 'join') { openInterviewMeeting(row); }
       else if (action === 'resend') { control.disabled = true; await ivResendInterview(row); control.disabled = false; }

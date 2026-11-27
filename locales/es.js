@@ -1892,6 +1892,8 @@
   'In person': 'Presencial',
   'Meeting link': 'Enlace de la reunión',
   'Join the meeting': 'Unirse a la reunión',
+  'Join the interview': 'Entrar a la entrevista',
+  'On the day, a button to join appears at the top of this page 30 minutes before the interview.': 'El día de la entrevista, aparecerá un botón para entrar en la parte superior de esta página 30 minutos antes.',
   'Address': 'Dirección',
   'Open in maps': 'Abrir en el mapa',
   'Notes': 'Observaciones',

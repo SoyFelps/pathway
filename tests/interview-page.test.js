@@ -57,3 +57,11 @@ test('the page reuses the candidate page components instead of inventing new one
   for (const file of ['interview.js', 'i18n.js']) assert.ok(html.includes(file), file + ' is loaded');
   assert.equal(html.includes('backend.js') || html.includes('candidate.js'), false, 'only what the page needs is loaded');
 });
+
+test('joining is obvious: a big button at the top from 30 minutes before until 2 hours after the start (owner, 2026-11-27)', () => {
+  assert.ok(js.includes('JOIN_BEFORE_MS = 30 * 60000') && js.includes('JOIN_AFTER_MS = 120 * 60000'), 'the time the button is shown');
+  assert.ok(js.includes('${intro}</p>${joinHtml()}${detailsHtml()}'), 'the button comes right under the greeting, before the details');
+  assert.ok(js.includes('class="btn btn-primary interview-join"'), 'a primary button');
+  assert.ok(js.includes("btn${joinPhase() === 'now' ? '' : ' btn-primary'}"), 'Confirm attendance does not compete with it');
+  assert.ok(js.includes('scheduleJoinRedraw();') && js.includes('if (panel || busy)'), 'a page left open turns into the join page, never while the person is typing');
+});

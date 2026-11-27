@@ -47,9 +47,37 @@
     cancelled: 'This interview was cancelled. The hiring team may contact you about a new time.'
   };
 
+  // Joining (owner, 2026-11-27: the small "Join the meeting" link in the table was easy to miss). From 30 minutes before the start until
+  // 2 hours after it (the Nellio room is open in that time), a big green button sits at the TOP of the card, under the greeting, before
+  // everything else; the answer buttons stop competing with it. Earlier, the table keeps the link and says when the button appears.
+  // The page redraws itself when that time comes, so a page left open turns into the join page.
+  const JOIN_BEFORE_MS = 30 * 60000;
+  const JOIN_AFTER_MS = 120 * 60000;
+  const VIDEO_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="m16 10.5 5-3v9l-5-3"/></svg>';
+  let joinTimer = null;
+  function joinPhase() {
+    if (!view || view.kind !== 'online' || !view.meetingLink || (view.state !== 'invited' && view.state !== 'confirmed')) return 'none';
+    const start = Date.parse(view.startsAt);
+    if (!Number.isFinite(start)) return 'none';
+    const now = Date.now();
+    return now < start - JOIN_BEFORE_MS ? 'early' : now <= start + JOIN_AFTER_MS ? 'now' : 'late';
+  }
+  function scheduleJoinRedraw() {
+    clearTimeout(joinTimer);
+    const phase = joinPhase();
+    if (phase !== 'early' && phase !== 'now') return;
+    const start = Date.parse(view.startsAt);
+    const at = phase === 'early' ? start - JOIN_BEFORE_MS : start + JOIN_AFTER_MS;
+    const wait = at - Date.now() + 1000;
+    if (wait > 24 * 3600000) return;
+    joinTimer = setTimeout(function redraw() { if (panel || busy) { joinTimer = setTimeout(redraw, 30000); return; } render(); }, Math.max(1000, wait));
+  }
+  const joinHtml = () => joinPhase() === 'now' ? `<a class="btn btn-primary interview-join" href="${esc(view.meetingLink)}" target="_blank" rel="noopener noreferrer">${VIDEO_ICON}<span>${t('Join the interview')}</span></a>` : '';
+
   function detailsHtml() {
     const rows = [[t('When'), esc(view.when)], [t('Format'), view.kind === 'online' ? t('Online') : t('In person')]];
-    if (view.kind === 'online' && view.meetingLink) rows.push([t('Meeting link'), `<a href="${esc(view.meetingLink)}" target="_blank" rel="noopener noreferrer">${t('Join the meeting')}</a>`]);
+    const phase = joinPhase();
+    if (view.kind === 'online' && view.meetingLink && phase !== 'now') rows.push([t('Meeting link'), `<a href="${esc(view.meetingLink)}" target="_blank" rel="noopener noreferrer">${t('Join the meeting')}</a>${phase === 'early' ? `<span class="interview-join-later">${t('On the day, a button to join appears at the top of this page 30 minutes before the interview.')}</span>` : ''}`]);
     if (view.kind === 'in_person' && view.address) rows.push([t('Address'), `${esc(view.address)} · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(view.address)}" target="_blank" rel="noopener noreferrer">${t('Open in maps')}</a>`]);
     if (view.notes) rows.push([t('Notes'), esc(view.notes).replace(/\n/g, '<br>')]);
     return `<dl class="interview-details">${rows.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl>`;
@@ -88,7 +116,7 @@
   function actionsHtml() {
     if (!view.canChange || panel) return '';
     const buttons = [];
-    if (view.state !== 'confirmed') buttons.push(`<button class="btn btn-primary" type="button" id="act-confirm">${t('Confirm attendance')}</button>`);
+    if (view.state !== 'confirmed') buttons.push(`<button class="btn${joinPhase() === 'now' ? '' : ' btn-primary'}" type="button" id="act-confirm">${t('Confirm attendance')}</button>`);
     if (view.state !== 'declined') buttons.push(`<button class="btn" type="button" id="act-decline">${t('I cannot attend')}</button>`);
     buttons.push(`<button class="btn" type="button" id="act-reschedule">${t('I need another time')}</button>`);
     return `<div class="interview-actions">${buttons.join('')}</div>`;
@@ -114,8 +142,9 @@
       : timeCame ? 'The time of this interview has come. If you have any questions, contact the hiring team.'
       : (known ? BANNERS[view.state] : '');
     const intro = view.candidateName ? t('Hi {name}, here are the details of your interview.', { name: esc(view.candidateName) }) : t('Here are the details of your interview.');
-    root.innerHTML = shell(`<main class="interview-main"><section class="candidate-form-card interview-card"><div class="job-kicker">${t('Interview')}</div><h1 class="interview-title">${esc(view.jobTitle || t('Interview'))}</h1><p class="form-intro">${esc(view.companyName || t('Hiring team'))}</p>${view.state === 'cancelled' ? '' : `<p class="interview-intro">${intro}</p>${detailsHtml()}`}${banner ? `<div class="prototype-note interview-banner interview-banner-${esc(view.state)}" role="status">${t(banner)}</div>` : ''}${sentTimesHtml()}${message ? `<p class="interview-error" role="alert">${esc(message)}</p>` : ''}${actionsHtml()}${panelHtml()}${calendarHtml()}</section></main>`);
+    root.innerHTML = shell(`<main class="interview-main"><section class="candidate-form-card interview-card"><div class="job-kicker">${t('Interview')}</div><h1 class="interview-title">${esc(view.jobTitle || t('Interview'))}</h1><p class="form-intro">${esc(view.companyName || t('Hiring team'))}</p>${view.state === 'cancelled' ? '' : `<p class="interview-intro">${intro}</p>${joinHtml()}${detailsHtml()}`}${banner ? `<div class="prototype-note interview-banner interview-banner-${esc(view.state)}" role="status">${t(banner)}</div>` : ''}${sentTimesHtml()}${message ? `<p class="interview-error" role="alert">${esc(message)}</p>` : ''}${actionsHtml()}${panelHtml()}${calendarHtml()}</section></main>`);
     bind();
+    scheduleJoinRedraw();
   }
 
   // While the answer is on its way the buttons are only switched off (the form is not redrawn), so nothing the person typed is lost if it fails.

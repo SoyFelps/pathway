@@ -198,3 +198,11 @@ test('the Interviews page can change the responsible people of an interview that
   assert.ok(modal.includes('mountResponsibleField(') && modal.includes('setInterviewResponsibles(row.id, currentResponsibleIds(chosen))') && modal.includes('loadInterviewsPage()'));
   assert.ok(builder.includes("action === 'responsibles') { openInterviewResponsiblesModal(row); return; }") && builder.includes("action === 'responsibles') { closeLayer(); openInterviewResponsiblesModal(row); }"), 'from the list and from the details window');
 });
+
+test('the interview details window: one or two buttons, the rest in the three-dots menu, Open candidate on the left (owner, 2026-11-27)', () => {
+  const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const details = builder.slice(builder.indexOf('function openInterviewDetails'), builder.indexOf('async function loadInterviewsPage'));
+  assert.ok(details.includes('data-ivd-menu') && details.includes('iv-menu-panel is-up'), 'a menu that opens upwards');
+  assert.ok(details.includes("menuItem('cancel', t('Cancel interview'), ' is-danger'") && details.includes('iv-menu-sep'), 'cancel last, in red, after a line');
+  assert.ok(details.includes("btn('open', t('Open candidate'), 'btn-quiet iv-detail-open')"), 'Open candidate is quiet, on the left');
+});
