@@ -306,8 +306,8 @@ test('leaving: the last team member is asked while the transcription is on; End 
   assert.ok(page.includes("getElementById('meeting-leave').addEventListener('click', askLeave)"), 'Leave goes through the check');
   const ask = page.slice(page.indexOf('function askLeave'), page.indexOf('// 10 minutes before the room closes'));
   assert.ok(ask.includes("peers.some(person => person.role === 'team')") && ask.includes('leave(); return;'), 'with another team member in the room, no question');
-  for (const id of ['leave-back', 'leave-only', 'leave-end']) assert.ok(ask.includes(`id="${id}"`), id);
-  assert.ok(ask.includes('await endTranscription(); close(); leave();'), 'end and leave');
+  for (const id of ['leave-back', 'leave-only', 'leave-end']) assert.ok(ask.includes(`id: '${id}'`), id);
+  assert.ok(ask.includes('run: endTranscription, then: leave') && page.includes('try { await item.run(); close(); if (item.then) item.then(); }'), 'end and leave');
   assert.ok(page.includes("view.role === 'team' && view.transcription && !view.transcriptionEnded"), 'only the hiring team, only while it is on');
 });
 
@@ -316,4 +316,11 @@ test('the lobby switches to the "default" microphone when the browser opened ano
   const start = page.slice(page.indexOf('async function startDevices'), page.indexOf('// ---- Background'));
   assert.ok(start.includes('if (!micId) await useDefaultMic();'), 'only when nobody chose a microphone');
   assert.ok(start.includes("deviceId: { exact: 'default' }") && start.indexOf('track.stop()') < start.indexOf("deviceId: { exact: 'default' }"), 'the default is required, after the other one is released');
+});
+
+test('End transcription asks in a window, with the green button to confirm (owner, 2026-11-27: "click again" went unnoticed)', () => {
+  const page = read('meeting.js');
+  assert.ok(!page.includes('End it? Click again'), 'no more button that changes its own text');
+  const handler = page.slice(page.indexOf("getElementById('meeting-end-transcription')?.addEventListener"), page.indexOf("getElementById('meeting-bg-toggle')"));
+  assert.ok(handler.includes('meetingDialog(') && handler.includes("{ id: 'end-back', label: t('Back') }") && handler.includes('primary: true, run: endTranscription'), 'Back, and End transcription in green');
 });
