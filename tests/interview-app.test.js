@@ -210,3 +210,11 @@ test('the interview details window: one row of buttons (menu left, main actions 
   const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
   assert.ok(css.includes('.applicant-info-item .iv-link-line a{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'), 'the link is one line');
 });
+
+test('the Interviews page always opens on the list, and loading draws what the switch shows (owner, 2026-11-27)', () => {
+  const builder = fs.readFileSync(path.join(__dirname, '..', 'builder.js'), 'utf8');
+  const page = builder.slice(builder.indexOf('async function renderInterviews()'), builder.indexOf('async function renderInterviews()') + 3000);
+  assert.ok(page.includes("ivView = 'list';"), 'entering the page resets the view');
+  const load = builder.slice(builder.indexOf('async function loadInterviewsPage'), builder.indexOf('let ivBoxes = []'));
+  assert.ok(load.includes('renderInterviewsBody();') && !load.includes('renderInterviewsList();'), 'loading draws the list or the calendar that is chosen');
+});

@@ -2829,8 +2829,7 @@
       ivRows = rows;
       ivConfirmId = '';
       for (const box of ivBoxes) box.refresh();
-      renderInterviewsScope();
-      renderInterviewsList();
+      renderInterviewsBody(); // the list or the calendar, whichever is chosen (a refresh after an action keeps the calendar)
     } catch (error) {
       if (content) content.innerHTML = '<div class="auth-error show" role="alert">' + esc(t('Could not load interviews: {reason}', { reason: error.message || t('check your connection and try again') })) + '</div>';
     }
@@ -2842,6 +2841,7 @@
     currentId = null; selectedId = null;
     applicantFlowLabels = flows;
     ivRows = []; ivConfirmId = ''; ivShown = IV_PAGE_SIZE;
+    ivView = 'list'; // coming back to the page always opens the list (owner, 2026-11-27: the switch showed Week over a list)
     root.innerHTML = `<div class="app-shell"><header class="topbar"><a class="brand" href="#"><img class="brand-logo logo-light" src="brand/nellio-logo.svg" alt="Nellio"><img class="brand-logo logo-dark" src="brand/nellio-logo-white.svg" alt="" aria-hidden="true"></a><div class="top-actions">${workspaceSwitcherHtml()}${renderPlanControl()}${headerUserHtml()}</div></header><div class="workspace-body">${renderSidebar('interviews')}<main class="interviews-page"><div class="applicants-heading"><div><h1>${t('Interviews')}</h1><p>${t('Interviews scheduled with your candidates: when, the status and who is responsible.')}</p></div><div class="iv-tools"><input id="iv-search" class="applicants-search" type="search" placeholder="${t('Search interviews')}" value="${esc(ivSearch)}" aria-label="${t('Search interviews')}">${hasPermission('flows') ? ivComboboxHtml('iv-responsible-filter', t('Filter by responsible'), t('Search people')) : ''}${ivComboboxHtml('iv-job-filter', t('Filter interviews by job'), t('Search jobs'))}${ivComboboxHtml('iv-status-filter', t('Filter by status'), t('Search statuses'))}<button class="btn btn-sm" id="iv-refresh" type="button" title="${t('Refresh interviews')}">↻ ${t('Refresh')}</button></div></div><div class="iv-toolbar" id="iv-toolbar"></div><div id="interviews-content" aria-live="polite"><div class="loading-card"><span>${t('Loading interviews…')}</span></div></div></main></div></div>`;
     bindSidebar();
     bindPlanControl();
